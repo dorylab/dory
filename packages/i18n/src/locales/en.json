@@ -3800,6 +3800,26 @@
         "DeleteModelDescription": "This permanently deletes “{name}”, its definitions, verified queries, and knowledge sources.",
         "DeleteModel": "Delete model",
         "Overview": "Overview",
+        "Readiness": {
+            "Ready": "Ready for Agent",
+            "NotReady": "Not ready for Agent",
+            "Description": "Dory checks whether the Agent has enough verified business meaning to query consistently.",
+            "Understands": "Agent understands",
+            "Checks": {
+                "dataSource": "A data source is connected",
+                "verifiedDefinition": "A definition is verified",
+                "verifiedQuery": "A verified query is available"
+            }
+        },
+        "KnowledgeFlow": {
+            "Title": "How Agent knowledge works",
+            "Description": "Provide business knowledge, establish meaning, query consistently, and inspect what the Agent used.",
+            "Sources": "Sources",
+            "Definitions": "Definitions",
+            "Queries": "Verified Queries",
+            "AskAi": "Ask AI",
+            "AgentRun": "Agent Run"
+        },
         "BusinessContext": "Business Context",
         "BusinessContextPlaceholder": "Document business rules, vocabulary, and agent instructions in Markdown.",
         "SaveContext": "Save context",
@@ -3828,6 +3848,15 @@
         "Source": "Source",
         "Status": "Status",
         "Verified": "Verified",
+        "Unverified": "Unverified",
+        "VerificationStatus": "Verification status",
+        "ReferencedByQueries": "Referenced by queries",
+        "ReferencedDefinitions": "Referenced definitions",
+        "RelatedSources": "Related sources",
+        "NoReferences": "No linked assets",
+        "ReferenceSources": "Reference sources",
+        "ReferenceSourcesEmpty": "Add a knowledge source before generating definitions with AI.",
+        "RelationTypes": { "provided": "Provided", "generated": "Generated" },
         "CloseDefinitionDetails": "Close definition details",
         "EditNamedDefinition": "Edit {name}",
         "NoDefinitionDetails": "No additional details have been documented for this definition.",
@@ -3900,7 +3929,8 @@
             "SaveYaml": "Could not save YAML.",
             "AddDataSource": "Could not add data source.",
             "ChooseOrCreateModel": "Choose a model or create a new one.",
-            "AddVerifiedQuery": "Could not add verified query."
+            "AddVerifiedQuery": "Could not add verified query.",
+            "UpdateReferences": "Could not update knowledge references."
         },
         "KnowledgeSources": {
             "Tab": "Knowledge sources",
@@ -3963,6 +3993,11 @@
             "Scope": "Scope",
             "Size": "Size",
             "Updated": "Updated",
+            "Assets": "Assets",
+            "AssetCounts": "{definitions} definitions · {queries} queries",
+            "NoLinkedAssets": "No linked assets",
+            "VerifiedQuery": "Verified Query",
+            "RelationTypes": { "provided": "Provided", "generated": "Generated" },
             "Edit": "Edit",
             "Delete": "Delete",
             "RemoveFile": "Remove {name}",
@@ -4201,6 +4236,15 @@
         }
     },
     "AgentRuns": {
+        "KnowledgeUsed": {
+            "Title": "Knowledge used",
+            "Description": "Knowledge assets explicitly opened by the Agent during this Run.",
+            "Groups": { "source": "Sources", "definition": "Definitions", "verified_query": "Verified Queries" },
+            "ReadCount": "Read {count} times",
+            "Unavailable": "Unavailable",
+            "None": "None",
+            "Empty": "This Agent Run did not explicitly read any knowledge assets."
+        },
         "Common": {
             "AgentRun": "Agent Run",
             "None": "None",

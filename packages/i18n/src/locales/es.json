@@ -3794,6 +3794,26 @@
         "DeleteModelDescription": "Esto elimina permanentemente “{name}”, sus definiciones, consultas verificadas y fuentes de conocimiento.",
         "DeleteModel": "Eliminar modelo",
         "Overview": "Resumen",
+        "Readiness": {
+            "Ready": "Listo para el Agent",
+            "NotReady": "Aún no está listo para el Agent",
+            "Description": "Dory comprueba que el Agent tenga suficiente significado de negocio verificado para consultar de forma coherente.",
+            "Understands": "El Agent entiende",
+            "Checks": {
+                "dataSource": "Hay una fuente de datos conectada",
+                "verifiedDefinition": "Hay una definición verificada",
+                "verifiedQuery": "Hay una consulta verificada disponible"
+            }
+        },
+        "KnowledgeFlow": {
+            "Title": "Cómo funciona el conocimiento del Agent",
+            "Description": "Aporta conocimiento de negocio, establece significado, consulta de forma coherente y revisa lo que usó el Agent.",
+            "Sources": "Fuentes",
+            "Definitions": "Definiciones",
+            "Queries": "Consultas verificadas",
+            "AskAi": "Preguntar a IA",
+            "AgentRun": "Agent Run"
+        },
         "BusinessContext": "Contexto empresarial",
         "BusinessContextPlaceholder": "Documenta reglas empresariales, vocabulario e instrucciones para agentes en Markdown.",
         "SaveContext": "Guardar contexto",
@@ -3822,6 +3842,15 @@
         "Source": "Fuente",
         "Status": "Estado",
         "Verified": "Verificado",
+        "Unverified": "Sin verificar",
+        "VerificationStatus": "Estado de verificación",
+        "ReferencedByQueries": "Referenciada por consultas",
+        "ReferencedDefinitions": "Definiciones referenciadas",
+        "RelatedSources": "Fuentes relacionadas",
+        "NoReferences": "No hay activos vinculados",
+        "ReferenceSources": "Fuentes de referencia",
+        "ReferenceSourcesEmpty": "Añade una fuente de conocimiento antes de generar definiciones con IA.",
+        "RelationTypes": { "provided": "Proporcionado", "generated": "Generado" },
         "CloseDefinitionDetails": "Cerrar detalles de la definición",
         "EditNamedDefinition": "Editar {name}",
         "NoDefinitionDetails": "No se han documentado detalles adicionales para esta definición.",
@@ -3894,7 +3923,8 @@
             "SaveYaml": "No se pudo guardar el YAML.",
             "AddDataSource": "No se pudo añadir la fuente de datos.",
             "ChooseOrCreateModel": "Selecciona un modelo o crea uno nuevo.",
-            "AddVerifiedQuery": "No se pudo añadir la consulta verificada."
+            "AddVerifiedQuery": "No se pudo añadir la consulta verificada.",
+            "UpdateReferences": "No se pudieron actualizar las referencias de conocimiento."
         },
         "KnowledgeSources": {
             "Tab": "Fuentes de conocimiento",
@@ -3957,6 +3987,11 @@
             "Scope": "Ámbito",
             "Size": "Tamaño",
             "Updated": "Actualizado",
+            "Assets": "Activos",
+            "AssetCounts": "{definitions} definiciones · {queries} consultas",
+            "NoLinkedAssets": "No hay activos vinculados",
+            "VerifiedQuery": "Consulta verificada",
+            "RelationTypes": { "provided": "Proporcionado", "generated": "Generado" },
             "Edit": "Editar",
             "Delete": "Eliminar",
             "RemoveFile": "Quitar {name}",
@@ -4195,6 +4230,15 @@
         }
     },
     "AgentRuns": {
+        "KnowledgeUsed": {
+            "Title": "Conocimiento utilizado",
+            "Description": "Activos de conocimiento abiertos explícitamente por el Agent durante esta ejecución.",
+            "Groups": { "source": "Fuentes", "definition": "Definiciones", "verified_query": "Consultas verificadas" },
+            "ReadCount": "Leído {count} veces",
+            "Unavailable": "No disponible",
+            "None": "Ninguno",
+            "Empty": "Este Agent Run no leyó explícitamente ningún activo de conocimiento."
+        },
         "Common": {
             "AgentRun": "Ejecución de agente",
             "None": "Ninguna",

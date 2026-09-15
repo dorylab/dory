@@ -4,6 +4,7 @@ import { parseDocument, stringify } from 'yaml';
 import { getClient } from '@dory/database/postgres/client';
 import {
     connections,
+    knowledgeAssetSources,
     knowledgeConnectorItems,
     knowledgeConnectorSyncJobs,
     knowledgeConnectors,
@@ -12,6 +13,8 @@ import {
     knowledgeModelSources,
     knowledgeVerifiedQueries,
     type KnowledgeDefinition,
+    type KnowledgeAssetType,
+    type KnowledgeSourceRelationType,
     type KnowledgeSourceFormat,
     type KnowledgeModelDocument,
 } from '@dory/database/postgres/schemas';
@@ -30,8 +33,36 @@ export type KnowledgeModelDetail = {
     model: KnowledgeModelDocument;
     dataSources: KnowledgeModelDataSourceDetail[];
     verifiedQueryCount: number;
+    knowledgeSourceCount: number;
+    readiness: KnowledgeReadiness;
+    agentUnderstands: Array<{ id: string; name: string; kind: KnowledgeDefinition['kind'] }>;
     createdAt: Date;
     updatedAt: Date;
+};
+
+export type KnowledgeReadiness = {
+    status: 'ready' | 'not_ready';
+    checks: { dataSource: boolean; verifiedDefinition: boolean; verifiedQuery: boolean };
+};
+
+export type KnowledgeGraph = {
+    queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
+    sourceAssetEdges: Array<{
+        sourceId: string;
+        assetType: KnowledgeAssetType;
+        assetId: string;
+        relationType: KnowledgeSourceRelationType;
+    }>;
+};
+
+export type KnowledgeSourceVerifiedQueryImport = {
+    id?: string;
+    sourceConnectionId?: string;
+    title: string;
+    question: string;
+    sql: string;
+    description?: string;
+    definitionIds: string[];
 };
 
 export function validateKnowledgeSource(fileName: string, contentText: string) {
@@ -220,6 +251,35 @@ export function parseKnowledgeYaml(source: string, fallbackSourceConnectionId?: 
     return validateKnowledgeModelDocument({ definitions });
 }
 
+export function parseKnowledgeSourceYaml(source: string, fallbackSourceConnectionId?: string) {
+    const definitions = parseKnowledgeYaml(source, fallbackSourceConnectionId).definitions;
+    const document = parseDocument(source);
+    if (document.errors.length) throw new Error(document.errors[0]?.message ?? 'Invalid YAML.');
+    const value = document.toJS() as { verifiedQueries?: Array<Record<string, unknown>> };
+    const verifiedQueries: KnowledgeSourceVerifiedQueryImport[] = (Array.isArray(value.verifiedQueries) ? value.verifiedQueries : []).map((item, index) => {
+        const title = typeof item.title === 'string' ? item.title.trim() : '';
+        const question = typeof item.question === 'string' ? item.question.trim() : '';
+        const sql = typeof item.sql === 'string' ? item.sql.trim() : '';
+        if (!title || !question || !sql) throw new Error(`Verified query ${index + 1} requires title, question, and sql.`);
+        return {
+            ...(typeof item.id === 'string' && item.id.trim() ? { id: item.id.trim() } : {}),
+            ...(typeof item.sourceConnectionId === 'string' && item.sourceConnectionId.trim()
+                ? { sourceConnectionId: item.sourceConnectionId.trim() }
+                : fallbackSourceConnectionId
+                  ? { sourceConnectionId: fallbackSourceConnectionId }
+                  : {}),
+            title,
+            question,
+            sql,
+            ...(typeof item.description === 'string' && item.description.trim() ? { description: item.description.trim() } : {}),
+            definitionIds: Array.isArray(item.definitionIds)
+                ? item.definitionIds.filter((id): id is string => typeof id === 'string' && Boolean(id.trim())).map(id => id.trim())
+                : [],
+        };
+    });
+    return { definitions, verifiedQueries };
+}
+
 export class PostgresKnowledgeRepository {
     private db!: PostgresDBClient;
 
@@ -234,7 +294,7 @@ export class PostgresKnowledgeRepository {
     }
 
     parseYamlForImport(source: string, fallbackSourceConnectionId?: string) {
-        return parseKnowledgeYaml(source, fallbackSourceConnectionId);
+        return parseKnowledgeSourceYaml(source, fallbackSourceConnectionId);
     }
 
     private async assertConnections(organizationId: string, connectionIds: string[]) {
@@ -292,12 +352,32 @@ export class PostgresKnowledgeRepository {
                   .from(knowledgeVerifiedQueries)
                   .where(inArray(knowledgeVerifiedQueries.knowledgeModelId, ids))
             : [];
-        return rows.map(row => ({
-            ...row,
-            model: validateKnowledgeModelDocument(row.modelJson),
-            dataSources: dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source),
-            verifiedQueryCount: verified.filter(queryRow => queryRow.knowledgeModelId === row.id).length,
-        }));
+        const sourceRows = ids.length
+            ? await this.db.select({ knowledgeModelId: knowledgeSources.knowledgeModelId }).from(knowledgeSources).where(inArray(knowledgeSources.knowledgeModelId, ids))
+            : [];
+        return rows.map(row => {
+            const model = validateKnowledgeModelDocument(row.modelJson);
+            const modelDataSources = dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source);
+            const verifiedQueryCount = verified.filter(queryRow => queryRow.knowledgeModelId === row.id).length;
+            const verifiedDefinitions = model.definitions.filter(definition => definition.status === 'verified');
+            const checks = {
+                dataSource: modelDataSources.length > 0,
+                verifiedDefinition: verifiedDefinitions.length > 0,
+                verifiedQuery: verifiedQueryCount > 0,
+            };
+            return {
+                ...row,
+                model,
+                dataSources: modelDataSources,
+                verifiedQueryCount,
+                knowledgeSourceCount: sourceRows.filter(source => source.knowledgeModelId === row.id).length,
+                readiness: { status: Object.values(checks).every(Boolean) ? ('ready' as const) : ('not_ready' as const), checks },
+                agentUnderstands: verifiedDefinitions
+                    .filter(definition => definition.kind !== 'relationship')
+                    .slice(0, 5)
+                    .map(({ id, name, kind }) => ({ id, name, kind })),
+            };
+        });
     }
 
     async getModel(input: { organizationId: string; knowledgeModelId: string }) {
@@ -342,7 +422,86 @@ export class PostgresKnowledgeRepository {
             .update(knowledgeModels)
             .set({ modelJson: document, modelYaml: serializeKnowledgeModel(document) })
             .where(eq(knowledgeModels.id, model.id));
+        const definitionIds = document.definitions.map(definition => definition.id);
+        const linkedDefinitions = await this.db
+            .select({ sourceId: knowledgeAssetSources.knowledgeSourceId, assetId: knowledgeAssetSources.assetId })
+            .from(knowledgeAssetSources)
+            .where(and(eq(knowledgeAssetSources.knowledgeModelId, model.id), eq(knowledgeAssetSources.assetType, 'definition')));
+        const removedIds = [...new Set(linkedDefinitions.map(link => link.assetId).filter(id => !definitionIds.includes(id)))];
+        if (removedIds.length) {
+            await this.db
+                .delete(knowledgeAssetSources)
+                .where(
+                    and(
+                        eq(knowledgeAssetSources.knowledgeModelId, model.id),
+                        eq(knowledgeAssetSources.assetType, 'definition'),
+                        inArray(knowledgeAssetSources.assetId, removedIds),
+                    ),
+                );
+        }
         return this.getModel(input);
+    }
+
+    async getGraph(input: { organizationId: string; knowledgeModelId: string }): Promise<KnowledgeGraph> {
+        await this.getModel(input);
+        const [queries, sourceAssetEdges] = await Promise.all([
+            this.listVerifiedQueries(input),
+            this.db
+                .select({
+                    sourceId: knowledgeAssetSources.knowledgeSourceId,
+                    assetType: knowledgeAssetSources.assetType,
+                    assetId: knowledgeAssetSources.assetId,
+                    relationType: knowledgeAssetSources.relationType,
+                })
+                .from(knowledgeAssetSources)
+                .where(eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId)),
+        ]);
+        return {
+            queryDefinitionEdges: queries.flatMap(query => query.definitionIds.map(definitionId => ({ queryId: query.id, definitionId }))),
+            sourceAssetEdges,
+        };
+    }
+
+    async replaceAssetSources(input: {
+        organizationId: string;
+        knowledgeModelId: string;
+        assetType: KnowledgeAssetType;
+        assetId: string;
+        sourceIds: string[];
+        relationType: KnowledgeSourceRelationType;
+        createdBy?: string | null;
+    }) {
+        await this.getModel(input);
+        const sourceIds = [...new Set(input.sourceIds)];
+        if (sourceIds.length) {
+            const sources = await this.db
+                .select({ id: knowledgeSources.id })
+                .from(knowledgeSources)
+                .where(and(eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId), inArray(knowledgeSources.id, sourceIds)));
+            if (sources.length !== sourceIds.length) throw new Error('One or more knowledge sources are unavailable.');
+        }
+        await this.db
+            .delete(knowledgeAssetSources)
+            .where(
+                and(
+                    eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId),
+                    eq(knowledgeAssetSources.assetType, input.assetType),
+                    eq(knowledgeAssetSources.assetId, input.assetId),
+                ),
+            );
+        if (sourceIds.length) {
+            await this.db.insert(knowledgeAssetSources).values(
+                sourceIds.map(sourceId => ({
+                    knowledgeModelId: input.knowledgeModelId,
+                    knowledgeSourceId: sourceId,
+                    assetType: input.assetType,
+                    assetId: input.assetId,
+                    relationType: input.relationType,
+                    createdBy: input.createdBy ?? null,
+                })),
+            );
+        }
+        await this.touchModel(input.knowledgeModelId);
     }
 
     async importYaml(input: { organizationId: string; knowledgeModelId: string; source: string; fallbackSourceConnectionId?: string; preserveStatus?: boolean }) {
@@ -771,12 +930,15 @@ export class PostgresKnowledgeRepository {
         sql: string;
         description?: string | null;
         definitionIds?: string[];
+        knowledgeSourceIds?: string[];
         sourceType?: string | null;
         sourceId?: string | null;
         createdBy?: string | null;
     }) {
         const model = await this.getModel(input);
         if (!model.dataSources.some(source => source.connectionId === input.sourceConnectionId)) throw new Error('This data source is not linked to the selected knowledge model.');
+        const definitionIds = [...new Set(input.definitionIds ?? [])];
+        if (definitionIds.some(id => !model.model.definitions.some(definition => definition.id === id))) throw new Error('One or more knowledge definitions are unavailable.');
         const [row] = await this.db
             .insert(knowledgeVerifiedQueries)
             .values({
@@ -786,14 +948,52 @@ export class PostgresKnowledgeRepository {
                 question: input.question.trim(),
                 sql: input.sql.trim(),
                 description: input.description?.trim() || null,
-                definitionIds: input.definitionIds ?? [],
+                definitionIds,
                 sourceType: input.sourceType?.trim() || 'manual',
                 sourceId: input.sourceId?.trim() || null,
                 createdBy: input.createdBy ?? null,
             })
             .returning();
+        await this.replaceAssetSources({
+            ...input,
+            assetType: 'verified_query',
+            assetId: row!.id,
+            sourceIds: input.knowledgeSourceIds ?? [],
+            relationType: 'provided',
+        });
         await this.touchModel(input.knowledgeModelId);
         return row!;
+    }
+
+    async updateVerifiedQuery(input: {
+        organizationId: string;
+        knowledgeModelId: string;
+        id: string;
+        title: string;
+        question: string;
+        sql: string;
+        description?: string | null;
+        definitionIds?: string[];
+        knowledgeSourceIds?: string[];
+        createdBy?: string | null;
+    }) {
+        const model = await this.getModel(input);
+        const definitionIds = [...new Set(input.definitionIds ?? [])];
+        if (definitionIds.some(id => !model.model.definitions.some(definition => definition.id === id))) throw new Error('One or more knowledge definitions are unavailable.');
+        const [row] = await this.db
+            .update(knowledgeVerifiedQueries)
+            .set({
+                title: input.title.trim(),
+                question: input.question.trim(),
+                sql: input.sql.trim(),
+                description: input.description?.trim() || null,
+                definitionIds,
+            })
+            .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
+            .returning();
+        if (!row) throw new Error('Verified query not found.');
+        await this.replaceAssetSources({ ...input, assetType: 'verified_query', assetId: input.id, sourceIds: input.knowledgeSourceIds ?? [], relationType: 'provided' });
+        return row;
     }
 
     async getVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
@@ -809,6 +1009,15 @@ export class PostgresKnowledgeRepository {
 
     async deleteVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         await this.getModel(input);
+        await this.db
+            .delete(knowledgeAssetSources)
+            .where(
+                and(
+                    eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId),
+                    eq(knowledgeAssetSources.assetType, 'verified_query'),
+                    eq(knowledgeAssetSources.assetId, input.id),
+                ),
+            );
         await this.db.delete(knowledgeVerifiedQueries).where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)));
         await this.touchModel(input.knowledgeModelId);
     }

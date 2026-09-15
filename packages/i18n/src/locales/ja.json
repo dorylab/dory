@@ -3800,6 +3800,26 @@
         "DeleteModelDescription": "「{name}」とその定義、検証済みクエリ、ナレッジソースを完全に削除します。",
         "DeleteModel": "モデルを削除",
         "Overview": "概要",
+        "Readiness": {
+            "Ready": "Agent の準備完了",
+            "NotReady": "Agent の準備未完了",
+            "Description": "Dory は、一貫したクエリに必要な検証済みのビジネス意味が揃っているか確認します。",
+            "Understands": "Agent が理解していること",
+            "Checks": {
+                "dataSource": "データソースが接続済み",
+                "verifiedDefinition": "検証済みの定義が存在",
+                "verifiedQuery": "検証済みクエリが利用可能"
+            }
+        },
+        "KnowledgeFlow": {
+            "Title": "Agent ナレッジの仕組み",
+            "Description": "ビジネス知識を提供し、意味を確立し、一貫して問い合わせ、Agent が使用した内容を確認します。",
+            "Sources": "ソース",
+            "Definitions": "定義",
+            "Queries": "検証済みクエリ",
+            "AskAi": "AI に質問",
+            "AgentRun": "Agent Run"
+        },
         "BusinessContext": "ビジネスコンテキスト",
         "BusinessContextPlaceholder": "ビジネスルール、用語、エージェントへの指示を Markdown で記録します。",
         "SaveContext": "コンテキストを保存",
@@ -3828,6 +3848,15 @@
         "Source": "ソース",
         "Status": "ステータス",
         "Verified": "検証済み",
+        "Unverified": "未検証",
+        "VerificationStatus": "検証ステータス",
+        "ReferencedByQueries": "参照しているクエリ",
+        "ReferencedDefinitions": "参照する定義",
+        "RelatedSources": "関連ソース",
+        "NoReferences": "リンクされたアセットはありません",
+        "ReferenceSources": "参照ソース",
+        "ReferenceSourcesEmpty": "AI で定義を生成する前にナレッジソースを追加してください。",
+        "RelationTypes": { "provided": "提供", "generated": "生成" },
         "CloseDefinitionDetails": "定義の詳細を閉じる",
         "EditNamedDefinition": "{name}を編集",
         "NoDefinitionDetails": "この定義には追加の詳細がまだ記録されていません。",
@@ -3900,7 +3929,8 @@
             "SaveYaml": "YAML を保存できませんでした。",
             "AddDataSource": "データソースを追加できませんでした。",
             "ChooseOrCreateModel": "モデルを選択するか、新しく作成してください。",
-            "AddVerifiedQuery": "検証済みクエリを追加できませんでした。"
+            "AddVerifiedQuery": "検証済みクエリを追加できませんでした。",
+            "UpdateReferences": "ナレッジ参照を更新できませんでした。"
         },
         "KnowledgeSources": {
             "Tab": "ナレッジソース",
@@ -3963,6 +3993,11 @@
             "Scope": "範囲",
             "Size": "サイズ",
             "Updated": "更新日時",
+            "Assets": "アセット",
+            "AssetCounts": "定義 {definitions} 件 · クエリ {queries} 件",
+            "NoLinkedAssets": "リンクされたアセットはありません",
+            "VerifiedQuery": "検証済みクエリ",
+            "RelationTypes": { "provided": "提供", "generated": "生成" },
             "Edit": "編集",
             "Delete": "削除",
             "RemoveFile": "{name}を削除",
@@ -4201,6 +4236,15 @@
         }
     },
     "AgentRuns": {
+        "KnowledgeUsed": {
+            "Title": "使用したナレッジ",
+            "Description": "この Run で Agent が明示的に開いたナレッジアセットです。",
+            "Groups": { "source": "ソース", "definition": "定義", "verified_query": "検証済みクエリ" },
+            "ReadCount": "{count} 回読み取り",
+            "Unavailable": "利用不可",
+            "None": "なし",
+            "Empty": "この Agent Run はナレッジアセットを明示的に読み取っていません。"
+        },
         "Common": {
             "AgentRun": "Agent Run",
             "None": "なし",

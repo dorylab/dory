@@ -5,6 +5,8 @@ import { connections } from './connections';
 
 export type KnowledgeDefinitionKind = 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
 export type KnowledgeDefinitionStatus = 'verified' | 'unverified';
+export type KnowledgeAssetType = 'definition' | 'verified_query';
+export type KnowledgeSourceRelationType = 'provided' | 'generated';
 
 export type KnowledgeDefinition = {
     id: string;
@@ -214,7 +216,29 @@ export const knowledgeVerifiedQueries = pgTable(
     ],
 );
 
+export const knowledgeAssetSources = pgTable(
+    'knowledge_asset_sources',
+    {
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        knowledgeSourceId: text('knowledge_source_id')
+            .notNull()
+            .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
+        assetType: text('asset_type').$type<KnowledgeAssetType>().notNull(),
+        assetId: text('asset_id').notNull(),
+        relationType: text('relation_type').$type<KnowledgeSourceRelationType>().notNull(),
+        createdBy: text('created_by'),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        primaryKey({ name: 'pk_knowledge_asset_sources', columns: [table.knowledgeSourceId, table.assetType, table.assetId] }),
+        index('idx_knowledge_asset_sources_model_asset').on(table.knowledgeModelId, table.assetType, table.assetId),
+    ],
+);
+
 export type KnowledgeModel = typeof knowledgeModels.$inferSelect;
 export type KnowledgeSource = typeof knowledgeSources.$inferSelect;
 export type KnowledgeConnector = typeof knowledgeConnectors.$inferSelect;
 export type KnowledgeVerifiedQuery = typeof knowledgeVerifiedQueries.$inferSelect;
+export type KnowledgeAssetSource = typeof knowledgeAssetSources.$inferSelect;

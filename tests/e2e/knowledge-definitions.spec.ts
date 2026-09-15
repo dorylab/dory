@@ -31,6 +31,12 @@ let model = {
     model: { definitions: [definition] },
     dataSources: [{ connectionId: 'connection-1', name: 'Taxi data', type: 'postgres', engine: 'postgres' }],
     verifiedQueryCount: 0,
+    knowledgeSourceCount: 0,
+    readiness: {
+        status: 'not_ready' as const,
+        checks: { dataSource: true, verifiedDefinition: true, verifiedQuery: false },
+    },
+    agentUnderstands: [{ id: definition.id, name: definition.name, kind: definition.kind }],
     createdAt: now,
     updatedAt: now,
 };

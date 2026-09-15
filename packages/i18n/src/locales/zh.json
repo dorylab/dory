@@ -3790,6 +3790,26 @@
         "DeleteModelDescription": "此操作会永久删除“{name}”及其定义、已验证查询和知识来源。",
         "DeleteModel": "删除模型",
         "Overview": "概览",
+        "Readiness": {
+            "Ready": "已为 Agent 就绪",
+            "NotReady": "尚未为 Agent 就绪",
+            "Description": "Dory 会检查 Agent 是否具备一致查询所需的已验证业务语义。",
+            "Understands": "Agent 已理解",
+            "Checks": {
+                "dataSource": "已连接数据源",
+                "verifiedDefinition": "已有已验证定义",
+                "verifiedQuery": "已有 Verified Query"
+            }
+        },
+        "KnowledgeFlow": {
+            "Title": "Agent 知识如何工作",
+            "Description": "提供业务知识、建立语义、按一致方式查询，并查看 Agent 实际使用了什么。",
+            "Sources": "Sources",
+            "Definitions": "Definitions",
+            "Queries": "Verified Queries",
+            "AskAi": "Ask AI",
+            "AgentRun": "Agent Run"
+        },
         "BusinessContext": "业务上下文",
         "BusinessContextPlaceholder": "使用 Markdown 记录业务规则、词汇和 Agent 指令。",
         "SaveContext": "保存上下文",
@@ -3818,6 +3838,15 @@
         "Source": "来源",
         "Status": "状态",
         "Verified": "已验证",
+        "Unverified": "未验证",
+        "VerificationStatus": "验证状态",
+        "ReferencedByQueries": "被 Query 引用",
+        "ReferencedDefinitions": "引用的 Definitions",
+        "RelatedSources": "关联 Sources",
+        "NoReferences": "暂无关联资产",
+        "ReferenceSources": "参考 Sources",
+        "ReferenceSourcesEmpty": "请先添加 Knowledge Source，再使用 AI 生成定义。",
+        "RelationTypes": { "provided": "提供", "generated": "生成" },
         "CloseDefinitionDetails": "关闭定义详情",
         "EditNamedDefinition": "编辑 {name}",
         "NoDefinitionDetails": "尚未记录该定义的更多详情。",
@@ -3890,7 +3919,8 @@
             "SaveYaml": "无法保存 YAML。",
             "AddDataSource": "无法添加数据源。",
             "ChooseOrCreateModel": "请选择一个模型或创建新模型。",
-            "AddVerifiedQuery": "无法添加已验证查询。"
+            "AddVerifiedQuery": "无法添加已验证查询。",
+            "UpdateReferences": "无法更新 Knowledge 引用关系。"
         },
         "KnowledgeSources": {
             "Tab": "知识来源",
@@ -3953,6 +3983,11 @@
             "Scope": "作用范围",
             "Size": "大小",
             "Updated": "更新时间",
+            "Assets": "资产",
+            "AssetCounts": "{definitions} 个定义 · {queries} 个查询",
+            "NoLinkedAssets": "暂无关联资产",
+            "VerifiedQuery": "Verified Query",
+            "RelationTypes": { "provided": "提供", "generated": "生成" },
             "Edit": "编辑",
             "Delete": "删除",
             "RemoveFile": "移除 {name}",
@@ -4191,6 +4226,15 @@
         }
     },
     "AgentRuns": {
+        "KnowledgeUsed": {
+            "Title": "使用的 Knowledge",
+            "Description": "本次 Run 中 Agent 明确打开过的 Knowledge 资产。",
+            "Groups": { "source": "Sources", "definition": "Definitions", "verified_query": "Verified Queries" },
+            "ReadCount": "读取 {count} 次",
+            "Unavailable": "已不可用",
+            "None": "无",
+            "Empty": "本次 Agent Run 没有明确读取 Knowledge 资产。"
+        },
         "Common": {
             "AgentRun": "Agent Run",
             "None": "无",

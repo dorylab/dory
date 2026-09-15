@@ -10,15 +10,19 @@ import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
 import {
     knowledgeConnectorSchema,
+    knowledgeAssetTypeSchema,
     knowledgeDefinitionSchema,
+    knowledgeGraphSchema,
     knowledgeSourceSchema,
     knowledgeSourceSummarySchema,
     knowledgeModelOutputSchema,
     knowledgeVerifiedQuerySchema,
+    knowledgeSourceRelationTypeSchema,
 } from './shared';
 
 const modelIdInput = z.object({ knowledgeModelId: z.string().min(1) });
 const readActors = ['user', 'agent', 'mcp', 'automation'] as const;
+const workspaceUiReadActors = ['user', 'automation'] as const;
 
 export const knowledgeListAction = defineWebAction({
     id: 'knowledge.list',
@@ -29,7 +33,7 @@ export const knowledgeListAction = defineWebAction({
     outputSchema: z.object({ models: z.array(knowledgeModelOutputSchema) }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
-    actors: [...readActors],
+    actors: [...workspaceUiReadActors],
     handler: async (ctx, input) => ({ models: await ctx.services.db.knowledge.listModels({ organizationId: ctx.organizationId, ...input }) }),
 });
 
@@ -42,7 +46,7 @@ export const knowledgeGetAction = defineWebAction({
     outputSchema: knowledgeModelOutputSchema,
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
-    actors: [...readActors],
+    actors: [...workspaceUiReadActors],
     handler: (ctx, input) => ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, ...input }),
 });
 
@@ -117,7 +121,7 @@ export const knowledgeListDefinitionsAction = defineWebAction({
     outputSchema: z.object({ definitions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })) }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
-    actors: [...readActors],
+    actors: [...workspaceUiReadActors],
     handler: async (ctx, input) => ({
         definitions: (await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, ...input })).model.definitions,
     }),
@@ -248,7 +252,7 @@ export const knowledgeListKnowledgeSourcesAction = defineWebAction({
     outputSchema: z.object({ sources: z.array(knowledgeSourceSummarySchema) }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
-    actors: [...readActors],
+    actors: [...workspaceUiReadActors],
     handler: async (ctx, input) => ({ sources: await ctx.services.db.knowledge.listKnowledgeSources({ organizationId: ctx.organizationId, ...input }) }),
 });
 
@@ -262,6 +266,11 @@ export const knowledgeGetKnowledgeSourceAction = defineWebAction({
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
     actors: [...readActors],
+    mcp: {
+        name: 'get_knowledge_source',
+        title: 'Get knowledge source',
+        description: 'Read the full contents of one selected knowledge source by ID.',
+    },
     handler: (ctx, input) => ctx.services.db.knowledge.getKnowledgeSource({ organizationId: ctx.organizationId, ...input }),
 });
 
@@ -315,7 +324,20 @@ export const knowledgePreviewKnowledgeSourceImportAction = defineWebAction({
     kind: 'query',
     risk: 'read',
     inputSchema: modelIdInput.extend({ id: z.string().min(1) }),
-    outputSchema: z.object({ suggestions: z.array(knowledgeDefinitionSchema.extend({ id: z.string(), sourceConnectionId: z.string().optional() })) }),
+    outputSchema: z.object({
+        suggestions: z.array(knowledgeDefinitionSchema.extend({ id: z.string(), sourceConnectionId: z.string().optional() })),
+        verifiedQueries: z.array(
+            z.object({
+                id: z.string().optional(),
+                sourceConnectionId: z.string().optional(),
+                title: z.string(),
+                question: z.string(),
+                sql: z.string(),
+                description: z.string().optional(),
+                definitionIds: z.array(z.string()),
+            }),
+        ),
+    }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
     actors: ['user'],
@@ -333,6 +355,10 @@ export const knowledgePreviewKnowledgeSourceImportAction = defineWebAction({
                 ...definition,
                 sourceConnectionId: allowedSourceIds.has(definition.sourceConnectionId) ? definition.sourceConnectionId : undefined,
             })),
+            verifiedQueries: document.verifiedQueries.map(query => ({
+                ...query,
+                sourceConnectionId: query.sourceConnectionId && allowedSourceIds.has(query.sourceConnectionId) ? query.sourceConnectionId : undefined,
+            })),
         };
     },
 });
@@ -346,7 +372,7 @@ export const knowledgeListVerifiedQueriesAction = defineWebAction({
     outputSchema: z.object({ queries: z.array(knowledgeVerifiedQuerySchema) }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
-    actors: [...readActors],
+    actors: [...workspaceUiReadActors],
     handler: async (ctx, input) => ({ queries: await ctx.services.db.knowledge.listVerifiedQueries({ organizationId: ctx.organizationId, ...input }) }),
 });
 
@@ -360,6 +386,11 @@ export const knowledgeGetVerifiedQueryAction = defineWebAction({
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
     actors: [...readActors],
+    mcp: {
+        name: 'get_knowledge_verified_query',
+        title: 'Get verified query',
+        description: 'Read one selected verified query, including its reviewed SQL and referenced definitions.',
+    },
     handler: (ctx, input) => ctx.services.db.knowledge.getVerifiedQuery({ organizationId: ctx.organizationId, ...input }),
 });
 
@@ -376,6 +407,7 @@ export const knowledgeCreateVerifiedQueryAction = defineWebAction({
         sql: z.string().min(1).max(100_000),
         description: z.string().max(4000).optional(),
         definitionIds: z.array(z.string()).max(100).optional(),
+        knowledgeSourceIds: z.array(z.string()).max(100).optional(),
         sourceType: z.string().max(80).optional(),
         sourceId: z.string().max(240).optional(),
     }),
@@ -384,6 +416,63 @@ export const knowledgeCreateVerifiedQueryAction = defineWebAction({
     scopes: ['knowledge:write'],
     actors: ['user'],
     handler: (ctx, input) => ctx.services.db.knowledge.createVerifiedQuery({ organizationId: ctx.organizationId, createdBy: ctx.userId, ...input }),
+});
+
+export const knowledgeUpdateVerifiedQueryAction = defineWebAction({
+    id: 'knowledge.updateVerifiedQuery',
+    domain: 'knowledge',
+    kind: 'command',
+    risk: 'write',
+    requiresConfirmation: false,
+    inputSchema: modelIdInput.extend({
+        id: z.string().min(1),
+        title: z.string().min(1).max(240),
+        question: z.string().min(1).max(4000),
+        sql: z.string().min(1).max(100_000),
+        description: z.string().max(4000).nullable().optional(),
+        definitionIds: z.array(z.string()).max(100).optional(),
+        knowledgeSourceIds: z.array(z.string()).max(100).optional(),
+    }),
+    outputSchema: knowledgeVerifiedQuerySchema,
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: (ctx, input) => ctx.services.db.knowledge.updateVerifiedQuery({ organizationId: ctx.organizationId, createdBy: ctx.userId, ...input }),
+});
+
+export const knowledgeGetGraphAction = defineWebAction({
+    id: 'knowledge.getGraph',
+    domain: 'knowledge',
+    kind: 'query',
+    risk: 'read',
+    inputSchema: modelIdInput,
+    outputSchema: knowledgeGraphSchema,
+    permissions: readWorkspace,
+    scopes: ['knowledge:read'],
+    actors: ['user'],
+    handler: (ctx, input) => ctx.services.db.knowledge.getGraph({ organizationId: ctx.organizationId, ...input }),
+});
+
+export const knowledgeReplaceAssetSourcesAction = defineWebAction({
+    id: 'knowledge.replaceAssetSources',
+    domain: 'knowledge',
+    kind: 'command',
+    risk: 'write',
+    requiresConfirmation: false,
+    inputSchema: modelIdInput.extend({
+        assetType: knowledgeAssetTypeSchema,
+        assetId: z.string().min(1),
+        sourceIds: z.array(z.string()).max(100),
+        relationType: knowledgeSourceRelationTypeSchema,
+    }),
+    outputSchema: z.object({ ok: z.literal(true) }),
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: async (ctx, input) => {
+        await ctx.services.db.knowledge.replaceAssetSources({ organizationId: ctx.organizationId, createdBy: ctx.userId, ...input });
+        return { ok: true as const };
+    },
 });
 
 export const knowledgeDeleteVerifiedQueryAction = defineWebAction({
@@ -415,16 +504,27 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
                 knowledgeModelId: z.string(),
                 knowledgeModelName: z.string(),
                 businessContext: z.string(),
-                definitions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })),
-                knowledgeSources: z.array(
-                    z.object({ id: z.string(), fileName: z.string(), format: z.enum(['markdown', 'yaml', 'text']), connectionId: z.string().nullable(), excerpt: z.string() }),
+                definitions: z.array(
+                    z.object({
+                        id: z.string(),
+                        name: z.string(),
+                        kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']),
+                        status: z.enum(['verified', 'unverified']),
+                        description: z.string().optional(),
+                    }),
                 ),
+                knowledgeSources: z.array(z.object({ id: z.string(), fileName: z.string(), format: z.enum(['markdown', 'yaml', 'text']), connectionId: z.string().nullable() })),
             }),
         ),
     }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
     actors: ['agent', 'mcp'],
+    mcp: {
+        name: 'search_knowledge',
+        title: 'Search knowledge',
+        description: 'Search knowledge candidates. Results are summaries; explicitly read a selected asset before using it.',
+    },
     handler: async (ctx, input) => {
         const models = await ctx.services.db.knowledge.listModels({ organizationId: ctx.organizationId, connectionId: input.connectionId });
         const needle = input.query.toLowerCase();
@@ -439,13 +539,16 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
                             item.sourceConnectionId === input.connectionId &&
                             [item.name, item.description, ...(item.aliases ?? [])].filter(Boolean).join(' ').toLowerCase().includes(needle),
                     )
-                    .slice(0, 20),
-                knowledgeSources: await ctx.services.db.knowledge.searchKnowledgeSources({
-                    organizationId: ctx.organizationId,
-                    knowledgeModelId: model.id,
-                    connectionId: input.connectionId,
-                    query: input.query,
-                }),
+                    .slice(0, 20)
+                    .map(({ id, name, kind, status, description }) => ({ id, name, kind, status, description })),
+                knowledgeSources: (
+                    await ctx.services.db.knowledge.searchKnowledgeSources({
+                        organizationId: ctx.organizationId,
+                        knowledgeModelId: model.id,
+                        connectionId: input.connectionId,
+                        query: input.query,
+                    })
+                ).map(({ id, fileName, format, connectionId }) => ({ id, fileName, format, connectionId })),
             })),
         );
         return { models: results.filter(model => model.businessContext || model.definitions.length || model.knowledgeSources.length) };
@@ -462,6 +565,11 @@ export const knowledgeGetDefinitionAction = defineWebAction({
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
     actors: ['agent', 'mcp'],
+    mcp: {
+        name: 'get_knowledge_definition',
+        title: 'Get knowledge definition',
+        description: 'Read one selected knowledge definition in full by ID.',
+    },
     handler: async (ctx, input) => {
         const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
         if (!model.dataSources.some(source => source.connectionId === input.connectionId)) throw new Error('Knowledge model is not linked to this data source.');
@@ -477,10 +585,27 @@ export const knowledgeSearchVerifiedQueriesAction = defineWebAction({
     kind: 'query',
     risk: 'read',
     inputSchema: z.object({ connectionId: z.string().min(1), query: z.string().max(240).optional() }),
-    outputSchema: z.object({ queries: z.array(knowledgeVerifiedQuerySchema.extend({ knowledgeModelName: z.string() })) }),
+    outputSchema: z.object({
+        queries: z.array(
+            z.object({
+                id: z.string(),
+                knowledgeModelId: z.string(),
+                knowledgeModelName: z.string(),
+                sourceConnectionId: z.string(),
+                title: z.string(),
+                question: z.string(),
+                description: z.string().nullable(),
+            }),
+        ),
+    }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
     actors: ['agent', 'mcp'],
+    mcp: {
+        name: 'search_knowledge_verified_queries',
+        title: 'Search verified queries',
+        description: 'Search verified query summaries. Explicitly read a selected query before using its SQL.',
+    },
     handler: async (ctx, input) => {
         const models = await ctx.services.db.knowledge.listModels({ organizationId: ctx.organizationId, connectionId: input.connectionId });
         const groups = await Promise.all(
@@ -492,7 +617,15 @@ export const knowledgeSearchVerifiedQueriesAction = defineWebAction({
                         connectionId: input.connectionId,
                         query: input.query,
                     })
-                ).map(query => ({ ...query, knowledgeModelName: model.name })),
+                ).map(query => ({
+                    id: query.id,
+                    knowledgeModelId: query.knowledgeModelId,
+                    knowledgeModelName: model.name,
+                    sourceConnectionId: query.sourceConnectionId,
+                    title: query.title,
+                    question: query.question,
+                    description: query.description,
+                })),
             ),
         );
         return { queries: groups.flat().slice(0, 20) };
@@ -507,6 +640,7 @@ export const knowledgeGenerateSuggestionsAction = defineWebAction({
     inputSchema: modelIdInput.extend({
         operation: z.enum(['generate_definitions', 'analyze_context', 'analyze_schema', 'find_relationships', 'suggest_metrics']),
         prompt: z.string().max(4000).optional(),
+        knowledgeSourceIds: z.array(z.string().min(1)).min(1).max(10),
     }),
     outputSchema: z.object({ suggestions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })) }),
     permissions: readWorkspace,
@@ -517,8 +651,11 @@ export const knowledgeGenerateSuggestionsAction = defineWebAction({
         const resolved = await resolveAiLanguageModel({ role: 'action', organizationId: ctx.organizationId, req: ctx.services.req });
         const sourceSummary = knowledgeModel.dataSources.map(source => `${source.name} (${source.engine}, id=${source.connectionId})`).join('\n');
         const knowledgeSourceSummaries = await ctx.services.db.knowledge.listKnowledgeSources({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
+        const requestedSourceIds = new Set(input.knowledgeSourceIds);
+        if (input.knowledgeSourceIds.some(id => !knowledgeSourceSummaries.some(source => source.id === id))) throw new Error('One or more knowledge sources are unavailable.');
         const knowledgeSources = await Promise.all(
             knowledgeSourceSummaries
+                .filter(source => requestedSourceIds.has(source.id))
                 .slice(0, 10)
                 .map(source => ctx.services.db.knowledge.getKnowledgeSource({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId, id: source.id })),
         );
@@ -732,7 +869,10 @@ export const knowledgeActions = [
     knowledgeListVerifiedQueriesAction,
     knowledgeGetVerifiedQueryAction,
     knowledgeCreateVerifiedQueryAction,
+    knowledgeUpdateVerifiedQueryAction,
     knowledgeDeleteVerifiedQueryAction,
+    knowledgeGetGraphAction,
+    knowledgeReplaceAssetSourcesAction,
     knowledgeSearchKnowledgeAction,
     knowledgeGetDefinitionAction,
     knowledgeSearchVerifiedQueriesAction,

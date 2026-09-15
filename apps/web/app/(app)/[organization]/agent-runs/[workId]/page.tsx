@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { ArrowLeft, CheckCircle2, Database, FileText, PanelTop, TerminalSquare } from 'lucide-react';
+import { ArrowLeft, BrainCircuit, CheckCircle2, Database, FileText, PanelTop, TerminalSquare } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
 import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
@@ -52,12 +52,13 @@ export default async function AgentRunDetailPage({
     }
 
     const db = await getDBService();
-    const [snapshot, events, connections, persistedFindings, artifacts] = await Promise.all([
+    const [snapshot, events, connections, persistedFindings, artifacts, knowledgeUsage] = await Promise.all([
         db.works.getSnapshot({ organizationId, userId, workId }),
         db.works.listEvents({ organizationId, userId, workId }),
         db.connections.list(organizationId),
         db.works.listFindings({ organizationId, userId, workId }),
         db.artifacts.listByWork({ organizationId, workId }),
+        db.works.listKnowledgeAssetUsage({ organizationId, userId, workId }),
     ]);
     if (!snapshot) notFound();
 
@@ -126,6 +127,62 @@ export default async function AgentRunDetailPage({
                         {t('Detail.WorkspaceDescription', { tabs: formatter.tabs(stats.tabCount), sqlRuns: formatter.sqlRuns(stats.sqlExecutionCount) })}
                     </p>
                 </header>
+
+                <section className="grid gap-3">
+                    <div>
+                        <h2 className="text-base font-semibold">{t('KnowledgeUsed.Title')}</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">{t('KnowledgeUsed.Description')}</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-5">
+                        {knowledgeUsage.length ? (
+                            <div className="grid gap-6 md:grid-cols-3">
+                                {(['source', 'definition', 'verified_query'] as const).map(assetType => {
+                                    const items = knowledgeUsage.filter(item => item.assetType === assetType);
+                                    return (
+                                        <section key={assetType}>
+                                            <h3 className="text-xs font-medium uppercase text-muted-foreground">{t(`KnowledgeUsed.Groups.${assetType}`)}</h3>
+                                            <div className="mt-3 grid gap-2">
+                                                {items.map(item => {
+                                                    const snapshot = item.assetSnapshot as { name?: string; modelName?: string };
+                                                    const parameter = assetType === 'definition' ? 'definition' : assetType === 'verified_query' ? 'query' : 'source';
+                                                    const tab = assetType === 'definition' ? 'definitions' : assetType === 'verified_query' ? 'queries' : 'sources';
+                                                    const content = (
+                                                        <>
+                                                            <BrainCircuit className="size-4 shrink-0 text-muted-foreground" />
+                                                            <span className="min-w-0 flex-1">
+                                                                <span className="block truncate text-sm font-medium">{snapshot.name ?? item.assetId}</span>
+                                                                <span className="block truncate text-xs text-muted-foreground">
+                                                                    {snapshot.modelName ?? item.knowledgeModelId} · {t('KnowledgeUsed.ReadCount', { count: item.useCount })}
+                                                                </span>
+                                                            </span>
+                                                        </>
+                                                    );
+                                                    return item.available ? (
+                                                        <Link
+                                                            key={`${assetType}:${item.assetId}`}
+                                                            href={`/${encodeURIComponent(organization)}/knowledge/${encodeURIComponent(item.knowledgeModelId)}?tab=${tab}&${parameter}=${encodeURIComponent(item.assetId)}`}
+                                                            className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent"
+                                                        >
+                                                            {content}
+                                                        </Link>
+                                                    ) : (
+                                                        <div key={`${assetType}:${item.assetId}`} className="flex items-center gap-3 rounded-md border p-3 opacity-70">
+                                                            {content}
+                                                            <span className="text-xs text-muted-foreground">{t('KnowledgeUsed.Unavailable')}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {!items.length ? <p className="text-sm text-muted-foreground">{t('KnowledgeUsed.None')}</p> : null}
+                                            </div>
+                                        </section>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">{t('KnowledgeUsed.Empty')}</div>
+                        )}
+                    </div>
+                </section>
 
                 <section className="grid gap-3">
                     <div>

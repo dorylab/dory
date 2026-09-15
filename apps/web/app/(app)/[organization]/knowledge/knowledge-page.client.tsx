@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BrainCircuit, CheckCircle2, FileCode2, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { ArrowDown, Bot, BrainCircuit, CheckCircle2, CircleAlert, FileCode2, FileText, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
@@ -60,6 +60,12 @@ export type KnowledgeModelView = {
     model: { definitions: Definition[] };
     dataSources: ModelDataSource[];
     verifiedQueryCount: number;
+    knowledgeSourceCount: number;
+    readiness: {
+        status: 'ready' | 'not_ready';
+        checks: { dataSource: boolean; verifiedDefinition: boolean; verifiedQuery: boolean };
+    };
+    agentUnderstands: Array<{ id: string; name: string; kind: Definition['kind'] }>;
     createdAt: string;
     updatedAt: string;
 };
@@ -76,6 +82,121 @@ type VerifiedQuery = {
     sourceId: string | null;
     updatedAt: string;
 };
+type KnowledgeSourceSummary = { id: string; fileName: string; format: 'markdown' | 'yaml' | 'text'; connectionId: string | null };
+type KnowledgeGraph = {
+    queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
+    sourceAssetEdges: Array<{
+        sourceId: string;
+        assetType: 'definition' | 'verified_query';
+        assetId: string;
+        relationType: 'provided' | 'generated';
+    }>;
+};
+
+function AssetSourceEditor({
+    organization,
+    knowledgeModelId,
+    assetType,
+    assetId,
+    sources,
+    graph,
+}: {
+    organization: string;
+    knowledgeModelId: string;
+    assetType: 'definition' | 'verified_query';
+    assetId: string;
+    sources: KnowledgeSourceSummary[];
+    graph: KnowledgeGraph;
+}) {
+    const t = useTranslations('Knowledge');
+    const queryClient = useQueryClient();
+    const selected = graph.sourceAssetEdges.filter(edge => edge.assetType === assetType && edge.assetId === assetId).map(edge => edge.sourceId);
+    const update = useMutation({
+        mutationFn: (sourceIds: string[]) =>
+            executeActionClient('knowledge.replaceAssetSources', { knowledgeModelId, assetType, assetId, sourceIds, relationType: 'provided' }, { organizationId: organization }),
+        onSuccess: () => void queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
+    });
+    if (!sources.length) return <span className="text-sm text-muted-foreground">{t('NoReferences')}</span>;
+    return (
+        <div className="flex flex-wrap gap-3">
+            {sources.map(source => {
+                const checked = selected.includes(source.id);
+                return (
+                    <label key={source.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={update.isPending}
+                            onChange={() => update.mutate(checked ? selected.filter(id => id !== source.id) : [...selected, source.id])}
+                        />
+                        {source.fileName}
+                    </label>
+                );
+            })}
+        </div>
+    );
+}
+
+function DefinitionReferenceEditor({
+    organization,
+    knowledgeModelId,
+    query,
+    definitions,
+    graph,
+}: {
+    organization: string;
+    knowledgeModelId: string;
+    query: VerifiedQuery;
+    definitions: Definition[];
+    graph: KnowledgeGraph;
+}) {
+    const t = useTranslations('Knowledge');
+    const queryClient = useQueryClient();
+    const sourceIds = graph.sourceAssetEdges.filter(edge => edge.assetType === 'verified_query' && edge.assetId === query.id).map(edge => edge.sourceId);
+    const update = useMutation({
+        mutationFn: (definitionIds: string[]) =>
+            executeActionClient(
+                'knowledge.updateVerifiedQuery',
+                {
+                    knowledgeModelId,
+                    id: query.id,
+                    title: query.title,
+                    question: query.question,
+                    sql: query.sql,
+                    description: query.description,
+                    definitionIds,
+                    knowledgeSourceIds: sourceIds,
+                },
+                { organizationId: organization },
+            ),
+        onSuccess: () => {
+            void Promise.all([
+                queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'verified-queries'] }),
+                queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
+            ]);
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
+    });
+    return (
+        <div className="grid gap-2">
+            {definitions.map(definition => {
+                const checked = query.definitionIds.includes(definition.id);
+                return (
+                    <label key={definition.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={update.isPending}
+                            onChange={() => update.mutate(checked ? query.definitionIds.filter(id => id !== definition.id) : [...query.definitionIds, definition.id])}
+                        />
+                        {definition.name}
+                    </label>
+                );
+            })}
+        </div>
+    );
+}
 
 const modelKey = (modelId: string) => ['knowledge-model', modelId] as const;
 const connectionIdOf = (item: ConnectionListItem) => item.connection.id!;
@@ -501,6 +622,7 @@ function EditDefinitionDialog({
     const [description, setDescription] = useState('');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
+    const [status, setStatus] = useState<Definition['status']>('verified');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -512,6 +634,7 @@ function EditDefinitionDialog({
         setDescription(definition.description ?? '');
         setFrom(definition.from ?? '');
         setTo(definition.to ?? '');
+        setStatus(definition.status);
     }, [definition]);
 
     const relationshipOptions = model.model.definitions.filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship');
@@ -522,6 +645,7 @@ function EditDefinitionDialog({
         try {
             await onSave(definition.id, {
                 ...definition,
+                status,
                 name: name.trim(),
                 sourceConnectionId,
                 description: description.trim() || undefined,
@@ -562,6 +686,15 @@ function EditDefinitionDialog({
                                     {item.name}
                                 </SelectItem>
                             ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={status} onValueChange={value => setStatus(value as Definition['status'])}>
+                        <SelectTrigger className="w-full" aria-label={t('VerificationStatus')}>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="verified">{t('Verified')}</SelectItem>
+                            <SelectItem value="unverified">{t('Unverified')}</SelectItem>
                         </SelectContent>
                     </Select>
                     {kind === 'relationship' ? (
@@ -634,20 +767,29 @@ function EditDefinitionDialog({
 }
 
 function DefinitionPanel({
+    organization,
     model,
+    queries,
+    graph,
+    sources,
     onSave,
     onUpdate,
     onImport,
     onAskAi,
 }: {
+    organization: string;
     model: KnowledgeModelView;
+    queries: VerifiedQuery[];
+    graph: KnowledgeGraph;
+    sources: KnowledgeSourceSummary[];
     onSave: (definitions: Definition[]) => void;
     onUpdate: (definitionId: string, definition: Definition) => Promise<void>;
     onImport: () => void;
     onAskAi: () => void;
 }) {
     const t = useTranslations('Knowledge');
-    const [selected, setSelected] = useState<Definition | null>(null);
+    const [selectedDefinitionId, setSelectedDefinitionId] = useQueryState('definition', parseAsString);
+    const selected = model.model.definitions.find(definition => definition.id === selectedDefinitionId) ?? null;
     const [editingDefinition, setEditingDefinition] = useState<Definition | null>(null);
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
@@ -743,7 +885,7 @@ function DefinitionPanel({
                             <tr
                                 key={definition.id}
                                 className="cursor-pointer border-t hover:bg-muted/30"
-                                onClick={() => setSelected(current => (current?.id === definition.id ? null : definition))}
+                                onClick={() => void setSelectedDefinitionId(selected?.id === definition.id ? null : definition.id)}
                             >
                                 <td className="p-3 font-medium">{definition.name}</td>
                                 <td className="p-3">{t(`Kinds.${definition.kind}`)}</td>
@@ -773,7 +915,60 @@ function DefinitionPanel({
                                 </td>
                             </tr>,
                             ...(selected?.id === definition.id
-                                ? [<DefinitionExpandedRow key={`${definition.id}:detail`} definition={definition} onEdit={() => setEditingDefinition(definition)} />]
+                                ? [
+                                      <DefinitionExpandedRow key={`${definition.id}:detail`} definition={definition} onEdit={() => setEditingDefinition(definition)} />,
+                                      <tr key={`${definition.id}:references`} className="border-t bg-muted/10">
+                                          <td colSpan={5} className="px-5 pb-5">
+                                              <div className="grid gap-4 md:grid-cols-2">
+                                                  <div>
+                                                      <div className="text-xs font-medium uppercase text-muted-foreground">{t('ReferencedByQueries')}</div>
+                                                      <div className="mt-2 flex flex-wrap gap-2">
+                                                          {queries
+                                                              .filter(query =>
+                                                                  graph.queryDefinitionEdges.some(edge => edge.queryId === query.id && edge.definitionId === definition.id),
+                                                              )
+                                                              .map(query => (
+                                                                  <Button key={query.id} variant="outline" size="sm" asChild>
+                                                                      <Link href={`?tab=queries&query=${encodeURIComponent(query.id)}`}>{query.title}</Link>
+                                                                  </Button>
+                                                              ))}
+                                                          {!graph.queryDefinitionEdges.some(edge => edge.definitionId === definition.id) ? (
+                                                              <span className="text-sm text-muted-foreground">{t('NoReferences')}</span>
+                                                          ) : null}
+                                                      </div>
+                                                      <div className="mt-3">
+                                                          <AssetSourceEditor
+                                                              organization={organization}
+                                                              knowledgeModelId={model.id}
+                                                              assetType="definition"
+                                                              assetId={definition.id}
+                                                              sources={sources}
+                                                              graph={graph}
+                                                          />
+                                                      </div>
+                                                  </div>
+                                                  <div>
+                                                      <div className="text-xs font-medium uppercase text-muted-foreground">{t('RelatedSources')}</div>
+                                                      <div className="mt-2 flex flex-wrap gap-2">
+                                                          {graph.sourceAssetEdges
+                                                              .filter(edge => edge.assetType === 'definition' && edge.assetId === definition.id)
+                                                              .map(edge => (
+                                                                  <Button key={edge.sourceId} variant="outline" size="sm" asChild>
+                                                                      <Link href={`?tab=sources&source=${encodeURIComponent(edge.sourceId)}`}>
+                                                                          {sources.find(source => source.id === edge.sourceId)?.fileName ?? edge.sourceId} ·{' '}
+                                                                          {t(`RelationTypes.${edge.relationType}`)}
+                                                                      </Link>
+                                                                  </Button>
+                                                              ))}
+                                                          {!graph.sourceAssetEdges.some(edge => edge.assetType === 'definition' && edge.assetId === definition.id) ? (
+                                                              <span className="text-sm text-muted-foreground">{t('NoReferences')}</span>
+                                                          ) : null}
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          </td>
+                                      </tr>,
+                                  ]
                                 : []),
                         ])}
                     </tbody>
@@ -855,28 +1050,40 @@ function AskAiDialog({
     open,
     onOpenChange,
     model,
+    organization,
     onAccept,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     model: KnowledgeModelView;
-    onAccept: (definitions: Definition[]) => void;
+    organization: string;
+    onAccept: (definitions: Definition[], generatedIds: string[], sourceIds: string[]) => void;
 }) {
     const t = useTranslations('Knowledge');
     const [operation, setOperation] = useState('generate_definitions');
     const [prompt, setPrompt] = useState('');
     const [suggestions, setSuggestions] = useState<Definition[]>([]);
+    const [sourceIds, setSourceIds] = useState<string[]>([]);
+    const sources = useQuery({
+        queryKey: [...modelKey(model.id), 'knowledge-sources'],
+        queryFn: () =>
+            executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId: model.id }, { organizationId: organization }),
+        enabled: open,
+    });
     const generate = useMutation({
-        mutationFn: () => executeActionClient<{ suggestions: Definition[] }>('knowledge.generateSuggestions', { knowledgeModelId: model.id, operation, prompt }),
+        mutationFn: () =>
+            executeActionClient<{ suggestions: Definition[] }>('knowledge.generateSuggestions', { knowledgeModelId: model.id, operation, prompt, knowledgeSourceIds: sourceIds }),
         onSuccess: data => setSuggestions(data.suggestions),
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.GenerateSuggestions')),
     });
     const accept = () => {
         const existing = new Set(model.model.definitions.map(item => item.id));
-        onAccept([
-            ...model.model.definitions,
-            ...suggestions.map(item => ({ ...item, id: existing.has(item.id) ? `${item.id}:${crypto.randomUUID()}` : item.id, status: 'verified' as const })),
-        ]);
+        const generated = suggestions.map(item => ({ ...item, id: existing.has(item.id) ? `${item.id}:${crypto.randomUUID()}` : item.id, status: 'verified' as const }));
+        onAccept(
+            [...model.model.definitions, ...generated],
+            generated.map(item => item.id),
+            sourceIds,
+        );
         onOpenChange(false);
         setSuggestions([]);
     };
@@ -888,6 +1095,20 @@ function AskAiDialog({
                     <DialogDescription>{t('AskAiDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
+                    <fieldset className="space-y-2 rounded-md border p-3">
+                        <legend className="px-1 text-sm font-medium">{t('ReferenceSources')}</legend>
+                        {sources.data?.sources.map(source => (
+                            <label key={source.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={sourceIds.includes(source.id)}
+                                    onChange={() => setSourceIds(current => (current.includes(source.id) ? current.filter(id => id !== source.id) : [...current, source.id]))}
+                                />
+                                {source.fileName}
+                            </label>
+                        ))}
+                        {sources.data && !sources.data.sources.length ? <p className="text-sm text-muted-foreground">{t('ReferenceSourcesEmpty')}</p> : null}
+                    </fieldset>
                     <Select value={operation} onValueChange={setOperation}>
                         <SelectTrigger className="w-full">
                             <SelectValue />
@@ -921,7 +1142,7 @@ function AskAiDialog({
                     {suggestions.length ? (
                         <Button onClick={accept}>{t('ReviewAndAdd', { count: suggestions.length })}</Button>
                     ) : (
-                        <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
+                        <Button onClick={() => generate.mutate()} disabled={generate.isPending || sourceIds.length === 0}>
                             {generate.isPending ? t('Analyzing') : t('GenerateSuggestions')}
                         </Button>
                     )}
@@ -1171,6 +1392,8 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
     const [askAiOpen, setAskAiOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
+    const [activeTab, setActiveTab] = useQueryState('tab', parseAsString.withDefault('overview'));
+    const [selectedQueryId, setSelectedQueryId] = useQueryState('query', parseAsString);
     const modelQuery = useQuery({
         queryKey: modelKey(knowledgeModelId),
         queryFn: () => executeActionClient<KnowledgeModelView>('knowledge.get', { knowledgeModelId }, { organizationId: organization }),
@@ -1178,6 +1401,14 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     const queries = useQuery({
         queryKey: [...modelKey(knowledgeModelId), 'verified-queries'],
         queryFn: () => executeActionClient<{ queries: VerifiedQuery[] }>('knowledge.listVerifiedQueries', { knowledgeModelId }, { organizationId: organization }),
+    });
+    const graph = useQuery({
+        queryKey: [...modelKey(knowledgeModelId), 'graph'],
+        queryFn: () => executeActionClient<KnowledgeGraph>('knowledge.getGraph', { knowledgeModelId }, { organizationId: organization }),
+    });
+    const sources = useQuery({
+        queryKey: [...modelKey(knowledgeModelId), 'knowledge-sources'],
+        queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
     });
     useEffect(() => {
         if (modelQuery.data) setMarkdown(modelQuery.data.businessContextMd);
@@ -1195,6 +1426,36 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
         onSuccess: setModel,
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveDefinitions')),
     });
+    const saveDefinitionsWithSources = useMutation({
+        mutationFn: async ({
+            definitions,
+            assetIds,
+            sourceIds,
+            relationType,
+        }: {
+            definitions: Definition[];
+            assetIds: string[];
+            sourceIds: string[];
+            relationType: 'provided' | 'generated';
+        }) => {
+            const saved = await executeActionClient<KnowledgeModelView>('knowledge.saveDefinitions', { knowledgeModelId, definitions }, { organizationId: organization });
+            await Promise.all(
+                assetIds.map(assetId =>
+                    executeActionClient(
+                        'knowledge.replaceAssetSources',
+                        { knowledgeModelId, assetType: 'definition', assetId, sourceIds, relationType },
+                        { organizationId: organization },
+                    ),
+                ),
+            );
+            return saved;
+        },
+        onSuccess: saved => {
+            setModel(saved);
+            void queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] });
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveDefinitions')),
+    });
     const updateDefinition = useMutation({
         mutationFn: ({ definitionId, definition }: { definitionId: string; definition: Definition }) =>
             executeActionClient<KnowledgeModelView>('knowledge.updateDefinition', { knowledgeModelId, definitionId, definition }, { organizationId: organization }),
@@ -1207,7 +1468,12 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     });
     const deleteQuery = useMutation({
         mutationFn: (id: string) => executeActionClient('knowledge.deleteVerifiedQuery', { knowledgeModelId, id }, { organizationId: organization }),
-        onSuccess: () => void queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'verified-queries'] }),
+        onSuccess: () =>
+            void Promise.all([
+                queryClient.invalidateQueries({ queryKey: modelKey(knowledgeModelId) }),
+                queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'verified-queries'] }),
+                queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
+            ]),
     });
     if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">{t('LoadingModel')}</div>;
     if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">{t('ModelNotFound')}</div>;
@@ -1243,7 +1509,7 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                         </DropdownMenu>
                     </div>
                 </header>
-                <Tabs defaultValue="overview">
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList variant="line">
                         <TabsTrigger value="overview">{t('Overview')}</TabsTrigger>
                         <TabsTrigger value="definitions">{t('Definitions')}</TabsTrigger>
@@ -1251,11 +1517,59 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                         <TabsTrigger value="sources">{t('KnowledgeSources.Tab')}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="overview" className="space-y-5 pt-4">
+                        <Card className={model.readiness.status === 'ready' ? 'border-primary/30' : 'border-amber-500/30'}>
+                            <CardContent className="flex flex-wrap items-start justify-between gap-5 py-5">
+                                <div>
+                                    <div className="flex items-center gap-2 text-lg font-semibold">
+                                        {model.readiness.status === 'ready' ? <CheckCircle2 className="text-primary" /> : <CircleAlert className="text-amber-500" />}
+                                        {model.readiness.status === 'ready' ? t('Readiness.Ready') : t('Readiness.NotReady')}
+                                    </div>
+                                    <p className="mt-1 text-sm text-muted-foreground">{t('Readiness.Description')}</p>
+                                    {model.agentUnderstands.length ? (
+                                        <div className="mt-4">
+                                            <div className="text-xs font-medium uppercase text-muted-foreground">{t('Readiness.Understands')}</div>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {model.agentUnderstands.map(item => (
+                                                    <Badge key={item.id} variant="secondary">
+                                                        {item.name}
+                                                    </Badge>
+                                                ))}
+                                                {model.model.definitions.filter(item => item.status === 'verified' && item.kind !== 'relationship').length >
+                                                model.agentUnderstands.length ? (
+                                                    <Badge variant="outline">
+                                                        +
+                                                        {model.model.definitions.filter(item => item.status === 'verified' && item.kind !== 'relationship').length -
+                                                            model.agentUnderstands.length}
+                                                    </Badge>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </div>
+                                {model.readiness.status === 'not_ready' ? (
+                                    <div className="grid gap-2 text-sm">
+                                        {Object.entries(model.readiness.checks).map(([check, ready]) => (
+                                            <button
+                                                key={check}
+                                                type="button"
+                                                className="flex items-center gap-2 text-left hover:text-foreground"
+                                                onClick={() =>
+                                                    void setActiveTab(check === 'verifiedQuery' ? 'queries' : check === 'verifiedDefinition' ? 'definitions' : 'overview')
+                                                }
+                                            >
+                                                {ready ? <CheckCircle2 className="size-4 text-primary" /> : <CircleAlert className="size-4 text-amber-500" />}
+                                                {t(`Readiness.Checks.${check}`)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </CardContent>
+                        </Card>
                         <div className="grid gap-3 sm:grid-cols-3">
                             {[
                                 [model.model.definitions.length, t('Definitions')],
                                 [model.verifiedQueryCount, t('VerifiedQueries')],
-                                [model.dataSources.length, t('DataSources')],
+                                [sources.data?.sources.length ?? model.knowledgeSourceCount, t('KnowledgeSources.Tab')],
                             ].map(([value, label]) => (
                                 <Card key={label}>
                                     <CardContent className="py-5">
@@ -1265,6 +1579,27 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                 </Card>
                             ))}
                         </div>
+                        <section className="rounded-lg border bg-card p-5">
+                            <h2 className="text-base font-semibold">{t('KnowledgeFlow.Title')}</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">{t('KnowledgeFlow.Description')}</p>
+                            <div className="mt-5 grid items-center gap-2 text-center sm:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr]">
+                                {[
+                                    [FileText, t('KnowledgeFlow.Sources')],
+                                    [BrainCircuit, t('KnowledgeFlow.Definitions')],
+                                    [FileCode2, t('KnowledgeFlow.Queries')],
+                                    [Sparkles, t('KnowledgeFlow.AskAi')],
+                                    [Bot, t('KnowledgeFlow.AgentRun')],
+                                ].map(([Icon, label], index) => (
+                                    <div key={String(label)} className="contents">
+                                        <div className="rounded-md border bg-muted/20 p-3">
+                                            <Icon className="mx-auto size-5 text-muted-foreground" />
+                                            <div className="mt-2 text-sm font-medium">{String(label)}</div>
+                                        </div>
+                                        {index < 4 ? <ArrowDown className="mx-auto size-4 text-muted-foreground sm:-rotate-90" /> : null}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
                         <section className="space-y-3 pt-1">
                             <h2 className="text-base font-semibold">{t('BusinessContext')}</h2>
                             <Textarea
@@ -1278,7 +1613,11 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                     </TabsContent>
                     <TabsContent value="definitions" className="pt-4">
                         <DefinitionPanel
+                            organization={organization}
                             model={model}
+                            queries={queries.data?.queries ?? []}
+                            graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                            sources={sources.data?.sources ?? []}
                             onSave={definitions => saveDefinitions.mutate(definitions)}
                             onUpdate={async (definitionId, definition) => {
                                 await updateDefinition.mutateAsync({ definitionId, definition });
@@ -1290,15 +1629,72 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                     <TabsContent value="queries" className="space-y-3 pt-4">
                         {queries.data?.queries.length ? (
                             queries.data.queries.map(item => (
-                                <Card key={item.id}>
+                                <Card key={item.id} className={selectedQueryId === item.id ? 'ring-1 ring-primary/30' : ''}>
                                     <CardContent className="flex items-start justify-between gap-4 py-4">
                                         <div className="min-w-0">
-                                            <div className="font-medium">{item.title}</div>
+                                            <button
+                                                type="button"
+                                                className="font-medium hover:underline"
+                                                onClick={() => void setSelectedQueryId(selectedQueryId === item.id ? null : item.id)}
+                                            >
+                                                {item.title}
+                                            </button>
                                             <p className="mt-1 text-sm text-muted-foreground">{item.question}</p>
                                             <div className="mt-2 text-xs text-muted-foreground">
                                                 {item.sourceType} · {t('UpdatedTime', { time: relativeTime(item.updatedAt) })}
                                             </div>
                                             <pre className="mt-3 max-h-48 overflow-auto rounded bg-muted p-3 text-xs">{item.sql}</pre>
+                                            {selectedQueryId === item.id ? (
+                                                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                                    <div>
+                                                        <div className="text-xs font-medium uppercase text-muted-foreground">{t('ReferencedDefinitions')}</div>
+                                                        <div className="mt-2 flex flex-wrap gap-2">
+                                                            {item.definitionIds.map(id => (
+                                                                <Button key={id} variant="outline" size="sm" asChild>
+                                                                    <Link href={`?tab=definitions&definition=${encodeURIComponent(id)}`}>
+                                                                        {model.model.definitions.find(definition => definition.id === id)?.name ?? id}
+                                                                    </Link>
+                                                                </Button>
+                                                            ))}
+                                                            {!item.definitionIds.length ? <span className="text-sm text-muted-foreground">{t('NoReferences')}</span> : null}
+                                                        </div>
+                                                        <div className="mt-3">
+                                                            <DefinitionReferenceEditor
+                                                                organization={organization}
+                                                                knowledgeModelId={knowledgeModelId}
+                                                                query={item}
+                                                                definitions={model.model.definitions}
+                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-xs font-medium uppercase text-muted-foreground">{t('RelatedSources')}</div>
+                                                        <div className="mt-2 flex flex-wrap gap-2">
+                                                            {(graph.data?.sourceAssetEdges ?? [])
+                                                                .filter(edge => edge.assetType === 'verified_query' && edge.assetId === item.id)
+                                                                .map(edge => (
+                                                                    <Button key={edge.sourceId} variant="outline" size="sm" asChild>
+                                                                        <Link href={`?tab=sources&source=${encodeURIComponent(edge.sourceId)}`}>
+                                                                            {sources.data?.sources.find(source => source.id === edge.sourceId)?.fileName ?? edge.sourceId} ·{' '}
+                                                                            {t(`RelationTypes.${edge.relationType}`)}
+                                                                        </Link>
+                                                                    </Button>
+                                                                ))}
+                                                        </div>
+                                                        <div className="mt-3">
+                                                            <AssetSourceEditor
+                                                                organization={organization}
+                                                                knowledgeModelId={knowledgeModelId}
+                                                                assetType="verified_query"
+                                                                assetId={item.id}
+                                                                sources={sources.data?.sources ?? []}
+                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : null}
                                         </div>
                                         <Button variant="ghost" size="icon-sm" aria-label={t('DeleteNamedQuery', { name: item.title })} onClick={() => deleteQuery.mutate(item.id)}>
                                             <Trash2 />
@@ -1318,11 +1714,23 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                             knowledgeModelId={knowledgeModelId}
                             dataSources={model.dataSources}
                             definitions={model.model.definitions}
-                            onImportDefinitions={definitions => saveDefinitions.mutate(definitions)}
+                            queries={queries.data?.queries ?? []}
+                            graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                            onImportDefinitions={async (definitions, importedIds, sourceId) => {
+                                await saveDefinitionsWithSources.mutateAsync({ definitions, assetIds: importedIds, sourceIds: [sourceId], relationType: 'provided' });
+                            }}
                         />
                     </TabsContent>
                 </Tabs>
-                <AskAiDialog open={askAiOpen} onOpenChange={setAskAiOpen} model={model} onAccept={definitions => saveDefinitions.mutate(definitions)} />
+                <AskAiDialog
+                    open={askAiOpen}
+                    onOpenChange={setAskAiOpen}
+                    model={model}
+                    organization={organization}
+                    onAccept={(definitions, generatedIds, sourceIds) =>
+                        saveDefinitionsWithSources.mutate({ definitions, assetIds: generatedIds, sourceIds, relationType: 'generated' })
+                    }
+                />
                 <ImportYamlDialog open={importOpen} onOpenChange={setImportOpen} model={model} onImported={setModel} />
                 <YamlEditorDialog open={yamlEditorOpen} onOpenChange={setYamlEditorOpen} model={model} onSaved={setModel} />
             </main>

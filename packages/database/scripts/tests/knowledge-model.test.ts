@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
     parseKnowledgeYaml,
+    parseKnowledgeSourceYaml,
     KNOWLEDGE_SOURCE_MAX_BYTES,
     serializeKnowledgeModel,
     validateKnowledgeSource,
@@ -31,6 +32,30 @@ test('knowledge model YAML preserves source ownership and imports definitions as
         ],
     );
     assert.equal(parseKnowledgeYaml(serializeKnowledgeModel(model), undefined, false).definitions[0]?.status, 'verified');
+});
+
+test('knowledge source YAML imports definitions and verified query candidates together', () => {
+    const imported = parseKnowledgeSourceYaml(
+        `definitions:
+  - id: metric:revenue
+    name: Revenue
+    kind: metric
+verifiedQueries:
+  - title: Revenue by month
+    question: What is monthly revenue?
+    sql: SELECT month, SUM(amount) FROM orders GROUP BY month
+    definitionIds: [metric:revenue]
+`,
+        'postgres',
+    );
+    assert.equal(imported.definitions[0]?.status, 'unverified');
+    assert.deepEqual(imported.verifiedQueries[0], {
+        sourceConnectionId: 'postgres',
+        title: 'Revenue by month',
+        question: 'What is monthly revenue?',
+        sql: 'SELECT month, SUM(amount) FROM orders GROUP BY month',
+        definitionIds: ['metric:revenue'],
+    });
 });
 
 test('Cube YAML without Dory source metadata requires a selected model source', () => {

@@ -206,7 +206,9 @@ const finishWorkInputSchema = z
             )
             .min(1)
             .max(20)
-            .describe('User-facing analytical conclusions. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. Evidence is optional when no Artifact supports the conclusion.'),
+            .describe(
+                'User-facing analytical conclusions. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. Evidence is optional when no Artifact supports the conclusion.',
+            ),
         steps: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
     })
     .passthrough();
@@ -218,11 +220,25 @@ const actionTransportInputSchema = z
         input: z.unknown().optional(),
         projection: z.enum(['canonical', 'ui', 'agent', 'mcp', 'automation']).optional(),
         reason: z.string().nullable().optional(),
+        workId: z.string().min(1).optional(),
+        externalSessionId: z.string().min(1).optional(),
     })
     .passthrough();
 
 type ActionTransportAccess = 'read' | 'write';
 const MCP_CLIENT_APPROVED_CONFIRMATION_TOKEN = 'mcp-client-approved';
+const TRACKED_KNOWLEDGE_ACTION_IDS = new Set([
+    'knowledge.searchKnowledge',
+    'knowledge.searchVerifiedQueries',
+    'knowledge.getDefinition',
+    'knowledge.getVerifiedQuery',
+    'knowledge.getKnowledgeSource',
+]);
+const USED_KNOWLEDGE_ASSET_BY_ACTION = {
+    'knowledge.getDefinition': 'definition',
+    'knowledge.getVerifiedQuery': 'verified_query',
+    'knowledge.getKnowledgeSource': 'source',
+} as const;
 
 const mcpErrorShape = {
     ok: z.literal(false).optional(),
@@ -1242,6 +1258,74 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
     }
 
     assertActionRunnableByMcp(action, access);
+    if (access === 'read' && TRACKED_KNOWLEDGE_ACTION_IDS.has(action.id)) {
+        const actionInput = toRecord(input.input);
+        const work = await resolveMcpWork(ctx, {
+            ...input,
+            connectionId: getString(actionInput.connectionId),
+        });
+        const startedAt = performance.now();
+        try {
+            const result = await executeAction(ctx, action.id, input.input ?? {}, {
+                projection: input.projection,
+                reason: input.reason,
+            });
+            const assetType = USED_KNOWLEDGE_ASSET_BY_ACTION[action.id as keyof typeof USED_KNOWLEDGE_ASSET_BY_ACTION];
+            const data = toRecord(result.data);
+            const knowledgeModelId = getString(actionInput.knowledgeModelId) ?? getString(data.knowledgeModelId);
+            const assetId = getString(data.id) ?? getString(actionInput.definitionId) ?? getString(actionInput.id);
+            const assetName = getString(data.name) ?? getString(data.title) ?? getString(data.fileName);
+            const event = {
+                tokenId: ctx.actor.id ?? null,
+                connectionId: work.connectionId,
+                toolName: 'dory_read',
+                actionId: action.id,
+                status: 'success' as const,
+                inputSummary: { actionId: action.id, knowledgeModelId, assetId },
+                outputSummary: { assetType: assetType ?? null, assetId, assetName },
+                durationMs: performance.now() - startedAt,
+            };
+            if (assetType && knowledgeModelId && assetId) {
+                const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId });
+                await ctx.services.db.works.recordKnowledgeAssetUsageEvent(
+                    {
+                        workId: work.workId,
+                        organizationId: ctx.organizationId,
+                        userId: ctx.userId,
+                        knowledgeModelId,
+                        assetType,
+                        assetId,
+                        assetSnapshot: {
+                            name: assetName ?? assetId,
+                            kind: getString(data.kind),
+                            modelName: model.name,
+                        },
+                    },
+                    event,
+                );
+            } else {
+                await ctx.services.db.works.recordEvent({ workId: work.workId, organizationId: ctx.organizationId, userId: ctx.userId, ...event });
+            }
+            return withWork({ ok: true, actionId: action.id, data: result.data, execution: result.execution }, work);
+        } catch (error) {
+            const structuredError = toMcpStructuredError(error);
+            await ctx.services.db.works.recordEvent({
+                workId: work.workId,
+                organizationId: ctx.organizationId,
+                userId: ctx.userId,
+                tokenId: ctx.actor.id ?? null,
+                connectionId: work.connectionId,
+                toolName: 'dory_read',
+                actionId: action.id,
+                status: 'error',
+                inputSummary: { actionId: action.id, knowledgeModelId: getString(actionInput.knowledgeModelId) },
+                errorCode: structuredError.code ?? null,
+                errorMessage: structuredError.message,
+                durationMs: performance.now() - startedAt,
+            });
+            throw error;
+        }
+    }
     const result = await executeAction(ctx, action.id, input.input ?? {}, {
         projection: input.projection,
         confirmationToken: access === 'write' && actionRequiresConfirmation(action) ? MCP_CLIENT_APPROVED_CONFIRMATION_TOKEN : null,
@@ -1355,7 +1439,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_read',
             title: 'Read Dory Actions',
             description:
-                'List, describe, or run read-only or low-risk Dory Actions by actionId. Use this for Action registry capabilities such as connection.list, connection.test, schema exploration, and other read operations.',
+                'List, describe, or run read-only or low-risk Dory Actions by actionId. Knowledge search and detail reads require an existing workId; search returns summaries and selected assets must be read explicitly before use.',
             inputSchema: actionTransportInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

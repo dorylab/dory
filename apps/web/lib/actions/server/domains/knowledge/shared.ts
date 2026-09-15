@@ -44,8 +44,28 @@ export const knowledgeModelOutputSchema = z.object({
     model: z.object({ definitions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })) }),
     dataSources: z.array(knowledgeDataSourceSchema),
     verifiedQueryCount: z.number().int().nonnegative(),
+    knowledgeSourceCount: z.number().int().nonnegative(),
+    readiness: z.object({
+        status: z.enum(['ready', 'not_ready']),
+        checks: z.object({ dataSource: z.boolean(), verifiedDefinition: z.boolean(), verifiedQuery: z.boolean() }),
+    }),
+    agentUnderstands: z.array(z.object({ id: z.string(), name: z.string(), kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']) })),
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
+});
+
+export const knowledgeAssetTypeSchema = z.enum(['definition', 'verified_query']);
+export const knowledgeSourceRelationTypeSchema = z.enum(['provided', 'generated']);
+export const knowledgeGraphSchema = z.object({
+    queryDefinitionEdges: z.array(z.object({ queryId: z.string(), definitionId: z.string() })),
+    sourceAssetEdges: z.array(
+        z.object({
+            sourceId: z.string(),
+            assetType: knowledgeAssetTypeSchema,
+            assetId: z.string(),
+            relationType: knowledgeSourceRelationTypeSchema,
+        }),
+    ),
 });
 
 export const knowledgeVerifiedQuerySchema = z.object({

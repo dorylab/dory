@@ -1,12 +1,13 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import NextLink from 'next/link';
 import { useTranslations } from 'next-intl';
 import { parseAsString, useQueryStates } from 'nuqs';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconBrandGithub } from '@tabler/icons-react';
-import { FileCode2, FileText, Link, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
+import { FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -62,6 +63,15 @@ type KnowledgeSourceSummary = {
 type KnowledgeSource = KnowledgeSourceSummary & { contentText: string };
 type PendingFile = { key: string; fileName: string; contentText: string; byteSize: number; connectionId: string | null };
 type ImportSuggestion = Omit<Definition, 'sourceConnectionId'> & { sourceConnectionId?: string };
+type ImportVerifiedQuery = {
+    id?: string;
+    sourceConnectionId?: string;
+    title: string;
+    question: string;
+    sql: string;
+    description?: string;
+    definitionIds: string[];
+};
 type KnowledgeConnector = {
     id: string;
     repositoryFullName: string;
@@ -72,6 +82,16 @@ type KnowledgeConnector = {
     lastError: string | null;
 };
 type GitHubRepository = { id: string; fullName: string; defaultBranch: string; private: boolean };
+type VerifiedQuery = { id: string; title: string };
+type KnowledgeGraph = {
+    queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
+    sourceAssetEdges: Array<{
+        sourceId: string;
+        assetType: 'definition' | 'verified_query';
+        assetId: string;
+        relationType: 'provided' | 'generated';
+    }>;
+};
 
 const MAX_FILE_BYTES = 10_000_000;
 const MAX_FILES_PER_UPLOAD = 20;
@@ -360,6 +380,7 @@ function SourceEditorDialog({
 function ImportReviewDialog({
     source,
     suggestions,
+    verifiedQueries,
     existingDefinitions,
     dataSources,
     onOpenChange,
@@ -370,27 +391,39 @@ function ImportReviewDialog({
     existingDefinitions: Definition[];
     dataSources: DataSource[];
     onOpenChange: (open: boolean) => void;
-    onImport: (definitions: Definition[]) => void;
+    verifiedQueries: ImportVerifiedQuery[];
+    onImport: (definitions: Definition[], importedIds: string[], sourceId: string, queries: ImportVerifiedQuery[]) => void;
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
     const existingIds = new Set(existingDefinitions.map(item => item.id));
     const [drafts, setDrafts] = useState<ImportSuggestion[]>([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [selectedQueryIndexes, setSelectedQueryIndexes] = useState<number[]>([]);
     useEffect(() => {
         setDrafts(suggestions);
         setSelectedIds(suggestions.filter(item => !existingIds.has(item.id)).map(item => item.id));
+        setSelectedQueryIndexes(verifiedQueries.map((_, index) => index));
         // The existing definition set is fixed while the review dialog is open.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [suggestions]);
+    }, [suggestions, verifiedQueries]);
     const selected = drafts.filter(item => selectedIds.includes(item.id));
-    const canImport = selected.length > 0 && selected.every(item => Boolean(item.sourceConnectionId));
+    const selectedQueries = verifiedQueries.filter((_, index) => selectedQueryIndexes.includes(index));
+    const canImport =
+        (selected.length > 0 || selectedQueries.length > 0) &&
+        selected.every(item => Boolean(item.sourceConnectionId)) &&
+        selectedQueries.every(item => Boolean(item.sourceConnectionId));
     const accept = () => {
         if (!canImport) return;
         const selectedIdSet = new Set(selected.map(item => item.id));
-        onImport([
-            ...existingDefinitions.filter(item => !selectedIdSet.has(item.id)),
-            ...selected.map(item => ({ ...item, sourceConnectionId: item.sourceConnectionId!, status: 'unverified' as const })),
-        ]);
+        onImport(
+            [
+                ...existingDefinitions.filter(item => !selectedIdSet.has(item.id)),
+                ...selected.map(item => ({ ...item, sourceConnectionId: item.sourceConnectionId!, status: 'unverified' as const })),
+            ],
+            selected.map(item => item.id),
+            source!.id,
+            selectedQueries,
+        );
         onOpenChange(false);
     };
     return (
@@ -445,13 +478,29 @@ function ImportReviewDialog({
                             </div>
                         );
                     })}
+                    {verifiedQueries.map((query, index) => (
+                        <label key={`${query.id ?? query.title}:${index}`} className="flex items-start gap-3 p-3">
+                            <input
+                                type="checkbox"
+                                className="mt-1 cursor-pointer"
+                                checked={selectedQueryIndexes.includes(index)}
+                                onChange={() => setSelectedQueryIndexes(current => (current.includes(index) ? current.filter(value => value !== index) : [...current, index]))}
+                            />
+                            <span className="min-w-0">
+                                <span className="flex items-center gap-2 font-medium">
+                                    {query.title} <Badge variant="outline">{t('VerifiedQuery')}</Badge>
+                                </span>
+                                <span className="mt-1 block text-xs text-muted-foreground">{query.question}</span>
+                            </span>
+                        </label>
+                    ))}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         {t('Cancel')}
                     </Button>
                     <Button onClick={accept} disabled={!canImport}>
-                        {t('ImportCount', { count: selected.length })}
+                        {t('ImportCount', { count: selected.length + selectedQueries.length })}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -612,13 +661,17 @@ export function KnowledgeSourcesPanel({
     knowledgeModelId,
     dataSources,
     definitions,
+    queries,
+    graph,
     onImportDefinitions,
 }: {
     organization: string;
     knowledgeModelId: string;
     dataSources: DataSource[];
     definitions: Definition[];
-    onImportDefinitions: (definitions: Definition[]) => void;
+    queries: VerifiedQuery[];
+    graph: KnowledgeGraph;
+    onImportDefinitions: (definitions: Definition[], importedIds: string[], sourceId: string) => Promise<void>;
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
     const queryClient = useQueryClient();
@@ -626,13 +679,20 @@ export function KnowledgeSourcesPanel({
         { githubInstallationId: parseAsString.withDefault(''), githubConnectionState: parseAsString.withDefault('') },
         { history: 'replace' },
     );
+    const [selectedSourceId, setSelectedSourceId] = useQueryStates({ source: parseAsString.withDefault('') }, { history: 'replace' });
     const [uploadOpen, setUploadOpen] = useState(false);
     const [connectorOpen, setConnectorOpen] = useState(Boolean(githubEntry.githubInstallationId && githubEntry.githubConnectionState));
     const [editing, setEditing] = useState<KnowledgeSourceSummary | null>(null);
     const [deleting, setDeleting] = useState<KnowledgeSourceSummary | null>(null);
     const [reviewing, setReviewing] = useState<KnowledgeSourceSummary | null>(null);
     const [suggestions, setSuggestions] = useState<ImportSuggestion[]>([]);
+    const [querySuggestions, setQuerySuggestions] = useState<ImportVerifiedQuery[]>([]);
     const [disconnecting, setDisconnecting] = useState<KnowledgeConnector | null>(null);
+    const sourceAssets = useMemo(() => {
+        const bySource = new Map<string, KnowledgeGraph['sourceAssetEdges']>();
+        for (const edge of graph.sourceAssetEdges) bySource.set(edge.sourceId, [...(bySource.get(edge.sourceId) ?? []), edge]);
+        return bySource;
+    }, [graph.sourceAssetEdges]);
     const sources = useQuery({
         queryKey: knowledgeSourcesKey(knowledgeModelId),
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
@@ -647,18 +707,19 @@ export function KnowledgeSourcesPanel({
     }, [githubEntry.githubConnectionState, githubEntry.githubInstallationId]);
     const previewImport = useMutation({
         mutationFn: (source: KnowledgeSourceSummary) =>
-            executeActionClient<{ suggestions: ImportSuggestion[] }>(
+            executeActionClient<{ suggestions: ImportSuggestion[]; verifiedQueries: ImportVerifiedQuery[] }>(
                 'knowledge.previewKnowledgeSourceImport',
                 { knowledgeModelId, id: source.id },
                 { organizationId: organization },
             ),
         onSuccess: (result, source) => {
-            if (!result.suggestions.length) {
+            if (!result.suggestions.length && !result.verifiedQueries.length) {
                 toast.error(t('NoImportable'));
                 return;
             }
             setReviewing(source);
             setSuggestions(result.suggestions);
+            setQuerySuggestions(result.verifiedQueries);
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('ParseFailed')),
     });
@@ -718,7 +779,7 @@ export function KnowledgeSourcesPanel({
                             {t('UploadFile')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={connectKnowledgeBase}>
-                            <Link />
+                            <LinkIcon />
                             {t('ConnectKnowledgeBase')}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -770,64 +831,109 @@ export function KnowledgeSourcesPanel({
                                 <th className="px-4 py-3 font-medium">{t('Scope')}</th>
                                 <th className="px-4 py-3 font-medium">{t('Size')}</th>
                                 <th className="px-4 py-3 font-medium">{t('Updated')}</th>
+                                <th className="px-4 py-3 font-medium">{t('Assets')}</th>
                                 <th className="w-14" />
                             </tr>
                         </thead>
                         <tbody>
-                            {sources.data.sources.map(source => (
-                                <tr
-                                    key={source.id}
-                                    className={`${source.connectorId ? '' : 'cursor-pointer'} border-t hover:bg-muted/30`}
-                                    onClick={() => !source.connectorId && setEditing(source)}
-                                >
-                                    <td className="px-4 py-3">
-                                        <span className="flex items-center gap-2 font-medium">
-                                            {source.format === 'yaml' ? (
-                                                <FileCode2 className="size-4 text-muted-foreground" />
-                                            ) : (
-                                                <FileText className="size-4 text-muted-foreground" />
-                                            )}
-                                            {source.fileName}
-                                            {source.connectorProvider === 'github' ? <Badge variant="outline">GitHub · {t('ReadOnly')}</Badge> : null}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 capitalize text-muted-foreground">{source.format}</td>
-                                    <td className="px-4 py-3 text-muted-foreground">{scopeName(source)}</td>
-                                    <td className="px-4 py-3 text-muted-foreground">{formatBytes(source.byteSize)}</td>
-                                    <td className="px-4 py-3 text-muted-foreground">{new Date(source.updatedAt).toLocaleDateString()}</td>
-                                    <td className="px-4 py-3 text-right">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon-sm"
-                                                    aria-label={t('ActionsFor', { name: source.fileName })}
-                                                    onClick={event => event.stopPropagation()}
-                                                >
-                                                    <MoreHorizontal />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" onClick={event => event.stopPropagation()}>
-                                                {!source.connectorId ? (
-                                                    <DropdownMenuItem onSelect={() => setEditing(source)}>
-                                                        <Pencil /> {t('Edit')}
-                                                    </DropdownMenuItem>
-                                                ) : null}
+                            {sources.data.sources.flatMap(source => {
+                                const assets = sourceAssets.get(source.id) ?? [];
+                                const definitionCount = assets.filter(asset => asset.assetType === 'definition').length;
+                                const queryCount = assets.filter(asset => asset.assetType === 'verified_query').length;
+                                const selected = selectedSourceId.source === source.id;
+                                return [
+                                    <tr
+                                        key={source.id}
+                                        className="cursor-pointer border-t hover:bg-muted/30"
+                                        onClick={() => void setSelectedSourceId({ source: selected ? '' : source.id })}
+                                    >
+                                        <td className="px-4 py-3">
+                                            <span className="flex items-center gap-2 font-medium">
                                                 {source.format === 'yaml' ? (
-                                                    <DropdownMenuItem onSelect={() => previewImport.mutate(source)}>
-                                                        <FileCode2 /> {t('ReviewImport')}
-                                                    </DropdownMenuItem>
-                                                ) : null}
-                                                {!source.connectorId ? (
-                                                    <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(source)}>
-                                                        <Trash2 /> {t('Delete')}
-                                                    </DropdownMenuItem>
-                                                ) : null}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </td>
-                                </tr>
-                            ))}
+                                                    <FileCode2 className="size-4 text-muted-foreground" />
+                                                ) : (
+                                                    <FileText className="size-4 text-muted-foreground" />
+                                                )}
+                                                {source.fileName}
+                                                {source.connectorProvider === 'github' ? <Badge variant="outline">GitHub · {t('ReadOnly')}</Badge> : null}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 capitalize text-muted-foreground">{source.format}</td>
+                                        <td className="px-4 py-3 text-muted-foreground">{scopeName(source)}</td>
+                                        <td className="px-4 py-3 text-muted-foreground">{formatBytes(source.byteSize)}</td>
+                                        <td className="px-4 py-3 text-muted-foreground">{new Date(source.updatedAt).toLocaleDateString()}</td>
+                                        <td className="px-4 py-3 text-muted-foreground">{t('AssetCounts', { definitions: definitionCount, queries: queryCount })}</td>
+                                        <td className="px-4 py-3 text-right">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon-sm"
+                                                        aria-label={t('ActionsFor', { name: source.fileName })}
+                                                        onClick={event => event.stopPropagation()}
+                                                    >
+                                                        <MoreHorizontal />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" onClick={event => event.stopPropagation()}>
+                                                    {!source.connectorId ? (
+                                                        <DropdownMenuItem onSelect={() => setEditing(source)}>
+                                                            <Pencil /> {t('Edit')}
+                                                        </DropdownMenuItem>
+                                                    ) : null}
+                                                    {source.format === 'yaml' ? (
+                                                        <DropdownMenuItem onSelect={() => previewImport.mutate(source)}>
+                                                            <FileCode2 /> {t('ReviewImport')}
+                                                        </DropdownMenuItem>
+                                                    ) : null}
+                                                    {!source.connectorId ? (
+                                                        <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(source)}>
+                                                            <Trash2 /> {t('Delete')}
+                                                        </DropdownMenuItem>
+                                                    ) : null}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </td>
+                                    </tr>,
+                                    ...(selected
+                                        ? [
+                                              <tr key={`${source.id}:assets`} className="border-t bg-muted/10">
+                                                  <td colSpan={7} className="p-5">
+                                                      <div className="grid gap-5 md:grid-cols-2">
+                                                          {(['provided', 'generated'] as const).map(relationType => (
+                                                              <section key={relationType}>
+                                                                  <h4 className="text-xs font-medium uppercase text-muted-foreground">{t(`RelationTypes.${relationType}`)}</h4>
+                                                                  <div className="mt-2 flex flex-wrap gap-2">
+                                                                      {assets
+                                                                          .filter(asset => asset.relationType === relationType)
+                                                                          .map(asset => {
+                                                                              const label =
+                                                                                  asset.assetType === 'definition'
+                                                                                      ? definitions.find(item => item.id === asset.assetId)?.name
+                                                                                      : queries.find(item => item.id === asset.assetId)?.title;
+                                                                              return (
+                                                                                  <Button key={`${asset.assetType}:${asset.assetId}`} variant="outline" size="sm" asChild>
+                                                                                      <NextLink
+                                                                                          href={`?tab=${asset.assetType === 'definition' ? 'definitions' : 'queries'}&${asset.assetType === 'definition' ? 'definition' : 'query'}=${encodeURIComponent(asset.assetId)}`}
+                                                                                      >
+                                                                                          {label ?? asset.assetId}
+                                                                                      </NextLink>
+                                                                                  </Button>
+                                                                              );
+                                                                          })}
+                                                                      {!assets.some(asset => asset.relationType === relationType) ? (
+                                                                          <span className="text-sm text-muted-foreground">{t('NoLinkedAssets')}</span>
+                                                                      ) : null}
+                                                                  </div>
+                                                              </section>
+                                                          ))}
+                                                      </div>
+                                                  </td>
+                                              </tr>,
+                                          ]
+                                        : []),
+                                ];
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -842,7 +948,7 @@ export function KnowledgeSourcesPanel({
                             {t('UploadFile')}
                         </Button>
                         <Button variant="outline" onClick={connectKnowledgeBase}>
-                            <Link />
+                            <LinkIcon />
                             {t('ConnectKnowledgeBase')}
                         </Button>
                     </div>
@@ -875,15 +981,46 @@ export function KnowledgeSourcesPanel({
             <ImportReviewDialog
                 source={reviewing}
                 suggestions={suggestions}
+                verifiedQueries={querySuggestions}
                 existingDefinitions={definitions}
                 dataSources={dataSources}
                 onOpenChange={open => {
                     if (!open) {
                         setReviewing(null);
                         setSuggestions([]);
+                        setQuerySuggestions([]);
                     }
                 }}
-                onImport={onImportDefinitions}
+                onImport={(definitions, importedIds, sourceId, importedQueries) => {
+                    void (async () => {
+                        await onImportDefinitions(definitions, importedIds, sourceId);
+                        await Promise.all(
+                            importedQueries.map(query =>
+                                executeActionClient(
+                                    'knowledge.createVerifiedQuery',
+                                    {
+                                        knowledgeModelId,
+                                        sourceConnectionId: query.sourceConnectionId,
+                                        title: query.title,
+                                        question: query.question,
+                                        sql: query.sql,
+                                        description: query.description,
+                                        definitionIds: query.definitionIds,
+                                        knowledgeSourceIds: [sourceId],
+                                        sourceType: 'knowledge_source',
+                                        sourceId,
+                                    },
+                                    { organizationId: organization },
+                                ),
+                            ),
+                        );
+                        await Promise.all([
+                            queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId, 'verified-queries'] }),
+                            queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId, 'graph'] }),
+                            queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] }),
+                        ]);
+                    })().catch(error => toast.error(error instanceof Error ? error.message : t('ParseFailed')));
+                }}
             />
             <AlertDialog open={Boolean(deleting)} onOpenChange={open => !open && !remove.isPending && setDeleting(null)}>
                 <AlertDialogContent>

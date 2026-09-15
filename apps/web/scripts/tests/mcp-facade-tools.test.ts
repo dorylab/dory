@@ -24,6 +24,7 @@ const [{ getPublicDoryMcpTools, structuredMcpFacadeError }, { registerDoryMcpToo
 
 function createWorksMock() {
     const events: any[] = [];
+    const knowledgeUsage: any[] = [];
     const works = new Map<string, any>();
     let nextId = 1;
     const now = new Date('2026-06-01T00:00:00.000Z');
@@ -133,6 +134,7 @@ function createWorksMock() {
 
     return {
         events,
+        knowledgeUsage,
         works,
         create: async (input: any) => {
             if (input.externalSessionId) {
@@ -152,6 +154,17 @@ function createWorksMock() {
         },
         recordEvent: async (event: any) => {
             events.push(event);
+            return { ...event, id: events.length, createdAt: now };
+        },
+        recordKnowledgeAssetUsageEvent: async (usage: any, event: any) => {
+            const existing = knowledgeUsage.find(item => item.workId === usage.workId && item.assetType === usage.assetType && item.assetId === usage.assetId);
+            if (existing) {
+                existing.useCount += 1;
+                existing.assetSnapshot = usage.assetSnapshot;
+            } else {
+                knowledgeUsage.push({ ...usage, useCount: 1 });
+            }
+            events.push({ ...event, workId: usage.workId, organizationId: usage.organizationId, userId: usage.userId });
             return { ...event, id: events.length, createdAt: now };
         },
         finishWithSummary: async (input: any) => {
@@ -1021,6 +1034,108 @@ test('ordinary MCP facade tools require an existing work context', async () => {
         'MISSING_WORK_CONTEXT',
     );
     await assertRejectsCode(() => getTool('dory_analyze_database_changes').execute(ctx, { runId: 'cmprun_1' }), 'MISSING_WORK_CONTEXT');
+});
+
+test('knowledge search returns summaries while successful detail reads record immutable usage', async () => {
+    const works = createWorksMock();
+    const definition = {
+        id: 'dimension:age',
+        name: 'Age',
+        kind: 'dimension' as const,
+        status: 'verified' as const,
+        sourceConnectionId: 'conn-1',
+        description: 'Customer age in whole years.',
+        expression: "date_part('year', age(current_date, birth_date))",
+    };
+    const knowledge = {
+        listModels: async () => [
+            {
+                id: 'model-1',
+                name: 'Customer profile',
+                businessContextMd: 'Use consistent customer definitions.',
+                model: { definitions: [definition] },
+            },
+        ],
+        searchKnowledgeSources: async () => [],
+        getModel: async () => ({
+            id: 'model-1',
+            name: 'Customer profile',
+            dataSources: [{ connectionId: 'conn-1' }],
+            model: { definitions: [definition] },
+        }),
+    };
+    const ctx = createContext(
+        {
+            db: { works, knowledge },
+        } as unknown as WebActionServices,
+        ['knowledge:read'],
+    );
+    const work = (await getTool('dory_create_work').execute(ctx, { title: 'Knowledge run', connectionId: 'conn-1' })) as any;
+    works.events.length = 0;
+
+    await assertRejectsCode(
+        () =>
+            getTool('dory_read').execute(ctx, {
+                operation: 'run',
+                actionId: 'knowledge.searchKnowledge',
+                input: { connectionId: 'conn-1', query: 'age' },
+            }),
+        'MISSING_WORK_CONTEXT',
+    );
+
+    const search = (await getTool('dory_read').execute(ctx, {
+        operation: 'run',
+        actionId: 'knowledge.searchKnowledge',
+        input: { connectionId: 'conn-1', query: 'age' },
+        workId: work.workId,
+        projection: 'mcp',
+    })) as any;
+    assert.equal(search.data.models[0].definitions[0].name, 'Age');
+    assert.equal('expression' in search.data.models[0].definitions[0], false);
+    assert.equal(works.knowledgeUsage.length, 0);
+    assert.equal(works.events[0].actionId, 'knowledge.searchKnowledge');
+
+    for (let read = 0; read < 2; read += 1) {
+        await getTool('dory_read').execute(ctx, {
+            operation: 'run',
+            actionId: 'knowledge.getDefinition',
+            input: { knowledgeModelId: 'model-1', definitionId: definition.id, connectionId: 'conn-1' },
+            workId: work.workId,
+            projection: 'mcp',
+        });
+    }
+    assert.equal(works.knowledgeUsage.length, 1);
+    assert.equal(works.knowledgeUsage[0].useCount, 2);
+    assert.deepEqual(works.knowledgeUsage[0].assetSnapshot, {
+        name: 'Age',
+        kind: 'dimension',
+        modelName: 'Customer profile',
+    });
+    assert.equal(works.events.filter(event => event.actionId === 'knowledge.getDefinition').length, 2);
+
+    await assert.rejects(() =>
+        getTool('dory_read').execute(ctx, {
+            operation: 'run',
+            actionId: 'knowledge.getDefinition',
+            input: { knowledgeModelId: 'model-1', definitionId: 'dimension:missing', connectionId: 'conn-1' },
+            workId: work.workId,
+        }),
+    );
+    assert.equal(works.knowledgeUsage.length, 1);
+    assert.equal(works.knowledgeUsage[0].useCount, 2);
+});
+
+test('generic full knowledge lists are not exposed through dory_read', async () => {
+    const ctx = createContext({ db: {} } as unknown as WebActionServices, ['knowledge:read']);
+    const output = (await getTool('dory_read').execute(ctx, { operation: 'list' })) as any;
+    const actionIds = output.actions.map((action: any) => action.id);
+
+    assert.equal(actionIds.includes('knowledge.get'), false);
+    assert.equal(actionIds.includes('knowledge.listDefinitions'), false);
+    assert.equal(actionIds.includes('knowledge.listVerifiedQueries'), false);
+    assert.equal(actionIds.includes('knowledge.listKnowledgeSources'), false);
+    assert.ok(actionIds.includes('knowledge.searchKnowledge'));
+    assert.ok(actionIds.includes('knowledge.getDefinition'));
 });
 
 test('schema Comparison MCP contracts accept saved and create-and-run paths', () => {

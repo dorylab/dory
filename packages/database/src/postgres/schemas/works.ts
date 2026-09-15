@@ -4,6 +4,7 @@ import type { ResultSetArtifactRef } from '@dory/resultset';
 
 export type WorkStatus = 'active' | 'completed' | 'error' | 'archived';
 export type WorkEventStatus = 'success' | 'error';
+export type WorkKnowledgeAssetType = 'definition' | 'verified_query' | 'source';
 
 export const works = pgTable(
     'works',
@@ -127,6 +128,29 @@ export const workChartStates = pgTable(
     t => [primaryKey({ name: 'pk_work_chart_states', columns: [t.workId, t.sessionId, t.setIndex, t.stateKey] }), index('idx_work_chart_states_work').on(t.workId)],
 );
 
+export const workKnowledgeAssets = pgTable(
+    'work_knowledge_assets',
+    {
+        workId: text('work_id')
+            .notNull()
+            .references(() => works.workId, { onDelete: 'cascade' }),
+        organizationId: text('organization_id').notNull(),
+        userId: text('user_id').notNull(),
+        knowledgeModelId: text('knowledge_model_id').notNull(),
+        assetType: text('asset_type').$type<WorkKnowledgeAssetType>().notNull(),
+        assetId: text('asset_id').notNull(),
+        assetSnapshot: jsonb('asset_snapshot').$type<Record<string, unknown>>().notNull(),
+        useCount: integer('use_count').notNull().default(1),
+        firstUsedAt: timestamp('first_used_at', { withTimezone: true }).notNull().defaultNow(),
+        lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        primaryKey({ name: 'pk_work_knowledge_assets', columns: [table.workId, table.assetType, table.assetId] }),
+        index('idx_work_knowledge_assets_work_used').on(table.workId, table.lastUsedAt),
+    ],
+);
+
 export type Work = typeof works.$inferSelect;
 export type NewWork = typeof works.$inferInsert;
 export type WorkEvent = typeof workEvents.$inferSelect;
+export type WorkKnowledgeAsset = typeof workKnowledgeAssets.$inferSelect;

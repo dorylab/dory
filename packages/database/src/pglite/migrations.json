@@ -559,5 +559,16 @@
     "bps": true,
     "folderMillis": 1788950400000,
     "hash": "c178ed5be8c1dc24dfdcdfccdcea473f4ea50f1609b5101bd44db70450041e9f"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"knowledge_asset_sources\" (\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"knowledge_source_id\" text NOT NULL REFERENCES \"knowledge_sources\"(\"id\") ON DELETE cascade,\n    \"asset_type\" text NOT NULL,\n    \"asset_id\" text NOT NULL,\n    \"relation_type\" text NOT NULL,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_knowledge_asset_sources\" PRIMARY KEY(\"knowledge_source_id\", \"asset_type\", \"asset_id\")\n);\n",
+      "\nCREATE INDEX \"idx_knowledge_asset_sources_model_asset\" ON \"knowledge_asset_sources\" (\"knowledge_model_id\", \"asset_type\", \"asset_id\");\n",
+      "\nCREATE TABLE \"work_knowledge_assets\" (\n    \"work_id\" text NOT NULL REFERENCES \"works\"(\"work_id\") ON DELETE cascade,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"knowledge_model_id\" text NOT NULL,\n    \"asset_type\" text NOT NULL,\n    \"asset_id\" text NOT NULL,\n    \"asset_snapshot\" jsonb NOT NULL,\n    \"use_count\" integer DEFAULT 1 NOT NULL,\n    \"first_used_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"last_used_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_work_knowledge_assets\" PRIMARY KEY(\"work_id\", \"asset_type\", \"asset_id\")\n);\n",
+      "\nCREATE INDEX \"idx_work_knowledge_assets_work_used\" ON \"work_knowledge_assets\" (\"work_id\", \"last_used_at\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1789430400000,
+    "hash": "4ea532a57ffca026ecdf014803cb1dfb40c8e5ed78fa735c92e5d4edb6cd6595"
   }
 ]
