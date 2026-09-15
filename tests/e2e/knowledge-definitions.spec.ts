@@ -90,3 +90,48 @@ test('knowledge definitions open an editor and save an update', async ({ page })
     });
     await expect(page.getByRole('dialog', { name: 'Edit definition' })).toBeHidden();
 });
+
+test('knowledge sources present upload and future knowledge-base connection entry points', async ({ page }) => {
+    const actionIds: string[] = [];
+
+    await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
+    await page.route('**/api/actions/execute', async route => {
+        const body = route.request().postDataJSON() as { actionId: string };
+        actionIds.push(body.actionId);
+        if (body.actionId === 'knowledge.get') {
+            await actionResponse(route, model);
+            return;
+        }
+        if (body.actionId === 'knowledge.listKnowledgeSources') {
+            await actionResponse(route, { sources: [] });
+            return;
+        }
+        await route.fallback();
+    });
+
+    await page.goto(`/${organization}/knowledge/${modelId}`);
+    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Add your first knowledge source' })).toBeVisible();
+    await expect(page.getByText('Upload files or connect an existing knowledge base so agents can use unified, continuously updated business context.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Upload file' }).click();
+    await expect(page.getByRole('dialog', { name: 'Upload knowledge sources' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    await page.getByRole('button', { name: 'Connect knowledge base' }).click();
+    await expect(page.getByText('Knowledge base connections are coming soon.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add source' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Upload file' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Connect knowledge base' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Upload file' }).click();
+    await expect(page.getByRole('dialog', { name: 'Upload knowledge sources' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    await page.getByRole('button', { name: 'Add source' }).click();
+    await page.getByRole('menuitem', { name: 'Connect knowledge base' }).click();
+    await expect(page.getByText('Knowledge base connections are coming soon.')).toBeVisible();
+    expect(actionIds).toEqual(expect.arrayContaining(['knowledge.get', 'knowledge.listKnowledgeSources']));
+    expect(actionIds).not.toContain('knowledge.createKnowledgeSource');
+});

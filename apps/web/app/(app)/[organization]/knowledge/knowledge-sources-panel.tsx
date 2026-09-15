@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileCode2, FileText, MoreHorizontal, Pencil, Trash2, Upload } from 'lucide-react';
+import { FileCode2, FileText, Link, MoreHorizontal, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -469,7 +469,11 @@ export function KnowledgeSourcesPanel({
     });
     const previewImport = useMutation({
         mutationFn: (source: KnowledgeSourceSummary) =>
-            executeActionClient<{ suggestions: ImportSuggestion[] }>('knowledge.previewKnowledgeSourceImport', { knowledgeModelId, id: source.id }, { organizationId: organization }),
+            executeActionClient<{ suggestions: ImportSuggestion[] }>(
+                'knowledge.previewKnowledgeSourceImport',
+                { knowledgeModelId, id: source.id },
+                { organizationId: organization },
+            ),
         onSuccess: (result, source) => {
             if (!result.suggestions.length) {
                 toast.error(t('NoImportable'));
@@ -496,15 +500,30 @@ export function KnowledgeSourcesPanel({
     });
     const scopeName = (source: KnowledgeSourceSummary) =>
         source.connectionId ? (dataSources.find(item => item.connectionId === source.connectionId)?.name ?? t('UnavailableDataSource')) : t('Shared');
+    const connectKnowledgeBase = () => toast.info(t('ConnectKnowledgeBaseComingSoon'));
 
     return (
         <div className="space-y-4">
             <div className="flex items-start justify-between gap-4">
                 <p className="max-w-2xl text-sm text-muted-foreground">{t('Description')}</p>
-                <Button onClick={() => setUploadOpen(true)}>
-                    <Upload />
-                    {t('Upload')}
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button>
+                            <Plus />
+                            {t('AddSource')}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setUploadOpen(true)}>
+                            <Upload />
+                            {t('UploadFile')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={connectKnowledgeBase}>
+                            <Link />
+                            {t('ConnectKnowledgeBase')}
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
             {sources.isLoading ? <p className="text-sm text-muted-foreground">{t('Loading')}</p> : null}
             {sources.data?.sources.length ? (
@@ -574,9 +593,16 @@ export function KnowledgeSourcesPanel({
                     <FileText className="size-8 text-muted-foreground" />
                     <h3 className="mt-4 font-medium">{t('EmptyTitle')}</h3>
                     <p className="mt-1 max-w-md text-sm text-muted-foreground">{t('EmptyDescription')}</p>
-                    <Button className="mt-4" onClick={() => setUploadOpen(true)}>
-                        {t('Upload')}
-                    </Button>
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        <Button onClick={() => setUploadOpen(true)}>
+                            <Upload />
+                            {t('UploadFile')}
+                        </Button>
+                        <Button variant="outline" onClick={connectKnowledgeBase}>
+                            <Link />
+                            {t('ConnectKnowledgeBase')}
+                        </Button>
+                    </div>
                 </div>
             ) : null}
             <UploadSourcesDialog open={uploadOpen} onOpenChange={setUploadOpen} organization={organization} knowledgeModelId={knowledgeModelId} dataSources={dataSources} />
