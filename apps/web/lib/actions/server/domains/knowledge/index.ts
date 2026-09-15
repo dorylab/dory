@@ -2,9 +2,20 @@ import { z } from 'zod';
 
 import { generateText } from '@/lib/ai/gateway';
 import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
+import { createGitHubInstallationUrl, githubAppConfigured, signGitHubConnectorState, verifyGitHubConnectorState } from '@/lib/server/github-app';
+import { listGitHubDirectories, listGitHubRepositories } from '@/lib/server/github-connector';
+import { getKnowledgeConnectorSyncRunner } from '@/lib/server/knowledge-connector-sync';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
-import { knowledgeDefinitionSchema, knowledgeSourceSchema, knowledgeSourceSummarySchema, knowledgeModelOutputSchema, knowledgeVerifiedQuerySchema } from './shared';
+import {
+    knowledgeConnectorSchema,
+    knowledgeDefinitionSchema,
+    knowledgeSourceSchema,
+    knowledgeSourceSummarySchema,
+    knowledgeModelOutputSchema,
+    knowledgeVerifiedQuerySchema,
+} from './shared';
 
 const modelIdInput = z.object({ knowledgeModelId: z.string().min(1) });
 const readActors = ['user', 'agent', 'mcp', 'automation'] as const;
@@ -542,6 +553,161 @@ export const knowledgeGenerateSuggestionsAction = defineWebAction({
     },
 });
 
+const githubSessionInput = modelIdInput.extend({ installationId: z.string().regex(/^\d+$/), connectionState: z.string().min(20) });
+
+function assertGitHubSession(ctx: { organizationId: string; userId: string }, input: z.infer<typeof githubSessionInput>) {
+    const state = verifyGitHubConnectorState(input.connectionState);
+    if (
+        state.organizationId !== ctx.organizationId ||
+        state.knowledgeModelId !== input.knowledgeModelId ||
+        state.userId !== ctx.userId ||
+        state.installationId !== input.installationId
+    ) {
+        throw new Error('This GitHub connection session does not belong to the current workspace.');
+    }
+}
+
+export const knowledgeGetGitHubConnectorSetupAction = defineWebAction({
+    id: 'knowledge.getGitHubConnectorSetup',
+    domain: 'knowledge',
+    kind: 'query',
+    risk: 'read',
+    inputSchema: modelIdInput,
+    outputSchema: z.object({ configured: z.boolean(), manualOnly: z.boolean(), installUrl: z.string().url().nullable() }),
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: async (ctx, input) => {
+        await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, ...input });
+        if (!githubAppConfigured()) return { configured: false, manualOnly: isDesktopRuntime(), installUrl: null };
+        const referer = ctx.services.req?.headers.get('referer');
+        const returnPath = referer ? new URL(referer).pathname : '/';
+        const state = signGitHubConnectorState({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId, userId: ctx.userId, returnPath });
+        return { configured: true, manualOnly: isDesktopRuntime(), installUrl: createGitHubInstallationUrl(state) };
+    },
+});
+
+export const knowledgeListGitHubRepositoriesAction = defineWebAction({
+    id: 'knowledge.listGitHubRepositories',
+    domain: 'knowledge',
+    kind: 'query',
+    risk: 'read',
+    inputSchema: githubSessionInput,
+    outputSchema: z.object({ repositories: z.array(z.object({ id: z.string(), fullName: z.string(), defaultBranch: z.string(), private: z.boolean() })) }),
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: async (ctx, input) => {
+        assertGitHubSession(ctx, input);
+        return { repositories: await listGitHubRepositories(input.installationId) };
+    },
+});
+
+export const knowledgeListGitHubDirectoriesAction = defineWebAction({
+    id: 'knowledge.listGitHubDirectories',
+    domain: 'knowledge',
+    kind: 'query',
+    risk: 'read',
+    inputSchema: githubSessionInput.extend({ repositoryId: z.string().min(1) }),
+    outputSchema: z.object({ directories: z.array(z.string()) }),
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: async (ctx, input) => {
+        assertGitHubSession(ctx, input);
+        const repository = (await listGitHubRepositories(input.installationId)).find(item => item.id === input.repositoryId);
+        if (!repository) throw new Error('The selected repository is not available to this GitHub App installation.');
+        return { directories: await listGitHubDirectories(input.installationId, repository.fullName, repository.defaultBranch) };
+    },
+});
+
+export const knowledgeCreateGitHubConnectorAction = defineWebAction({
+    id: 'knowledge.createGitHubConnector',
+    domain: 'knowledge',
+    kind: 'command',
+    risk: 'write',
+    requiresConfirmation: false,
+    inputSchema: githubSessionInput.extend({ repositoryId: z.string().min(1), rootPath: z.string().max(2000) }),
+    outputSchema: knowledgeConnectorSchema,
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: async (ctx, input) => {
+        assertGitHubSession(ctx, input);
+        const repository = (await listGitHubRepositories(input.installationId)).find(item => item.id === input.repositoryId);
+        if (!repository) throw new Error('The selected repository is not available to this GitHub App installation.');
+        const rootPath = input.rootPath.replace(/^\/+|\/+$/g, '');
+        const directories = await listGitHubDirectories(input.installationId, repository.fullName, repository.defaultBranch);
+        if (!directories.includes(rootPath)) throw new Error('The selected GitHub directory is unavailable.');
+        const connector = await ctx.services.db.knowledge.createConnector({
+            organizationId: ctx.organizationId,
+            knowledgeModelId: input.knowledgeModelId,
+            installationId: input.installationId,
+            repositoryId: repository.id,
+            repositoryFullName: repository.fullName,
+            defaultBranch: repository.defaultBranch,
+            rootPath,
+            createdBy: ctx.userId,
+        });
+        await ctx.services.db.knowledge.queueConnectorSync({ connectorId: connector.id });
+        getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
+        return connector;
+    },
+});
+
+export const knowledgeListConnectorsAction = defineWebAction({
+    id: 'knowledge.listConnectors',
+    domain: 'knowledge',
+    kind: 'query',
+    risk: 'read',
+    inputSchema: modelIdInput,
+    outputSchema: z.object({ connectors: z.array(knowledgeConnectorSchema) }),
+    permissions: readWorkspace,
+    scopes: ['knowledge:read'],
+    actors: [...readActors],
+    handler: async (ctx, input) => {
+        const connectors = await ctx.services.db.knowledge.listConnectors({ organizationId: ctx.organizationId, ...input });
+        if (githubAppConfigured()) getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
+        return { connectors };
+    },
+});
+
+export const knowledgeSyncConnectorAction = defineWebAction({
+    id: 'knowledge.syncConnector',
+    domain: 'knowledge',
+    kind: 'command',
+    risk: 'write',
+    requiresConfirmation: false,
+    inputSchema: z.object({ connectorId: z.string().min(1) }),
+    outputSchema: z.object({ queued: z.boolean() }),
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: async (ctx, input) => {
+        const connector = await ctx.services.db.knowledge.getConnector({ organizationId: ctx.organizationId, ...input });
+        if (connector.status === 'disabled') throw new Error('Reconnect the GitHub App before syncing.');
+        await ctx.services.db.knowledge.queueConnectorSync({ connectorId: connector.id });
+        getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
+        return { queued: true };
+    },
+});
+
+export const knowledgeDeleteConnectorAction = defineWebAction({
+    id: 'knowledge.deleteConnector',
+    domain: 'knowledge',
+    kind: 'command',
+    risk: 'destructive',
+    inputSchema: z.object({ connectorId: z.string().min(1) }),
+    outputSchema: z.object({ id: z.string() }),
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: async (ctx, input) => {
+        await ctx.services.db.knowledge.deleteConnector({ organizationId: ctx.organizationId, ...input });
+        return { id: input.connectorId };
+    },
+});
+
 export const knowledgeActions = [
     knowledgeListAction,
     knowledgeGetAction,
@@ -571,4 +737,11 @@ export const knowledgeActions = [
     knowledgeGetDefinitionAction,
     knowledgeSearchVerifiedQueriesAction,
     knowledgeGenerateSuggestionsAction,
+    knowledgeGetGitHubConnectorSetupAction,
+    knowledgeListGitHubRepositoriesAction,
+    knowledgeListGitHubDirectoriesAction,
+    knowledgeCreateGitHubConnectorAction,
+    knowledgeListConnectorsAction,
+    knowledgeSyncConnectorAction,
+    knowledgeDeleteConnectorAction,
 ];

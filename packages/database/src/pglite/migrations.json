@@ -543,5 +543,21 @@
     "bps": true,
     "folderMillis": 1788949800000,
     "hash": "a364cf46ff992a465c7fd22139007e9ee859b7b94ce953f13b47b28204bb6e35"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"knowledge_connectors\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"provider\" text NOT NULL,\n    \"installation_id\" text NOT NULL,\n    \"repository_id\" text NOT NULL,\n    \"repository_full_name\" text NOT NULL,\n    \"default_branch\" text NOT NULL,\n    \"root_path\" text DEFAULT '' NOT NULL,\n    \"status\" text DEFAULT 'pending' NOT NULL,\n    \"last_commit_sha\" text,\n    \"last_synced_at\" timestamp with time zone,\n    \"last_error\" text,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_knowledge_connectors_model_repo_path\" ON \"knowledge_connectors\" (\"knowledge_model_id\", \"provider\", \"repository_id\", \"root_path\");\n",
+      "\nCREATE INDEX \"idx_knowledge_connectors_org_model\" ON \"knowledge_connectors\" (\"organization_id\", \"knowledge_model_id\");\n",
+      "\nCREATE INDEX \"idx_knowledge_connectors_installation_repo\" ON \"knowledge_connectors\" (\"installation_id\", \"repository_id\");\n",
+      "\n\nCREATE TABLE \"knowledge_connector_items\" (\n    \"connector_id\" text NOT NULL REFERENCES \"knowledge_connectors\"(\"id\") ON DELETE cascade,\n    \"knowledge_source_id\" text NOT NULL REFERENCES \"knowledge_sources\"(\"id\") ON DELETE cascade,\n    \"remote_path\" text NOT NULL,\n    \"remote_sha\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_knowledge_connector_items\" PRIMARY KEY(\"connector_id\", \"remote_path\")\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_knowledge_connector_items_source\" ON \"knowledge_connector_items\" (\"knowledge_source_id\");\n",
+      "\n\nCREATE TABLE \"knowledge_connector_sync_jobs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"connector_id\" text NOT NULL REFERENCES \"knowledge_connectors\"(\"id\") ON DELETE cascade,\n    \"status\" text DEFAULT 'queued' NOT NULL,\n    \"target_sha\" text,\n    \"attempts\" integer DEFAULT 0 NOT NULL,\n    \"error\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_knowledge_connector_sync_jobs_status_created\" ON \"knowledge_connector_sync_jobs\" (\"status\", \"created_at\");\n",
+      "\nCREATE INDEX \"idx_knowledge_connector_sync_jobs_connector\" ON \"knowledge_connector_sync_jobs\" (\"connector_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1788950400000,
+    "hash": "c178ed5be8c1dc24dfdcdfccdcea473f4ea50f1609b5101bd44db70450041e9f"
   }
 ]

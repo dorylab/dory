@@ -42,6 +42,12 @@ async function actionResponse(route: Route, data: unknown) {
     });
 }
 
+async function currentOrganization(page: import('@playwright/test').Page) {
+    await page.goto('/');
+    await page.waitForURL(/\/[^/]+\/connections$/);
+    return new URL(page.url()).pathname.split('/')[1]!;
+}
+
 test('knowledge definitions open an editor and save an update', async ({ page }) => {
     let updatedInput: Record<string, unknown> | null = null;
     model = { ...model, model: { definitions: [{ ...definition }] } };
@@ -63,7 +69,7 @@ test('knowledge definitions open an editor and save an update', async ({ page })
         await route.fallback();
     });
 
-    await page.goto(`/${organization}/knowledge/${modelId}`);
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
     await page.getByRole('tab', { name: 'Definitions' }).click();
     await page.getByRole('cell', { name: 'Trip Distance', exact: true }).click();
     await page.getByRole('button', { name: 'Edit Trip Distance' }).click();
@@ -91,7 +97,7 @@ test('knowledge definitions open an editor and save an update', async ({ page })
     await expect(page.getByRole('dialog', { name: 'Edit definition' })).toBeHidden();
 });
 
-test('knowledge sources present upload and future knowledge-base connection entry points', async ({ page }) => {
+test('knowledge sources present upload and GitHub connection entry points', async ({ page }) => {
     const actionIds: string[] = [];
 
     await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
@@ -106,10 +112,18 @@ test('knowledge sources present upload and future knowledge-base connection entr
             await actionResponse(route, { sources: [] });
             return;
         }
+        if (body.actionId === 'knowledge.listConnectors') {
+            await actionResponse(route, { connectors: [] });
+            return;
+        }
+        if (body.actionId === 'knowledge.getGitHubConnectorSetup') {
+            await actionResponse(route, { configured: false, manualOnly: false, installUrl: null });
+            return;
+        }
         await route.fallback();
     });
 
-    await page.goto(`/${organization}/knowledge/${modelId}`);
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
     await page.getByRole('tab', { name: 'Knowledge sources' }).click();
 
     await expect(page.getByRole('heading', { name: 'Add your first knowledge source' })).toBeVisible();
@@ -120,7 +134,9 @@ test('knowledge sources present upload and future knowledge-base connection entr
     await page.getByRole('button', { name: 'Cancel' }).click();
 
     await page.getByRole('button', { name: 'Connect knowledge base' }).click();
-    await expect(page.getByText('Knowledge base connections are coming soon.')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Connect GitHub' })).toBeVisible();
+    await expect(page.getByText('GitHub connections are not configured for this Dory deployment.')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
 
     await page.getByRole('button', { name: 'Add source' }).click();
     await expect(page.getByRole('menuitem', { name: 'Upload file' })).toBeVisible();
@@ -131,7 +147,74 @@ test('knowledge sources present upload and future knowledge-base connection entr
 
     await page.getByRole('button', { name: 'Add source' }).click();
     await page.getByRole('menuitem', { name: 'Connect knowledge base' }).click();
-    await expect(page.getByText('Knowledge base connections are coming soon.')).toBeVisible();
-    expect(actionIds).toEqual(expect.arrayContaining(['knowledge.get', 'knowledge.listKnowledgeSources']));
+    await expect(page.getByRole('dialog', { name: 'Connect GitHub' })).toBeVisible();
+    expect(actionIds).toEqual(expect.arrayContaining(['knowledge.get', 'knowledge.listKnowledgeSources', 'knowledge.listConnectors', 'knowledge.getGitHubConnectorSetup']));
     expect(actionIds).not.toContain('knowledge.createKnowledgeSource');
+});
+
+test('GitHub-managed knowledge sources are read-only and connectors can be synchronized', async ({ page }) => {
+    const actionIds: string[] = [];
+    await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
+    await page.route('**/api/actions/execute', async route => {
+        const body = route.request().postDataJSON() as { actionId: string };
+        actionIds.push(body.actionId);
+        if (body.actionId === 'knowledge.get') return actionResponse(route, model);
+        if (body.actionId === 'knowledge.listConnectors') {
+            return actionResponse(route, {
+                connectors: [
+                    {
+                        id: 'connector-1',
+                        organizationId: organization,
+                        knowledgeModelId: modelId,
+                        provider: 'github',
+                        installationId: '10',
+                        repositoryId: '20',
+                        repositoryFullName: 'dorylab/docs',
+                        defaultBranch: 'main',
+                        rootPath: 'docs',
+                        status: 'ready',
+                        lastCommitSha: 'abc',
+                        lastSyncedAt: now,
+                        lastError: null,
+                        createdBy: 'user-1',
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                ],
+            });
+        }
+        if (body.actionId === 'knowledge.listKnowledgeSources') {
+            return actionResponse(route, {
+                sources: [
+                    {
+                        id: 'source-1',
+                        organizationId: organization,
+                        knowledgeModelId: modelId,
+                        connectionId: null,
+                        fileName: 'dorylab/docs · docs › readme.md · ector-1',
+                        format: 'markdown',
+                        byteSize: 7,
+                        createdBy: 'user-1',
+                        createdAt: now,
+                        updatedAt: now,
+                        connectorId: 'connector-1',
+                        connectorProvider: 'github',
+                        remotePath: 'docs/readme.md',
+                    },
+                ],
+            });
+        }
+        if (body.actionId === 'knowledge.syncConnector') return actionResponse(route, { queued: true });
+        await route.fallback();
+    });
+
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+    await expect(page.getByText('dorylab/docs', { exact: true })).toBeVisible();
+    await expect(page.getByText('GitHub · Read-only')).toBeVisible();
+    await page.getByRole('button', { name: 'Sync now' }).click();
+    await expect.poll(() => actionIds).toContain('knowledge.syncConnector');
+    await page.getByRole('button', { name: /Actions for/ }).click();
+    await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0);
 });

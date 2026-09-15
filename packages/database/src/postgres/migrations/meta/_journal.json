@@ -232,6 +232,13 @@
             "when": 1788949800000,
             "tag": "0033_knowledge",
             "breakpoints": true
+        },
+        {
+            "idx": 33,
+            "version": "7",
+            "when": 1788950400000,
+            "tag": "0034_github_knowledge_connectors",
+            "breakpoints": true
         }
     ]
 }

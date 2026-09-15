@@ -2,9 +2,11 @@
 
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
+import { parseAsString, useQueryStates } from 'nuqs';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileCode2, FileText, Link, MoreHorizontal, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { IconBrandGithub } from '@tabler/icons-react';
+import { FileCode2, FileText, Link, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -53,10 +55,23 @@ type KnowledgeSourceSummary = {
     createdBy: string | null;
     createdAt: string;
     updatedAt: string;
+    connectorId: string | null;
+    connectorProvider: 'github' | null;
+    remotePath: string | null;
 };
 type KnowledgeSource = KnowledgeSourceSummary & { contentText: string };
 type PendingFile = { key: string; fileName: string; contentText: string; byteSize: number; connectionId: string | null };
 type ImportSuggestion = Omit<Definition, 'sourceConnectionId'> & { sourceConnectionId?: string };
+type KnowledgeConnector = {
+    id: string;
+    repositoryFullName: string;
+    defaultBranch: string;
+    rootPath: string;
+    status: 'pending' | 'syncing' | 'ready' | 'error' | 'disabled';
+    lastSyncedAt: string | null;
+    lastError: string | null;
+};
+type GitHubRepository = { id: string; fullName: string; defaultBranch: string; private: boolean };
 
 const MAX_FILE_BYTES = 10_000_000;
 const MAX_FILES_PER_UPLOAD = 20;
@@ -67,6 +82,7 @@ const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-edit
 });
 
 const knowledgeSourcesKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-sources'] as const;
+const knowledgeConnectorsKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-connectors'] as const;
 
 function formatBytes(bytes: number) {
     if (bytes < 1_000) return `${bytes} B`;
@@ -443,6 +459,154 @@ function ImportReviewDialog({
     );
 }
 
+function GitHubConnectorDialog({
+    open,
+    onOpenChange,
+    organization,
+    knowledgeModelId,
+    installationId,
+    connectionState,
+    onConnected,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    organization: string;
+    knowledgeModelId: string;
+    installationId: string;
+    connectionState: string;
+    onConnected: () => void;
+}) {
+    const t = useTranslations('Knowledge.KnowledgeSources');
+    const [repositoryId, setRepositoryId] = useState('');
+    const [rootPath, setRootPath] = useState('');
+    const setup = useQuery({
+        queryKey: ['github-connector-setup', knowledgeModelId],
+        queryFn: () =>
+            executeActionClient<{ configured: boolean; manualOnly: boolean; installUrl: string | null }>(
+                'knowledge.getGitHubConnectorSetup',
+                { knowledgeModelId },
+                { organizationId: organization },
+            ),
+        enabled: open,
+    });
+    const repositories = useQuery({
+        queryKey: ['github-connector-repositories', installationId, connectionState],
+        queryFn: () =>
+            executeActionClient<{ repositories: GitHubRepository[] }>(
+                'knowledge.listGitHubRepositories',
+                { knowledgeModelId, installationId, connectionState },
+                { organizationId: organization },
+            ),
+        enabled: open && Boolean(installationId && connectionState),
+    });
+    const selectedRepository = repositories.data?.repositories.find(repository => repository.id === repositoryId);
+    const directories = useQuery({
+        queryKey: ['github-connector-directories', installationId, repositoryId],
+        queryFn: () =>
+            executeActionClient<{ directories: string[] }>(
+                'knowledge.listGitHubDirectories',
+                { knowledgeModelId, installationId, connectionState, repositoryId },
+                { organizationId: organization },
+            ),
+        enabled: open && Boolean(installationId && connectionState && repositoryId),
+    });
+    useEffect(() => {
+        setRootPath('');
+    }, [repositoryId]);
+    const create = useMutation({
+        mutationFn: () =>
+            executeActionClient<KnowledgeConnector>(
+                'knowledge.createGitHubConnector',
+                { knowledgeModelId, installationId, connectionState, repositoryId, rootPath },
+                { organizationId: organization },
+            ),
+        onSuccess: () => {
+            toast.success(t('GitHubSyncQueued'));
+            onConnected();
+            onOpenChange(false);
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('GitHubCreateFailed')),
+    });
+
+    const hasInstallation = Boolean(installationId && connectionState);
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <IconBrandGithub className="size-5" /> {t('GitHubTitle')}
+                    </DialogTitle>
+                    <DialogDescription>{t('GitHubDescription')}</DialogDescription>
+                </DialogHeader>
+                {setup.isLoading ? <div className="h-28 animate-pulse rounded-md bg-muted" /> : null}
+                {setup.data && !setup.data.configured ? (
+                    <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                        {t(setup.data.manualOnly ? 'GitHubDesktopNotConfigured' : 'GitHubNotConfigured')}
+                    </div>
+                ) : null}
+                {setup.data?.configured && !hasInstallation ? (
+                    <div className="space-y-4 rounded-md border p-4">
+                        <div>
+                            <div className="font-medium">{t('GitHubInstallTitle')}</div>
+                            <p className="mt-1 text-sm text-muted-foreground">{t('GitHubInstallDescription')}</p>
+                        </div>
+                        <Button onClick={() => setup.data.installUrl && window.location.assign(setup.data.installUrl)}>
+                            <IconBrandGithub /> {t('GitHubInstall')}
+                        </Button>
+                    </div>
+                ) : null}
+                {setup.data?.configured && hasInstallation ? (
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">{t('GitHubRepository')}</label>
+                            <Select value={repositoryId} onValueChange={setRepositoryId} disabled={repositories.isLoading}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder={repositories.isLoading ? t('GitHubLoadingRepositories') : t('GitHubSelectRepository')} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {repositories.data?.repositories.map(repository => (
+                                        <SelectItem key={repository.id} value={repository.id}>
+                                            {repository.fullName} · {repository.defaultBranch}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {selectedRepository ? (
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">{t('GitHubFolder')}</label>
+                                <Select value={rootPath || '__root__'} onValueChange={value => setRootPath(value === '__root__' ? '' : value)} disabled={directories.isLoading}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder={directories.isLoading ? t('GitHubLoadingFolders') : t('GitHubSelectFolder')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {directories.data?.directories.map(directory => (
+                                            <SelectItem key={directory || '__root__'} value={directory || '__root__'}>
+                                                {directory || t('GitHubRepositoryRoot')}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">{t('GitHubFolderDescription')}</p>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        {t('Cancel')}
+                    </Button>
+                    {hasInstallation ? (
+                        <Button onClick={() => create.mutate()} disabled={!repositoryId || !directories.data || create.isPending}>
+                            {create.isPending ? t('GitHubConnecting') : t('GitHubConnectAndSync')}
+                        </Button>
+                    ) : null}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export function KnowledgeSourcesPanel({
     organization,
     knowledgeModelId,
@@ -458,15 +622,29 @@ export function KnowledgeSourcesPanel({
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
     const queryClient = useQueryClient();
+    const [githubEntry, setGitHubEntry] = useQueryStates(
+        { githubInstallationId: parseAsString.withDefault(''), githubConnectionState: parseAsString.withDefault('') },
+        { history: 'replace' },
+    );
     const [uploadOpen, setUploadOpen] = useState(false);
+    const [connectorOpen, setConnectorOpen] = useState(Boolean(githubEntry.githubInstallationId && githubEntry.githubConnectionState));
     const [editing, setEditing] = useState<KnowledgeSourceSummary | null>(null);
     const [deleting, setDeleting] = useState<KnowledgeSourceSummary | null>(null);
     const [reviewing, setReviewing] = useState<KnowledgeSourceSummary | null>(null);
     const [suggestions, setSuggestions] = useState<ImportSuggestion[]>([]);
+    const [disconnecting, setDisconnecting] = useState<KnowledgeConnector | null>(null);
     const sources = useQuery({
         queryKey: knowledgeSourcesKey(knowledgeModelId),
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
     });
+    const connectors = useQuery({
+        queryKey: knowledgeConnectorsKey(knowledgeModelId),
+        queryFn: () => executeActionClient<{ connectors: KnowledgeConnector[] }>('knowledge.listConnectors', { knowledgeModelId }, { organizationId: organization }),
+        refetchInterval: query => (query.state.data?.connectors.some(connector => connector.status === 'pending' || connector.status === 'syncing') ? 2_000 : 15_000),
+    });
+    useEffect(() => {
+        if (githubEntry.githubInstallationId && githubEntry.githubConnectionState) setConnectorOpen(true);
+    }, [githubEntry.githubConnectionState, githubEntry.githubInstallationId]);
     const previewImport = useMutation({
         mutationFn: (source: KnowledgeSourceSummary) =>
             executeActionClient<{ suggestions: ImportSuggestion[] }>(
@@ -498,9 +676,30 @@ export function KnowledgeSourcesPanel({
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('DeleteFailed')),
     });
+    const sync = useMutation({
+        mutationFn: (connector: KnowledgeConnector) => executeActionClient('knowledge.syncConnector', { connectorId: connector.id }, { organizationId: organization }),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: knowledgeConnectorsKey(knowledgeModelId) });
+            toast.success(t('GitHubSyncQueued'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('GitHubSyncFailed')),
+    });
+    const disconnect = useMutation({
+        mutationFn: (connector: KnowledgeConnector) =>
+            executeActionClient('knowledge.deleteConnector', { connectorId: connector.id }, { organizationId: organization, confirmationToken: 'knowledge.deleteConnector' }),
+        onSuccess: () => {
+            void Promise.all([
+                queryClient.invalidateQueries({ queryKey: knowledgeConnectorsKey(knowledgeModelId) }),
+                queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) }),
+            ]);
+            setDisconnecting(null);
+            toast.success(t('GitHubDisconnected'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('GitHubDisconnectFailed')),
+    });
     const scopeName = (source: KnowledgeSourceSummary) =>
         source.connectionId ? (dataSources.find(item => item.connectionId === source.connectionId)?.name ?? t('UnavailableDataSource')) : t('Shared');
-    const connectKnowledgeBase = () => toast.info(t('ConnectKnowledgeBaseComingSoon'));
+    const connectKnowledgeBase = () => setConnectorOpen(true);
 
     return (
         <div className="space-y-4">
@@ -525,6 +724,41 @@ export function KnowledgeSourcesPanel({
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
+            {connectors.data?.connectors.length ? (
+                <div className="grid gap-3 lg:grid-cols-2">
+                    {connectors.data.connectors.map(connector => (
+                        <div key={connector.id} className="rounded-md border bg-card p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 font-medium">
+                                        <IconBrandGithub className="size-4" /> <span className="truncate">{connector.repositoryFullName}</span>
+                                    </div>
+                                    <div className="mt-1 truncate text-xs text-muted-foreground">
+                                        {connector.defaultBranch} · {connector.rootPath || t('GitHubRepositoryRoot')}
+                                    </div>
+                                </div>
+                                <Badge variant={connector.status === 'error' || connector.status === 'disabled' ? 'destructive' : 'outline'}>
+                                    {t(`GitHubStatus.${connector.status}`)}
+                                </Badge>
+                            </div>
+                            {connector.lastError ? <p className="mt-3 line-clamp-2 text-xs text-destructive">{connector.lastError}</p> : null}
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                                <span className="text-xs text-muted-foreground">
+                                    {connector.lastSyncedAt ? t('GitHubLastSynced', { date: new Date(connector.lastSyncedAt).toLocaleString() }) : t('GitHubNotSynced')}
+                                </span>
+                                <div className="flex gap-1">
+                                    <Button variant="ghost" size="sm" onClick={() => sync.mutate(connector)} disabled={sync.isPending || connector.status === 'disabled'}>
+                                        <RefreshCw className={connector.status === 'syncing' ? 'animate-spin' : ''} /> {t('GitHubSyncNow')}
+                                    </Button>
+                                    <Button variant="ghost" size="icon-sm" aria-label={t('GitHubDisconnect')} onClick={() => setDisconnecting(connector)}>
+                                        <Unplug />
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
             {sources.isLoading ? <p className="text-sm text-muted-foreground">{t('Loading')}</p> : null}
             {sources.data?.sources.length ? (
                 <div className="overflow-hidden rounded-md border bg-card">
@@ -541,7 +775,11 @@ export function KnowledgeSourcesPanel({
                         </thead>
                         <tbody>
                             {sources.data.sources.map(source => (
-                                <tr key={source.id} className="cursor-pointer border-t hover:bg-muted/30" onClick={() => setEditing(source)}>
+                                <tr
+                                    key={source.id}
+                                    className={`${source.connectorId ? '' : 'cursor-pointer'} border-t hover:bg-muted/30`}
+                                    onClick={() => !source.connectorId && setEditing(source)}
+                                >
                                     <td className="px-4 py-3">
                                         <span className="flex items-center gap-2 font-medium">
                                             {source.format === 'yaml' ? (
@@ -550,6 +788,7 @@ export function KnowledgeSourcesPanel({
                                                 <FileText className="size-4 text-muted-foreground" />
                                             )}
                                             {source.fileName}
+                                            {source.connectorProvider === 'github' ? <Badge variant="outline">GitHub · {t('ReadOnly')}</Badge> : null}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 capitalize text-muted-foreground">{source.format}</td>
@@ -569,17 +808,21 @@ export function KnowledgeSourcesPanel({
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" onClick={event => event.stopPropagation()}>
-                                                <DropdownMenuItem onSelect={() => setEditing(source)}>
-                                                    <Pencil /> {t('Edit')}
-                                                </DropdownMenuItem>
+                                                {!source.connectorId ? (
+                                                    <DropdownMenuItem onSelect={() => setEditing(source)}>
+                                                        <Pencil /> {t('Edit')}
+                                                    </DropdownMenuItem>
+                                                ) : null}
                                                 {source.format === 'yaml' ? (
                                                     <DropdownMenuItem onSelect={() => previewImport.mutate(source)}>
                                                         <FileCode2 /> {t('ReviewImport')}
                                                     </DropdownMenuItem>
                                                 ) : null}
-                                                <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(source)}>
-                                                    <Trash2 /> {t('Delete')}
-                                                </DropdownMenuItem>
+                                                {!source.connectorId ? (
+                                                    <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(source)}>
+                                                        <Trash2 /> {t('Delete')}
+                                                    </DropdownMenuItem>
+                                                ) : null}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </td>
@@ -606,6 +849,21 @@ export function KnowledgeSourcesPanel({
                 </div>
             ) : null}
             <UploadSourcesDialog open={uploadOpen} onOpenChange={setUploadOpen} organization={organization} knowledgeModelId={knowledgeModelId} dataSources={dataSources} />
+            <GitHubConnectorDialog
+                open={connectorOpen}
+                onOpenChange={setConnectorOpen}
+                organization={organization}
+                knowledgeModelId={knowledgeModelId}
+                installationId={githubEntry.githubInstallationId}
+                connectionState={githubEntry.githubConnectionState}
+                onConnected={() => {
+                    void setGitHubEntry({ githubInstallationId: null, githubConnectionState: null });
+                    void Promise.all([
+                        queryClient.invalidateQueries({ queryKey: knowledgeConnectorsKey(knowledgeModelId) }),
+                        queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) }),
+                    ]);
+                }}
+            />
             <SourceEditorDialog
                 source={editing}
                 open={Boolean(editing)}
@@ -641,6 +899,24 @@ export function KnowledgeSourcesPanel({
                             onClick={() => deleting && remove.mutate(deleting)}
                         >
                             {remove.isPending ? t('Deleting') : t('Delete')}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={Boolean(disconnecting)} onOpenChange={open => !open && !disconnect.isPending && setDisconnecting(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('GitHubDisconnectTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('GitHubDisconnectDescription', { repository: disconnecting?.repositoryFullName ?? '' })}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={disconnect.isPending}>{t('Cancel')}</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={disconnect.isPending}
+                            onClick={() => disconnecting && disconnect.mutate(disconnecting)}
+                        >
+                            {disconnect.isPending ? t('Deleting') : t('GitHubDisconnect')}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

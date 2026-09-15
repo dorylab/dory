@@ -67,6 +67,43 @@ export const knowledgeModelSources = pgTable(
 );
 
 export type KnowledgeSourceFormat = 'markdown' | 'yaml' | 'text';
+export type KnowledgeConnectorProvider = 'github';
+export type KnowledgeConnectorStatus = 'pending' | 'syncing' | 'ready' | 'error' | 'disabled';
+export type KnowledgeConnectorSyncJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export const knowledgeConnectors = pgTable(
+    'knowledge_connectors',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `kc_${newEntityId()}`),
+        organizationId: text('organization_id').notNull(),
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        provider: text('provider').$type<KnowledgeConnectorProvider>().notNull(),
+        installationId: text('installation_id').notNull(),
+        repositoryId: text('repository_id').notNull(),
+        repositoryFullName: text('repository_full_name').notNull(),
+        defaultBranch: text('default_branch').notNull(),
+        rootPath: text('root_path').notNull().default(''),
+        status: text('status').$type<KnowledgeConnectorStatus>().notNull().default('pending'),
+        lastCommitSha: text('last_commit_sha'),
+        lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+        lastError: text('last_error'),
+        createdBy: text('created_by'),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .defaultNow()
+            .$onUpdateFn(() => new Date()),
+    },
+    table => [
+        uniqueIndex('uidx_knowledge_connectors_model_repo_path').on(table.knowledgeModelId, table.provider, table.repositoryId, table.rootPath),
+        index('idx_knowledge_connectors_org_model').on(table.organizationId, table.knowledgeModelId),
+        index('idx_knowledge_connectors_installation_repo').on(table.installationId, table.repositoryId),
+    ],
+);
 
 export const knowledgeSources = pgTable(
     'knowledge_sources',
@@ -94,6 +131,54 @@ export const knowledgeSources = pgTable(
         uniqueIndex('uidx_knowledge_sources_model_file').on(table.knowledgeModelId, table.fileName),
         index('idx_knowledge_sources_org_model').on(table.organizationId, table.knowledgeModelId),
         index('idx_knowledge_sources_connection').on(table.connectionId),
+    ],
+);
+
+export const knowledgeConnectorItems = pgTable(
+    'knowledge_connector_items',
+    {
+        connectorId: text('connector_id')
+            .notNull()
+            .references(() => knowledgeConnectors.id, { onDelete: 'cascade' }),
+        knowledgeSourceId: text('knowledge_source_id')
+            .notNull()
+            .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
+        remotePath: text('remote_path').notNull(),
+        remoteSha: text('remote_sha').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .defaultNow()
+            .$onUpdateFn(() => new Date()),
+    },
+    table => [
+        primaryKey({ name: 'pk_knowledge_connector_items', columns: [table.connectorId, table.remotePath] }),
+        uniqueIndex('uidx_knowledge_connector_items_source').on(table.knowledgeSourceId),
+    ],
+);
+
+export const knowledgeConnectorSyncJobs = pgTable(
+    'knowledge_connector_sync_jobs',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `ksj_${newEntityId()}`),
+        connectorId: text('connector_id')
+            .notNull()
+            .references(() => knowledgeConnectors.id, { onDelete: 'cascade' }),
+        status: text('status').$type<KnowledgeConnectorSyncJobStatus>().notNull().default('queued'),
+        targetSha: text('target_sha'),
+        attempts: integer('attempts').notNull().default(0),
+        error: text('error'),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .defaultNow()
+            .$onUpdateFn(() => new Date()),
+    },
+    table => [
+        index('idx_knowledge_connector_sync_jobs_status_created').on(table.status, table.createdAt),
+        index('idx_knowledge_connector_sync_jobs_connector').on(table.connectorId),
     ],
 );
 
@@ -131,4 +216,5 @@ export const knowledgeVerifiedQueries = pgTable(
 
 export type KnowledgeModel = typeof knowledgeModels.$inferSelect;
 export type KnowledgeSource = typeof knowledgeSources.$inferSelect;
+export type KnowledgeConnector = typeof knowledgeConnectors.$inferSelect;
 export type KnowledgeVerifiedQuery = typeof knowledgeVerifiedQueries.$inferSelect;

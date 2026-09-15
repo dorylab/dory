@@ -29,6 +29,9 @@ export const knowledgeSourceSummarySchema = z.object({
     createdBy: z.string().nullable(),
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
+    connectorId: z.string().nullable(),
+    connectorProvider: z.enum(['github']).nullable(),
+    remotePath: z.string().nullable(),
 });
 export const knowledgeSourceSchema = knowledgeSourceSummarySchema.extend({ contentText: z.string() });
 export const knowledgeModelOutputSchema = z.object({
@@ -56,6 +59,25 @@ export const knowledgeVerifiedQuerySchema = z.object({
     definitionIds: z.array(z.string()),
     sourceType: z.string(),
     sourceId: z.string().nullable(),
+    createdBy: z.string().nullable(),
+    createdAt: z.union([z.date(), z.string()]),
+    updatedAt: z.union([z.date(), z.string()]),
+});
+
+export const knowledgeConnectorSchema = z.object({
+    id: z.string(),
+    organizationId: z.string(),
+    knowledgeModelId: z.string(),
+    provider: z.literal('github'),
+    installationId: z.string(),
+    repositoryId: z.string(),
+    repositoryFullName: z.string(),
+    defaultBranch: z.string(),
+    rootPath: z.string(),
+    status: z.enum(['pending', 'syncing', 'ready', 'error', 'disabled']),
+    lastCommitSha: z.string().nullable(),
+    lastSyncedAt: z.union([z.date(), z.string()]).nullable(),
+    lastError: z.string().nullable(),
     createdBy: z.string().nullable(),
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
