@@ -3863,8 +3863,24 @@
         "ReferenceSources": "参考 Sources",
         "ReferenceSourcesEmpty": "请先添加 Knowledge Source，再使用 AI 生成定义。",
         "RelationTypes": { "provided": "提供", "generated": "生成" },
+        "OpenNamedDefinitionDetails": "展开 {name} 的详情",
+        "CloseNamedDefinitionDetails": "收起 {name} 的详情",
         "CloseDefinitionDetails": "关闭定义详情",
         "EditNamedDefinition": "编辑 {name}",
+        "EditDefinitionAction": "编辑",
+        "DefinitionQueries": {
+            "Title": "使用此定义的 Verified Queries",
+            "Description": "为常见问题保留经过验证的查询方式。",
+            "EmptyTitle": "尚无关联项",
+            "ViewAction": "前往 Verified Queries"
+        },
+        "DefinitionSources": {
+            "Title": "关联的 Knowledge Sources",
+            "Description": "业务文档可保留这个 Definition 的来源与背景。",
+            "EmptyTitle": "尚无关联项",
+            "AddAction": "添加 Knowledge Source",
+            "OpenNamed": "打开 {name}"
+        },
         "NoDefinitionDetails": "尚未记录该定义的更多详情。",
         "DeleteNamedDefinition": "删除 {name}",
         "CreateDefinitionTitle": "创建{type}",
@@ -3907,10 +3923,10 @@
             "relationship": "关系"
         },
         "DefinitionFields": {
-            "Description": "描述",
+            "Description": "业务定义",
             "Aliases": "别名",
             "SourceTable": "来源表",
-            "Calculation": "计算方式",
+            "Calculation": "计算表达式",
             "Filters": "过滤条件",
             "TimeDimension": "时间维度",
             "AvailableDimensions": "可用维度"

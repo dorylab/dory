@@ -3873,8 +3873,24 @@
         "ReferenceSources": "参照ソース",
         "ReferenceSourcesEmpty": "AI で定義を生成する前にナレッジソースを追加してください。",
         "RelationTypes": { "provided": "提供", "generated": "生成" },
+        "OpenNamedDefinitionDetails": "{name}の詳細を表示",
+        "CloseNamedDefinitionDetails": "{name}の詳細を非表示",
         "CloseDefinitionDetails": "定義の詳細を閉じる",
         "EditNamedDefinition": "{name}を編集",
+        "EditDefinitionAction": "編集",
+        "DefinitionQueries": {
+            "Title": "この定義を使用する Verified Queries",
+            "Description": "よくある質問向けの検証済みクエリパターンを保持します。",
+            "EmptyTitle": "関連項目はまだありません",
+            "ViewAction": "Verified Queries を開く"
+        },
+        "DefinitionSources": {
+            "Title": "関連する Knowledge Sources",
+            "Description": "ビジネス文書はこの Definition の出典と背景を残します。",
+            "EmptyTitle": "関連項目はまだありません",
+            "AddAction": "Knowledge Source を追加",
+            "OpenNamed": "{name}を開く"
+        },
         "NoDefinitionDetails": "この定義には追加の詳細がまだ記録されていません。",
         "DeleteNamedDefinition": "{name}を削除",
         "CreateDefinitionTitle": "{type}を作成",
@@ -3917,7 +3933,7 @@
             "relationship": "リレーション"
         },
         "DefinitionFields": {
-            "Description": "説明",
+            "Description": "ビジネス定義",
             "Aliases": "別名",
             "SourceTable": "ソーステーブル",
             "Calculation": "計算式",

@@ -4,15 +4,18 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { useDeferredValue, useEffect, useRef, useState } from 'react';
+import { Fragment, useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     ArrowDown,
+    ArrowLeft,
     Bot,
     BrainCircuit,
     CheckCircle2,
+    ChevronRight,
     Circle,
     CircleAlert,
+    ExternalLink,
     FileCode2,
     FileText,
     MoreHorizontal,
@@ -150,6 +153,77 @@ function AssetSourceEditor({
                         />
                         {source.fileName}
                     </label>
+                );
+            })}
+        </div>
+    );
+}
+
+function DefinitionSourceEditor({
+    organization,
+    knowledgeModelId,
+    definitionId,
+    sources,
+    graph,
+}: {
+    organization: string;
+    knowledgeModelId: string;
+    definitionId: string;
+    sources: KnowledgeSourceSummary[];
+    graph: KnowledgeGraph;
+}) {
+    const t = useTranslations('Knowledge');
+    const queryClient = useQueryClient();
+    const relationBySourceId = new Map(
+        graph.sourceAssetEdges.filter(edge => edge.assetType === 'definition' && edge.assetId === definitionId).map(edge => [edge.sourceId, edge.relationType] as const),
+    );
+    const selectedSourceIds = [...relationBySourceId.keys()];
+    const update = useMutation({
+        mutationFn: (sourceIds: string[]) =>
+            executeActionClient(
+                'knowledge.replaceAssetSources',
+                { knowledgeModelId, assetType: 'definition', assetId: definitionId, sourceIds, relationType: 'provided' },
+                { organizationId: organization },
+            ),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
+    });
+    const displayedSourceIds = update.isPending && update.variables ? update.variables : selectedSourceIds;
+
+    if (!sources.length) {
+        return (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2.5">
+                <p className="text-sm text-muted-foreground">{t('DefinitionSources.EmptyTitle')}</p>
+                <Button variant="outline" size="sm" asChild>
+                    <Link href="?tab=sources">{t('DefinitionSources.AddAction')}</Link>
+                </Button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-h-48 divide-y overflow-y-auto rounded-md border">
+            {sources.map(source => {
+                const relationType = relationBySourceId.get(source.id);
+                const checked = displayedSourceIds.includes(source.id);
+                return (
+                    <div key={source.id} className="flex min-h-10 items-center gap-3 px-3 py-2">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={update.isPending}
+                                onChange={() => update.mutate(checked ? displayedSourceIds.filter(id => id !== source.id) : [...displayedSourceIds, source.id])}
+                            />
+                            <span className="truncate">{source.fileName}</span>
+                        </label>
+                        {checked && relationType ? <Badge variant="outline">{t(`RelationTypes.${relationType}`)}</Badge> : null}
+                        <Button variant="ghost" size="icon-sm" asChild>
+                            <Link href={`?tab=sources&source=${encodeURIComponent(source.id)}`} aria-label={t('DefinitionSources.OpenNamed', { name: source.fileName })}>
+                                <ExternalLink />
+                            </Link>
+                        </Button>
+                    </div>
                 );
             })}
         </div>
@@ -578,43 +652,135 @@ function KnowledgeModelList({ organization }: { organization: string }) {
     );
 }
 
-function DefinitionExpandedRow({ definition, onEdit }: { definition: Definition; onEdit: () => void }) {
+function DefinitionExpandedRow({
+    definition,
+    organization,
+    knowledgeModelId,
+    queries,
+    sources,
+    graph,
+    panelId,
+    onEdit,
+}: {
+    definition: Definition;
+    organization: string;
+    knowledgeModelId: string;
+    queries: VerifiedQuery[];
+    sources: KnowledgeSourceSummary[];
+    graph: KnowledgeGraph;
+    panelId: string;
+    onEdit: () => void;
+}) {
     const t = useTranslations('Knowledge');
-    const fields = [
-        [t('DefinitionFields.Description'), definition.description],
+    const referencedQueryIds = new Set(graph.queryDefinitionEdges.filter(edge => edge.definitionId === definition.id).map(edge => edge.queryId));
+    const referencedQueries = queries.filter(query => referencedQueryIds.has(query.id));
+    const metadataFields = [
         [t('DefinitionFields.Aliases'), definition.aliases?.join(', ')],
-        [t('DefinitionFields.Calculation'), definition.expression],
+        [t('DefinitionFields.SourceTable'), definition.source],
         [t('DefinitionFields.Filters'), definition.filters?.join('\n')],
         [t('DefinitionFields.TimeDimension'), definition.timeDimension],
         [t('DefinitionFields.AvailableDimensions'), definition.dimensions?.join(', ')],
+        [t('FromDefinition'), definition.from],
+        [t('ToDefinition'), definition.to],
     ].filter(([, value]) => value);
+    const hasDefinitionDetails = Boolean(definition.description || definition.expression || metadataFields.length);
 
     return (
-        <tr className="border-t bg-muted/20">
+        <tr className="border-t bg-muted/10">
             <td colSpan={5} className="p-0">
-                <div className="relative p-5">
-                    <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3" onClick={onEdit} aria-label={t('EditNamedDefinition', { name: definition.name })}>
-                        <Pencil />
-                    </Button>
-                    <div className="pr-10">
-                        <div className="text-base font-semibold">{definition.name}</div>
-                        <div className="mt-2 flex gap-2">
-                            <Badge>{t(`Kinds.${definition.kind}`)}</Badge>
-                            {definition.status === 'verified' ? <Badge variant="secondary">{t('Verified')}</Badge> : null}
+                <div id={panelId} className="p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <div className="text-base font-semibold">{definition.name}</div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <Badge variant="outline">{t(`Kinds.${definition.kind}`)}</Badge>
+                                {definition.status === 'verified' ? (
+                                    <Badge variant="secondary">
+                                        <CheckCircle2 />
+                                        {t('Verified')}
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline">{t('Unverified')}</Badge>
+                                )}
+                            </div>
                         </div>
+                        <Button variant="outline" size="sm" onClick={onEdit} aria-label={t('EditNamedDefinition', { name: definition.name })}>
+                            <Pencil />
+                            {t('EditDefinitionAction')}
+                        </Button>
                     </div>
-                    {fields.length ? (
-                        <div className="mt-5 grid gap-4 md:grid-cols-2">
-                            {fields.map(([label, value]) => (
+
+                    {hasDefinitionDetails ? (
+                        <dl className="mt-5 grid gap-4 md:grid-cols-2">
+                            {definition.description ? (
+                                <div className="md:col-span-2">
+                                    <dt className="text-sm font-medium text-muted-foreground">{t('DefinitionFields.Description')}</dt>
+                                    <dd className="mt-1 whitespace-pre-wrap text-sm leading-6">{definition.description}</dd>
+                                </div>
+                            ) : null}
+                            {definition.expression ? (
+                                <div className="md:col-span-2">
+                                    <dt className="text-sm font-medium text-muted-foreground">{t('DefinitionFields.Calculation')}</dt>
+                                    <dd className="mt-1 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-sm">{definition.expression}</dd>
+                                </div>
+                            ) : null}
+                            {metadataFields.map(([label, value]) => (
                                 <div key={label}>
-                                    <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
-                                    <div className="mt-1 whitespace-pre-wrap text-sm">{value}</div>
+                                    <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+                                    <dd className="mt-1 whitespace-pre-wrap text-sm">{value}</dd>
                                 </div>
                             ))}
-                        </div>
+                        </dl>
                     ) : (
                         <p className="mt-5 text-sm text-muted-foreground">{t('NoDefinitionDetails')}</p>
                     )}
+
+                    <div className="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2">
+                        <section className="rounded-lg border bg-background/60 p-4">
+                            <div className="flex items-start gap-3">
+                                <FileCode2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                                <div>
+                                    <h3 className="text-sm font-semibold">{t('DefinitionQueries.Title')}</h3>
+                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('DefinitionQueries.Description')}</p>
+                                </div>
+                            </div>
+                            {referencedQueries.length ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {referencedQueries.map(query => (
+                                        <Button key={query.id} variant="outline" size="sm" asChild>
+                                            <Link href={`?tab=queries&query=${encodeURIComponent(query.id)}`}>{query.title}</Link>
+                                        </Button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2.5">
+                                    <p className="text-sm text-muted-foreground">{t('DefinitionQueries.EmptyTitle')}</p>
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href="?tab=queries">{t('DefinitionQueries.ViewAction')}</Link>
+                                    </Button>
+                                </div>
+                            )}
+                        </section>
+
+                        <section className="rounded-lg border bg-background/60 p-4">
+                            <div className="flex items-start gap-3">
+                                <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                                <div>
+                                    <h3 className="text-sm font-semibold">{t('DefinitionSources.Title')}</h3>
+                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('DefinitionSources.Description')}</p>
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <DefinitionSourceEditor
+                                    organization={organization}
+                                    knowledgeModelId={knowledgeModelId}
+                                    definitionId={definition.id}
+                                    sources={sources}
+                                    graph={graph}
+                                />
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </td>
         </tr>
@@ -899,96 +1065,67 @@ function DefinitionPanel({
                         </tr>
                     </thead>
                     <tbody>
-                        {model.model.definitions.flatMap(definition => [
-                            <tr
-                                key={definition.id}
-                                className="cursor-pointer border-t hover:bg-muted/30"
-                                onClick={() => void setSelectedDefinitionId(selected?.id === definition.id ? null : definition.id)}
-                            >
-                                <td className="p-3 font-medium">{definition.name}</td>
-                                <td className="p-3">{t(`Kinds.${definition.kind}`)}</td>
-                                <td className="p-3">{definition.source || sourceName(definition.sourceConnectionId)}</td>
-                                <td className="p-3">
-                                    {definition.status === 'verified' ? (
-                                        <Badge variant="secondary">
-                                            <CheckCircle2 />
-                                            {t('Verified')}
-                                        </Badge>
-                                    ) : (
-                                        '—'
-                                    )}
-                                </td>
-                                <td>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label={t('DeleteNamedDefinition', { name: definition.name })}
-                                        onClick={event => {
-                                            event.stopPropagation();
-                                            onSave(model.model.definitions.filter(item => item.id !== definition.id));
-                                        }}
-                                    >
-                                        <Trash2 />
-                                    </Button>
-                                </td>
-                            </tr>,
-                            ...(selected?.id === definition.id
-                                ? [
-                                      <DefinitionExpandedRow key={`${definition.id}:detail`} definition={definition} onEdit={() => setEditingDefinition(definition)} />,
-                                      <tr key={`${definition.id}:references`} className="border-t bg-muted/10">
-                                          <td colSpan={5} className="px-5 pb-5">
-                                              <div className="grid gap-4 md:grid-cols-2">
-                                                  <div>
-                                                      <div className="text-xs font-medium uppercase text-muted-foreground">{t('ReferencedByQueries')}</div>
-                                                      <div className="mt-2 flex flex-wrap gap-2">
-                                                          {queries
-                                                              .filter(query =>
-                                                                  graph.queryDefinitionEdges.some(edge => edge.queryId === query.id && edge.definitionId === definition.id),
-                                                              )
-                                                              .map(query => (
-                                                                  <Button key={query.id} variant="outline" size="sm" asChild>
-                                                                      <Link href={`?tab=queries&query=${encodeURIComponent(query.id)}`}>{query.title}</Link>
-                                                                  </Button>
-                                                              ))}
-                                                          {!graph.queryDefinitionEdges.some(edge => edge.definitionId === definition.id) ? (
-                                                              <span className="text-sm text-muted-foreground">{t('NoReferences')}</span>
-                                                          ) : null}
-                                                      </div>
-                                                      <div className="mt-3">
-                                                          <AssetSourceEditor
-                                                              organization={organization}
-                                                              knowledgeModelId={model.id}
-                                                              assetType="definition"
-                                                              assetId={definition.id}
-                                                              sources={sources}
-                                                              graph={graph}
-                                                          />
-                                                      </div>
-                                                  </div>
-                                                  <div>
-                                                      <div className="text-xs font-medium uppercase text-muted-foreground">{t('RelatedSources')}</div>
-                                                      <div className="mt-2 flex flex-wrap gap-2">
-                                                          {graph.sourceAssetEdges
-                                                              .filter(edge => edge.assetType === 'definition' && edge.assetId === definition.id)
-                                                              .map(edge => (
-                                                                  <Button key={edge.sourceId} variant="outline" size="sm" asChild>
-                                                                      <Link href={`?tab=sources&source=${encodeURIComponent(edge.sourceId)}`}>
-                                                                          {sources.find(source => source.id === edge.sourceId)?.fileName ?? edge.sourceId} ·{' '}
-                                                                          {t(`RelationTypes.${edge.relationType}`)}
-                                                                      </Link>
-                                                                  </Button>
-                                                              ))}
-                                                          {!graph.sourceAssetEdges.some(edge => edge.assetType === 'definition' && edge.assetId === definition.id) ? (
-                                                              <span className="text-sm text-muted-foreground">{t('NoReferences')}</span>
-                                                          ) : null}
-                                                      </div>
-                                                  </div>
-                                              </div>
-                                          </td>
-                                      </tr>,
-                                  ]
-                                : []),
-                        ])}
+                        {model.model.definitions.map(definition => {
+                            const expanded = selected?.id === definition.id;
+                            const panelId = `definition-details-${definition.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+                            return (
+                                <Fragment key={definition.id}>
+                                    <tr className="border-t hover:bg-muted/30">
+                                        <td className="p-0 font-medium">
+                                            <button
+                                                type="button"
+                                                className="flex w-full items-center gap-2 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                                                aria-expanded={expanded}
+                                                aria-controls={panelId}
+                                                aria-label={t(expanded ? 'CloseNamedDefinitionDetails' : 'OpenNamedDefinitionDetails', { name: definition.name })}
+                                                onClick={() => void setSelectedDefinitionId(expanded ? null : definition.id)}
+                                            >
+                                                <ChevronRight
+                                                    className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
+                                                    aria-hidden="true"
+                                                />
+                                                <span>{definition.name}</span>
+                                            </button>
+                                        </td>
+                                        <td className="p-3">{t(`Kinds.${definition.kind}`)}</td>
+                                        <td className="p-3">{definition.source || sourceName(definition.sourceConnectionId)}</td>
+                                        <td className="p-3">
+                                            {definition.status === 'verified' ? (
+                                                <Badge variant="secondary">
+                                                    <CheckCircle2 />
+                                                    {t('Verified')}
+                                                </Badge>
+                                            ) : (
+                                                '—'
+                                            )}
+                                        </td>
+                                        <td>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                aria-label={t('DeleteNamedDefinition', { name: definition.name })}
+                                                onClick={() => onSave(model.model.definitions.filter(item => item.id !== definition.id))}
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                    {expanded ? (
+                                        <DefinitionExpandedRow
+                                            definition={definition}
+                                            organization={organization}
+                                            knowledgeModelId={model.id}
+                                            queries={queries}
+                                            sources={sources}
+                                            graph={graph}
+                                            panelId={panelId}
+                                            onEdit={() => setEditingDefinition(definition)}
+                                        />
+                                    ) : null}
+                                </Fragment>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -1511,9 +1648,12 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
             <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <Link className="text-sm text-muted-foreground hover:text-foreground" href={`/${organization}/knowledge`}>
-                            {t('Title')}
-                        </Link>
+                        <Button asChild variant="ghost" size="sm" className="-ml-2">
+                            <Link href={`/${organization}/knowledge`}>
+                                <ArrowLeft className="h-4 w-4" />
+                                {t('Title')}
+                            </Link>
+                        </Button>
                         <h1 className="mt-2 text-2xl font-bold">{model.name}</h1>
                         {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
                     </div>

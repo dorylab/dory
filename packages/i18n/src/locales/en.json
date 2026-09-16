@@ -3873,8 +3873,24 @@
         "ReferenceSources": "Reference sources",
         "ReferenceSourcesEmpty": "Add a knowledge source before generating definitions with AI.",
         "RelationTypes": { "provided": "Provided", "generated": "Generated" },
+        "OpenNamedDefinitionDetails": "Show details for {name}",
+        "CloseNamedDefinitionDetails": "Hide details for {name}",
         "CloseDefinitionDetails": "Close definition details",
         "EditNamedDefinition": "Edit {name}",
+        "EditDefinitionAction": "Edit",
+        "DefinitionQueries": {
+            "Title": "Verified Queries using this definition",
+            "Description": "Keep verified query patterns for common questions.",
+            "EmptyTitle": "No linked items yet",
+            "ViewAction": "Go to Verified Queries"
+        },
+        "DefinitionSources": {
+            "Title": "Linked Knowledge Sources",
+            "Description": "Business documents preserve this Definition's origin and context.",
+            "EmptyTitle": "No linked items yet",
+            "AddAction": "Add Knowledge Source",
+            "OpenNamed": "Open {name}"
+        },
         "NoDefinitionDetails": "No additional details have been documented for this definition.",
         "DeleteNamedDefinition": "Delete {name}",
         "CreateDefinitionTitle": "Create {type}",
@@ -3917,10 +3933,10 @@
             "relationship": "Relationship"
         },
         "DefinitionFields": {
-            "Description": "Description",
+            "Description": "Business definition",
             "Aliases": "Aliases",
             "SourceTable": "Source table",
-            "Calculation": "Calculation",
+            "Calculation": "Calculation expression",
             "Filters": "Filters",
             "TimeDimension": "Time dimension",
             "AvailableDimensions": "Available dimensions"

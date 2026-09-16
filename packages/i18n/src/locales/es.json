@@ -3867,8 +3867,24 @@
         "ReferenceSources": "Fuentes de referencia",
         "ReferenceSourcesEmpty": "Añade una fuente de conocimiento antes de generar definiciones con IA.",
         "RelationTypes": { "provided": "Proporcionado", "generated": "Generado" },
+        "OpenNamedDefinitionDetails": "Mostrar detalles de {name}",
+        "CloseNamedDefinitionDetails": "Ocultar detalles de {name}",
         "CloseDefinitionDetails": "Cerrar detalles de la definición",
         "EditNamedDefinition": "Editar {name}",
+        "EditDefinitionAction": "Editar",
+        "DefinitionQueries": {
+            "Title": "Verified Queries que usan esta definición",
+            "Description": "Conserva patrones de consulta verificados para preguntas frecuentes.",
+            "EmptyTitle": "Aún no hay elementos vinculados",
+            "ViewAction": "Ir a Verified Queries"
+        },
+        "DefinitionSources": {
+            "Title": "Knowledge Sources vinculadas",
+            "Description": "Los documentos empresariales conservan el origen y el contexto de esta Definition.",
+            "EmptyTitle": "Aún no hay elementos vinculados",
+            "AddAction": "Añadir Knowledge Source",
+            "OpenNamed": "Abrir {name}"
+        },
         "NoDefinitionDetails": "No se han documentado detalles adicionales para esta definición.",
         "DeleteNamedDefinition": "Eliminar {name}",
         "CreateDefinitionTitle": "Crear {type}",
@@ -3911,10 +3927,10 @@
             "relationship": "Relación"
         },
         "DefinitionFields": {
-            "Description": "Descripción",
+            "Description": "Definición de negocio",
             "Aliases": "Alias",
             "SourceTable": "Tabla de origen",
-            "Calculation": "Cálculo",
+            "Calculation": "Expresión de cálculo",
             "Filters": "Filtros",
             "TimeDimension": "Dimensión temporal",
             "AvailableDimensions": "Dimensiones disponibles"
