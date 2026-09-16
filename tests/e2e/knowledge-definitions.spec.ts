@@ -197,6 +197,10 @@ test('definition details show query links and edit knowledge source relationship
         definitionIds: [definition.id],
         sourceType: 'manual',
         sourceId: null,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        updatedByName: 'Demo User',
+        createdAt: now,
         updatedAt: now,
     };
     let selectedSourceIds = [source.id];
@@ -245,6 +249,63 @@ test('definition details show query links and edit knowledge source relationship
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     await expect(page.getByRole('heading', { name: 'Verified Queries using this definition' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Linked Knowledge Sources' })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('verified query details identify the updater and organize relationships', async ({ page }) => {
+    const source = { id: 'source-1', fileName: 'query-rules.md', format: 'markdown' as const, connectionId: null };
+    const query = {
+        id: 'query-1',
+        knowledgeModelId: modelId,
+        sourceConnectionId: 'connection-1',
+        title: 'Average trip distance',
+        question: 'What is the average trip distance?',
+        sql: 'SELECT AVG(trip_distance) FROM trips',
+        description: null,
+        definitionIds: [definition.id],
+        sourceType: 'workspace',
+        sourceId: null,
+        createdBy: 'user-1',
+        updatedBy: 'user-2',
+        updatedByName: 'Avery Chen',
+        createdAt: now,
+        updatedAt: now,
+    };
+
+    await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
+    await page.route('**/api/actions/execute', async route => {
+        const body = route.request().postDataJSON() as { actionId: string };
+        if (body.actionId === 'knowledge.get') return actionResponse(route, model);
+        if (body.actionId === 'knowledge.listVerifiedQueries') return actionResponse(route, { queries: [query] });
+        if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [source] });
+        if (body.actionId === 'knowledge.getGraph') {
+            return actionResponse(route, {
+                queryDefinitionEdges: [{ queryId: query.id, definitionId: definition.id }],
+                sourceAssetEdges: [{ sourceId: source.id, assetType: 'verified_query', assetId: query.id, relationType: 'provided' }],
+            });
+        }
+        if (body.actionId === 'connection.list') return actionResponse(route, { connections: [] });
+        await route.fallback();
+    });
+
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+    await page.getByRole('tab', { name: 'Verified queries' }).click();
+
+    await expect(page.getByText('Updated by Avery Chen', { exact: false })).toBeVisible();
+    await expect(page.getByText('workspace', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Average trip distance', exact: true }).click();
+
+    await expect(page.getByRole('heading', { name: 'Referenced Definitions' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Linked Knowledge Sources' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: definition.name })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: source.fileName })).toBeChecked();
+    await expect(page.getByText('Provided', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: `Open ${source.fileName}` })).toHaveAttribute('href', /tab=sources&source=source-1/);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await expect(page.getByRole('heading', { name: 'Referenced Definitions' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Linked Knowledge Sources' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

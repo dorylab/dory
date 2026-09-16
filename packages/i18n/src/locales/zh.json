@@ -3881,6 +3881,18 @@
             "AddAction": "添加 Knowledge Source",
             "OpenNamed": "打开 {name}"
         },
+        "VerifiedQueryDetails": {
+            "Columns": { "Query": "查询", "Question": "问题", "Updated": "最近更新" },
+            "UpdatedByTime": "由 {user} 更新 · {time}",
+            "UnknownUser": "未知用户",
+            "ReferencedDefinitions": "引用的 Definitions",
+            "DefinitionsDescription": "勾选此查询应使用的业务定义。",
+            "RelatedSources": "关联的 Knowledge Sources",
+            "SourcesDescription": "勾选为此查询提供背景或规则的业务文档。",
+            "NoDefinitions": "没有可关联的 Definition",
+            "NoKnowledgeSources": "尚未添加 Knowledge Source",
+            "AddKnowledgeSource": "添加 Knowledge Source"
+        },
         "NoDefinitionDetails": "尚未记录该定义的更多详情。",
         "DeleteNamedDefinition": "删除 {name}",
         "CreateDefinitionTitle": "创建{type}",

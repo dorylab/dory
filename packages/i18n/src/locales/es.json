@@ -3885,6 +3885,18 @@
             "AddAction": "Añadir Knowledge Source",
             "OpenNamed": "Abrir {name}"
         },
+        "VerifiedQueryDetails": {
+            "Columns": { "Query": "Consulta", "Question": "Pregunta", "Updated": "Última actualización" },
+            "UpdatedByTime": "Actualizado por {user} · {time}",
+            "UnknownUser": "Usuario desconocido",
+            "ReferencedDefinitions": "Definitions referenciadas",
+            "DefinitionsDescription": "Selecciona las definiciones de negocio que debe usar esta consulta.",
+            "RelatedSources": "Knowledge Sources vinculadas",
+            "SourcesDescription": "Selecciona los documentos empresariales que aportan contexto o reglas a esta consulta.",
+            "NoDefinitions": "No hay ninguna Definition disponible para vincular",
+            "NoKnowledgeSources": "No se ha añadido ninguna Knowledge Source",
+            "AddKnowledgeSource": "Añadir Knowledge Source"
+        },
         "NoDefinitionDetails": "No se han documentado detalles adicionales para esta definición.",
         "DeleteNamedDefinition": "Eliminar {name}",
         "CreateDefinitionTitle": "Crear {type}",

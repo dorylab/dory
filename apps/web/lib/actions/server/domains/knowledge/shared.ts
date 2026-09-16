@@ -80,6 +80,8 @@ export const knowledgeVerifiedQuerySchema = z.object({
     sourceType: z.string(),
     sourceId: z.string().nullable(),
     createdBy: z.string().nullable(),
+    updatedBy: z.string().nullable(),
+    updatedByName: z.string().nullable(),
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
 });

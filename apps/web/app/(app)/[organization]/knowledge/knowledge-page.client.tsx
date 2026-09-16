@@ -26,6 +26,7 @@ import {
     Sparkles,
     Trash2,
     Upload,
+    UserRound,
     X,
 } from 'lucide-react';
 import { parseAsString, useQueryState } from 'nuqs';
@@ -101,6 +102,10 @@ type VerifiedQuery = {
     definitionIds: string[];
     sourceType: string;
     sourceId: string | null;
+    createdBy: string | null;
+    updatedBy: string | null;
+    updatedByName: string | null;
+    createdAt: string;
     updatedAt: string;
 };
 type KnowledgeSourceSummary = { id: string; fileName: string; format: 'markdown' | 'yaml' | 'text'; connectionId: string | null };
@@ -131,28 +136,52 @@ function AssetSourceEditor({
 }) {
     const t = useTranslations('Knowledge');
     const queryClient = useQueryClient();
-    const selected = graph.sourceAssetEdges.filter(edge => edge.assetType === assetType && edge.assetId === assetId).map(edge => edge.sourceId);
+    const relationBySourceId = new Map(
+        graph.sourceAssetEdges.filter(edge => edge.assetType === assetType && edge.assetId === assetId).map(edge => [edge.sourceId, edge.relationType] as const),
+    );
+    const selectedSourceIds = [...relationBySourceId.keys()];
     const update = useMutation({
         mutationFn: (sourceIds: string[]) =>
             executeActionClient('knowledge.replaceAssetSources', { knowledgeModelId, assetType, assetId, sourceIds, relationType: 'provided' }, { organizationId: organization }),
-        onSuccess: () => void queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
     });
-    if (!sources.length) return <span className="text-sm text-muted-foreground">{t('NoReferences')}</span>;
+    const displayedSourceIds = update.isPending && update.variables ? update.variables : selectedSourceIds;
+
+    if (!sources.length) {
+        return (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2.5">
+                <p className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoKnowledgeSources')}</p>
+                <Button variant="outline" size="sm" asChild>
+                    <Link href="?tab=sources">{t('VerifiedQueryDetails.AddKnowledgeSource')}</Link>
+                </Button>
+            </div>
+        );
+    }
+
     return (
-        <div className="flex flex-wrap gap-3">
+        <div className="max-h-48 divide-y overflow-y-auto rounded-md border">
             {sources.map(source => {
-                const checked = selected.includes(source.id);
+                const relationType = relationBySourceId.get(source.id);
+                const checked = displayedSourceIds.includes(source.id);
                 return (
-                    <label key={source.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                        <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={update.isPending}
-                            onChange={() => update.mutate(checked ? selected.filter(id => id !== source.id) : [...selected, source.id])}
-                        />
-                        {source.fileName}
-                    </label>
+                    <div key={source.id} className="flex min-h-10 items-center gap-3 px-3 py-2">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={update.isPending}
+                                onChange={() => update.mutate(checked ? displayedSourceIds.filter(id => id !== source.id) : [...displayedSourceIds, source.id])}
+                            />
+                            <span className="truncate">{source.fileName}</span>
+                        </label>
+                        {checked && relationType ? <Badge variant="outline">{t(`RelationTypes.${relationType}`)}</Badge> : null}
+                        <Button variant="ghost" size="icon-sm" asChild>
+                            <Link href={`?tab=sources&source=${encodeURIComponent(source.id)}`} aria-label={t('DefinitionSources.OpenNamed', { name: source.fileName })}>
+                                <ExternalLink />
+                            </Link>
+                        </Button>
+                    </div>
                 );
             })}
         </div>
@@ -262,25 +291,28 @@ function DefinitionReferenceEditor({
                 },
                 { organizationId: organization },
             ),
-        onSuccess: () => {
-            void Promise.all([
+        onSuccess: () =>
+            Promise.all([
                 queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'verified-queries'] }),
                 queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
-            ]);
-        },
+            ]),
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
     });
+    const displayedDefinitionIds = update.isPending && update.variables ? update.variables : query.definitionIds;
+
+    if (!definitions.length) return <p className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoDefinitions')}</p>;
+
     return (
-        <div className="grid gap-2">
+        <div className="max-h-48 divide-y overflow-y-auto rounded-md border">
             {definitions.map(definition => {
-                const checked = query.definitionIds.includes(definition.id);
+                const checked = displayedDefinitionIds.includes(definition.id);
                 return (
-                    <label key={definition.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <label key={definition.id} className="flex min-h-10 cursor-pointer items-center gap-2 px-3 py-2 text-sm">
                         <input
                             type="checkbox"
                             checked={checked}
                             disabled={update.isPending}
-                            onChange={() => update.mutate(checked ? query.definitionIds.filter(id => id !== definition.id) : [...query.definitionIds, definition.id])}
+                            onChange={() => update.mutate(checked ? displayedDefinitionIds.filter(id => id !== definition.id) : [...displayedDefinitionIds, definition.id])}
                         />
                         {definition.name}
                     </label>
@@ -1839,80 +1871,113 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                     </TabsContent>
                     <TabsContent value="queries" className="space-y-3 pt-4">
                         {queries.data?.queries.length ? (
-                            queries.data.queries.map(item => (
-                                <Card key={item.id} className={selectedQueryId === item.id ? 'ring-1 ring-primary/30' : ''}>
-                                    <CardContent className="flex items-start justify-between gap-4 py-4">
-                                        <div className="min-w-0">
-                                            <button
-                                                type="button"
-                                                className="font-medium hover:underline"
-                                                onClick={() => void setSelectedQueryId(selectedQueryId === item.id ? null : item.id)}
-                                            >
-                                                {item.title}
-                                            </button>
-                                            <p className="mt-1 text-sm text-muted-foreground">{item.question}</p>
-                                            <div className="mt-2 text-xs text-muted-foreground">
-                                                {item.sourceType} · {t('UpdatedTime', { time: relativeTime(item.updatedAt) })}
-                                            </div>
-                                            <pre className="mt-3 max-h-48 overflow-auto rounded bg-muted p-3 text-xs">{item.sql}</pre>
-                                            {selectedQueryId === item.id ? (
-                                                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                                    <div>
-                                                        <div className="text-xs font-medium uppercase text-muted-foreground">{t('ReferencedDefinitions')}</div>
-                                                        <div className="mt-2 flex flex-wrap gap-2">
-                                                            {item.definitionIds.map(id => (
-                                                                <Button key={id} variant="outline" size="sm" asChild>
-                                                                    <Link href={`?tab=definitions&definition=${encodeURIComponent(id)}`}>
-                                                                        {model.model.definitions.find(definition => definition.id === id)?.name ?? id}
-                                                                    </Link>
-                                                                </Button>
-                                                            ))}
-                                                            {!item.definitionIds.length ? <span className="text-sm text-muted-foreground">{t('NoReferences')}</span> : null}
-                                                        </div>
-                                                        <div className="mt-3">
-                                                            <DefinitionReferenceEditor
-                                                                organization={organization}
-                                                                knowledgeModelId={knowledgeModelId}
-                                                                query={item}
-                                                                definitions={model.model.definitions}
-                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <div className="text-xs font-medium uppercase text-muted-foreground">{t('RelatedSources')}</div>
-                                                        <div className="mt-2 flex flex-wrap gap-2">
-                                                            {(graph.data?.sourceAssetEdges ?? [])
-                                                                .filter(edge => edge.assetType === 'verified_query' && edge.assetId === item.id)
-                                                                .map(edge => (
-                                                                    <Button key={edge.sourceId} variant="outline" size="sm" asChild>
-                                                                        <Link href={`?tab=sources&source=${encodeURIComponent(edge.sourceId)}`}>
-                                                                            {sources.data?.sources.find(source => source.id === edge.sourceId)?.fileName ?? edge.sourceId} ·{' '}
-                                                                            {t(`RelationTypes.${edge.relationType}`)}
-                                                                        </Link>
-                                                                    </Button>
-                                                                ))}
-                                                        </div>
-                                                        <div className="mt-3">
-                                                            <AssetSourceEditor
-                                                                organization={organization}
-                                                                knowledgeModelId={knowledgeModelId}
-                                                                assetType="verified_query"
-                                                                assetId={item.id}
-                                                                sources={sources.data?.sources ?? []}
-                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                        <Button variant="ghost" size="icon-sm" aria-label={t('DeleteNamedQuery', { name: item.title })} onClick={() => deleteQuery.mutate(item.id)}>
-                                            <Trash2 />
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            ))
+                            <div className="overflow-x-auto rounded-md border">
+                                <table className="w-full min-w-[720px] text-sm">
+                                    <thead className="bg-muted/50 text-left text-muted-foreground">
+                                        <tr>
+                                            <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Query')}</th>
+                                            <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Question')}</th>
+                                            <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Updated')}</th>
+                                            <th className="w-12" />
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {queries.data.queries.map(item => {
+                                            const expanded = selectedQueryId === item.id;
+                                            const panelId = `verified-query-details-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+                                            return (
+                                                <Fragment key={item.id}>
+                                                    <tr className={expanded ? 'border-t bg-muted/20' : 'border-t hover:bg-muted/30'}>
+                                                        <td className="p-0 font-medium">
+                                                            <button
+                                                                type="button"
+                                                                className="flex w-full items-center gap-2 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                                                                aria-expanded={expanded}
+                                                                aria-controls={panelId}
+                                                                aria-label={item.title}
+                                                                onClick={() => void setSelectedQueryId(expanded ? null : item.id)}
+                                                            >
+                                                                <ChevronRight
+                                                                    className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
+                                                                    aria-hidden="true"
+                                                                />
+                                                                <span className="truncate">{item.title}</span>
+                                                            </button>
+                                                        </td>
+                                                        <td className="max-w-sm p-3 text-muted-foreground">
+                                                            <span className="block truncate">{item.question}</span>
+                                                        </td>
+                                                        <td className="whitespace-nowrap p-3 text-xs text-muted-foreground">
+                                                            <span className="flex items-center gap-1.5">
+                                                                <UserRound className="size-3.5" />
+                                                                {t('VerifiedQueryDetails.UpdatedByTime', {
+                                                                    user: item.updatedByName ?? t('VerifiedQueryDetails.UnknownUser'),
+                                                                    time: relativeTime(item.updatedAt),
+                                                                })}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon-sm"
+                                                                aria-label={t('DeleteNamedQuery', { name: item.title })}
+                                                                onClick={() => deleteQuery.mutate(item.id)}
+                                                            >
+                                                                <Trash2 />
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                    {expanded ? (
+                                                        <tr className="border-t bg-muted/10">
+                                                            <td colSpan={4} className="p-0">
+                                                                <div id={panelId} className="p-5">
+                                                                    <pre className="max-h-48 overflow-auto rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5">
+                                                                        {item.sql}
+                                                                    </pre>
+                                                                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                                                        <section className="rounded-lg border bg-background/60 p-4">
+                                                                            <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.ReferencedDefinitions')}</h3>
+                                                                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                                                                {t('VerifiedQueryDetails.DefinitionsDescription')}
+                                                                            </p>
+                                                                            <div className="mt-3">
+                                                                                <DefinitionReferenceEditor
+                                                                                    organization={organization}
+                                                                                    knowledgeModelId={knowledgeModelId}
+                                                                                    query={item}
+                                                                                    definitions={model.model.definitions}
+                                                                                    graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                                                />
+                                                                            </div>
+                                                                        </section>
+                                                                        <section className="rounded-lg border bg-background/60 p-4">
+                                                                            <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.RelatedSources')}</h3>
+                                                                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                                                                {t('VerifiedQueryDetails.SourcesDescription')}
+                                                                            </p>
+                                                                            <div className="mt-3">
+                                                                                <AssetSourceEditor
+                                                                                    organization={organization}
+                                                                                    knowledgeModelId={knowledgeModelId}
+                                                                                    assetType="verified_query"
+                                                                                    assetId={item.id}
+                                                                                    sources={sources.data?.sources ?? []}
+                                                                                    graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                                                />
+                                                                            </div>
+                                                                        </section>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ) : null}
+                                                </Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         ) : (
                             <Card className="border-dashed">
                                 <CardContent className="py-12 text-center text-sm text-muted-foreground">{t('VerifiedQueriesEmpty')}</CardContent>

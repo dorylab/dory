@@ -3891,6 +3891,18 @@
             "AddAction": "Add Knowledge Source",
             "OpenNamed": "Open {name}"
         },
+        "VerifiedQueryDetails": {
+            "Columns": { "Query": "Query", "Question": "Question", "Updated": "Last updated" },
+            "UpdatedByTime": "Updated by {user} · {time}",
+            "UnknownUser": "Unknown user",
+            "ReferencedDefinitions": "Referenced Definitions",
+            "DefinitionsDescription": "Select the business definitions this query should use.",
+            "RelatedSources": "Linked Knowledge Sources",
+            "SourcesDescription": "Select the business documents that provide context or rules for this query.",
+            "NoDefinitions": "No Definition is available to link",
+            "NoKnowledgeSources": "No Knowledge Source has been added",
+            "AddKnowledgeSource": "Add Knowledge Source"
+        },
         "NoDefinitionDetails": "No additional details have been documented for this definition.",
         "DeleteNamedDefinition": "Delete {name}",
         "CreateDefinitionTitle": "Create {type}",

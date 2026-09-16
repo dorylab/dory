@@ -437,7 +437,7 @@ export const knowledgeUpdateVerifiedQueryAction = defineWebAction({
     permissions: writeWorkspace,
     scopes: ['knowledge:write'],
     actors: ['user'],
-    handler: (ctx, input) => ctx.services.db.knowledge.updateVerifiedQuery({ organizationId: ctx.organizationId, createdBy: ctx.userId, ...input }),
+    handler: (ctx, input) => ctx.services.db.knowledge.updateVerifiedQuery({ organizationId: ctx.organizationId, updatedBy: ctx.userId, ...input }),
 });
 
 export const knowledgeGetGraphAction = defineWebAction({

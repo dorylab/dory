@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { parseDocument, stringify } from 'yaml';
 
 import { getClient } from '@dory/database/postgres/client';
@@ -12,6 +12,7 @@ import {
     knowledgeModels,
     knowledgeModelSources,
     knowledgeVerifiedQueries,
+    user,
     type KnowledgeDefinition,
     type KnowledgeAssetType,
     type KnowledgeSourceRelationType,
@@ -918,8 +919,9 @@ export class PostgresKnowledgeRepository {
         if (input.query?.trim())
             conditions.push(or(ilike(knowledgeVerifiedQueries.title, `%${input.query.trim()}%`), ilike(knowledgeVerifiedQueries.question, `%${input.query.trim()}%`))!);
         return this.db
-            .select()
+            .select({ ...getTableColumns(knowledgeVerifiedQueries), updatedByName: user.name })
             .from(knowledgeVerifiedQueries)
+            .leftJoin(user, eq(user.id, sql`COALESCE(${knowledgeVerifiedQueries.updatedBy}, ${knowledgeVerifiedQueries.createdBy})`))
             .where(and(...conditions))
             .orderBy(desc(knowledgeVerifiedQueries.updatedAt));
     }
@@ -955,6 +957,7 @@ export class PostgresKnowledgeRepository {
                 sourceType: input.sourceType?.trim() || 'manual',
                 sourceId: input.sourceId?.trim() || null,
                 createdBy: input.createdBy ?? null,
+                updatedBy: input.createdBy ?? null,
             })
             .returning();
         await this.replaceAssetSources({
@@ -965,7 +968,7 @@ export class PostgresKnowledgeRepository {
             relationType: 'provided',
         });
         await this.touchModel(input.knowledgeModelId);
-        return row!;
+        return this.getVerifiedQuery({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: row!.id });
     }
 
     async updateVerifiedQuery(input: {
@@ -978,7 +981,7 @@ export class PostgresKnowledgeRepository {
         description?: string | null;
         definitionIds?: string[];
         knowledgeSourceIds?: string[];
-        createdBy?: string | null;
+        updatedBy?: string | null;
     }) {
         const model = await this.getModel(input);
         const definitionIds = [...new Set(input.definitionIds ?? [])];
@@ -991,19 +994,21 @@ export class PostgresKnowledgeRepository {
                 sql: input.sql.trim(),
                 description: input.description?.trim() || null,
                 definitionIds,
+                updatedBy: input.updatedBy ?? null,
             })
             .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
             .returning();
         if (!row) throw new Error('Verified query not found.');
         await this.replaceAssetSources({ ...input, assetType: 'verified_query', assetId: input.id, sourceIds: input.knowledgeSourceIds ?? [], relationType: 'provided' });
-        return row;
+        return this.getVerifiedQuery({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: row.id });
     }
 
     async getVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         await this.getModel(input);
         const [row] = await this.db
-            .select()
+            .select({ ...getTableColumns(knowledgeVerifiedQueries), updatedByName: user.name })
             .from(knowledgeVerifiedQueries)
+            .leftJoin(user, eq(user.id, sql`COALESCE(${knowledgeVerifiedQueries.updatedBy}, ${knowledgeVerifiedQueries.createdBy})`))
             .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
             .limit(1);
         if (!row) throw new Error('Verified query not found.');

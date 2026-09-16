@@ -570,5 +570,13 @@
     "bps": true,
     "folderMillis": 1789430400000,
     "hash": "4ea532a57ffca026ecdf014803cb1dfb40c8e5ed78fa735c92e5d4edb6cd6595"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"knowledge_verified_queries\" ADD COLUMN \"updated_by\" text;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1789603200000,
+    "hash": "55141f5de1eb69a6f7907e06b0a8af712da6e6dfe3dc2476a00c19f6b1d87a1f"
   }
 ]

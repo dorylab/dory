@@ -204,6 +204,7 @@ export const knowledgeVerifiedQueries = pgTable(
         sourceType: text('source_type').notNull().default('manual'),
         sourceId: text('source_id'),
         createdBy: text('created_by'),
+        updatedBy: text('updated_by'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true })
             .notNull()

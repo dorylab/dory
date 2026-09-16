@@ -3891,6 +3891,18 @@
             "AddAction": "Knowledge Source を追加",
             "OpenNamed": "{name}を開く"
         },
+        "VerifiedQueryDetails": {
+            "Columns": { "Query": "クエリ", "Question": "質問", "Updated": "最終更新" },
+            "UpdatedByTime": "{user} が更新 · {time}",
+            "UnknownUser": "不明なユーザー",
+            "ReferencedDefinitions": "参照する Definitions",
+            "DefinitionsDescription": "このクエリで使用するビジネス定義を選択します。",
+            "RelatedSources": "関連する Knowledge Sources",
+            "SourcesDescription": "このクエリの背景やルールを提供するビジネス文書を選択します。",
+            "NoDefinitions": "関連付け可能な Definition はありません",
+            "NoKnowledgeSources": "Knowledge Source はまだ追加されていません",
+            "AddKnowledgeSource": "Knowledge Source を追加"
+        },
         "NoDefinitionDetails": "この定義には追加の詳細がまだ記録されていません。",
         "DeleteNamedDefinition": "{name}を削除",
         "CreateDefinitionTitle": "{type}を作成",
