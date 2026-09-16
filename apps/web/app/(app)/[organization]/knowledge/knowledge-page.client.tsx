@@ -6,7 +6,25 @@ import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, Bot, BrainCircuit, CheckCircle2, CircleAlert, FileCode2, FileText, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import {
+    ArrowDown,
+    Bot,
+    BrainCircuit,
+    CheckCircle2,
+    Circle,
+    CircleAlert,
+    FileCode2,
+    FileText,
+    MoreHorizontal,
+    Pencil,
+    Plus,
+    Search,
+    ShieldCheck,
+    Sparkles,
+    Trash2,
+    Upload,
+    X,
+} from 'lucide-react';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
@@ -63,7 +81,7 @@ export type KnowledgeModelView = {
     knowledgeSourceCount: number;
     readiness: {
         status: 'ready' | 'not_ready';
-        checks: { dataSource: boolean; verifiedDefinition: boolean; verifiedQuery: boolean };
+        requirements: { dataSource: boolean; verifiedDefinition: boolean };
     };
     agentUnderstands: Array<{ id: string; name: string; kind: Definition['kind'] }>;
     createdAt: string;
@@ -1392,6 +1410,7 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
     const [askAiOpen, setAskAiOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
+    const [editingModel, setEditingModel] = useState<KnowledgeModelView | null>(null);
     const [activeTab, setActiveTab] = useQueryState('tab', parseAsString.withDefault('overview'));
     const [selectedQueryId, setSelectedQueryId] = useQueryState('query', parseAsString);
     const modelQuery = useQuery({
@@ -1409,6 +1428,10 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     const sources = useQuery({
         queryKey: [...modelKey(knowledgeModelId), 'knowledge-sources'],
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
+    });
+    const connections = useQuery({
+        queryKey: ['connections', organization],
+        queryFn: () => executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {}, { organizationId: organization }),
     });
     useEffect(() => {
         if (modelQuery.data) setMarkdown(modelQuery.data.businessContextMd);
@@ -1478,6 +1501,11 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">{t('LoadingModel')}</div>;
     if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">{t('ModelNotFound')}</div>;
     const model = modelQuery.data;
+    let verifiedDefinitionCount = 0;
+    for (const definition of model.model.definitions) {
+        if (definition.status === 'verified' && definition.kind !== 'relationship') verifiedDefinitionCount += 1;
+    }
+    const knowledgeSourceCount = sources.data?.sources.length ?? model.knowledgeSourceCount;
     return (
         <div className="bg-n8 h-screen overflow-auto">
             <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
@@ -1500,6 +1528,7 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => setEditingModel(model)}>{t('EditModel')}</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => setYamlEditorOpen(true)}>{t('ViewYaml')}</DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => setImportOpen(true)}>{t('ImportYaml')}</DropdownMenuItem>
                                 <DropdownMenuItem variant="destructive" onSelect={() => deleteModel.mutate()}>
@@ -1519,12 +1548,14 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                     <TabsContent value="overview" className="space-y-5 pt-4">
                         <Card className={model.readiness.status === 'ready' ? 'border-primary/30' : 'border-amber-500/30'}>
                             <CardContent className="flex flex-wrap items-start justify-between gap-5 py-5">
-                                <div>
+                                <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 text-lg font-semibold">
                                         {model.readiness.status === 'ready' ? <CheckCircle2 className="text-primary" /> : <CircleAlert className="text-amber-500" />}
                                         {model.readiness.status === 'ready' ? t('Readiness.Ready') : t('Readiness.NotReady')}
                                     </div>
-                                    <p className="mt-1 text-sm text-muted-foreground">{t('Readiness.Description')}</p>
+                                    <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                                        {model.readiness.status === 'ready' ? t('Readiness.ReadyDescription') : t('Readiness.NotReadyDescription')}
+                                    </p>
                                     {model.agentUnderstands.length ? (
                                         <div className="mt-4">
                                             <div className="text-xs font-medium uppercase text-muted-foreground">{t('Readiness.Understands')}</div>
@@ -1534,42 +1565,48 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                                         {item.name}
                                                     </Badge>
                                                 ))}
-                                                {model.model.definitions.filter(item => item.status === 'verified' && item.kind !== 'relationship').length >
-                                                model.agentUnderstands.length ? (
-                                                    <Badge variant="outline">
-                                                        +
-                                                        {model.model.definitions.filter(item => item.status === 'verified' && item.kind !== 'relationship').length -
-                                                            model.agentUnderstands.length}
-                                                    </Badge>
+                                                {verifiedDefinitionCount > model.agentUnderstands.length ? (
+                                                    <Badge variant="outline">+{verifiedDefinitionCount - model.agentUnderstands.length}</Badge>
                                                 ) : null}
                                             </div>
                                         </div>
                                     ) : null}
                                 </div>
-                                {model.readiness.status === 'not_ready' ? (
-                                    <div className="grid gap-2 text-sm">
-                                        {Object.entries(model.readiness.checks).map(([check, ready]) => (
-                                            <button
-                                                key={check}
-                                                type="button"
-                                                className="flex items-center gap-2 text-left hover:text-foreground"
-                                                onClick={() =>
-                                                    void setActiveTab(check === 'verifiedQuery' ? 'queries' : check === 'verifiedDefinition' ? 'definitions' : 'overview')
-                                                }
-                                            >
-                                                {ready ? <CheckCircle2 className="size-4 text-primary" /> : <CircleAlert className="size-4 text-amber-500" />}
-                                                {t(`Readiness.Checks.${check}`)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : null}
+                                <div className="grid min-w-64 gap-2 text-sm">
+                                    <button type="button" className="flex items-center gap-2 text-left hover:text-foreground" onClick={() => setEditingModel(model)}>
+                                        {model.readiness.requirements.dataSource ? (
+                                            <CheckCircle2 className="size-4 text-primary" />
+                                        ) : (
+                                            <CircleAlert className="size-4 text-amber-500" />
+                                        )}
+                                        <span>{t('Readiness.Requirements.DataSources', { count: model.dataSources.length })}</span>
+                                    </button>
+                                    <button type="button" className="flex items-center gap-2 text-left hover:text-foreground" onClick={() => void setActiveTab('definitions')}>
+                                        {model.readiness.requirements.verifiedDefinition ? (
+                                            <CheckCircle2 className="size-4 text-primary" />
+                                        ) : (
+                                            <CircleAlert className="size-4 text-amber-500" />
+                                        )}
+                                        <span>{t('Readiness.Requirements.Definitions', { count: verifiedDefinitionCount })}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-2 text-left text-muted-foreground hover:text-foreground"
+                                        onClick={() => void setActiveTab('queries')}
+                                    >
+                                        <Circle className="size-4" />
+                                        <span>{t('Readiness.Requirements.VerifiedQueries', { count: model.verifiedQueryCount })}</span>
+                                        {!model.verifiedQueryCount ? <Badge variant="outline">{t('Readiness.Suggested')}</Badge> : null}
+                                    </button>
+                                </div>
                             </CardContent>
                         </Card>
-                        <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             {[
+                                [model.dataSources.length, t('ConnectedDataSources')],
                                 [model.model.definitions.length, t('Definitions')],
                                 [model.verifiedQueryCount, t('VerifiedQueries')],
-                                [sources.data?.sources.length ?? model.knowledgeSourceCount, t('KnowledgeSources.Tab')],
+                                [knowledgeSourceCount, t('KnowledgeSources.Tab')],
                             ].map(([value, label]) => (
                                 <Card key={label}>
                                     <CardContent className="py-5">
@@ -1579,25 +1616,59 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                 </Card>
                             ))}
                         </div>
+                        <Card>
+                            <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
+                                <div className="flex min-w-0 items-start gap-3">
+                                    <ShieldCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+                                    <div>
+                                        <h2 className="font-semibold">{t('QueryCoverage.Title')}</h2>
+                                        <p className="mt-1 text-sm font-medium">
+                                            {model.verifiedQueryCount ? t('QueryCoverage.CoveredTitle', { count: model.verifiedQueryCount }) : t('QueryCoverage.EmptyTitle')}
+                                        </p>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            {model.verifiedQueryCount ? t('QueryCoverage.CoveredDescription') : t('QueryCoverage.EmptyDescription')}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button variant="outline" onClick={() => void setActiveTab('queries')}>
+                                    {model.verifiedQueryCount ? t('QueryCoverage.View') : t('QueryCoverage.Add')}
+                                </Button>
+                            </CardContent>
+                        </Card>
                         <section className="rounded-lg border bg-card p-5">
                             <h2 className="text-base font-semibold">{t('KnowledgeFlow.Title')}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">{t('KnowledgeFlow.Description')}</p>
-                            <div className="mt-5 grid items-center gap-2 text-center sm:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr]">
-                                {[
-                                    [FileText, t('KnowledgeFlow.Sources')],
-                                    [BrainCircuit, t('KnowledgeFlow.Definitions')],
-                                    [FileCode2, t('KnowledgeFlow.Queries')],
-                                    [Sparkles, t('KnowledgeFlow.AskAi')],
-                                    [Bot, t('KnowledgeFlow.AgentRun')],
-                                ].map(([Icon, label], index) => (
-                                    <div key={String(label)} className="contents">
-                                        <div className="rounded-md border bg-muted/20 p-3">
-                                            <Icon className="mx-auto size-5 text-muted-foreground" />
-                                            <div className="mt-2 text-sm font-medium">{String(label)}</div>
+                            <div className="mt-5 grid items-center gap-3 text-center lg:grid-cols-[minmax(0,1.2fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
+                                <div className="grid gap-2">
+                                    {[
+                                        [FileText, t('KnowledgeFlow.Sources'), t('KnowledgeFlow.SourceDescription')],
+                                        [BrainCircuit, t('KnowledgeFlow.Definitions'), t('KnowledgeFlow.DefinitionDescription')],
+                                        [FileCode2, t('KnowledgeFlow.Queries'), t('KnowledgeFlow.QueryDescription')],
+                                    ].map(([Icon, label, description]) => (
+                                        <div key={String(label)} className="rounded-md border bg-muted/20 p-3 text-left">
+                                            <div className="flex items-center gap-2">
+                                                <Icon className="size-5 text-muted-foreground" />
+                                                <span className="text-sm font-medium">{String(label)}</span>
+                                            </div>
+                                            <p className="mt-1 pl-7 text-xs text-muted-foreground">{String(description)}</p>
                                         </div>
-                                        {index < 4 ? <ArrowDown className="mx-auto size-4 text-muted-foreground sm:-rotate-90" /> : null}
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
+                                <ArrowDown className="mx-auto size-4 text-muted-foreground lg:-rotate-90" />
+                                <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+                                    <BrainCircuit className="mx-auto size-5 text-primary" />
+                                    <div className="mt-2 text-sm font-medium">{t('KnowledgeFlow.AgentContext')}</div>
+                                </div>
+                                <ArrowDown className="mx-auto size-4 text-muted-foreground lg:-rotate-90" />
+                                <div className="rounded-md border bg-muted/20 p-4">
+                                    <Sparkles className="mx-auto size-5 text-muted-foreground" />
+                                    <div className="mt-2 text-sm font-medium">{t('KnowledgeFlow.AskAi')}</div>
+                                </div>
+                                <ArrowDown className="mx-auto size-4 text-muted-foreground lg:-rotate-90" />
+                                <div className="rounded-md border bg-muted/20 p-4">
+                                    <Bot className="mx-auto size-5 text-muted-foreground" />
+                                    <div className="mt-2 text-sm font-medium">{t('KnowledgeFlow.AgentRun')}</div>
+                                </div>
                             </div>
                         </section>
                         <section className="space-y-3 pt-1">
@@ -1733,6 +1804,16 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                 />
                 <ImportYamlDialog open={importOpen} onOpenChange={setImportOpen} model={model} onImported={setModel} />
                 <YamlEditorDialog open={yamlEditorOpen} onOpenChange={setYamlEditorOpen} model={model} onSaved={setModel} />
+                <EditKnowledgeModelDialog
+                    model={editingModel}
+                    organization={organization}
+                    connections={connections.data?.connections ?? []}
+                    onOpenChange={open => !open && setEditingModel(null)}
+                    onUpdated={updated => {
+                        setModel(updated);
+                        void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
+                    }}
+                />
             </main>
         </div>
     );

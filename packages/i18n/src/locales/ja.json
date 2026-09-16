@@ -3791,6 +3791,7 @@
         "UpdatedTime": "{time}に更新",
         "DefinitionQueryCount": "{definitions} 件の定義 · {queries} 件の検証済みクエリ",
         "DataSourceCount": "{count} 件のデータソース",
+        "ConnectedDataSources": "関連データソース",
         "EditNamedModel": "{name}を編集",
         "DeleteNamedModel": "{name}を削除",
         "EmptyTitle": "最初のナレッジモデルを作成",
@@ -3803,22 +3804,37 @@
         "Readiness": {
             "Ready": "Agent の準備完了",
             "NotReady": "Agent の準備未完了",
-            "Description": "Dory は、一貫したクエリに必要な検証済みのビジネス意味が揃っているか確認します。",
+            "ReadyDescription": "Agent はこれらのビジネス定義を使ってデータを理解し、クエリできます。検証済みクエリを追加すると、よくある質問への一貫性がさらに高まります。",
+            "NotReadyDescription": "データソースを関連付け、少なくとも 1 件のビジネス定義を検証すると、Agent がこの Knowledge Model を使用できます。",
             "Understands": "Agent が理解していること",
-            "Checks": {
-                "dataSource": "データソースが接続済み",
-                "verifiedDefinition": "検証済みの定義が存在",
-                "verifiedQuery": "検証済みクエリが利用可能"
+            "Suggested": "推奨",
+            "Requirements": {
+                "DataSources": "関連データソース {count} 件",
+                "Definitions": "検証済みビジネス定義 {count} 件",
+                "VerifiedQueries": "検証済みクエリ {count} 件"
             }
         },
         "KnowledgeFlow": {
-            "Title": "Agent ナレッジの仕組み",
-            "Description": "ビジネス知識を提供し、意味を確立し、一貫して問い合わせ、Agent が使用した内容を確認します。",
-            "Sources": "ソース",
+            "Title": "Agent がナレッジを使う仕組み",
+            "Description": "異なる種類のナレッジが Agent Context を構成し、各 Run で必要に応じて使用されます。",
+            "Sources": "Knowledge Sources",
+            "SourceDescription": "ビジネス背景とルール",
             "Definitions": "定義",
+            "DefinitionDescription": "ビジネスセマンティクス",
             "Queries": "検証済みクエリ",
+            "QueryDescription": "信頼できるクエリ方法",
+            "AgentContext": "Agent Context",
             "AskAi": "AI に質問",
             "AgentRun": "Agent Run"
+        },
+        "QueryCoverage": {
+            "Title": "クエリ保証",
+            "EmptyTitle": "検証済みクエリはまだありません",
+            "EmptyDescription": "よくあるビジネス質問に Verified Query を追加すると、Agent が一貫した方法でクエリできます。",
+            "CoveredTitle": "よくある質問 {count} 件を保証",
+            "CoveredDescription": "Agent はレビュー済みのクエリ方法を優先して再利用できます。",
+            "Add": "Verified Query を追加",
+            "View": "Verified Queries を表示"
         },
         "BusinessContext": "ビジネスコンテキスト",
         "BusinessContextPlaceholder": "ビジネスルール、用語、エージェントへの指示を Markdown で記録します。",

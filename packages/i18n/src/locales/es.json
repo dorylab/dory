@@ -3785,6 +3785,7 @@
         "UpdatedTime": "Actualizado {time}",
         "DefinitionQueryCount": "{definitions, plural, one {# definición} other {# definiciones}} · {queries, plural, one {# consulta verificada} other {# consultas verificadas}}",
         "DataSourceCount": "{count, plural, one {# fuente de datos} other {# fuentes de datos}}",
+        "ConnectedDataSources": "Fuentes de datos vinculadas",
         "EditNamedModel": "Editar {name}",
         "DeleteNamedModel": "Eliminar {name}",
         "EmptyTitle": "Crea tu primer modelo de conocimiento",
@@ -3797,22 +3798,37 @@
         "Readiness": {
             "Ready": "Listo para el Agent",
             "NotReady": "Aún no está listo para el Agent",
-            "Description": "Dory comprueba que el Agent tenga suficiente significado de negocio verificado para consultar de forma coherente.",
+            "ReadyDescription": "El Agent ya puede usar estas definiciones de negocio para entender y consultar datos. Añade consultas verificadas para mejorar la coherencia en preguntas frecuentes.",
+            "NotReadyDescription": "Vincula una fuente de datos y verifica al menos una definición de negocio antes de que el Agent pueda usar este Knowledge Model.",
             "Understands": "El Agent entiende",
-            "Checks": {
-                "dataSource": "Hay una fuente de datos conectada",
-                "verifiedDefinition": "Hay una definición verificada",
-                "verifiedQuery": "Hay una consulta verificada disponible"
+            "Suggested": "Sugerido",
+            "Requirements": {
+                "DataSources": "{count, plural, one {# fuente de datos vinculada} other {# fuentes de datos vinculadas}}",
+                "Definitions": "{count, plural, one {# definición de negocio verificada} other {# definiciones de negocio verificadas}}",
+                "VerifiedQueries": "{count, plural, one {# consulta verificada} other {# consultas verificadas}}"
             }
         },
         "KnowledgeFlow": {
-            "Title": "Cómo funciona el conocimiento del Agent",
-            "Description": "Aporta conocimiento de negocio, establece significado, consulta de forma coherente y revisa lo que usó el Agent.",
-            "Sources": "Fuentes",
+            "Title": "Cómo usa el Agent el conocimiento",
+            "Description": "Los distintos activos de conocimiento forman el Agent Context y se usan según sea necesario en cada ejecución.",
+            "Sources": "Knowledge Sources",
+            "SourceDescription": "Contexto y reglas de negocio",
             "Definitions": "Definiciones",
+            "DefinitionDescription": "Semántica de negocio",
             "Queries": "Consultas verificadas",
+            "QueryDescription": "Métodos de consulta confiables",
+            "AgentContext": "Agent Context",
             "AskAi": "Preguntar a IA",
             "AgentRun": "Agent Run"
+        },
+        "QueryCoverage": {
+            "Title": "Cobertura de consultas",
+            "EmptyTitle": "Aún no hay consultas verificadas",
+            "EmptyDescription": "Añade Verified Queries para preguntas frecuentes de negocio y garantiza un enfoque de consulta coherente.",
+            "CoveredTitle": "{count, plural, one {# pregunta frecuente cubierta} other {# preguntas frecuentes cubiertas}}",
+            "CoveredDescription": "El Agent puede priorizar estos enfoques de consulta revisados.",
+            "Add": "Añadir Verified Query",
+            "View": "Ver Verified Queries"
         },
         "BusinessContext": "Contexto empresarial",
         "BusinessContextPlaceholder": "Documenta reglas empresariales, vocabulario e instrucciones para agentes en Markdown.",

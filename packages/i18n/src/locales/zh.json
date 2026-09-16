@@ -3781,6 +3781,7 @@
         "UpdatedTime": "更新于 {time}",
         "DefinitionQueryCount": "{definitions} 个定义 · {queries} 个已验证查询",
         "DataSourceCount": "{count} 个数据源",
+        "ConnectedDataSources": "已关联数据源",
         "EditNamedModel": "编辑 {name}",
         "DeleteNamedModel": "删除 {name}",
         "EmptyTitle": "创建第一个知识模型",
@@ -3793,22 +3794,37 @@
         "Readiness": {
             "Ready": "已为 Agent 就绪",
             "NotReady": "尚未为 Agent 就绪",
-            "Description": "Dory 会检查 Agent 是否具备一致查询所需的已验证业务语义。",
+            "ReadyDescription": "Agent 已可以使用这些业务定义理解并查询数据。添加已验证查询可以进一步提高常见问题的查询一致性。",
+            "NotReadyDescription": "关联数据源并验证至少一个业务定义后，Agent 才能使用这个 Knowledge Model。",
             "Understands": "Agent 已理解",
-            "Checks": {
-                "dataSource": "已连接数据源",
-                "verifiedDefinition": "已有已验证定义",
-                "verifiedQuery": "已有 Verified Query"
+            "Suggested": "建议",
+            "Requirements": {
+                "DataSources": "{count} 个已关联数据源",
+                "Definitions": "{count} 个已验证业务定义",
+                "VerifiedQueries": "{count} 个已验证查询"
             }
         },
         "KnowledgeFlow": {
-            "Title": "Agent 知识如何工作",
-            "Description": "提供业务知识、建立语义、按一致方式查询，并查看 Agent 实际使用了什么。",
-            "Sources": "Sources",
+            "Title": "Agent 如何使用知识",
+            "Description": "不同类型的 Knowledge 共同组成 Agent Context，并在每次运行中按需使用。",
+            "Sources": "Knowledge Sources",
+            "SourceDescription": "业务背景与规则",
             "Definitions": "Definitions",
+            "DefinitionDescription": "业务语义",
             "Queries": "Verified Queries",
+            "QueryDescription": "可信查询方式",
+            "AgentContext": "Agent Context",
             "AskAi": "Ask AI",
             "AgentRun": "Agent Run"
+        },
+        "QueryCoverage": {
+            "Title": "查询保障",
+            "EmptyTitle": "暂无已验证查询",
+            "EmptyDescription": "为高频业务问题添加 Verified Query，可确保 Agent 使用一致的查询方式。",
+            "CoveredTitle": "已保障 {count} 个常见问题",
+            "CoveredDescription": "Agent 可以优先复用这些经过审核的查询方式。",
+            "Add": "添加 Verified Query",
+            "View": "查看 Verified Queries"
         },
         "BusinessContext": "业务上下文",
         "BusinessContextPlaceholder": "使用 Markdown 记录业务规则、词汇和 Agent 指令。",

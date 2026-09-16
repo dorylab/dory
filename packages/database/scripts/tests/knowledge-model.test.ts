@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    getKnowledgeReadiness,
     parseKnowledgeYaml,
     parseKnowledgeSourceYaml,
     KNOWLEDGE_SOURCE_MAX_BYTES,
@@ -11,6 +12,28 @@ import {
 } from '../../src/postgres/impl/knowledge/index';
 
 const sources = new Set(['postgres', 'clickhouse']);
+
+test('knowledge readiness requires connected data and a verified non-relationship definition', () => {
+    const verifiedMetric = { id: 'metric:revenue', name: 'Revenue', kind: 'metric' as const, status: 'verified' as const, sourceConnectionId: 'postgres' };
+    const verifiedRelationship = {
+        id: 'relationship:customer',
+        name: 'Order customer',
+        kind: 'relationship' as const,
+        status: 'verified' as const,
+        sourceConnectionId: 'postgres',
+        from: 'Orders',
+        to: 'Customers',
+    };
+    const unverifiedMetric = { ...verifiedMetric, status: 'unverified' as const };
+
+    assert.deepEqual(getKnowledgeReadiness([verifiedMetric], 1), {
+        status: 'ready',
+        requirements: { dataSource: true, verifiedDefinition: true },
+    });
+    assert.equal(getKnowledgeReadiness([verifiedMetric], 0).status, 'not_ready');
+    assert.equal(getKnowledgeReadiness([verifiedRelationship], 1).status, 'not_ready');
+    assert.equal(getKnowledgeReadiness([unverifiedMetric], 1).status, 'not_ready');
+});
 
 test('knowledge model YAML preserves source ownership and imports definitions as unverified', () => {
     const model = validateKnowledgeModelDocument(

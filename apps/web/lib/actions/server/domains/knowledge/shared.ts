@@ -47,7 +47,7 @@ export const knowledgeModelOutputSchema = z.object({
     knowledgeSourceCount: z.number().int().nonnegative(),
     readiness: z.object({
         status: z.enum(['ready', 'not_ready']),
-        checks: z.object({ dataSource: z.boolean(), verifiedDefinition: z.boolean(), verifiedQuery: z.boolean() }),
+        requirements: z.object({ dataSource: z.boolean(), verifiedDefinition: z.boolean() }),
     }),
     agentUnderstands: z.array(z.object({ id: z.string(), name: z.string(), kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']) })),
     createdAt: z.union([z.date(), z.string()]),

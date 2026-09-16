@@ -42,7 +42,7 @@ export type KnowledgeModelDetail = {
 
 export type KnowledgeReadiness = {
     status: 'ready' | 'not_ready';
-    checks: { dataSource: boolean; verifiedDefinition: boolean; verifiedQuery: boolean };
+    requirements: { dataSource: boolean; verifiedDefinition: boolean };
 };
 
 export type KnowledgeGraph = {
@@ -64,6 +64,17 @@ export type KnowledgeSourceVerifiedQueryImport = {
     description?: string;
     definitionIds: string[];
 };
+
+export function getKnowledgeReadiness(definitions: KnowledgeDefinition[], dataSourceCount: number): KnowledgeReadiness {
+    const requirements = {
+        dataSource: dataSourceCount > 0,
+        verifiedDefinition: definitions.some(definition => definition.status === 'verified' && definition.kind !== 'relationship'),
+    };
+    return {
+        status: requirements.dataSource && requirements.verifiedDefinition ? 'ready' : 'not_ready',
+        requirements,
+    };
+}
 
 export function validateKnowledgeSource(fileName: string, contentText: string) {
     const normalizedName = fileName.trim();
@@ -359,23 +370,15 @@ export class PostgresKnowledgeRepository {
             const model = validateKnowledgeModelDocument(row.modelJson);
             const modelDataSources = dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source);
             const verifiedQueryCount = verified.filter(queryRow => queryRow.knowledgeModelId === row.id).length;
-            const verifiedDefinitions = model.definitions.filter(definition => definition.status === 'verified');
-            const checks = {
-                dataSource: modelDataSources.length > 0,
-                verifiedDefinition: verifiedDefinitions.length > 0,
-                verifiedQuery: verifiedQueryCount > 0,
-            };
+            const verifiedDefinitions = model.definitions.filter(definition => definition.status === 'verified' && definition.kind !== 'relationship');
             return {
                 ...row,
                 model,
                 dataSources: modelDataSources,
                 verifiedQueryCount,
                 knowledgeSourceCount: sourceRows.filter(source => source.knowledgeModelId === row.id).length,
-                readiness: { status: Object.values(checks).every(Boolean) ? ('ready' as const) : ('not_ready' as const), checks },
-                agentUnderstands: verifiedDefinitions
-                    .filter(definition => definition.kind !== 'relationship')
-                    .slice(0, 5)
-                    .map(({ id, name, kind }) => ({ id, name, kind })),
+                readiness: getKnowledgeReadiness(model.definitions, modelDataSources.length),
+                agentUnderstands: verifiedDefinitions.slice(0, 5).map(({ id, name, kind }) => ({ id, name, kind })),
             };
         });
     }

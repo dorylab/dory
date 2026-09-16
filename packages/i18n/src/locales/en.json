@@ -3791,6 +3791,7 @@
         "UpdatedTime": "Updated {time}",
         "DefinitionQueryCount": "{definitions, plural, one {# definition} other {# definitions}} · {queries, plural, one {# verified query} other {# verified queries}}",
         "DataSourceCount": "{count, plural, one {# data source} other {# data sources}}",
+        "ConnectedDataSources": "Connected Data Sources",
         "EditNamedModel": "Edit {name}",
         "DeleteNamedModel": "Delete {name}",
         "EmptyTitle": "Create your first knowledge model",
@@ -3803,22 +3804,37 @@
         "Readiness": {
             "Ready": "Ready for Agent",
             "NotReady": "Not ready for Agent",
-            "Description": "Dory checks whether the Agent has enough verified business meaning to query consistently.",
+            "ReadyDescription": "The Agent can use these business definitions to understand and query data. Add verified queries to improve consistency for common questions.",
+            "NotReadyDescription": "Connect a data source and verify at least one business definition before the Agent can use this Knowledge Model.",
             "Understands": "Agent understands",
-            "Checks": {
-                "dataSource": "A data source is connected",
-                "verifiedDefinition": "A definition is verified",
-                "verifiedQuery": "A verified query is available"
+            "Suggested": "Suggested",
+            "Requirements": {
+                "DataSources": "{count, plural, one {# connected data source} other {# connected data sources}}",
+                "Definitions": "{count, plural, one {# verified business definition} other {# verified business definitions}}",
+                "VerifiedQueries": "{count, plural, one {# verified query} other {# verified queries}}"
             }
         },
         "KnowledgeFlow": {
-            "Title": "How Agent knowledge works",
-            "Description": "Provide business knowledge, establish meaning, query consistently, and inspect what the Agent used.",
-            "Sources": "Sources",
+            "Title": "How the Agent uses knowledge",
+            "Description": "Different knowledge assets form the Agent Context and are used as needed in each run.",
+            "Sources": "Knowledge Sources",
+            "SourceDescription": "Business context and rules",
             "Definitions": "Definitions",
+            "DefinitionDescription": "Business semantics",
             "Queries": "Verified Queries",
+            "QueryDescription": "Trusted query patterns",
+            "AgentContext": "Agent Context",
             "AskAi": "Ask AI",
             "AgentRun": "Agent Run"
+        },
+        "QueryCoverage": {
+            "Title": "Query coverage",
+            "EmptyTitle": "No verified queries yet",
+            "EmptyDescription": "Add Verified Queries for common business questions so the Agent uses a consistent query approach.",
+            "CoveredTitle": "{count, plural, one {# common question covered} other {# common questions covered}}",
+            "CoveredDescription": "The Agent can prioritize these reviewed query approaches.",
+            "Add": "Add Verified Query",
+            "View": "View Verified Queries"
         },
         "BusinessContext": "Business Context",
         "BusinessContextPlaceholder": "Document business rules, vocabulary, and agent instructions in Markdown.",

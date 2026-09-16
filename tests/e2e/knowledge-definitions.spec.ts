@@ -33,8 +33,8 @@ let model = {
     verifiedQueryCount: 0,
     knowledgeSourceCount: 0,
     readiness: {
-        status: 'not_ready' as const,
-        checks: { dataSource: true, verifiedDefinition: true, verifiedQuery: false },
+        status: 'ready' as const,
+        requirements: { dataSource: true, verifiedDefinition: true },
     },
     agentUnderstands: [{ id: definition.id, name: definition.name, kind: definition.kind }],
     createdAt: now,
@@ -53,6 +53,54 @@ async function currentOrganization(page: import('@playwright/test').Page) {
     await page.waitForURL(/\/[^/]+\/connections$/);
     return new URL(page.url()).pathname.split('/')[1]!;
 }
+
+test('knowledge overview separates readiness from verified query coverage', async ({ page }) => {
+    await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
+    await page.route('**/api/actions/execute', async route => {
+        const body = route.request().postDataJSON() as { actionId: string };
+        if (body.actionId === 'knowledge.get') {
+            await actionResponse(route, model);
+            return;
+        }
+        if (body.actionId === 'knowledge.listVerifiedQueries') {
+            await actionResponse(route, { queries: [] });
+            return;
+        }
+        if (body.actionId === 'knowledge.listKnowledgeSources') {
+            await actionResponse(route, { sources: [] });
+            return;
+        }
+        if (body.actionId === 'knowledge.getGraph') {
+            await actionResponse(route, { queryDefinitionEdges: [], sourceAssetEdges: [] });
+            return;
+        }
+        if (body.actionId === 'connection.list') {
+            await actionResponse(route, { connections: [] });
+            return;
+        }
+        await route.fallback();
+    });
+
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+
+    await expect(page.getByText('Ready for Agent', { exact: true })).toBeVisible();
+    await expect(page.getByText('1 connected data source', { exact: true })).toBeVisible();
+    await expect(page.getByText('1 verified business definition', { exact: true })).toBeVisible();
+    await expect(page.getByText('0 verified queries', { exact: true })).toBeVisible();
+    await expect(page.getByText('Suggested', { exact: true })).toBeVisible();
+    await expect(page.getByText('No verified queries yet', { exact: true })).toBeVisible();
+    await expect(page.getByText('Connected Data Sources', { exact: true })).toBeVisible();
+    await expect(page.getByText('Knowledge Sources', { exact: true })).toBeVisible();
+    await expect(page.getByText('Agent Context', { exact: true })).toBeVisible();
+    await expect(page.getByText('Business context and rules', { exact: true })).toBeVisible();
+    await expect(page.getByText('Business semantics', { exact: true })).toBeVisible();
+    await expect(page.getByText('Trusted query patterns', { exact: true })).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await expect(page.getByText('Agent Context', { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
 
 test('knowledge definitions open an editor and save an update', async ({ page }) => {
     let updatedInput: Record<string, unknown> | null = null;
