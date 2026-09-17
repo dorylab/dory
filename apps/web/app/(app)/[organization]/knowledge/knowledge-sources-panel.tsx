@@ -110,11 +110,21 @@ function formatBytes(bytes: number) {
     return `${(bytes / 1_000).toFixed(bytes < 10_000 ? 1 : 0)} KB`;
 }
 
-function ScopeSelect({ value, dataSources, onChange }: { value: string | null; dataSources: DataSource[]; onChange: (value: string | null) => void }) {
+function ScopeSelect({
+    value,
+    dataSources,
+    onChange,
+    className = 'w-full',
+}: {
+    value: string | null;
+    dataSources: DataSource[];
+    onChange: (value: string | null) => void;
+    className?: string;
+}) {
     const t = useTranslations('Knowledge.KnowledgeSources');
     return (
         <Select value={value ?? '__shared__'} onValueChange={selected => onChange(selected === '__shared__' ? null : selected)}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className={className}>
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -253,6 +263,7 @@ function UploadSourcesDialog({
                                     value={file.connectionId}
                                     dataSources={dataSources}
                                     onChange={connectionId => setFiles(current => current.map(item => (item.key === file.key ? { ...item, connectionId } : item)))}
+                                    className="w-48 shrink-0"
                                 />
                                 <Button
                                     variant="ghost"
