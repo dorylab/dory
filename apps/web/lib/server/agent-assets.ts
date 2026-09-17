@@ -165,7 +165,10 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
     const limit = Math.max(1, Math.min(input.limit ?? DEFAULT_LIMIT, MAX_LIMIT));
 
     const [artifactsResult, models] = await Promise.all([
-        kinds.has('artifact') ? db.artifacts.list({ organizationId: input.organizationId, query: query || undefined, limit: 100 }) : Promise.resolve({ rows: [], total: 0 }),
+        // Artifact titles can be derived from their SQL when they are read. Fetch the
+        // organization slice first so the shared lexical scorer evaluates that same
+        // public title instead of filtering against the stored fallback title.
+        kinds.has('artifact') ? db.artifacts.list({ organizationId: input.organizationId, limit: 100 }) : Promise.resolve({ rows: [], total: 0 }),
         kinds.has('knowledge_definition') || kinds.has('verified_query') || kinds.has('knowledge_source')
             ? db.knowledge.listModels({ organizationId: input.organizationId, connectionId: input.connectionId ?? undefined })
             : Promise.resolve([]),

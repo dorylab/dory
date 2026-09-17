@@ -3972,6 +3972,7 @@ __metadata:
     mysql2: "npm:^3.20.0"
     oracledb: "npm:^6.10.0"
     pg: "npm:^8.20.0"
+    snowflake-sdk: "npm:^3.0.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
     tsx: "npm:^4.23.1"
     typescript: "npm:^6.0.2"

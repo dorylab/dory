@@ -3,6 +3,7 @@ import { and, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { getClient } from '@dory/database/postgres/client';
 import {
     agentRunResultSets,
+    agentActivities,
     artifacts,
     findingArtifacts,
     findings,
@@ -41,6 +42,7 @@ const DEFAULT_WORK_TITLE = 'Agent Run';
 
 export type WorkRecord = typeof works.$inferSelect;
 export type WorkEventRecord = typeof workEvents.$inferSelect;
+export type AgentActivityRecord = typeof agentActivities.$inferSelect;
 export type WorkKnowledgeAssetUsage = typeof workKnowledgeAssets.$inferSelect & { available: boolean };
 export type WorkAgentAssetUsage = typeof workAgentAssets.$inferSelect;
 
@@ -79,6 +81,8 @@ export type WorkEventCreateInput = {
     errorMessage?: string | null;
     durationMs?: number | null;
 };
+
+export type AgentActivityCreateInput = Omit<WorkEventCreateInput, 'workId'>;
 
 export type WorkKnowledgeAssetUsageInput = {
     workId: string;
@@ -552,6 +556,30 @@ export class PostgresWorksRepository {
         await this.appendAgentRunEvent(input, row);
         await this.touch(input.workId);
         return row as WorkEventRecord;
+    }
+
+    async recordAgentActivity(input: AgentActivityCreateInput): Promise<AgentActivityRecord> {
+        this.assertInited();
+        const [row] = await this.db
+            .insert(agentActivities)
+            .values({
+                organizationId: input.organizationId,
+                userId: input.userId,
+                principalType: input.principalType ?? 'user',
+                principalId: input.principalId ?? input.userId,
+                tokenId: input.tokenId ?? null,
+                connectionId: input.connectionId ?? null,
+                toolName: input.toolName,
+                actionId: input.actionId ?? null,
+                status: input.status,
+                inputSummary: input.inputSummary ?? null,
+                outputSummary: input.outputSummary ?? null,
+                errorCode: input.errorCode ?? null,
+                errorMessage: input.errorMessage ?? null,
+                durationMs: Math.max(0, Math.round(input.durationMs ?? 0)),
+            })
+            .returning();
+        return row as AgentActivityRecord;
     }
 
     async recordKnowledgeAssetUsage(input: WorkKnowledgeAssetUsageInput) {

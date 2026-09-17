@@ -48,56 +48,33 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
             async uri => {
                 const { createMcpActionContext } = await import('@/lib/actions/server/context');
                 const ctx = await createMcpActionContext(context);
-                const work = await ctx.services.db.works.resolve({
-                    organizationId: ctx.organizationId,
-                    userId: ctx.userId,
-                    principalType: ctx.actor.metadata?.principalType === 'service' ? 'service' : 'user',
-                    principalId: typeof ctx.actor.metadata?.principalId === 'string' ? ctx.actor.metadata.principalId : ctx.userId,
-                    tokenId: ctx.actor.id ?? null,
-                    connectionId: null,
-                    externalSessionId: `mcp-resources:${ctx.actor.id ?? 'unknown'}`,
-                    title: 'MCP Resource Reads',
-                    metadata: { source: 'mcp_resource' },
-                });
                 const startedAt = performance.now();
                 try {
                     const result = await executeAction<Record<string, unknown>>(ctx, 'catalog.read', { ref: uri.href });
                     const asset = result.data.asset as Record<string, unknown>;
-                    await ctx.services.db.works.recordAgentAssetUsageEvent(
-                        {
-                            workId: work.workId,
-                            organizationId: ctx.organizationId,
-                            userId: ctx.userId,
-                            assetKind: asset.kind as 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source',
-                            assetRef: String(asset.ref),
-                            revision: String(asset.revision),
-                            assetSnapshot: {
-                                title: asset.title,
-                                deepLink: asset.deepLink,
-                                knowledgeModelId: asset.knowledgeModelId,
-                                knowledgeModelName: asset.knowledgeModelName,
-                                trustLevel: asset.trustLevel,
-                            },
-                        },
-                        {
-                            tokenId: ctx.actor.id ?? null,
-                            connectionId: null,
-                            toolName: 'mcp_resource_read',
-                            actionId: 'catalog.read',
-                            status: 'success',
-                            inputSummary: { ref: uri.href },
-                            outputSummary: { kind: asset.kind, ref: asset.ref, revision: asset.revision },
-                            durationMs: performance.now() - startedAt,
-                        },
-                    );
+                    await ctx.services.db.works.recordAgentActivity({
+                        organizationId: ctx.organizationId,
+                        userId: ctx.userId,
+                        principalType: ctx.actor.metadata?.principalType === 'service' ? 'service' : 'user',
+                        principalId: typeof ctx.actor.metadata?.principalId === 'string' ? ctx.actor.metadata.principalId : ctx.userId,
+                        tokenId: ctx.actor.id ?? null,
+                        connectionId: null,
+                        toolName: 'mcp_resource_read',
+                        actionId: 'catalog.read',
+                        status: 'success',
+                        inputSummary: { ref: uri.href },
+                        outputSummary: { kind: asset.kind, ref: asset.ref, revision: asset.revision },
+                        durationMs: performance.now() - startedAt,
+                    });
                     return {
                         contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(result.data, null, 2) }],
                     };
                 } catch (error) {
-                    await ctx.services.db.works.recordEvent({
-                        workId: work.workId,
+                    await ctx.services.db.works.recordAgentActivity({
                         organizationId: ctx.organizationId,
                         userId: ctx.userId,
+                        principalType: ctx.actor.metadata?.principalType === 'service' ? 'service' : 'user',
+                        principalId: typeof ctx.actor.metadata?.principalId === 'string' ? ctx.actor.metadata.principalId : ctx.userId,
                         tokenId: ctx.actor.id ?? null,
                         connectionId: null,
                         toolName: 'mcp_resource_read',

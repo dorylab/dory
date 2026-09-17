@@ -173,6 +173,21 @@ test('Agent asset search hides unverified definitions and supports connection al
     assert.equal(denied.assets.length, 0);
 });
 
+test('Agent asset search scores public Artifact titles without repository prefiltering', async () => {
+    const db = dbMock();
+    const list = db.artifacts.list;
+    let receivedInput: { query?: string | undefined } | undefined;
+    db.artifacts.list = async (input: { organizationId: string; query?: string; limit?: number }) => {
+        receivedInput = input;
+        return list(input);
+    };
+
+    const result = await searchAgentAssets(db, { organizationId: 'org-1', query: 'revenue' });
+
+    assert.equal(receivedInput?.query, undefined);
+    assert.ok(result.assets.some(asset => asset.ref === artifactAgentAssetRef('art-1')));
+});
+
 test('Agent asset reads chunk untrusted sources and cap Artifact previews', async () => {
     const source = await readAgentAsset(dbMock(), { organizationId: 'org-1', ref: knowledgeSourceAgentAssetRef('kn-1', 'source-1'), maxChars: 10 });
     assert.equal((source.content as any).text, 'abcdefghij');

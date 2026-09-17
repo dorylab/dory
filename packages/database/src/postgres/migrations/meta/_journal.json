@@ -260,6 +260,13 @@
             "when": 1789689600000,
             "tag": "0037_agent_assets",
             "breakpoints": true
+        },
+        {
+            "idx": 37,
+            "version": "7",
+            "when": 1789776000000,
+            "tag": "0038_agent_activities",
+            "breakpoints": true
         }
     ]
 }

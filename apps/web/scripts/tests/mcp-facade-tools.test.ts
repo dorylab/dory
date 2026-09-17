@@ -24,6 +24,7 @@ const [{ getPublicDoryMcpTools, structuredMcpFacadeError }, { registerDoryMcpToo
 
 function createWorksMock() {
     const events: any[] = [];
+    const activities: any[] = [];
     const knowledgeUsage: any[] = [];
     const works = new Map<string, any>();
     let nextId = 1;
@@ -134,8 +135,10 @@ function createWorksMock() {
 
     return {
         events,
+        activities,
         knowledgeUsage,
         works,
+        summarizeInput: (input: unknown) => input,
         create: async (input: any) => {
             if (input.externalSessionId) {
                 const existing = findByExternalSessionId(input);
@@ -155,6 +158,10 @@ function createWorksMock() {
         recordEvent: async (event: any) => {
             events.push(event);
             return { ...event, id: events.length, createdAt: now };
+        },
+        recordAgentActivity: async (activity: any) => {
+            activities.push(activity);
+            return { ...activity, activityId: `activity-${activities.length}`, createdAt: now };
         },
         recordKnowledgeAssetUsageEvent: async (usage: any, event: any) => {
             const existing = knowledgeUsage.find(item => item.workId === usage.workId && item.assetType === usage.assetType && item.assetId === usage.assetId);
@@ -201,7 +208,6 @@ function createWorksMock() {
             work.lastActiveAt = now;
             return work;
         },
-        summarizeInput: (input: unknown) => input,
         saveSqlSnapshot: async () => {},
     };
 }
@@ -244,6 +250,10 @@ function createContext(
         services: {
             requestOrigin: 'https://dory.test',
             ...services,
+            db: {
+                ...services.db,
+                works: (services.db as any).works ?? createWorksMock(),
+            },
         },
         ...overrides,
     };
@@ -316,13 +326,13 @@ test('public Dory MCP descriptions scope work context to query and workspace too
     const write = getTool('dory_write');
     const listConnections = getTool('dory_list_connections');
 
-    assert.match(createWork.description, /query, analysis, SQL, schema exploration, schema comparison, workspace tab, or saved query tools/);
+    assert.match(createWork.description, /SQL execution, SQL workspace edits, or Saved Query operations/);
     assert.doesNotMatch(createWork.description, /every later Dory tool call/);
     assert.match(write.description, /connection\.create, connection\.update, and connection\.delete/);
     assert.match(write.description, /do not require workId/);
     assert.doesNotMatch(write.description, /Call dory_create_work/);
-    assert.match(listConnections.description, /Requires an existing workId/);
-    assert.match(listConnections.description, /Call dory_create_work before query/);
+    assert.match(listConnections.description, /Without a workId this is recorded as Agent activity/);
+    assert.doesNotMatch(listConnections.description, /Requires an existing workId/);
 });
 
 test('dory_read and dory_write split MCP-runnable actions without adding domain-specific tools', async () => {
@@ -1016,26 +1026,27 @@ test('dory_finish_work rejects work owned by another user', async () => {
     );
 });
 
-test('ordinary MCP facade tools require an existing work context', async () => {
+test('non-SQL MCP facade tools record standalone Agent activity without creating a work', async () => {
+    const works = createWorksMock();
     const ctx = createContext({
         db: {
-            works: createWorksMock(),
+            works,
             connections: {
                 list: async () => [],
             },
         },
     } as unknown as WebActionServices);
 
-    await assertRejectsCode(() => getTool('dory_list_connections').execute(ctx, { includeRecent: true }), 'MISSING_WORK_CONTEXT');
-    await assertRejectsCode(
-        () =>
-            getTool('dory_compare_schema').execute(ctx, {
-                current: { connectionId: 'current', database: 'app' },
-                desired: { connectionId: 'desired', database: 'app' },
-            }),
-        'MISSING_WORK_CONTEXT',
-    );
-    await assertRejectsCode(() => getTool('dory_analyze_database_changes').execute(ctx, { runId: 'cmprun_1' }), 'MISSING_WORK_CONTEXT');
+    const output = (await getTool('dory_list_connections').execute(ctx, { includeRecent: true })) as any;
+    assert.deepEqual(output.connections, []);
+    assert.equal(works.works.size, 0);
+    assert.equal(works.activities[0].toolName, 'dory_list_connections');
+    const work = (await getTool('dory_create_work').execute(ctx, { title: 'SQL analysis', connectionId: 'conn-1' })) as any;
+    await getTool('dory_list_connections').execute(ctx, { workId: work.work.workId, includeRecent: true });
+    assert.equal(works.works.size, 1);
+    assert.equal(works.events.at(-1)?.toolName, 'dory_list_connections');
+    assert.equal(getTool('dory_compare_schema').inputSchema.safeParse({ comparisonId: 'cmp_1' }).success, true);
+    assert.equal(getTool('dory_analyze_database_changes').inputSchema.safeParse({ runId: 'cmprun_1' }).success, true);
 });
 
 test('knowledge search returns summaries while successful detail reads record immutable usage', async () => {
@@ -1075,15 +1086,13 @@ test('knowledge search returns summaries while successful detail reads record im
     const work = (await getTool('dory_create_work').execute(ctx, { title: 'Knowledge run', connectionId: 'conn-1' })) as any;
     works.events.length = 0;
 
-    await assertRejectsCode(
-        () =>
-            getTool('dory_read').execute(ctx, {
-                operation: 'run',
-                actionId: 'knowledge.searchKnowledge',
-                input: { connectionId: 'conn-1', query: 'age' },
-            }),
-        'MISSING_WORK_CONTEXT',
-    );
+    const standaloneSearch = (await getTool('dory_read').execute(ctx, {
+        operation: 'run',
+        actionId: 'knowledge.searchKnowledge',
+        input: { connectionId: 'conn-1', query: 'age' },
+    })) as any;
+    assert.equal(standaloneSearch.data.models[0].definitions[0].name, 'Age');
+    assert.equal(works.activities[0].actionId, 'knowledge.searchKnowledge');
 
     const search = (await getTool('dory_read').execute(ctx, {
         operation: 'run',

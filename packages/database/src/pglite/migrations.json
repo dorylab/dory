@@ -603,5 +603,16 @@
     "bps": true,
     "folderMillis": 1789689600000,
     "hash": "459eed5962cb302ee06849595b9b319a2da8238879bb6d6c565493fbdbfe3e4d"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"agent_activities\" (\n    \"activity_id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"principal_type\" text DEFAULT 'user' NOT NULL,\n    \"principal_id\" text,\n    \"token_id\" text,\n    \"connection_id\" text,\n    \"tool_name\" text NOT NULL,\n    \"action_id\" text,\n    \"status\" text NOT NULL,\n    \"input_summary\" jsonb,\n    \"output_summary\" jsonb,\n    \"error_code\" text,\n    \"error_message\" text,\n    \"duration_ms\" integer DEFAULT 0 NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_agent_activities_org_created\" ON \"agent_activities\" (\"organization_id\", \"created_at\");\n",
+      "\nCREATE INDEX \"idx_agent_activities_principal_created\" ON \"agent_activities\" (\"organization_id\", \"principal_type\", \"principal_id\", \"created_at\");\n",
+      "\nUPDATE \"works\"\nSET \"status\" = 'archived', \"archived_at\" = now(), \"updated_at\" = now(), \"last_active_at\" = now()\nWHERE \"archived_at\" IS NULL\n  AND \"token_id\" IS NOT NULL\n  AND NOT EXISTS (SELECT 1 FROM \"work_query_sessions\" WHERE \"work_query_sessions\".\"work_id\" = \"works\".\"work_id\")\n  AND NOT EXISTS (SELECT 1 FROM \"tabs\" WHERE \"tabs\".\"work_id\" = \"works\".\"work_id\")\n  AND NOT EXISTS (SELECT 1 FROM \"artifacts\" WHERE \"artifacts\".\"work_id\" = \"works\".\"work_id\")\n  AND EXISTS (SELECT 1 FROM \"work_events\" WHERE \"work_events\".\"work_id\" = \"works\".\"work_id\")\n  AND NOT EXISTS (\n      SELECT 1 FROM \"work_events\"\n      WHERE \"work_events\".\"work_id\" = \"works\".\"work_id\"\n        AND \"work_events\".\"tool_name\" IN ('dory_run_readonly_sql', 'dory_workspace_tabs', 'dory_saved_queries')\n  );\n"
+    ],
+    "bps": true,
+    "folderMillis": 1789776000000,
+    "hash": "92c804c2efa49e617e660e000ac24aba83c0eeb646f7b03b879e014c36bd473b"
   }
 ]

@@ -62,6 +62,31 @@ export const workEvents = pgTable(
     t => [index('idx_work_events_work_created').on(t.workId, t.createdAt), index('idx_work_events_org_created').on(t.organizationId, t.createdAt)],
 );
 
+export const agentActivities = pgTable(
+    'agent_activities',
+    {
+        activityId: text('activity_id')
+            .primaryKey()
+            .$defaultFn(() => newEntityId()),
+        organizationId: text('organization_id').notNull(),
+        userId: text('user_id').notNull(),
+        principalType: text('principal_type').$type<WorkPrincipalType>().notNull().default('user'),
+        principalId: text('principal_id'),
+        tokenId: text('token_id'),
+        connectionId: text('connection_id'),
+        toolName: text('tool_name').notNull(),
+        actionId: text('action_id'),
+        status: text('status').$type<WorkEventStatus>().notNull(),
+        inputSummary: jsonb('input_summary').$type<Record<string, unknown> | null>(),
+        outputSummary: jsonb('output_summary').$type<Record<string, unknown> | null>(),
+        errorCode: text('error_code'),
+        errorMessage: text('error_message'),
+        durationMs: integer('duration_ms').notNull().default(0),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    t => [index('idx_agent_activities_org_created').on(t.organizationId, t.createdAt), index('idx_agent_activities_principal_created').on(t.organizationId, t.principalType, t.principalId, t.createdAt)],
+);
+
 export const workQuerySessions = pgTable(
     'work_query_sessions',
     {
