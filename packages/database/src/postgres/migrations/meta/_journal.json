@@ -253,6 +253,13 @@
             "when": 1789603200000,
             "tag": "0036_knowledge_verified_query_updater",
             "breakpoints": true
+        },
+        {
+            "idx": 36,
+            "version": "7",
+            "when": 1789689600000,
+            "tag": "0037_agent_assets",
+            "breakpoints": true
         }
     ]
 }

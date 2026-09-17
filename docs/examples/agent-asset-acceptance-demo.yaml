@@ -1,0 +1,88 @@
+# Replace __DEMO_CONNECTION_ID__ with the ID of your Demo Database before import.
+# Import with "Preserve verified status" enabled for the Agent acceptance demo.
+cubes:
+  - name: orders
+    sql_table: orders
+    meta:
+      dory:
+        sourceConnectionId: __DEMO_CONNECTION_ID__
+        entities:
+          - name: Orders
+            description: One record per customer order. Use order_id as the order grain.
+            meta:
+              dory:
+                id: entity:orders
+                kind: entity
+                status: verified
+                sourceConnectionId: __DEMO_CONNECTION_ID__
+                aliases: [purchases, sales orders]
+    measures:
+      - name: Gross merchandise value
+        description: Total amount of completed orders, excluding pending, cancelled, and refunded orders.
+        sql: SUM(amount)
+        meta:
+          dory:
+            id: metric:completed_gmv
+            kind: metric
+            status: verified
+            sourceConnectionId: __DEMO_CONNECTION_ID__
+            aliases: [gmv, completed revenue, revenue]
+            filters: ["status = 'completed'"]
+      - name: Completed order count
+        description: Count of completed orders.
+        sql: COUNT(*)
+        meta:
+          dory:
+            id: metric:completed_order_count
+            kind: metric
+            status: verified
+            sourceConnectionId: __DEMO_CONNECTION_ID__
+            aliases: [completed orders, successful orders]
+            filters: ["status = 'completed'"]
+    dimensions:
+      - name: Order status
+        description: Lifecycle state of an order.
+        sql: status
+        meta:
+          dory:
+            id: dimension:order_status
+            kind: dimension
+            status: verified
+            sourceConnectionId: __DEMO_CONNECTION_ID__
+            aliases: [status]
+      - name: Order created at
+        description: Timestamp at which the order was created.
+        sql: created_at
+        meta:
+          dory:
+            id: dimension:order_created_at
+            kind: dimension
+            status: verified
+            sourceConnectionId: __DEMO_CONNECTION_ID__
+            timeDimension: created_at
+  - name: users
+    sql_table: users
+    meta:
+      dory:
+        sourceConnectionId: __DEMO_CONNECTION_ID__
+        entities:
+          - name: Users
+            description: One record per customer.
+            meta:
+              dory:
+                id: entity:users
+                kind: entity
+                status: verified
+                sourceConnectionId: __DEMO_CONNECTION_ID__
+                aliases: [customers]
+    dimensions:
+      - name: Customer country
+        description: Country recorded for the customer.
+        sql: country
+        meta:
+          dory:
+            id: dimension:customer_country
+            kind: dimension
+            status: verified
+            sourceConnectionId: __DEMO_CONNECTION_ID__
+            aliases: [country, customer geography]

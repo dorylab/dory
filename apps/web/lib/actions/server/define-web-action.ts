@@ -20,6 +20,7 @@ export type WebActionRegistration<TInput, TOutput> = Omit<
     outputSchema: z.ZodType<TOutput>;
     permissions?: ActionPermissionRequirement[];
     scopes?: string[];
+    scopeAliases?: Record<string, string[]>;
     actors: ActionActorType[];
     mcp?: ActionMcpMetadata;
     requiresConfirmation?: boolean;
@@ -49,7 +50,7 @@ function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<unknown, unknow
         return 'local-workspace';
     }
 
-    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'resultSet', 'artifact', 'comparison', 'knowledge'].includes(action.domain)) {
+    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'resultSet', 'artifact', 'comparison', 'knowledge', 'catalog'].includes(action.domain)) {
         return 'local-workspace';
     }
 
@@ -57,7 +58,7 @@ function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<unknown, unknow
 }
 
 export function defineWebAction<TInput, TOutput>(action: WebActionRegistration<TInput, TOutput>) {
-    const { outputSchema, permissions, scopes, actors, mcp, requiresConfirmation, defaultProjection, projections, audit, desktopAuth, ...definition } = action;
+    const { outputSchema, permissions, scopes, scopeAliases, actors, mcp, requiresConfirmation, defaultProjection, projections, audit, desktopAuth, ...definition } = action;
     if (definition.risk === 'write' && typeof requiresConfirmation !== 'boolean') {
         throw new Error(`Write action "${definition.id}" must explicitly declare requiresConfirmation.`);
     }
@@ -69,6 +70,7 @@ export function defineWebAction<TInput, TOutput>(action: WebActionRegistration<T
         permission: {
             organization: permissions ?? [],
             scopes: scopes ?? [],
+            scopeAliases,
             confirmation:
                 typeof requiresConfirmation === 'boolean'
                     ? {

@@ -11,6 +11,7 @@ const DEFAULT_SCOPE_ALIASES: Partial<Record<ActionScope, ActionScope[]>> = {
     'analysis:run': ['read', 'write'],
     'comparisons:read': ['read', 'write'],
     'knowledge:read': ['read', 'write'],
+    'assets:read': ['read', 'write', 'query:read'],
     'connections:write': ['write'],
     'query:write': ['write'],
     'tabs:write': ['write'],

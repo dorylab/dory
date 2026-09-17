@@ -3441,6 +3441,23 @@
                 "ClientsEmpty": "还没有连接 MCP client。",
                 "ClientRevoked": "已撤销 MCP client。",
                 "ClientRevokeFailed": "撤销 MCP client 失败。",
+                "ServiceAccountsTitle": "Agent 服务账号",
+                "ServiceAccountsDescription": "为无人值守的客户 Agent 创建只读身份。令牌有效期为 90 天，并支持轮换。",
+                "ServiceNamePlaceholder": "服务账号名称",
+                "ServiceConnections": "允许访问的连接（留空表示全部）",
+                "CreateServiceAccount": "创建服务账号",
+                "ServiceCreated": "Agent 服务账号已创建。",
+                "ServiceCreateFailed": "创建 Agent 服务账号失败。",
+                "ServiceTokenOnce": "请立即复制此令牌，之后将不再显示。",
+                "ServiceTokenCreated": "已创建新的服务账号令牌。",
+                "ServiceTokenFailed": "创建服务账号令牌失败。",
+                "ServiceDisabled": "Agent 服务账号已禁用，其令牌已撤销。",
+                "ServiceDisableFailed": "禁用 Agent 服务账号失败。",
+                "ServiceConnectionCount": "仅限 {count} 个连接",
+                "ServiceAllConnections": "组织内全部连接",
+                "RotateServiceToken": "轮换令牌",
+                "DisableServiceAccount": "禁用",
+                "ServiceAccountsEmpty": "暂无 Agent 服务账号。",
                 "WebAuthorizationStatus": "Web MCP 授权稍后提供。现在可以使用桌面端本地 MCP。"
             },
             "DoryCli": {
@@ -4271,13 +4288,13 @@
     },
     "AgentRuns": {
         "KnowledgeUsed": {
-            "Title": "使用的 Knowledge",
-            "Description": "本次 Run 中 Agent 明确打开过的 Knowledge 资产。",
-            "Groups": { "source": "Sources", "definition": "Definitions", "verified_query": "Verified Queries" },
+            "Title": "使用的 Agent 资产",
+            "Description": "本次 Run 中 Agent 明确打开过的 Artifact 与 Knowledge 资产。",
+            "Groups": { "artifact": "Artifacts", "knowledge_source": "Sources", "knowledge_definition": "Definitions", "verified_query": "Verified Queries" },
             "ReadCount": "读取 {count} 次",
             "Unavailable": "已不可用",
             "None": "无",
-            "Empty": "本次 Agent Run 没有明确读取 Knowledge 资产。"
+            "Empty": "本次 Agent Run 没有明确读取任何 Agent 资产。"
         },
         "Common": {
             "AgentRun": "Agent Run",

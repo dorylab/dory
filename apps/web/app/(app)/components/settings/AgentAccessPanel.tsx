@@ -4,12 +4,14 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
-import { Check, Copy, Trash2 } from 'lucide-react';
+import { Check, Copy, KeyRound, Plus, Trash2 } from 'lucide-react';
 import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Switch } from '@/registry/new-york-v4/ui/switch';
+import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
+import { Input } from '@/registry/new-york-v4/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { authClient } from '@/lib/auth-client';
@@ -21,6 +23,17 @@ type McpSettingsPayload = {
     endpoint: string;
     defaultScopes: string[];
     tokens: McpTokenRecord[];
+    canManageServiceAccounts: boolean;
+    serviceAccounts: AgentPrincipalRecord[];
+    connections: Array<{ id: string; name: string }>;
+};
+
+type AgentPrincipalRecord = {
+    id: string;
+    name: string;
+    enabled: boolean;
+    allowedConnectionIds: string[] | null;
+    createdAt: string | Date;
 };
 
 type McpTokenRecord = {
@@ -33,6 +46,9 @@ type McpTokenRecord = {
     revokedAt: string | Date | null;
     createdAt: string | Date;
     updatedAt: string | Date;
+    principalType?: 'user' | 'service';
+    principalId?: string | null;
+    expiresAt?: string | Date | null;
 };
 
 type McpDesktopGrantPayload = {
@@ -112,6 +128,10 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
     const isDesktop = desktopBridgeAvailable;
     const effectiveEndpoint = isDesktop ? (mcpProxy?.endpoint ?? settings?.endpoint) : settings?.endpoint;
     const [deletingTokenId, setDeletingTokenId] = useState<string | null>(null);
+    const [serviceName, setServiceName] = useState('');
+    const [serviceConnectionIds, setServiceConnectionIds] = useState<string[]>([]);
+    const [serviceBusyId, setServiceBusyId] = useState<string | null>(null);
+    const [createdServiceToken, setCreatedServiceToken] = useState<string | null>(null);
 
     const setupSnippets = useMemo<McpSetupSnippets | null>(() => {
         if (!effectiveEndpoint) return null;
@@ -133,7 +153,9 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
             );
             const codexCli = [`npx -y @getdory/cli mcp login --url ${target}`, `codex mcp add dory -- npx -y @getdory/cli mcp bridge --url ${target}`, 'codex mcp list'].join('\n');
             const codexToml = [`[mcp_servers.dory]`, `command = "npx"`, `args = ["-y", "@getdory/cli", "mcp", "bridge", "--url", "${target}"]`].join('\n');
-            const claudeCli = [`npx -y @getdory/cli mcp login --url ${target}`, `claude mcp add dory -- npx -y @getdory/cli mcp bridge --url ${target}`, 'claude mcp list'].join('\n');
+            const claudeCli = [`npx -y @getdory/cli mcp login --url ${target}`, `claude mcp add dory -- npx -y @getdory/cli mcp bridge --url ${target}`, 'claude mcp list'].join(
+                '\n',
+            );
             const claudeJson = JSON.stringify(
                 {
                     mcpServers: {
@@ -312,6 +334,68 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
         }
     };
 
+    const createServiceAccount = async () => {
+        if (!serviceName.trim()) return;
+        setServiceBusyId('new');
+        setMessage(null);
+        try {
+            const result = await readJson<{ principal: AgentPrincipalRecord; token: string }>(
+                await authFetch('/api/mcp/service-accounts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: serviceName.trim(), allowedConnectionIds: serviceConnectionIds, expiresInDays: 90 }),
+                }),
+            );
+            setSettings(current => (current ? { ...current, serviceAccounts: [...current.serviceAccounts, result.principal] } : current));
+            setCreatedServiceToken(result.token);
+            setServiceName('');
+            setServiceConnectionIds([]);
+            setMessage({ type: 'success', text: t('ServiceCreated') });
+        } catch (error) {
+            setMessage({ type: 'error', text: error instanceof Error ? error.message : t('ServiceCreateFailed') });
+        } finally {
+            setServiceBusyId(null);
+        }
+    };
+
+    const rotateServiceToken = async (serviceAccountId: string) => {
+        setServiceBusyId(serviceAccountId);
+        setMessage(null);
+        try {
+            const result = await readJson<{ token: string }>(
+                await authFetch(`/api/mcp/service-accounts/${serviceAccountId}/tokens`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expiresInDays: 90 }),
+                }),
+            );
+            setCreatedServiceToken(result.token);
+            setMessage({ type: 'success', text: t('ServiceTokenCreated') });
+        } catch (error) {
+            setMessage({ type: 'error', text: error instanceof Error ? error.message : t('ServiceTokenFailed') });
+        } finally {
+            setServiceBusyId(null);
+        }
+    };
+
+    const disableServiceAccount = async (serviceAccountId: string) => {
+        setServiceBusyId(serviceAccountId);
+        setMessage(null);
+        try {
+            await readJson<{ disabled: boolean }>(await authFetch(`/api/mcp/service-accounts/${serviceAccountId}`, { method: 'DELETE' }));
+            setSettings(current =>
+                current
+                    ? { ...current, serviceAccounts: current.serviceAccounts.map(account => (account.id === serviceAccountId ? { ...account, enabled: false } : account)) }
+                    : current,
+            );
+            setMessage({ type: 'success', text: t('ServiceDisabled') });
+        } catch (error) {
+            setMessage({ type: 'error', text: error instanceof Error ? error.message : t('ServiceDisableFailed') });
+        } finally {
+            setServiceBusyId(null);
+        }
+    };
+
     const copyLabel = (
         <>
             <Copy className="h-3.5 w-3.5" />
@@ -431,6 +515,102 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
                         </div>
                     ) : (
                         <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">{t('ClientsEmpty')}</div>
+                    )}
+                </div>
+            ) : null}
+
+            {!isDesktop && settings?.canManageServiceAccounts ? (
+                <div className="space-y-3">
+                    <div>
+                        <div className="text-sm font-medium">{t('ServiceAccountsTitle')}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{t('ServiceAccountsDescription')}</div>
+                    </div>
+                    <div className="space-y-3 rounded-md border p-3">
+                        <Input value={serviceName} onChange={event => setServiceName(event.target.value)} placeholder={t('ServiceNamePlaceholder')} maxLength={80} />
+                        {settings.connections.length ? (
+                            <div className="space-y-2">
+                                <div className="text-xs font-medium">{t('ServiceConnections')}</div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {settings.connections.map(connection => (
+                                        <label key={connection.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
+                                            <Checkbox
+                                                checked={serviceConnectionIds.includes(connection.id)}
+                                                onCheckedChange={checked =>
+                                                    setServiceConnectionIds(current =>
+                                                        checked ? [...new Set([...current, connection.id])] : current.filter(id => id !== connection.id),
+                                                    )
+                                                }
+                                            />
+                                            <span className="truncate">{connection.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+                        <Button type="button" size="sm" disabled={!serviceName.trim() || serviceBusyId === 'new'} onClick={() => void createServiceAccount()}>
+                            <Plus className="size-4" />
+                            {t('CreateServiceAccount')}
+                        </Button>
+                    </div>
+                    {createdServiceToken ? (
+                        <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+                            <div className="text-xs font-medium">{t('ServiceTokenOnce')}</div>
+                            <div className="flex items-start gap-2">
+                                <code className="min-w-0 flex-1 break-all text-xs text-muted-foreground">{createdServiceToken}</code>
+                                <CopyButton
+                                    text={createdServiceToken}
+                                    variant="outline"
+                                    size="icon"
+                                    className="size-8"
+                                    aria-label={t('Copy')}
+                                    label={copyLabel}
+                                    copiedLabel={copiedLabel}
+                                />
+                            </div>
+                        </div>
+                    ) : null}
+                    {settings.serviceAccounts.length ? (
+                        <div className="divide-y rounded-md border">
+                            {settings.serviceAccounts.map(account => (
+                                <div key={account.id} className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                                    <div className="min-w-0 space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-medium">{account.name}</span>
+                                            <Badge variant={account.enabled ? 'secondary' : 'outline'}>{account.enabled ? t('ClientActive') : t('ClientInactive')}</Badge>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {account.allowedConnectionIds?.length
+                                                ? t('ServiceConnectionCount', { count: account.allowedConnectionIds.length })
+                                                : t('ServiceAllConnections')}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={!account.enabled || serviceBusyId === account.id}
+                                            onClick={() => void rotateServiceToken(account.id)}
+                                        >
+                                            <KeyRound className="size-4" />
+                                            {t('RotateServiceToken')}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={!account.enabled || serviceBusyId === account.id}
+                                            onClick={() => void disableServiceAccount(account.id)}
+                                        >
+                                            <Trash2 className="size-4" />
+                                            {t('DisableServiceAccount')}
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">{t('ServiceAccountsEmpty')}</div>
                     )}
                 </div>
             ) : null}

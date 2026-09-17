@@ -609,19 +609,16 @@ export class PostgresKnowledgeRepository {
             .orderBy(desc(knowledgeSources.updatedAt));
     }
 
-    async searchKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId: string; query: string }) {
+    async searchKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId?: string; query: string }) {
         const model = await this.getModel(input);
-        if (!model.dataSources.some(source => source.connectionId === input.connectionId)) throw new Error('Knowledge model is not linked to this data source.');
+        if (input.connectionId && !model.dataSources.some(source => source.connectionId === input.connectionId))
+            throw new Error('Knowledge model is not linked to this data source.');
+        const conditions = [eq(knowledgeSources.organizationId, input.organizationId), eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId)];
+        if (input.connectionId) conditions.push(or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId))!);
         const rows = await this.db
             .select()
             .from(knowledgeSources)
-            .where(
-                and(
-                    eq(knowledgeSources.organizationId, input.organizationId),
-                    eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId),
-                    or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId)),
-                ),
-            )
+            .where(and(...conditions))
             .orderBy(desc(knowledgeSources.updatedAt));
         const needle = input.query.trim().toLowerCase();
         return rows
@@ -917,7 +914,13 @@ export class PostgresKnowledgeRepository {
         const conditions = [eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)];
         if (input.connectionId) conditions.push(eq(knowledgeVerifiedQueries.sourceConnectionId, input.connectionId));
         if (input.query?.trim())
-            conditions.push(or(ilike(knowledgeVerifiedQueries.title, `%${input.query.trim()}%`), ilike(knowledgeVerifiedQueries.question, `%${input.query.trim()}%`))!);
+            conditions.push(
+                or(
+                    ilike(knowledgeVerifiedQueries.title, `%${input.query.trim()}%`),
+                    ilike(knowledgeVerifiedQueries.question, `%${input.query.trim()}%`),
+                    ilike(knowledgeVerifiedQueries.description, `%${input.query.trim()}%`),
+                )!,
+            );
         return this.db
             .select({ ...getTableColumns(knowledgeVerifiedQueries), updatedByName: user.name })
             .from(knowledgeVerifiedQueries)

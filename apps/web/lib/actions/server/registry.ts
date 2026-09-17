@@ -3,6 +3,7 @@ import type { WebActionServices } from './types';
 import { aiActions } from './domains/ai';
 import { artifactActions } from './domains/artifact';
 import { chartActions } from './domains/chart';
+import { catalogActions } from './domains/catalog';
 import { comparisonActions } from './domains/comparison';
 import { connectionActions } from './domains/connection';
 import { queryActions } from './domains/query';
@@ -24,6 +25,7 @@ webActionRegistry.registerMany([
     ...tabActions,
     ...savedQueryActions,
     ...chartActions,
+    ...catalogActions,
     ...aiActions,
     ...artifactActions,
     ...comparisonActions,

@@ -66,6 +66,10 @@ function createTokenRecord(overrides: Partial<McpAccessTokenRecord> = {}): McpAc
         scopes: ['connections:read'],
         enabled: true,
         createdByUserId: 'owner-user',
+        principalType: 'user',
+        principalId: 'owner-user',
+        allowedConnectionIds: null,
+        expiresAt: null,
         lastUsedAt: null,
         revokedAt: null,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -173,6 +177,32 @@ test('MCP auth context uses the personal token owner as the execution user', asy
     assert.equal(result.context.userId, 'owner-user');
     assert.equal(result.context.tokenId, 'token-id');
     assert.deepEqual(result.context.scopes, ['connections:read']);
+    assert.equal(result.context.principalType, 'user');
+    assert.equal(result.context.principalId, 'owner-user');
+});
+
+test('MCP auth supports read-only service principals and rejects expired tokens', async () => {
+    const service = await buildMcpAuthContextForToken(
+        createTokenRecord({
+            principalType: 'service',
+            principalId: 'agt-1',
+            allowedConnectionIds: ['conn-1'],
+            scopes: ['read'],
+        }),
+        {
+            resolvePrincipal: async () => ({ enabled: true, allowedConnectionIds: ['conn-1'] }),
+        },
+    );
+    assert.equal(service.ok, true);
+    if (service.ok) {
+        assert.equal(service.context.userId, 'agt-1');
+        assert.equal(service.context.access.role, 'viewer');
+        assert.deepEqual(service.context.allowedConnectionIds, ['conn-1']);
+    }
+
+    const expired = await buildMcpAuthContextForToken(createTokenRecord({ expiresAt: new Date('2026-01-02T00:00:00.000Z') }));
+    assert.equal(expired.ok, false);
+    if (!expired.ok) assert.equal(expired.status, 401);
 });
 
 test('MCP auth context rejects tokens whose owner no longer has organization access', async () => {

@@ -52,13 +52,13 @@ export default async function AgentRunDetailPage({
     }
 
     const db = await getDBService();
-    const [snapshot, events, connections, persistedFindings, artifacts, knowledgeUsage] = await Promise.all([
+    const [snapshot, events, connections, persistedFindings, artifacts, agentAssetUsage] = await Promise.all([
         db.works.getSnapshot({ organizationId, userId, workId }),
         db.works.listEvents({ organizationId, userId, workId }),
         db.connections.list(organizationId),
         db.works.listFindings({ organizationId, userId, workId }),
         db.artifacts.listByWork({ organizationId, workId }),
-        db.works.listKnowledgeAssetUsage({ organizationId, userId, workId }),
+        db.works.listAgentAssetUsage({ organizationId, userId, workId }),
     ]);
     if (!snapshot) notFound();
 
@@ -134,41 +134,33 @@ export default async function AgentRunDetailPage({
                         <p className="mt-1 text-sm text-muted-foreground">{t('KnowledgeUsed.Description')}</p>
                     </div>
                     <div className="rounded-lg border bg-card p-5">
-                        {knowledgeUsage.length ? (
-                            <div className="grid gap-6 md:grid-cols-3">
-                                {(['source', 'definition', 'verified_query'] as const).map(assetType => {
-                                    const items = knowledgeUsage.filter(item => item.assetType === assetType);
+                        {agentAssetUsage.length ? (
+                            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+                                {(['artifact', 'knowledge_source', 'knowledge_definition', 'verified_query'] as const).map(assetKind => {
+                                    const items = agentAssetUsage.filter(item => item.assetKind === assetKind);
                                     return (
-                                        <section key={assetType}>
-                                            <h3 className="text-xs font-medium uppercase text-muted-foreground">{t(`KnowledgeUsed.Groups.${assetType}`)}</h3>
+                                        <section key={assetKind}>
+                                            <h3 className="text-xs font-medium uppercase text-muted-foreground">{t(`KnowledgeUsed.Groups.${assetKind}`)}</h3>
                                             <div className="mt-3 grid gap-2">
                                                 {items.map(item => {
-                                                    const snapshot = item.assetSnapshot as { name?: string; modelName?: string };
-                                                    const parameter = assetType === 'definition' ? 'definition' : assetType === 'verified_query' ? 'query' : 'source';
-                                                    const tab = assetType === 'definition' ? 'definitions' : assetType === 'verified_query' ? 'queries' : 'sources';
-                                                    const content = (
-                                                        <>
-                                                            <BrainCircuit className="size-4 shrink-0 text-muted-foreground" />
-                                                            <span className="min-w-0 flex-1">
-                                                                <span className="block truncate text-sm font-medium">{snapshot.name ?? item.assetId}</span>
-                                                                <span className="block truncate text-xs text-muted-foreground">
-                                                                    {snapshot.modelName ?? item.knowledgeModelId} · {t('KnowledgeUsed.ReadCount', { count: item.useCount })}
+                                                    const asset = item.assetSnapshot as { title?: string; knowledgeModelName?: string; deepLink?: string };
+                                                    return asset.deepLink ? (
+                                                        <Link key={item.assetRef} href={asset.deepLink} className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent">
+                                                            <>
+                                                                <BrainCircuit className="size-4 shrink-0 text-muted-foreground" />
+                                                                <span className="min-w-0 flex-1">
+                                                                    <span className="block truncate text-sm font-medium">{asset.title ?? item.assetRef}</span>
+                                                                    <span className="block truncate text-xs text-muted-foreground">
+                                                                        {asset.knowledgeModelName ? `${asset.knowledgeModelName} · ` : ''}
+                                                                        {t('KnowledgeUsed.ReadCount', { count: item.useCount })}
+                                                                    </span>
                                                                 </span>
-                                                            </span>
-                                                        </>
-                                                    );
-                                                    return item.available ? (
-                                                        <Link
-                                                            key={`${assetType}:${item.assetId}`}
-                                                            href={`/${encodeURIComponent(organization)}/knowledge/${encodeURIComponent(item.knowledgeModelId)}?tab=${tab}&${parameter}=${encodeURIComponent(item.assetId)}`}
-                                                            className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent"
-                                                        >
-                                                            {content}
+                                                            </>
                                                         </Link>
                                                     ) : (
-                                                        <div key={`${assetType}:${item.assetId}`} className="flex items-center gap-3 rounded-md border p-3 opacity-70">
-                                                            {content}
-                                                            <span className="text-xs text-muted-foreground">{t('KnowledgeUsed.Unavailable')}</span>
+                                                        <div key={item.assetRef} className="flex items-center gap-3 rounded-md border p-3 opacity-70">
+                                                            <BrainCircuit className="size-4 shrink-0 text-muted-foreground" />
+                                                            <span className="min-w-0 flex-1 truncate text-sm font-medium">{asset.title ?? item.assetRef}</span>
                                                         </div>
                                                     );
                                                 })}

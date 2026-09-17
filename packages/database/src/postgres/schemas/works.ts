@@ -5,6 +5,8 @@ import type { ResultSetArtifactRef } from '@dory/resultset';
 export type WorkStatus = 'active' | 'completed' | 'error' | 'archived';
 export type WorkEventStatus = 'success' | 'error';
 export type WorkKnowledgeAssetType = 'definition' | 'verified_query' | 'source';
+export type WorkAgentAssetKind = 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source';
+export type WorkPrincipalType = 'user' | 'service';
 
 export const works = pgTable(
     'works',
@@ -14,6 +16,8 @@ export const works = pgTable(
             .$defaultFn(() => newEntityId()),
         organizationId: text('organization_id').notNull(),
         userId: text('user_id').notNull(),
+        principalType: text('principal_type').$type<WorkPrincipalType>().notNull().default('user'),
+        principalId: text('principal_id'),
         tokenId: text('token_id'),
         connectionId: text('connection_id'),
         externalSessionId: text('external_session_id'),
@@ -41,6 +45,8 @@ export const workEvents = pgTable(
         workId: text('work_id').notNull(),
         organizationId: text('organization_id').notNull(),
         userId: text('user_id').notNull(),
+        principalType: text('principal_type').$type<WorkPrincipalType>().notNull().default('user'),
+        principalId: text('principal_id'),
         tokenId: text('token_id'),
         connectionId: text('connection_id'),
         toolName: text('tool_name').notNull(),
@@ -150,7 +156,33 @@ export const workKnowledgeAssets = pgTable(
     ],
 );
 
+export const workAgentAssets = pgTable(
+    'work_agent_assets',
+    {
+        workId: text('work_id')
+            .notNull()
+            .references(() => works.workId, { onDelete: 'cascade' }),
+        organizationId: text('organization_id').notNull(),
+        userId: text('user_id').notNull(),
+        principalType: text('principal_type').$type<WorkPrincipalType>().notNull().default('user'),
+        principalId: text('principal_id'),
+        assetKind: text('asset_kind').$type<WorkAgentAssetKind>().notNull(),
+        assetRef: text('asset_ref').notNull(),
+        revision: text('revision').notNull(),
+        assetSnapshot: jsonb('asset_snapshot').$type<Record<string, unknown>>().notNull(),
+        useCount: integer('use_count').notNull().default(1),
+        firstUsedAt: timestamp('first_used_at', { withTimezone: true }).notNull().defaultNow(),
+        lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        primaryKey({ name: 'pk_work_agent_assets', columns: [table.workId, table.assetRef] }),
+        index('idx_work_agent_assets_work_used').on(table.workId, table.lastUsedAt),
+        index('idx_work_agent_assets_org_ref').on(table.organizationId, table.assetRef),
+    ],
+);
+
 export type Work = typeof works.$inferSelect;
 export type NewWork = typeof works.$inferInsert;
 export type WorkEvent = typeof workEvents.$inferSelect;
 export type WorkKnowledgeAsset = typeof workKnowledgeAssets.$inferSelect;
+export type WorkAgentAsset = typeof workAgentAssets.$inferSelect;

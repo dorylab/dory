@@ -3445,6 +3445,23 @@
                 "ClientsEmpty": "No MCP clients are connected yet.",
                 "ClientRevoked": "MCP client revoked.",
                 "ClientRevokeFailed": "Failed to revoke MCP client.",
+                "ServiceAccountsTitle": "Agent service accounts",
+                "ServiceAccountsDescription": "Create read-only identities for unattended customer agents. Tokens expire after 90 days and can be rotated.",
+                "ServiceNamePlaceholder": "Service account name",
+                "ServiceConnections": "Allowed connections (leave empty for all)",
+                "CreateServiceAccount": "Create service account",
+                "ServiceCreated": "Agent service account created.",
+                "ServiceCreateFailed": "Failed to create Agent service account.",
+                "ServiceTokenOnce": "Copy this token now. It will not be shown again.",
+                "ServiceTokenCreated": "A new service account token was created.",
+                "ServiceTokenFailed": "Failed to create a service account token.",
+                "ServiceDisabled": "Agent service account disabled and its tokens revoked.",
+                "ServiceDisableFailed": "Failed to disable Agent service account.",
+                "ServiceConnectionCount": "Limited to {count} connections",
+                "ServiceAllConnections": "All organization connections",
+                "RotateServiceToken": "Rotate token",
+                "DisableServiceAccount": "Disable",
+                "ServiceAccountsEmpty": "No Agent service accounts yet.",
                 "WebAuthorizationStatus": "Web MCP authorization is coming later. Desktop local MCP is available now."
             },
             "DoryCli": {
@@ -4281,13 +4298,13 @@
     },
     "AgentRuns": {
         "KnowledgeUsed": {
-            "Title": "Knowledge used",
-            "Description": "Knowledge assets explicitly opened by the Agent during this Run.",
-            "Groups": { "source": "Sources", "definition": "Definitions", "verified_query": "Verified Queries" },
+            "Title": "Agent assets used",
+            "Description": "Artifacts and Knowledge assets explicitly opened by the Agent during this Run.",
+            "Groups": { "artifact": "Artifacts", "knowledge_source": "Sources", "knowledge_definition": "Definitions", "verified_query": "Verified Queries" },
             "ReadCount": "Read {count} times",
             "Unavailable": "Unavailable",
             "None": "None",
-            "Empty": "This Agent Run did not explicitly read any knowledge assets."
+            "Empty": "This Agent Run did not explicitly read any Agent assets."
         },
         "Common": {
             "AgentRun": "Agent Run",

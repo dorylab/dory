@@ -10,6 +10,8 @@ export function toAgentToolName(actionId: string) {
         'knowledge.searchVerifiedQueries': 'search_knowledge_verified_queries',
         'knowledge.getVerifiedQuery': 'get_knowledge_verified_query',
         'knowledge.getKnowledgeSource': 'get_knowledge_source',
+        'catalog.search': 'search_assets',
+        'catalog.read': 'read_asset',
     };
     if (knowledgeToolNames[actionId]) return knowledgeToolNames[actionId];
     return actionId.replace(/[^a-zA-Z0-9_]/g, '_');

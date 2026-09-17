@@ -1,12 +1,13 @@
 import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
-import { localAiBridges, localAiJobs, mcpAccessTokens, mcpAuthorizationRequests, organizations } from '@dory/database/schema';
+import { agentPrincipals, localAiBridges, localAiJobs, mcpAccessTokens, mcpAuthorizationRequests, organizations } from '@dory/database/schema';
 import { translateDatabase } from '@dory/database/i18n';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
 
 export type McpAccessTokenRecord = typeof mcpAccessTokens.$inferSelect;
+export type AgentPrincipalRecord = typeof agentPrincipals.$inferSelect;
 export type McpAuthorizationRequestRecord = typeof mcpAuthorizationRequests.$inferSelect;
 export type LocalAiBridgeRecord = typeof localAiBridges.$inferSelect;
 export type LocalAiJobRecord = typeof localAiJobs.$inferSelect;
@@ -20,6 +21,17 @@ export type McpAccessTokenCreateInput = {
     tokenPrefix: string;
     tokenHash: string;
     scopes: string[];
+    createdByUserId: string;
+    principalType?: 'user' | 'service';
+    principalId?: string | null;
+    allowedConnectionIds?: string[] | null;
+    expiresAt?: Date | null;
+};
+
+export type AgentPrincipalCreateInput = {
+    organizationId: string;
+    name: string;
+    allowedConnectionIds?: string[] | null;
     createdByUserId: string;
 };
 
@@ -192,6 +204,51 @@ export class PostgresMcpRepository {
             .orderBy(mcpAccessTokens.createdAt);
     }
 
+    async listAgentPrincipals(organizationId: string): Promise<AgentPrincipalRecord[]> {
+        return this.db.select().from(agentPrincipals).where(eq(agentPrincipals.organizationId, organizationId)).orderBy(agentPrincipals.createdAt);
+    }
+
+    async createAgentPrincipal(input: AgentPrincipalCreateInput): Promise<AgentPrincipalRecord> {
+        const [created] = await this.db
+            .insert(agentPrincipals)
+            .values({
+                organizationId: input.organizationId,
+                name: normalizeName(input.name),
+                enabled: true,
+                allowedConnectionIds: input.allowedConnectionIds?.length ? input.allowedConnectionIds : null,
+                createdByUserId: input.createdByUserId,
+            })
+            .returning();
+        if (!created) throw new DatabaseError('Failed to create Agent service account', 500);
+        return created;
+    }
+
+    async getAgentPrincipal(organizationId: string, id: string): Promise<AgentPrincipalRecord | null> {
+        const rows = await this.db
+            .select()
+            .from(agentPrincipals)
+            .where(and(eq(agentPrincipals.organizationId, organizationId), eq(agentPrincipals.id, id)))
+            .limit(1);
+        return rows[0] ?? null;
+    }
+
+    async disableAgentPrincipal(organizationId: string, id: string): Promise<boolean> {
+        const now = new Date();
+        return this.db.transaction(async tx => {
+            const rows = await tx
+                .update(agentPrincipals)
+                .set({ enabled: false, updatedAt: now })
+                .where(and(eq(agentPrincipals.organizationId, organizationId), eq(agentPrincipals.id, id), eq(agentPrincipals.enabled, true)))
+                .returning({ id: agentPrincipals.id });
+            if (!rows.length) return false;
+            await tx
+                .update(mcpAccessTokens)
+                .set({ enabled: false, revokedAt: now, updatedAt: now })
+                .where(and(eq(mcpAccessTokens.organizationId, organizationId), eq(mcpAccessTokens.principalType, 'service'), eq(mcpAccessTokens.principalId, id)));
+            return true;
+        });
+    }
+
     async createToken(input: McpAccessTokenCreateInput): Promise<McpAccessTokenRecord> {
         const [created] = await this.db
             .insert(mcpAccessTokens)
@@ -203,6 +260,10 @@ export class PostgresMcpRepository {
                 scopes: input.scopes,
                 enabled: true,
                 createdByUserId: input.createdByUserId,
+                principalType: input.principalType ?? 'user',
+                principalId: input.principalId ?? input.createdByUserId,
+                allowedConnectionIds: input.allowedConnectionIds?.length ? input.allowedConnectionIds : null,
+                expiresAt: input.expiresAt ?? null,
             })
             .returning();
 
@@ -211,6 +272,41 @@ export class PostgresMcpRepository {
         }
 
         return created;
+    }
+
+    async rotateAgentPrincipalToken(input: McpAccessTokenCreateInput & { principalId: string }): Promise<McpAccessTokenRecord> {
+        const now = new Date();
+        return this.db.transaction(async tx => {
+            await tx
+                .update(mcpAccessTokens)
+                .set({ enabled: false, revokedAt: now, updatedAt: now })
+                .where(
+                    and(
+                        eq(mcpAccessTokens.organizationId, input.organizationId),
+                        eq(mcpAccessTokens.principalType, 'service'),
+                        eq(mcpAccessTokens.principalId, input.principalId),
+                        isNull(mcpAccessTokens.revokedAt),
+                    ),
+                );
+            const [created] = await tx
+                .insert(mcpAccessTokens)
+                .values({
+                    organizationId: input.organizationId,
+                    name: input.name,
+                    tokenPrefix: input.tokenPrefix,
+                    tokenHash: input.tokenHash,
+                    scopes: input.scopes,
+                    enabled: true,
+                    createdByUserId: input.createdByUserId,
+                    principalType: 'service',
+                    principalId: input.principalId,
+                    allowedConnectionIds: input.allowedConnectionIds?.length ? input.allowedConnectionIds : null,
+                    expiresAt: input.expiresAt ?? null,
+                })
+                .returning();
+            if (!created) throw new DatabaseError('Failed to rotate Agent service account token', 500);
+            return created;
+        });
     }
 
     async createAuthorizationRequest(input: McpAuthorizationRequestCreateInput): Promise<McpAuthorizationRequestRecord> {
@@ -325,6 +421,10 @@ export class PostgresMcpRepository {
                     scopes: input.token.scopes,
                     enabled: true,
                     createdByUserId: input.token.createdByUserId,
+                    principalType: input.token.principalType ?? 'user',
+                    principalId: input.token.principalId ?? input.token.createdByUserId,
+                    allowedConnectionIds: input.token.allowedConnectionIds?.length ? input.token.allowedConnectionIds : null,
+                    expiresAt: input.token.expiresAt ?? null,
                 })
                 .returning();
 
@@ -408,12 +508,7 @@ export class PostgresMcpRepository {
             .select()
             .from(localAiBridges)
             .where(
-                and(
-                    eq(localAiBridges.mcpTokenId, input.mcpTokenId),
-                    eq(localAiBridges.provider, input.provider),
-                    eq(localAiBridges.name, name),
-                    isNull(localAiBridges.revokedAt),
-                ),
+                and(eq(localAiBridges.mcpTokenId, input.mcpTokenId), eq(localAiBridges.provider, input.provider), eq(localAiBridges.name, name), isNull(localAiBridges.revokedAt)),
             )
             .orderBy(desc(localAiBridges.updatedAt))
             .limit(1);
@@ -485,7 +580,14 @@ export class PostgresMcpRepository {
                 lastSeenAt: now,
                 updatedAt: now,
             })
-            .where(and(eq(localAiBridges.organizationId, input.organizationId), eq(localAiBridges.id, input.id), eq(localAiBridges.mcpTokenId, input.mcpTokenId), isNull(localAiBridges.revokedAt)))
+            .where(
+                and(
+                    eq(localAiBridges.organizationId, input.organizationId),
+                    eq(localAiBridges.id, input.id),
+                    eq(localAiBridges.mcpTokenId, input.mcpTokenId),
+                    isNull(localAiBridges.revokedAt),
+                ),
+            )
             .returning();
 
         return updated ?? null;
@@ -514,7 +616,11 @@ export class PostgresMcpRepository {
     }
 
     async getLocalAiJob(organizationId: string, id: string): Promise<LocalAiJobRecord | null> {
-        const rows = await this.db.select().from(localAiJobs).where(and(eq(localAiJobs.organizationId, organizationId), eq(localAiJobs.id, id))).limit(1);
+        const rows = await this.db
+            .select()
+            .from(localAiJobs)
+            .where(and(eq(localAiJobs.organizationId, organizationId), eq(localAiJobs.id, id)))
+            .limit(1);
         return rows[0] ?? null;
     }
 
@@ -536,7 +642,14 @@ export class PostgresMcpRepository {
                 completedAt: now,
                 updatedAt: now,
             })
-            .where(and(eq(localAiJobs.organizationId, input.organizationId), eq(localAiJobs.bridgeId, input.bridgeId), eq(localAiJobs.status, 'pending'), lte(localAiJobs.expiresAt, now)));
+            .where(
+                and(
+                    eq(localAiJobs.organizationId, input.organizationId),
+                    eq(localAiJobs.bridgeId, input.bridgeId),
+                    eq(localAiJobs.status, 'pending'),
+                    lte(localAiJobs.expiresAt, now),
+                ),
+            );
 
         return this.db.transaction(async tx => {
             const [job] = await tx
@@ -595,7 +708,14 @@ export class PostgresMcpRepository {
                 completedAt: now,
                 updatedAt: now,
             })
-            .where(and(eq(localAiJobs.organizationId, input.organizationId), eq(localAiJobs.bridgeId, input.bridgeId), eq(localAiJobs.id, input.id), eq(localAiJobs.status, 'claimed')))
+            .where(
+                and(
+                    eq(localAiJobs.organizationId, input.organizationId),
+                    eq(localAiJobs.bridgeId, input.bridgeId),
+                    eq(localAiJobs.id, input.id),
+                    eq(localAiJobs.status, 'claimed'),
+                ),
+            )
             .returning();
 
         return updated ?? null;

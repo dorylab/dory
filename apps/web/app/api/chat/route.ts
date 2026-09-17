@@ -274,6 +274,7 @@ async function handleChatRequest(req: Request) {
                 organizationId,
                 currentConnectionId: connectionId,
                 locale,
+                chatId: chatId ?? requestMessageId ?? newEntityId(),
             }),
         );
     }

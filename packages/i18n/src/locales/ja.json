@@ -3443,6 +3443,23 @@
                 "ClientsEmpty": "接続済みの MCP クライアントはまだありません。",
                 "ClientRevoked": "MCP クライアントを取り消しました。",
                 "ClientRevokeFailed": "MCP クライアントの取り消しに失敗しました。",
+                "ServiceAccountsTitle": "Agent サービスアカウント",
+                "ServiceAccountsDescription": "無人運用 Agent 用の読み取り専用 ID を作成します。トークンは 90 日で期限切れになり、ローテーションできます。",
+                "ServiceNamePlaceholder": "サービスアカウント名",
+                "ServiceConnections": "許可する接続（空の場合はすべて）",
+                "CreateServiceAccount": "サービスアカウントを作成",
+                "ServiceCreated": "Agent サービスアカウントを作成しました。",
+                "ServiceCreateFailed": "Agent サービスアカウントを作成できませんでした。",
+                "ServiceTokenOnce": "このトークンを今すぐコピーしてください。再表示されません。",
+                "ServiceTokenCreated": "新しいサービスアカウントトークンを作成しました。",
+                "ServiceTokenFailed": "サービスアカウントトークンを作成できませんでした。",
+                "ServiceDisabled": "Agent サービスアカウントを無効化し、トークンを取り消しました。",
+                "ServiceDisableFailed": "Agent サービスアカウントを無効化できませんでした。",
+                "ServiceConnectionCount": "{count} 件の接続に制限",
+                "ServiceAllConnections": "組織内のすべての接続",
+                "RotateServiceToken": "トークンをローテーション",
+                "DisableServiceAccount": "無効化",
+                "ServiceAccountsEmpty": "Agent サービスアカウントはまだありません。",
                 "WebAuthorizationStatus": "Web MCP authorization は後日提供予定です。現在はデスクトップのローカル MCP を利用できます。"
             },
             "DoryCli": {
@@ -4281,13 +4298,13 @@
     },
     "AgentRuns": {
         "KnowledgeUsed": {
-            "Title": "使用したナレッジ",
-            "Description": "この Run で Agent が明示的に開いたナレッジアセットです。",
-            "Groups": { "source": "ソース", "definition": "定義", "verified_query": "検証済みクエリ" },
+            "Title": "使用した Agent アセット",
+            "Description": "この Run で Agent が明示的に開いた Artifact とナレッジアセットです。",
+            "Groups": { "artifact": "Artifacts", "knowledge_source": "ソース", "knowledge_definition": "定義", "verified_query": "検証済みクエリ" },
             "ReadCount": "{count} 回読み取り",
             "Unavailable": "利用不可",
             "None": "なし",
-            "Empty": "この Agent Run はナレッジアセットを明示的に読み取っていません。"
+            "Empty": "この Agent Run は Agent アセットを明示的に読み取っていません。"
         },
         "Common": {
             "AgentRun": "Agent Run",

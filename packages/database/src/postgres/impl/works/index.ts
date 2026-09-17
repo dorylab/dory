@@ -14,6 +14,7 @@ import {
     tabs,
     workChartStates,
     workEvents,
+    workAgentAssets,
     workKnowledgeAssets,
     workQueryResultSets,
     workQuerySessions,
@@ -41,6 +42,7 @@ const DEFAULT_WORK_TITLE = 'Agent Run';
 export type WorkRecord = typeof works.$inferSelect;
 export type WorkEventRecord = typeof workEvents.$inferSelect;
 export type WorkKnowledgeAssetUsage = typeof workKnowledgeAssets.$inferSelect & { available: boolean };
+export type WorkAgentAssetUsage = typeof workAgentAssets.$inferSelect;
 
 export type WorkListPage = {
     rows: WorkRecord[];
@@ -50,6 +52,8 @@ export type WorkListPage = {
 export type ResolveWorkInput = {
     organizationId: string;
     userId: string;
+    principalType?: 'user' | 'service';
+    principalId?: string | null;
     tokenId?: string | null;
     connectionId?: string | null;
     workId?: string | null;
@@ -62,6 +66,8 @@ export type WorkEventCreateInput = {
     workId: string;
     organizationId: string;
     userId: string;
+    principalType?: 'user' | 'service';
+    principalId?: string | null;
     tokenId?: string | null;
     connectionId?: string | null;
     toolName: string;
@@ -81,6 +87,18 @@ export type WorkKnowledgeAssetUsageInput = {
     knowledgeModelId: string;
     assetType: 'definition' | 'verified_query' | 'source';
     assetId: string;
+    assetSnapshot: Record<string, unknown>;
+};
+
+export type WorkAgentAssetUsageInput = {
+    workId: string;
+    organizationId: string;
+    userId: string;
+    principalType?: 'user' | 'service';
+    principalId?: string | null;
+    assetKind: 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source';
+    assetRef: string;
+    revision: string;
     assetSnapshot: Record<string, unknown>;
 };
 
@@ -283,6 +301,8 @@ export class PostgresWorksRepository {
                 workId: input.workId?.trim() || newEntityId(),
                 organizationId: input.organizationId,
                 userId: input.userId,
+                principalType: input.principalType ?? 'user',
+                principalId: input.principalId ?? input.userId,
                 tokenId: input.tokenId ?? null,
                 connectionId: input.connectionId ?? null,
                 externalSessionId: input.externalSessionId ?? null,
@@ -507,12 +527,15 @@ export class PostgresWorksRepository {
 
     async recordEvent(input: WorkEventCreateInput): Promise<WorkEventRecord> {
         this.assertInited();
+        const work = input.principalType && input.principalId ? null : await this.getById({ organizationId: input.organizationId, userId: input.userId, workId: input.workId });
         const [row] = await this.db
             .insert(workEvents)
             .values({
                 workId: input.workId,
                 organizationId: input.organizationId,
                 userId: input.userId,
+                principalType: input.principalType ?? work?.principalType ?? 'user',
+                principalId: input.principalId ?? work?.principalId ?? input.userId,
                 tokenId: input.tokenId ?? null,
                 connectionId: input.connectionId ?? null,
                 toolName: input.toolName,
@@ -572,6 +595,8 @@ export class PostgresWorksRepository {
                     workId: input.workId,
                     organizationId: input.organizationId,
                     userId: input.userId,
+                    principalType: work.principalType,
+                    principalId: work.principalId ?? work.userId,
                     tokenId: event.tokenId ?? null,
                     connectionId: event.connectionId ?? null,
                     toolName: event.toolName,
@@ -590,6 +615,65 @@ export class PostgresWorksRepository {
         await this.appendAgentRunEvent({ ...event, ...input }, row);
         return row;
     }
+
+    async recordAgentAssetUsageEvent(input: WorkAgentAssetUsageInput, event: Omit<WorkEventCreateInput, 'workId' | 'organizationId' | 'userId'>) {
+        const work = await this.getById({ organizationId: input.organizationId, userId: input.userId, workId: input.workId });
+        if (!work) throw new Error('Agent Run not found.');
+        const now = new Date();
+        const row = await this.db.transaction(async tx => {
+            await tx
+                .insert(workAgentAssets)
+                .values({
+                    ...input,
+                    principalType: input.principalType ?? work.principalType,
+                    principalId: input.principalId ?? work.principalId ?? work.userId,
+                })
+                .onConflictDoUpdate({
+                    target: [workAgentAssets.workId, workAgentAssets.assetRef],
+                    set: {
+                        revision: input.revision,
+                        assetSnapshot: input.assetSnapshot,
+                        useCount: sql`${workAgentAssets.useCount} + 1`,
+                        lastUsedAt: now,
+                    },
+                });
+            const [eventRow] = await tx
+                .insert(workEvents)
+                .values({
+                    workId: input.workId,
+                    organizationId: input.organizationId,
+                    userId: input.userId,
+                    principalType: work.principalType,
+                    principalId: work.principalId ?? work.userId,
+                    tokenId: event.tokenId ?? null,
+                    connectionId: event.connectionId ?? null,
+                    toolName: event.toolName,
+                    actionId: event.actionId ?? null,
+                    status: event.status,
+                    inputSummary: event.inputSummary ?? null,
+                    outputSummary: event.outputSummary ?? null,
+                    errorCode: event.errorCode ?? null,
+                    errorMessage: event.errorMessage ?? null,
+                    durationMs: Math.max(0, Math.round(event.durationMs ?? 0)),
+                })
+                .returning();
+            await tx.update(works).set({ updatedAt: now, lastActiveAt: now }).where(eq(works.workId, input.workId));
+            return eventRow!;
+        });
+        await this.appendAgentRunEvent({ ...event, ...input }, row);
+        return row;
+    }
+
+    async listAgentAssetUsage(input: { organizationId: string; userId: string; workId: string }): Promise<WorkAgentAssetUsage[]> {
+        const work = await this.getById(input);
+        if (!work) return [];
+        return this.db
+            .select()
+            .from(workAgentAssets)
+            .where(and(eq(workAgentAssets.organizationId, input.organizationId), eq(workAgentAssets.userId, input.userId), eq(workAgentAssets.workId, input.workId)))
+            .orderBy(desc(workAgentAssets.lastUsedAt));
+    }
+
 
     async listKnowledgeAssetUsage(input: { organizationId: string; userId: string; workId: string }): Promise<WorkKnowledgeAssetUsage[]> {
         const work = await this.getById(input);

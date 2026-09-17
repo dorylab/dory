@@ -1,258 +1,265 @@
 {
-    "version": "7",
-    "dialect": "postgresql",
-    "entries": [
-        {
-            "idx": 0,
-            "version": "7",
-            "when": 1774064729618,
-            "tag": "0000_fantastic_thanos",
-            "breakpoints": true
-        },
-        {
-            "idx": 1,
-            "version": "7",
-            "when": 1774065386733,
-            "tag": "0001_mighty_nomad",
-            "breakpoints": true
-        },
-        {
-            "idx": 2,
-            "version": "7",
-            "when": 1774112951843,
-            "tag": "0002_yummy_pyro",
-            "breakpoints": true
-        },
-        {
-            "idx": 3,
-            "version": "7",
-            "when": 1774155701241,
-            "tag": "0003_mute_human_fly",
-            "breakpoints": true
-        },
-        {
-            "idx": 4,
-            "version": "7",
-            "when": 1774367010423,
-            "tag": "0004_short_quasimodo",
-            "breakpoints": true
-        },
-        {
-            "idx": 5,
-            "version": "7",
-            "when": 1774538755994,
-            "tag": "0005_good_vector",
-            "breakpoints": true
-        },
-        {
-            "idx": 6,
-            "version": "7",
-            "when": 1775056342854,
-            "tag": "0006_aberrant_texas_twister",
-            "breakpoints": true
-        },
-        {
-            "idx": 7,
-            "version": "7",
-            "when": 1775064413388,
-            "tag": "0007_empty_supernaut",
-            "breakpoints": true
-        },
-        {
-            "idx": 8,
-            "version": "7",
-            "when": 1778517567589,
-            "tag": "0008_wandering_abomination",
-            "breakpoints": true
-        },
-        {
-            "idx": 9,
-            "version": "7",
-            "when": 1778574691122,
-            "tag": "0009_personal_mcp_tokens",
-            "breakpoints": true
-        },
-        {
-            "idx": 10,
-            "version": "7",
-            "when": 1778648400000,
-            "tag": "0010_local_files",
-            "breakpoints": true
-        },
-        {
-            "idx": 11,
-            "version": "7",
-            "when": 1779285907000,
-            "tag": "0011_organization_ai_providers",
-            "breakpoints": true
-        },
-        {
-            "idx": 12,
-            "version": "7",
-            "when": 1780045857584,
-            "tag": "0012_query_audit_identity_snapshot",
-            "breakpoints": true
-        },
-        {
-            "idx": 13,
-            "version": "7",
-            "when": 1780045857585,
-            "tag": "0013_action_audit",
-            "breakpoints": true
-        },
-        {
-            "idx": 14,
-            "version": "7",
-            "when": 1780303200000,
-            "tag": "0014_mcp_authorization_requests",
-            "breakpoints": true
-        },
-        {
-            "idx": 15,
-            "version": "7",
-            "when": 1780476000000,
-            "tag": "0015_connection_tls",
-            "breakpoints": true
-        },
-        {
-            "idx": 16,
-            "version": "7",
-            "when": 1781712000000,
-            "tag": "0016_works",
-            "breakpoints": true
-        },
-        {
-            "idx": 17,
-            "version": "7",
-            "when": 1782748800000,
-            "tag": "0017_local_ai_bridge",
-            "breakpoints": true
-        },
-        {
-            "idx": 18,
-            "version": "7",
-            "when": 1782986582920,
-            "tag": "0018_round_black_widow",
-            "breakpoints": true
-        },
-        {
-            "idx": 19,
-            "version": "7",
-            "when": 1783075200000,
-            "tag": "0019_resultset_artifacts",
-            "breakpoints": true
-        },
-        {
-            "idx": 20,
-            "version": "7",
-            "when": 1784296092000,
-            "tag": "0020_resultset_schema_updates",
-            "breakpoints": true
-        },
-        {
-            "idx": 21,
-            "version": "7",
-            "when": 1784780119152,
-            "tag": "0021_skinny_squirrel_girl",
-            "breakpoints": true
-        },
-        {
-            "idx": 22,
-            "version": "7",
-            "when": 1784796637312,
-            "tag": "0022_first_class_comparisons",
-            "breakpoints": true
-        },
-        {
-            "idx": 23,
-            "version": "7",
-            "when": 1785851842755,
-            "tag": "0023_import_runs",
-            "breakpoints": true
-        },
-        {
-            "idx": 24,
-            "version": "7",
-            "when": 1785866199860,
-            "tag": "0024_import_transform_stats",
-            "breakpoints": true
-        },
-        {
-            "idx": 25,
-            "version": "7",
-            "when": 1786028223308,
-            "tag": "0025_export_runs",
-            "breakpoints": true
-        },
-        {
-            "idx": 26,
-            "version": "7",
-            "when": 1786118400000,
-            "tag": "0027_silent_zarda",
-            "breakpoints": true
-        },
-        {
-            "idx": 27,
-            "version": "7",
-            "when": 1786204800000,
-            "tag": "0028_artifact_workspace_pins",
-            "breakpoints": true
-        },
-        {
-            "idx": 28,
-            "version": "7",
-            "when": 1786291200000,
-            "tag": "0029_agent_run_findings",
-            "breakpoints": true
-        },
-        {
-            "idx": 29,
-            "version": "7",
-            "when": 1788859254000,
-            "tag": "0030_semantic_context",
-            "breakpoints": true
-        },
-        {
-            "idx": 30,
-            "version": "7",
-            "when": 1788945600000,
-            "tag": "0031_semantic_models",
-            "breakpoints": true
-        },
-        {
-            "idx": 31,
-            "version": "7",
-            "when": 1788949200000,
-            "tag": "0032_semantic_knowledge_sources",
-            "breakpoints": true
-        },
-        {
-            "idx": 32,
-            "version": "7",
-            "when": 1788949800000,
-            "tag": "0033_knowledge",
-            "breakpoints": true
-        },
-        {
-            "idx": 33,
-            "version": "7",
-            "when": 1788950400000,
-            "tag": "0034_github_knowledge_connectors",
-            "breakpoints": true
-        },
-        {
-            "idx": 34,
-            "version": "7",
-            "when": 1789430400000,
-            "tag": "0035_knowledge_traceability",
-            "breakpoints": true
-        },
-        {
-            "idx": 35,
-            "version": "7",
-            "when": 1789603200000,
-            "tag": "0036_knowledge_verified_query_updater",
-            "breakpoints": true
-        }
-    ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1774064729618,
+      "tag": "0000_fantastic_thanos",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774065386733,
+      "tag": "0001_mighty_nomad",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774112951843,
+      "tag": "0002_yummy_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774155701241,
+      "tag": "0003_mute_human_fly",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774367010423,
+      "tag": "0004_short_quasimodo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774538755994,
+      "tag": "0005_good_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775056342854,
+      "tag": "0006_aberrant_texas_twister",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775064413388,
+      "tag": "0007_empty_supernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778517567589,
+      "tag": "0008_wandering_abomination",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778574691122,
+      "tag": "0009_personal_mcp_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778648400000,
+      "tag": "0010_local_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779285907000,
+      "tag": "0011_organization_ai_providers",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780045857584,
+      "tag": "0012_query_audit_identity_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1780045857585,
+      "tag": "0013_action_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1780303200000,
+      "tag": "0014_mcp_authorization_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1780476000000,
+      "tag": "0015_connection_tls",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1781712000000,
+      "tag": "0016_works",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782748800000,
+      "tag": "0017_local_ai_bridge",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782986582920,
+      "tag": "0018_round_black_widow",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783075200000,
+      "tag": "0019_resultset_artifacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784296092000,
+      "tag": "0020_resultset_schema_updates",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784780119152,
+      "tag": "0021_skinny_squirrel_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784796637312,
+      "tag": "0022_first_class_comparisons",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785851842755,
+      "tag": "0023_import_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785866199860,
+      "tag": "0024_import_transform_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786028223308,
+      "tag": "0025_export_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786118400000,
+      "tag": "0027_silent_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1786204800000,
+      "tag": "0028_artifact_workspace_pins",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1786291200000,
+      "tag": "0029_agent_run_findings",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788859254000,
+      "tag": "0030_semantic_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788945600000,
+      "tag": "0031_semantic_models",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788949200000,
+      "tag": "0032_semantic_knowledge_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788949800000,
+      "tag": "0033_knowledge",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788950400000,
+      "tag": "0034_github_knowledge_connectors",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789430400000,
+      "tag": "0035_knowledge_traceability",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789603200000,
+      "tag": "0036_knowledge_verified_query_updater",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1789689600000,
+      "tag": "0037_agent_assets",
+      "breakpoints": true
+    }
+  ]
 }

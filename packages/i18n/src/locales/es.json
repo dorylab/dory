@@ -3439,6 +3439,23 @@
                 "ClientsEmpty": "Aún no hay clientes MCP conectados.",
                 "ClientRevoked": "Cliente MCP revocado.",
                 "ClientRevokeFailed": "No se pudo revocar el cliente MCP.",
+                "ServiceAccountsTitle": "Cuentas de servicio de Agent",
+                "ServiceAccountsDescription": "Crea identidades de solo lectura para agentes desatendidos. Los tokens caducan a los 90 días y se pueden rotar.",
+                "ServiceNamePlaceholder": "Nombre de la cuenta de servicio",
+                "ServiceConnections": "Conexiones permitidas (vacío para todas)",
+                "CreateServiceAccount": "Crear cuenta de servicio",
+                "ServiceCreated": "Cuenta de servicio creada.",
+                "ServiceCreateFailed": "No se pudo crear la cuenta de servicio.",
+                "ServiceTokenOnce": "Copia este token ahora. No se volverá a mostrar.",
+                "ServiceTokenCreated": "Se creó un nuevo token.",
+                "ServiceTokenFailed": "No se pudo crear el token.",
+                "ServiceDisabled": "Cuenta desactivada y tokens revocados.",
+                "ServiceDisableFailed": "No se pudo desactivar la cuenta.",
+                "ServiceConnectionCount": "Limitado a {count} conexiones",
+                "ServiceAllConnections": "Todas las conexiones de la organización",
+                "RotateServiceToken": "Rotar token",
+                "DisableServiceAccount": "Desactivar",
+                "ServiceAccountsEmpty": "Aún no hay cuentas de servicio.",
                 "WebAuthorizationStatus": "La autorización MCP web llegará más adelante. El MCP local de escritorio ya está disponible."
             },
             "DoryCli": {
@@ -4275,13 +4292,13 @@
     },
     "AgentRuns": {
         "KnowledgeUsed": {
-            "Title": "Conocimiento utilizado",
-            "Description": "Activos de conocimiento abiertos explícitamente por el Agent durante esta ejecución.",
-            "Groups": { "source": "Fuentes", "definition": "Definiciones", "verified_query": "Consultas verificadas" },
+            "Title": "Activos usados por el Agent",
+            "Description": "Artifacts y activos de conocimiento abiertos explícitamente durante esta ejecución.",
+            "Groups": { "artifact": "Artifacts", "knowledge_source": "Fuentes", "knowledge_definition": "Definiciones", "verified_query": "Consultas verificadas" },
             "ReadCount": "Leído {count} veces",
             "Unavailable": "No disponible",
             "None": "Ninguno",
-            "Empty": "Este Agent Run no leyó explícitamente ningún activo de conocimiento."
+            "Empty": "Este Agent Run no leyó explícitamente ningún activo."
         },
         "Common": {
             "AgentRun": "Ejecución de agente",
