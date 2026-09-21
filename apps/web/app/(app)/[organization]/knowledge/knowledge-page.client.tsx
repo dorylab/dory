@@ -1871,8 +1871,8 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                     </TabsContent>
                     <TabsContent value="queries" className="space-y-3 pt-4">
                         {queries.data?.queries.length ? (
-                            <div className="overflow-x-auto rounded-md border">
-                                <table className="w-full min-w-[720px] text-sm">
+                            <div className="w-full rounded-md border">
+                                <table className="w-full table-fixed text-sm">
                                     <thead className="bg-muted/50 text-left text-muted-foreground">
                                         <tr>
                                             <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Query')}</th>
@@ -1932,11 +1932,11 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                                         <tr className="border-t bg-muted/10">
                                                             <td colSpan={4} className="p-0">
                                                                 <div id={panelId} className="p-5">
-                                                                    <pre className="max-h-48 overflow-auto rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5">
+                                                                    <pre className="max-h-48 w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
                                                                         {item.sql}
                                                                     </pre>
-                                                                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                                                                        <section className="rounded-lg border bg-background/60 p-4">
+                                                                    <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
+                                                                        <section className="min-w-0 rounded-lg border bg-background/60 p-4">
                                                                             <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.ReferencedDefinitions')}</h3>
                                                                             <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                                 {t('VerifiedQueryDetails.DefinitionsDescription')}
@@ -1951,7 +1951,7 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                                                                 />
                                                                             </div>
                                                                         </section>
-                                                                        <section className="rounded-lg border bg-background/60 p-4">
+                                                                        <section className="min-w-0 rounded-lg border bg-background/60 p-4">
                                                                             <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.RelatedSources')}</h3>
                                                                             <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                                                                 {t('VerifiedQueryDetails.SourcesDescription')}

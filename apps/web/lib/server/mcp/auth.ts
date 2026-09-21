@@ -181,13 +181,24 @@ export async function buildMcpAuthContextForToken(record: McpAccessTokenRecord, 
             return { ok: false, status: 403, message: 'Agent service account is disabled or unavailable.' };
         }
         principalAllowedConnectionIds = Array.isArray(principal.allowedConnectionIds) ? principal.allowedConnectionIds : null;
+        const viewerPermissions = getOrganizationPermissionMap('viewer');
         access = {
             source: 'local',
             isMember: true,
             organizationId: record.organizationId,
             userId: principalId,
             role: 'viewer',
-            permissions: getOrganizationPermissionMap('viewer'),
+            // Service principals stay data-source viewers. They may only write their own
+            // Dory workspace metadata (Agent Runs, tabs, and Artifacts) after a read-only
+            // MCP tool succeeds; database and connection write actions still require scopes
+            // the service account never receives.
+            permissions: {
+                ...viewerPermissions,
+                workspace: {
+                    ...viewerPermissions.workspace,
+                    write: true,
+                },
+            },
             organization: { id: record.organizationId },
         };
     } else {

@@ -197,6 +197,8 @@ test('MCP auth supports read-only service principals and rejects expired tokens'
     if (service.ok) {
         assert.equal(service.context.userId, 'agt-1');
         assert.equal(service.context.access.role, 'viewer');
+        assert.equal(service.context.access.permissions.workspace.write, true);
+        assert.equal(service.context.access.permissions.connection.update, false);
         assert.deepEqual(service.context.allowedConnectionIds, ['conn-1']);
     }
 

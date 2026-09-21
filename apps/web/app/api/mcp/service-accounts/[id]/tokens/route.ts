@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             name: principal.name,
             tokenPrefix: generated.tokenPrefix,
             tokenHash: generated.tokenHash,
-            scopes: ['assets:read', 'knowledge:read'],
+            scopes: ['read', 'tabs:write'],
             createdByUserId: userId,
             principalType: 'service',
             principalId: principal.id,

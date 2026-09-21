@@ -31,7 +31,7 @@ export const POST = withManagedOrganizationHandler(async ({ req, db, organizatio
         name: principal.name,
         tokenPrefix: generated.tokenPrefix,
         tokenHash: generated.tokenHash,
-        scopes: ['assets:read', 'knowledge:read'],
+        scopes: ['read', 'tabs:write'],
         createdByUserId: userId,
         principalType: 'service',
         principalId: principal.id,

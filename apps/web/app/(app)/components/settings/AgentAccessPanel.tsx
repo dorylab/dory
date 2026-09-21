@@ -28,6 +28,9 @@ type McpSettingsPayload = {
     connections: Array<{ id: string; name: string }>;
 };
 
+// Service accounts are intentionally not part of the first public Agent Access experience.
+const SHOW_SERVICE_ACCOUNTS = false;
+
 type AgentPrincipalRecord = {
     id: string;
     name: string;
@@ -519,7 +522,7 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
                 </div>
             ) : null}
 
-            {!isDesktop && settings?.canManageServiceAccounts ? (
+            {SHOW_SERVICE_ACCOUNTS && !isDesktop && settings?.canManageServiceAccounts ? (
                 <div className="space-y-3">
                     <div>
                         <div className="text-sm font-medium">{t('ServiceAccountsTitle')}</div>

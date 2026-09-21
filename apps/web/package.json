@@ -16,6 +16,8 @@
         "drizzle:push": "drizzle-kit push",
         "drizzle:migrate": "tsx ./scripts/migrate.ts",
         "demo:backfill": "tsx ./scripts/backfill-demo-connections.ts",
+        "commerce:evaluation:seed": "tsx ./scripts/seed-commerce-agent-evaluation.ts",
+        "commerce:evaluation:mcp": "tsx ./scripts/commerce-agent-evaluation-mcp-replay.ts",
         "schema-compare:fixtures": "tsx ./scripts/seed-schema-compare-fixtures.ts",
         "postgres:check": "tsx ./scripts/check-postgres-connection.ts",
         "postgres:repair-migrations": "tsx ./scripts/repair-drizzle-migrations.ts",
