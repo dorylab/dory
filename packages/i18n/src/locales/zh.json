@@ -4362,7 +4362,9 @@
             "LastActive": "最近活动"
         },
         "Detail": {
-            "WorkspaceDescription": "这个 run 生成了包含{tabs}和{sqlRuns}的工作区。打开工作区可以检查、编辑并继续生成的 SQL 分析。"
+            "WorkspaceDescription": "这个 run 生成了包含{tabs}和{sqlRuns}的工作区。打开工作区可以检查、编辑并继续生成的 SQL 分析。",
+            "KnowledgeDefinitions": "{count} 个 Knowledge Definition",
+            "ResultSets": "{count} 个 ResultSet"
         },
         "Summary": {
             "Title": "Run 总结",
@@ -4374,8 +4376,37 @@
             "NoSteps": "尚未记录执行步骤。",
             "Empty": "这个 run 尚未生成总结。打开工作区可检查生成的 SQL 和结果。"
         },
+        "Findings": {
+            "Title": "关键发现",
+            "Description": "Agent 产出的结论，以及可检查的数据证据。",
+            "Evidence": "证据",
+            "NoEvidence": "此发现没有引用结果快照。",
+            "Empty": "这个 Run 没有生成发现。",
+            "OtherOutputs": "其他输出",
+            "ViewResult": "查看结果",
+            "ViewSql": "查看 SQL",
+            "Verified": "已验证",
+            "Verify": "验证发现",
+            "VerificationFailed": "无法更新这个发现的验证状态。"
+        },
+        "Context": {
+            "Title": "使用的上下文",
+            "Description": "Agent 为解释本次分析而明确读取的知识与资产。",
+            "Table": "数据表",
+            "Kinds": {
+                "artifact": "Artifact",
+                "knowledge_definition": "Definition",
+                "knowledge_source": "知识来源",
+                "verified_query": "Verified Query"
+            }
+        },
+        "Trace": {
+            "Title": "Agent 如何得出结论",
+            "Description": "简明的分析路径记录。",
+            "Empty": "没有记录执行步骤。"
+        },
         "Activity": {
-            "Title": "活动",
+            "Title": "活动与原始执行详情",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "运行中",

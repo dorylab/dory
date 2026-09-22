@@ -4366,7 +4366,9 @@
             "LastActive": "Última actividad"
         },
         "Detail": {
-            "WorkspaceDescription": "Esta ejecución generó un espacio con {tabs} y {sqlRuns}. Abre el espacio para inspeccionar, editar y continuar el análisis SQL generado."
+            "WorkspaceDescription": "Esta ejecución generó un espacio con {tabs} y {sqlRuns}. Abre el espacio para inspeccionar, editar y continuar el análisis SQL generado.",
+            "KnowledgeDefinitions": "{count, plural, one {# definición de conocimiento} other {# definiciones de conocimiento}}",
+            "ResultSets": "{count, plural, one {# conjunto de resultados} other {# conjuntos de resultados}}"
         },
         "Summary": {
             "Title": "Resumen del run",
@@ -4378,8 +4380,32 @@
             "NoSteps": "Aún no se registraron pasos de ejecución.",
             "Empty": "No se generó ningún resumen para esta ejecución. Abre el espacio para inspeccionar el SQL generado y los resultados."
         },
+        "Findings": {
+            "Title": "Hallazgos clave",
+            "Description": "Conclusiones del Agent con evidencia de datos verificable.",
+            "Evidence": "Evidencia",
+            "NoEvidence": "No se citó ninguna instantánea de resultados para este hallazgo.",
+            "Empty": "No se generaron hallazgos para esta ejecución.",
+            "OtherOutputs": "Otros resultados",
+            "ViewResult": "Ver resultado",
+            "ViewSql": "Ver SQL",
+            "Verified": "Verificado",
+            "Verify": "Verificar hallazgo",
+            "VerificationFailed": "No se pudo actualizar la verificación de este hallazgo."
+        },
+        "Context": {
+            "Title": "Contexto utilizado",
+            "Description": "Conocimiento y activos que el Agent leyó explícitamente para interpretar este análisis.",
+            "Table": "Tabla",
+            "Kinds": { "artifact": "Artifact", "knowledge_definition": "Definición", "knowledge_source": "Fuente de conocimiento", "verified_query": "Consulta verificada" }
+        },
+        "Trace": {
+            "Title": "Cómo llegó el Agent",
+            "Description": "Un registro breve del camino de análisis.",
+            "Empty": "No se registraron pasos de ejecución."
+        },
         "Activity": {
-            "Title": "Actividad",
+            "Title": "Actividad y ejecución sin procesar",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "activa",

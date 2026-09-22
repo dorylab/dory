@@ -20,6 +20,7 @@ import {
     workQueryResultSets,
     workQuerySessions,
     works,
+    type FindingPresentation,
     type WorkStatus,
 } from '@dory/database/postgres/schemas';
 import { translateDatabase } from '@dory/database/i18n';
@@ -120,12 +121,18 @@ export type WorkFindingInput = {
     title: string;
     content?: string | null;
     evidenceArtifactIds?: string[];
+    presentation?: FindingPresentation | null;
+    isPrimary?: boolean;
 };
 
 export type WorkFinding = {
     id: string;
     title: string;
     content: string | null;
+    presentation: FindingPresentation | null;
+    isPrimary: boolean;
+    verifiedAt: Date | null;
+    verifiedByUserId: string | null;
     createdAt: Date;
     evidence: Array<{ id: string; title: string; type: string; rowCount: number | null }>;
 };
@@ -218,11 +225,13 @@ function cleanSummaryItems(value: unknown): string[] {
 }
 
 function normalizeFinding(input: string | WorkFindingInput) {
-    if (typeof input === 'string') return { title: input.trim(), content: null, evidenceArtifactIds: [] };
+    if (typeof input === 'string') return { title: input.trim(), content: null, evidenceArtifactIds: [], presentation: null, isPrimary: false };
     return {
         title: input.title.trim(),
         content: input.content?.trim() || null,
         evidenceArtifactIds: [...new Set(input.evidenceArtifactIds ?? [])],
+        presentation: input.presentation ?? null,
+        isPrimary: input.isPrimary === true,
     };
 }
 
@@ -754,6 +763,12 @@ export class PostgresWorksRepository {
         const currentMetadata = existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata) ? existing.metadata : {};
         const existingSummary = getAgentRunSummaryMetadata(currentMetadata);
         const normalizedFindings = input.findings.map(normalizeFinding).filter(finding => finding.title);
+        if (normalizedFindings.filter(finding => finding.isPrimary).length > 1) {
+            throw new DatabaseError('Only one primary Finding can be created per Agent Run update', 400);
+        }
+        if (normalizedFindings.some(finding => finding.presentation && !finding.evidenceArtifactIds.length)) {
+            throw new DatabaseError('Structured Finding presentation requires at least one Evidence Artifact', 400);
+        }
         const newFindings = normalizedFindings.map(finding => finding.title);
         const newSteps = cleanSummaryItems(input.steps);
         const nextFindings = [...existingSummary.findings, ...newFindings];
@@ -798,10 +813,23 @@ export class PostgresWorksRepository {
                     throw new DatabaseError('Finding evidence must be an Artifact produced by this Agent Run', 400);
                 }
             }
+            if (normalizedFindings.some(finding => finding.isPrimary)) {
+                await tx
+                    .update(findings)
+                    .set({ isPrimary: false })
+                    .where(and(eq(findings.organizationId, input.organizationId), eq(findings.workId, input.workId), eq(findings.isPrimary, true)));
+            }
             for (const finding of findingsToCreate) {
                 const [created] = await tx
                     .insert(findings)
-                    .values({ organizationId: input.organizationId, workId: input.workId, title: finding.title, content: finding.content })
+                    .values({
+                        organizationId: input.organizationId,
+                        workId: input.workId,
+                        title: finding.title,
+                        content: finding.content,
+                        presentation: finding.presentation,
+                        isPrimary: finding.isPrimary,
+                    })
                     .returning({ id: findings.id });
                 if (finding.evidenceArtifactIds.length) {
                     await tx.insert(findingArtifacts).values(finding.evidenceArtifactIds.map(artifactId => ({ findingId: created.id, artifactId })));
@@ -836,6 +864,10 @@ export class PostgresWorksRepository {
                 id: row.finding.id,
                 title: row.finding.title,
                 content: row.finding.content,
+                presentation: row.finding.presentation,
+                isPrimary: row.finding.isPrimary,
+                verifiedAt: row.finding.verifiedAt,
+                verifiedByUserId: row.finding.verifiedByUserId,
                 createdAt: row.finding.createdAt,
                 evidence: [],
             };
@@ -843,6 +875,22 @@ export class PostgresWorksRepository {
             grouped.set(finding.id, finding);
         }
         return [...grouped.values()];
+    }
+
+    async setFindingVerification(input: { organizationId: string; userId: string; workId: string; findingId: string; verified: boolean }) {
+        this.assertInited();
+        const work = await this.getById({ organizationId: input.organizationId, userId: input.userId, workId: input.workId });
+        if (!work) throw new DatabaseError('Work not found', 404);
+        const [row] = await this.db
+            .update(findings)
+            .set({
+                verifiedAt: input.verified ? new Date() : null,
+                verifiedByUserId: input.verified ? input.userId : null,
+            })
+            .where(and(eq(findings.id, input.findingId), eq(findings.organizationId, input.organizationId), eq(findings.workId, input.workId)))
+            .returning();
+        if (!row) throw new DatabaseError('Finding not found', 404);
+        return row;
     }
 
     summarizeInput(input: unknown) {

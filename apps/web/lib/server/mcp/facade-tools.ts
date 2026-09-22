@@ -222,13 +222,24 @@ const finishWorkInputSchema = z
                         title: z.string().min(1).max(500),
                         content: z.string().max(4000).nullable().optional(),
                         evidenceArtifactIds: z.array(z.string().min(1)).max(20).optional(),
+                        presentation: z
+                            .object({
+                                metricLabel: z.string().min(1).max(160).optional(),
+                                metricValue: z.string().min(1).max(160).optional(),
+                                metricUnit: z.string().min(1).max(80).optional(),
+                                timeframe: z.string().min(1).max(240).optional(),
+                                dimensions: z.array(z.string().min(1).max(160)).max(8).optional(),
+                                facts: z.array(z.object({ label: z.string().min(1).max(160), value: z.string().min(1).max(240) })).max(3).optional(),
+                            })
+                            .optional(),
+                        isPrimary: z.boolean().optional(),
                     }),
                 ]),
             )
             .min(1)
             .max(20)
             .describe(
-                'User-facing analytical conclusions. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. Evidence is optional when no Artifact supports the conclusion.',
+                'User-facing analytical conclusions. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. When presenting a metric, include presentation with the exact measured value, time window, and up to three supporting facts from that Artifact. A structured presentation requires evidenceArtifactIds. Mark at most one Finding as isPrimary. Evidence is optional when no Artifact supports the conclusion.',
             ),
         steps: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
     })

@@ -1,6 +1,16 @@
-import { index, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { newEntityId } from '@dory/shared/id';
+
+export type FindingPresentation = {
+    metricLabel?: string;
+    metricValue?: string;
+    metricUnit?: string;
+    timeframe?: string;
+    dimensions?: string[];
+    facts?: Array<{ label: string; value: string }>;
+};
 
 export const findings = pgTable(
     'findings',
@@ -12,9 +22,16 @@ export const findings = pgTable(
         workId: text('work_id').notNull(),
         title: text('title').notNull(),
         content: text('content'),
+        presentation: jsonb('presentation').$type<FindingPresentation | null>(),
+        isPrimary: boolean('is_primary').notNull().default(false),
+        verifiedAt: timestamp('verified_at', { withTimezone: true }),
+        verifiedByUserId: text('verified_by_user_id'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
-    table => [index('idx_findings_org_work_created').on(table.organizationId, table.workId, table.createdAt)],
+    table => [
+        index('idx_findings_org_work_created').on(table.organizationId, table.workId, table.createdAt),
+        uniqueIndex('uidx_findings_primary_per_work').on(table.organizationId, table.workId).where(sql`${table.isPrimary}`),
+    ],
 );
 
 export const findingArtifacts = pgTable(

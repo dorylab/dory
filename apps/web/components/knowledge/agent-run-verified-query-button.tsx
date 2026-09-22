@@ -13,7 +13,7 @@ export function AgentRunVerifiedQueryButton({ connectionId, sql, workId, title }
     return (
         <>
             <Button variant="outline" onClick={() => setOpen(true)}>
-                {t('MarkAsVerified')}
+                {t('SaveAsVerifiedQuery')}
             </Button>
             <AddVerifiedQueryDialog open={open} onOpenChange={setOpen} connectionId={connectionId} sql={sql} sourceType="agent_run" sourceId={workId} initialTitle={title} />
         </>

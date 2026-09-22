@@ -13,6 +13,7 @@ import { schemaActions } from './domains/schema';
 import { tabActions } from './domains/tab';
 import { tableActions } from './domains/table';
 import { knowledgeActions } from './domains/knowledge';
+import { workActions } from './domains/work';
 
 export const webActionRegistry = new ActionRegistry<WebActionServices>();
 
@@ -30,4 +31,5 @@ webActionRegistry.registerMany([
     ...artifactActions,
     ...comparisonActions,
     ...knowledgeActions,
+    ...workActions,
 ]);

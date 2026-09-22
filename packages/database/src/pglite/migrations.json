@@ -614,5 +614,17 @@
     "bps": true,
     "folderMillis": 1789776000000,
     "hash": "92c804c2efa49e617e660e000ac24aba83c0eeb646f7b03b879e014c36bd473b"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"findings\" ADD COLUMN \"presentation\" jsonb;\n",
+      "\nALTER TABLE \"findings\" ADD COLUMN \"is_primary\" boolean DEFAULT false NOT NULL;\n",
+      "\nALTER TABLE \"findings\" ADD COLUMN \"verified_at\" timestamp with time zone;\n",
+      "\nALTER TABLE \"findings\" ADD COLUMN \"verified_by_user_id\" text;\n",
+      "\nCREATE UNIQUE INDEX \"uidx_findings_primary_per_work\" ON \"findings\" USING btree (\"organization_id\", \"work_id\") WHERE \"is_primary\" = true;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1789987200000,
+    "hash": "5b2844bce43af5c960ed994f4f7d26a6eadfe2326e49c508006c269f593d1135"
   }
 ]

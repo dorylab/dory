@@ -26,6 +26,7 @@ function createWorksMock() {
     const events: any[] = [];
     const activities: any[] = [];
     const knowledgeUsage: any[] = [];
+    const finishInputs: any[] = [];
     const works = new Map<string, any>();
     let nextId = 1;
     const now = new Date('2026-06-01T00:00:00.000Z');
@@ -137,6 +138,7 @@ function createWorksMock() {
         events,
         activities,
         knowledgeUsage,
+        finishInputs,
         works,
         summarizeInput: (input: unknown) => input,
         create: async (input: any) => {
@@ -175,6 +177,7 @@ function createWorksMock() {
             return { ...event, id: events.length, createdAt: now };
         },
         finishWithSummary: async (input: any) => {
+            finishInputs.push(input);
             const work = works.get(input.workId);
             if (!work || work.organizationId !== input.organizationId || work.userId !== input.userId) {
                 throw Object.assign(new Error(`Work not found: ${input.workId}.`), {
@@ -952,6 +955,59 @@ test('dory_finish_work persists agent summary metadata and status', async () => 
     assert.equal(works.works.get(work.workId)?.status, 'completed');
     assert.equal(works.events.at(-1)?.toolName, 'dory_finish_work');
     assert.equal(works.events.at(-1)?.status, 'success');
+});
+
+test('dory_finish_work accepts a structured, evidence-backed primary Finding', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Validate payment incident' })) as any;
+    await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        findings: [
+            {
+                title: 'Atlas Pay failure rate was 36.84% during the incident week.',
+                evidenceArtifactIds: ['artifact-payment-incident'],
+                isPrimary: true,
+                presentation: {
+                    metricLabel: 'Atlas Pay failure rate',
+                    metricValue: '36.84',
+                    metricUnit: '%',
+                    timeframe: '2026-05-11 to 2026-05-17',
+                    dimensions: ['Atlas Pay', 'payments'],
+                    facts: [
+                        { label: 'Failed payments', value: '7' },
+                        { label: 'Total payments', value: '19' },
+                    ],
+                },
+            },
+        ],
+        steps: ['Ran read-only payment incident query', 'Preserved the result set as evidence'],
+    });
+
+    assert.deepEqual(works.finishInputs.at(-1)?.findings, [
+        {
+            title: 'Atlas Pay failure rate was 36.84% during the incident week.',
+            evidenceArtifactIds: ['artifact-payment-incident'],
+            isPrimary: true,
+            presentation: {
+                metricLabel: 'Atlas Pay failure rate',
+                metricValue: '36.84',
+                metricUnit: '%',
+                timeframe: '2026-05-11 to 2026-05-17',
+                dimensions: ['Atlas Pay', 'payments'],
+                facts: [
+                    { label: 'Failed payments', value: '7' },
+                    { label: 'Total payments', value: '19' },
+                ],
+            },
+        },
+    ]);
 });
 
 test('dory_finish_work appends continuation findings and steps without replacing existing summary', async () => {

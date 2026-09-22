@@ -92,10 +92,23 @@ async function main() {
             summaryTitle: 'Atlas Pay failure-rate incident',
             findings: [
                 {
-                    title: 'Atlas Pay has the highest payment failure rate during 2026-05-11 to 2026-05-17.',
+                    title: 'Atlas Pay failure rate was 36.84% during the incident week.',
                     content:
                         'The deterministic evaluation dataset injects an Atlas Pay timeout incident for this window. Review the Artifact for the measured rate and competing providers.',
                     evidenceArtifactIds,
+                    isPrimary: true,
+                    presentation: {
+                        metricLabel: 'Atlas Pay failure rate',
+                        metricValue: '36.84',
+                        metricUnit: '%',
+                        timeframe: 'Incident week · 2026-05-11 to 2026-05-17',
+                        dimensions: ['Atlas Pay', 'payments'],
+                            facts: [
+                                { label: 'Failed payments', value: '14' },
+                                { label: 'Total payments', value: '38' },
+                            { label: 'Result rows', value: '3' },
+                        ],
+                    },
                 },
             ],
             steps: ['Searched and read verified payment knowledge.', 'Inspected the payments schema.', 'Executed the incident aggregation and saved its Artifact.'],

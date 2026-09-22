@@ -4372,7 +4372,9 @@
             "LastActive": "Last active"
         },
         "Detail": {
-            "WorkspaceDescription": "This run generated a workspace with {tabs} and {sqlRuns}. Open the workspace to inspect, edit, and continue the generated SQL analysis."
+            "WorkspaceDescription": "This run generated a workspace with {tabs} and {sqlRuns}. Open the workspace to inspect, edit, and continue the generated SQL analysis.",
+            "KnowledgeDefinitions": "{count, plural, one {# Knowledge Definition} other {# Knowledge Definitions}}",
+            "ResultSets": "{count, plural, one {# ResultSet} other {# ResultSets}}"
         },
         "Summary": {
             "Title": "Run summary",
@@ -4384,8 +4386,37 @@
             "NoSteps": "No execution steps recorded yet.",
             "Empty": "No summary generated for this run. Open the workspace to inspect generated SQL and results."
         },
+        "Findings": {
+            "Title": "Key findings",
+            "Description": "Conclusions the Agent produced, with inspectable data evidence.",
+            "Evidence": "Evidence",
+            "NoEvidence": "No result snapshot was cited for this finding.",
+            "Empty": "No findings were generated for this run.",
+            "OtherOutputs": "Other outputs",
+            "ViewResult": "View result",
+            "ViewSql": "View SQL",
+            "Verified": "Verified",
+            "Verify": "Verify finding",
+            "VerificationFailed": "Could not update this Finding's verification."
+        },
+        "Context": {
+            "Title": "Context used",
+            "Description": "Knowledge and assets the Agent explicitly read to interpret this analysis.",
+            "Table": "Table",
+            "Kinds": {
+                "artifact": "Artifact",
+                "knowledge_definition": "Definition",
+                "knowledge_source": "Knowledge Source",
+                "verified_query": "Verified Query"
+            }
+        },
+        "Trace": {
+            "Title": "How Agent got here",
+            "Description": "A concise record of the analysis path.",
+            "Empty": "No execution steps were recorded."
+        },
         "Activity": {
-            "Title": "Activity",
+            "Title": "Activity & raw execution",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "active",

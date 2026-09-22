@@ -4372,7 +4372,9 @@
             "LastActive": "最終アクティブ"
         },
         "Detail": {
-            "WorkspaceDescription": "この run は{tabs}と{sqlRuns}を含むワークスペースを生成しました。ワークスペースを開いて、生成された SQL 分析を確認、編集、継続できます。"
+            "WorkspaceDescription": "この run は{tabs}と{sqlRuns}を含むワークスペースを生成しました。ワークスペースを開いて、生成された SQL 分析を確認、編集、継続できます。",
+            "KnowledgeDefinitions": "{count} 件の Knowledge Definition",
+            "ResultSets": "{count} 件の ResultSet"
         },
         "Summary": {
             "Title": "Run サマリー",
@@ -4384,8 +4386,32 @@
             "NoSteps": "実行手順はまだ記録されていません。",
             "Empty": "この run のサマリーはまだ生成されていません。ワークスペースを開いて、生成された SQL と結果を確認してください。"
         },
+        "Findings": {
+            "Title": "主な発見事項",
+            "Description": "Agent が作成した結論と、確認可能なデータ証拠です。",
+            "Evidence": "証拠",
+            "NoEvidence": "この発見事項には結果スナップショットが引用されていません。",
+            "Empty": "この Run では発見事項が生成されていません。",
+            "OtherOutputs": "その他の出力",
+            "ViewResult": "結果を見る",
+            "ViewSql": "SQL を見る",
+            "Verified": "検証済み",
+            "Verify": "発見事項を検証",
+            "VerificationFailed": "この発見事項の検証状態を更新できませんでした。"
+        },
+        "Context": {
+            "Title": "使用したコンテキスト",
+            "Description": "この分析の解釈のために Agent が明示的に読んだナレッジとアセットです。",
+            "Table": "テーブル",
+            "Kinds": { "artifact": "Artifact", "knowledge_definition": "定義", "knowledge_source": "ナレッジソース", "verified_query": "検証済みクエリ" }
+        },
+        "Trace": {
+            "Title": "Agent が結論に至るまで",
+            "Description": "分析経路の簡潔な記録です。",
+            "Empty": "実行手順は記録されていません。"
+        },
         "Activity": {
-            "Title": "アクティビティ",
+            "Title": "アクティビティと生の実行内容",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "実行中",
