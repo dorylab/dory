@@ -96,108 +96,115 @@ export function AgentRunsTable({
 
     return (
         <>
-            <Table className="[&_td]:px-4 [&_th]:px-4 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6">
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>{t('Table.Run')}</TableHead>
-                        <TableHead>{t('Table.DataSource')}</TableHead>
-                        <TableHead>{t('Table.Status')}</TableHead>
-                        <TableHead>{t('Table.LastActive')}</TableHead>
-                        <TableHead className="text-right">{t('Table.Actions')}</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {runs.length ? (
-                        runs.map(run => (
-                            <TableRow
-                                key={run.workId}
-                                role="link"
-                                tabIndex={0}
-                                className="group cursor-pointer"
-                                onClick={() => router.push(run.detailHref)}
-                                onKeyDown={event => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                        event.preventDefault();
-                                        router.push(run.detailHref);
-                                    }
-                                }}
-                                aria-label={t('Accessibility.OpenRun', { title: run.title })}
-                            >
-                                <TableCell className="min-w-[320px] max-w-[520px]">
-                                    <div className="line-clamp-2 font-medium group-hover:underline" title={run.title}>
-                                        {run.title}
-                                    </div>
-                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                                        <span className="font-mono">{run.shortWorkId}</span>
-                                        <span>{run.outputLabel}</span>
-                                    </div>
-                                    <div className="mt-1 line-clamp-1 max-w-[480px] text-sm text-muted-foreground">{run.summaryPreview}</div>
-                                </TableCell>
-                                <TableCell>
-                                    <DataSourceCell dataSource={run.dataSource} emptyLabel={t('Common.None')} />
-                                </TableCell>
-                                <TableCell>
-                                    <AgentRunStatusBadge status={run.status} />
-                                </TableCell>
-                                <TableCell>{run.lastActiveLabel}</TableCell>
-                                <TableCell className="text-right" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-                                    <div className="flex items-center justify-end gap-2">
-                                        {run.hasWorkspace ? (
-                                            <Button asChild size="sm" variant="outline">
-                                                <Link href={run.workspaceHref}>{t('Actions.OpenWorkspace')}</Link>
-                                            </Button>
-                                        ) : (
-                                            <Button size="sm" variant="outline" disabled>
-                                                {t('Actions.OpenWorkspace')}
-                                            </Button>
-                                        )}
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" aria-label={t('Accessibility.ActionsForRun', { title: run.title })}>
-                                                    <MoreHorizontal className="h-4 w-4" />
+            <div className="overflow-x-auto">
+                <Table className="min-w-[760px] [&_td]:px-4 [&_th]:px-4 [&_td:first-child]:pl-5 [&_th:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:last-child]:pr-5">
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>{t('Table.Run')}</TableHead>
+                            <TableHead>{t('Table.DataSource')}</TableHead>
+                            <TableHead>{t('Table.Status')}</TableHead>
+                            <TableHead>{t('Table.LastActive')}</TableHead>
+                            <TableHead className="text-right">{t('Table.Actions')}</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {runs.length ? (
+                            runs.map(run => (
+                                <TableRow
+                                    key={run.workId}
+                                    role="link"
+                                    tabIndex={0}
+                                    className="group cursor-pointer"
+                                    onClick={() => router.push(run.detailHref)}
+                                    onKeyDown={event => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
+                                            router.push(run.detailHref);
+                                        }
+                                    }}
+                                    aria-label={t('Accessibility.OpenRun', { title: run.title })}
+                                >
+                                    <TableCell className="min-w-[320px] max-w-[520px]">
+                                        <div className="line-clamp-2 font-medium group-hover:underline" title={run.title}>
+                                            {run.title}
+                                        </div>
+                                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                            <span className="font-mono">{run.shortWorkId}</span>
+                                            <span>{run.outputLabel}</span>
+                                        </div>
+                                        <div className="mt-1 line-clamp-1 max-w-[480px] text-sm text-muted-foreground">{run.summaryPreview}</div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <DataSourceCell dataSource={run.dataSource} emptyLabel={t('Common.None')} />
+                                    </TableCell>
+                                    <TableCell>
+                                        <AgentRunStatusBadge status={run.status} />
+                                    </TableCell>
+                                    <TableCell>{run.lastActiveLabel}</TableCell>
+                                    <TableCell className="text-right" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+                                        <div className="flex items-center justify-end gap-2">
+                                            {run.hasWorkspace ? (
+                                                <Button asChild size="sm" variant="outline">
+                                                    <Link href={run.workspaceHref}>{t('Actions.OpenWorkspace')}</Link>
                                                 </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-44">
-                                                <DropdownMenuItem asChild>
-                                                    <Link href={run.detailHref}>
-                                                        <Info className="h-4 w-4" />
-                                                        {t('Actions.ViewDetails')}
-                                                    </Link>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    onSelect={() => {
-                                                        void copyText(run.workId).then(() => toast.success(t('Toasts.RunIdCopied')));
-                                                    }}
-                                                >
-                                                    <Copy className="h-4 w-4" />
-                                                    {t('Actions.CopyRunId')}
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem
-                                                    variant="destructive"
-                                                    onSelect={event => {
-                                                        event.preventDefault();
-                                                        setPendingDelete(run);
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                    {t('Actions.Delete')}
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </div>
+                                            ) : (
+                                                <Button size="sm" variant="outline" disabled>
+                                                    {t('Actions.OpenWorkspace')}
+                                                </Button>
+                                            )}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 cursor-pointer"
+                                                        aria-label={t('Accessibility.ActionsForRun', { title: run.title })}
+                                                    >
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-44">
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={run.detailHref}>
+                                                            <Info className="h-4 w-4" />
+                                                            {t('Actions.ViewDetails')}
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onSelect={() => {
+                                                            void copyText(run.workId).then(() => toast.success(t('Toasts.RunIdCopied')));
+                                                        }}
+                                                    >
+                                                        <Copy className="h-4 w-4" />
+                                                        {t('Actions.CopyRunId')}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        variant="destructive"
+                                                        onSelect={event => {
+                                                            event.preventDefault();
+                                                            setPendingDelete(run);
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                        {t('Actions.Delete')}
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                                    {t('Table.Empty')}
                                 </TableCell>
                             </TableRow>
-                        ))
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                                {t('Table.Empty')}
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
             <DataTablePagination
                 total={total}
                 pageIndex={pageIndex}

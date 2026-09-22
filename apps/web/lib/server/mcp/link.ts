@@ -25,7 +25,16 @@ export function hashMcpLinkVerifier(verifier: string) {
 }
 
 export function getMcpLinkScopes(scopes?: string[]) {
-    return scopes?.length ? scopes : [...MCP_DEFAULT_SCOPES];
+    const requestedScopes = scopes?.length ? scopes : [...MCP_DEFAULT_SCOPES];
+
+    // Older local Codex bridges requested only the database-specific scopes.
+    // A bridge explicitly asking for local AI must also be able to retrieve the
+    // read-only Knowledge and Asset context that Dory injects into Agent work.
+    // This is intentionally limited to the local-AI capability rather than
+    // treating every query token as a Knowledge token.
+    if (!requestedScopes.includes('local_ai:run')) return requestedScopes;
+
+    return [...new Set([...requestedScopes, 'read', 'knowledge:read', 'assets:read'])];
 }
 
 export function getMcpLinkExpiresAt(now = Date.now()) {

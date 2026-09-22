@@ -9,7 +9,9 @@ import { postJson, type FetchLike } from './bridge-api.js';
 import { login } from './bridge-auth.js';
 import { getBridgeConfigPath, resolveCredential } from './bridge-config.js';
 
-const DEFAULT_MCP_SCOPES = ['read', 'write', 'local_ai:run'];
+// Keep the broad legacy scopes for compatibility, and request the catalog scopes
+// explicitly so a local Codex bridge can discover and read Agent Knowledge.
+const DEFAULT_MCP_SCOPES = ['read', 'write', 'knowledge:read', 'assets:read', 'local_ai:run'];
 export const LOCAL_AI_SCOPES = [...DEFAULT_MCP_SCOPES];
 const LOCAL_AGENT_TIMEOUT_MS = 120_000;
 const LOCAL_AGENT_MAX_BUFFER = 2 * 1024 * 1024;

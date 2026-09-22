@@ -364,11 +364,21 @@ test('web MCP link schemas validate start and poll payloads', () => {
     );
 });
 
-test('web MCP link defaults use existing MCP scopes and ten minute expiry', () => {
+test('web MCP link defaults include local Agent Knowledge scopes and ten minute expiry', () => {
     const now = Date.parse('2026-01-01T00:00:00.000Z');
 
-    assert.deepEqual(getMcpLinkScopes(), [...MCP_DEFAULT_SCOPES]);
+    assert.deepEqual(getMcpLinkScopes(), [...MCP_DEFAULT_SCOPES, 'knowledge:read', 'assets:read']);
     assert.equal(getMcpLinkExpiresAt(now).getTime(), now + MCP_LINK_TTL_MS);
+});
+
+test('local AI MCP links include the read-only Knowledge and Asset scopes', () => {
+    const scopes = getMcpLinkScopes(['connections:read', 'query:read', 'local_ai:run']);
+
+    assert.deepEqual(scopes, ['connections:read', 'query:read', 'local_ai:run', 'read', 'knowledge:read', 'assets:read']);
+});
+
+test('non-local AI MCP links do not receive additional Knowledge scopes', () => {
+    assert.deepEqual(getMcpLinkScopes(['connections:read', 'query:read']), ['connections:read', 'query:read']);
 });
 
 test('web MCP link URLs prefer the externally reachable request host', () => {

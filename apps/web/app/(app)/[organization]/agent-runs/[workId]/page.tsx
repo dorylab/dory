@@ -58,18 +58,20 @@ function EvidenceCard({
     const artifactHref = `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}?fromAgentRun=${encodeURIComponent(workId)}`;
 
     return (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
-            <div className="flex min-w-0 items-center gap-2">
+        <div className="grid min-w-0 gap-3 rounded-md border bg-muted/30 p-3">
+            <div className="flex min-w-0 items-start gap-2">
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{artifact.title}</div>
+                    <div className="line-clamp-2 break-words text-sm font-medium" title={artifact.title}>
+                        {artifact.title}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                         {artifact.type}
                         {artifact.rowCount == null ? '' : ` · ${labels.rowCount(artifact.rowCount)}`}
                     </div>
                 </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 border-t pt-3">
                 <Button asChild variant="outline" size="sm">
                     <Link href={artifactHref}>{labels.viewResult}</Link>
                 </Button>
@@ -138,9 +140,7 @@ export default async function AgentRunDetailPage({
     );
     const sqlByResultSetId = new Map(
         snapshot.sessions.flatMap(item =>
-            item.queryResultSets.flatMap(resultSet =>
-                resultSet.resultSetId && resultSet.sqlText ? [[resultSet.resultSetId, resultSet.sqlText] as const] : [],
-            ),
+            item.queryResultSets.flatMap(resultSet => (resultSet.resultSetId && resultSet.sqlText ? [[resultSet.resultSetId, resultSet.sqlText] as const] : [])),
         ),
     );
     const traceSteps = unique(
@@ -153,8 +153,8 @@ export default async function AgentRunDetailPage({
 
     return (
         <div className="h-screen overflow-auto bg-n8">
-            <main className="container mx-auto flex max-w-6xl flex-col gap-8 px-6 pb-12 pt-4 lg:px-10">
-                <header className="grid gap-4">
+            <main className="container mx-auto flex max-w-7xl flex-col gap-7 px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+                <header className="grid gap-5">
                     <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
                         <Link href={backHref}>
                             <ArrowLeft className="h-4 w-4" />
@@ -162,13 +162,13 @@ export default async function AgentRunDetailPage({
                         </Link>
                     </Button>
 
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="min-w-0 max-w-3xl">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                        <div className="min-w-0 max-w-4xl">
                             <div className="flex flex-wrap items-center gap-3">
                                 <h1 className="text-2xl font-semibold tracking-normal">{summary?.summaryTitle || snapshot.work.title || t('Common.AgentRun')}</h1>
                                 <AgentRunStatusBadge status={snapshot.work.status} />
                             </div>
-                            {conclusion ? <p className="mt-3 text-xl font-medium leading-snug">{conclusion}</p> : null}
+                            {conclusion ? <p className="mt-3 max-w-3xl text-xl font-medium leading-snug sm:text-2xl">{conclusion}</p> : null}
                             <p className="mt-3 text-sm text-muted-foreground">
                                 {[
                                     stats.dataSource,
@@ -179,7 +179,7 @@ export default async function AgentRunDetailPage({
                             </p>
                         </div>
                         {hasWorkspace ? (
-                            <Button asChild>
+                            <Button asChild className="w-full sm:w-auto">
                                 <Link href={workspaceHref}>{t('Actions.OpenWorkspace')}</Link>
                             </Button>
                         ) : (
@@ -196,15 +196,22 @@ export default async function AgentRunDetailPage({
                     {findings.length ? (
                         <div className="grid gap-4">
                             {findings.map(finding => (
-                                <article key={finding.id} className="grid gap-5 rounded-lg border bg-card p-5 md:grid-cols-[minmax(0,7fr)_minmax(14rem,3fr)]">
+                                <article
+                                    key={finding.id}
+                                    className="grid min-w-0 gap-6 rounded-lg border bg-card p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)] xl:gap-0"
+                                >
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-start justify-between gap-3">
                                             <div>
-                                                {finding.presentation?.metricLabel ? <p className="text-sm font-medium text-muted-foreground">{finding.presentation.metricLabel}</p> : null}
+                                                {finding.presentation?.metricLabel ? (
+                                                    <p className="text-sm font-medium text-muted-foreground">{finding.presentation.metricLabel}</p>
+                                                ) : null}
                                                 {finding.presentation?.metricValue ? (
-                                                    <p className="mt-1 text-4xl font-semibold tracking-tight">
+                                                    <p className="mt-1 text-4xl font-semibold tracking-tight sm:text-5xl">
                                                         {finding.presentation.metricValue}
-                                                        {finding.presentation.metricUnit ? <span className="ml-1 text-xl text-muted-foreground">{finding.presentation.metricUnit}</span> : null}
+                                                        {finding.presentation.metricUnit ? (
+                                                            <span className="ml-1 text-xl text-muted-foreground">{finding.presentation.metricUnit}</span>
+                                                        ) : null}
                                                     </p>
                                                 ) : (
                                                     <h3 className="text-lg font-semibold">{finding.title}</h3>
@@ -217,7 +224,9 @@ export default async function AgentRunDetailPage({
                                         {finding.presentation?.dimensions?.length ? (
                                             <div className="mt-3 flex flex-wrap gap-2">
                                                 {finding.presentation.dimensions.map(dimension => (
-                                                    <Badge key={dimension} variant="secondary">{dimension}</Badge>
+                                                    <Badge key={dimension} variant="secondary">
+                                                        {dimension}
+                                                    </Badge>
                                                 ))}
                                             </div>
                                         ) : null}
@@ -233,7 +242,7 @@ export default async function AgentRunDetailPage({
                                             </dl>
                                         ) : null}
                                     </div>
-                                    <div className="grid content-start gap-3 border-t pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                                    <div className="grid min-w-0 content-start gap-3 border-t pt-5 xl:border-t-0 xl:pl-6 xl:pt-0">
                                         <h3 className="text-sm font-semibold">{t('Findings.Evidence')}</h3>
                                         {finding.evidence.length ? (
                                             finding.evidence.map(artifact => (
@@ -270,7 +279,7 @@ export default async function AgentRunDetailPage({
                             <h2 className="text-base font-semibold">{t('Context.Title')}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">{t('Context.Description')}</p>
                         </div>
-                        <div className="flex flex-wrap gap-3">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             {agentAssetUsage.map(item => {
                                 const asset = item.assetSnapshot as { title?: string; knowledgeModelName?: string; deepLink?: string };
                                 const content = (
@@ -286,15 +295,17 @@ export default async function AgentRunDetailPage({
                                     </>
                                 );
                                 return asset.deepLink ? (
-                                    <Link key={item.assetRef} href={asset.deepLink} className="flex min-w-52 max-w-full items-center gap-3 rounded-md border bg-card p-3 hover:bg-accent">
+                                    <Link key={item.assetRef} href={asset.deepLink} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3 hover:bg-accent">
                                         {content}
                                     </Link>
                                 ) : (
-                                    <div key={item.assetRef} className="flex min-w-52 max-w-full items-center gap-3 rounded-md border bg-card p-3">{content}</div>
+                                    <div key={item.assetRef} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3">
+                                        {content}
+                                    </div>
                                 );
                             })}
                             {inspectedTables.map(table => (
-                                <div key={`table-${table}`} className="flex min-w-52 max-w-full items-center gap-3 rounded-md border bg-card p-3">
+                                <div key={`table-${table}`} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3">
                                     <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground" />
                                     <span className="min-w-0">
                                         <span className="block truncate text-sm font-medium">{table}</span>
@@ -330,7 +341,7 @@ export default async function AgentRunDetailPage({
                         <h2 className="text-base font-semibold">{t('Trace.Title')}</h2>
                         <p className="mt-1 text-sm text-muted-foreground">{t('Trace.Description')}</p>
                     </div>
-                    <div className="grid gap-3 rounded-lg border bg-card p-5">
+                    <div className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
                         {traceSteps.length ? (
                             traceSteps.map((step, index) => (
                                 <div key={`${index}-${step}`} className="flex items-start gap-3 text-sm">

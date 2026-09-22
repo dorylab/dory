@@ -42,8 +42,8 @@ export function AgentWorkspaceDrawer({
     return (
         <Drawer direction="bottom" dismissible={false} handleOnly open onOpenChange={open => !open && closeDrawer()}>
             <DrawerContent className="!inset-0 !m-0 !h-dvh !max-h-none !w-screen !max-w-none !overflow-hidden !rounded-none !border-0 !p-0 shadow-2xl sm:!inset-2 sm:!h-auto sm:!w-auto sm:!rounded-xl sm:!border [&>div:first-child]:!hidden">
-                <header className="flex h-11 shrink-0 items-center gap-2 border-b bg-background px-2.5">
-                    <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2" onClick={closeDrawer}>
+                <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-2.5 sm:h-11">
+                    <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2 sm:h-8" onClick={closeDrawer}>
                         <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                         <span>{resolvedBackLabel}</span>
                     </Button>
@@ -51,7 +51,7 @@ export function AgentWorkspaceDrawer({
                         <DrawerTitle className="truncate text-sm font-medium">{resolvedTitle}</DrawerTitle>
                         <DrawerDescription className="sr-only">{resolvedDescription}</DrawerDescription>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={closeDrawer} aria-label={resolvedCloseLabel} title={resolvedCloseLabel}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" onClick={closeDrawer} aria-label={resolvedCloseLabel} title={resolvedCloseLabel}>
                         <X className="h-4 w-4" aria-hidden="true" />
                     </Button>
                 </header>
