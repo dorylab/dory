@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 
+import { ossieRevision, parseKnowledgeYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
+
+import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
+
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
 require.cache[serverOnlyPath] = { id: serverOnlyPath, filename: serverOnlyPath, loaded: true, exports: {} } as NodeJS.Module;
@@ -83,6 +87,35 @@ test('resolver isolates by connection and matches synonyms with ANSI fallback', 
         result.models.map(item => item.id),
         ['commerce'],
     );
+});
+
+test('classic commerce questions resolve the expected Ossie metrics and relationship paths', async () => {
+    const connectionId = 'connection-commerce';
+    const ossieDocument = buildCommerceEvaluationOssieDocument(connectionId);
+    const yaml = serializeOssieDocument(ossieDocument);
+    const knowledgeModel = {
+        id: 'commerce-operations',
+        name: 'Commerce Operations Knowledge',
+        description: ossieDocument.semantic_model[0].description ?? null,
+        ossieVersion: '0.1.1' as const,
+        modelRevision: ossieRevision(ossieDocument),
+        readiness: { status: 'ready' as const },
+        model: parseKnowledgeYaml(yaml, connectionId, false),
+        ossieDocument,
+    };
+
+    for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
+        const result = await resolveSemanticModelContext(fakeDb([knowledgeModel as any]), {
+            organizationId: 'org-1',
+            connectionId,
+            question: scenario.question,
+            dialect: 'ANSI_SQL',
+        });
+        assert.equal(result.models[0]?.id, knowledgeModel.id, scenario.id);
+        for (const semanticId of scenario.expectedSemanticIds) {
+            assert.match(result.context ?? '', new RegExp(semanticId.split(':').at(-1)!), `${scenario.id} should include ${semanticId}`);
+        }
+    }
 });
 
 test('resolver uses a single-model fallback but not an ambiguous multi-model fallback', async () => {

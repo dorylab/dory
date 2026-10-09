@@ -12,7 +12,11 @@ test('Commerce Agent Evaluation connection, Knowledge, Agent Runs, and Artifacts
     await expect(page.getByText('Commerce Agent Evaluation', { exact: true })).toBeVisible();
 
     await page.goto(`/${organization}/knowledge`);
-    await expect(page.getByText('Commerce Operations Knowledge', { exact: true })).toBeVisible();
+    await page.getByText('Commerce Operations Knowledge', { exact: true }).click();
+    await expect(page.getByText(/Apache Ossie 0\.1\.1 · rev [a-f0-9]{8}/)).toBeVisible();
+    await page.getByRole('tab', { name: /Definitions/i }).click();
+    await expect(page.getByText('payment_success_rate', { exact: true })).toBeVisible();
+    await expect(page.getByText('payments_order', { exact: true })).toBeVisible();
 
     await page.goto(`/${organization}/agent-runs`);
     await expect(page.getByRole('heading', { name: /Agent Runs/i })).toBeVisible();

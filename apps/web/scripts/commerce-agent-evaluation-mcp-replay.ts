@@ -50,12 +50,6 @@ async function main() {
     try {
         const call = async (name: string, args: JsonRecord) => toolPayload(await client.callTool({ name, arguments: args }));
 
-        // These calls intentionally do not include workId: they should be recorded only as Agent audit activity.
-        const assetSearch = await call('dory_search_assets', { query: '支付成功率', kinds: ['knowledge_definition', 'verified_query'] });
-        const ref = assetRefs(assetSearch)[0];
-        if (!ref) throw new Error('The seeded payment-success Knowledge asset was not discoverable.');
-        await call('dory_read_asset', { ref });
-
         const connections = await call('dory_list_connections', {});
         const connectionRows = Array.isArray(connections.connections) ? connections.connections.filter(isRecord) : [];
         const connection = connectionRows.find(item => item.connectionId === configuredConnectionId || item.name === 'Commerce Agent Evaluation');
@@ -68,9 +62,20 @@ async function main() {
             userQuestion: 'Identify the 2026-05-11 to 2026-05-17 payment failure anomaly.',
         });
         const workId = requireString(work.workId, 'workId');
+        const semanticContext = requireString(work.semanticContext, 'semanticContext');
+        if (!semanticContext.includes('payment_success_rate') || !semanticContext.includes('payments_order')) {
+            throw new Error('dory_create_work did not automatically inject the expected payment metric and relationship.');
+        }
+        const semanticModelsUsed = Array.isArray(work.semanticModelsUsed) ? work.semanticModelsUsed.filter(isRecord) : [];
+        const semanticModel = semanticModelsUsed.find(item => item.name === 'Commerce Operations Knowledge');
+        if (!semanticModel || semanticModel.ossieVersion !== '0.1.1' || typeof semanticModel.modelRevision !== 'string') {
+            throw new Error('dory_create_work did not report the expected Ossie model version and revision.');
+        }
 
-        // Once a SQL work exists, contextual reads belong to its existing activity timeline.
-        await call('dory_search_assets', { query: '支付渠道失败率', kinds: ['verified_query'], workId });
+        // Explicit discovery remains available, but automatic semantic context above must succeed without it.
+        const assetSearch = await call('dory_search_assets', { query: '支付渠道失败率', kinds: ['knowledge_definition', 'verified_query'], workId });
+        const ref = assetRefs(assetSearch)[0];
+        if (!ref) throw new Error('The seeded payment-success Knowledge asset was not discoverable.');
         await call('dory_read_asset', { ref, workId });
         await call('dory_explore_schema', { operation: 'describe_table', connectionId, database: 'main', table: 'payments', workId });
         const sql = await call('dory_run_readonly_sql', {
@@ -103,9 +108,9 @@ async function main() {
                         metricUnit: '%',
                         timeframe: 'Incident week · 2026-05-11 to 2026-05-17',
                         dimensions: ['Atlas Pay', 'payments'],
-                            facts: [
-                                { label: 'Failed payments', value: '14' },
-                                { label: 'Total payments', value: '38' },
+                        facts: [
+                            { label: 'Failed payments', value: '14' },
+                            { label: 'Total payments', value: '38' },
                             { label: 'Result rows', value: '3' },
                         ],
                     },
@@ -114,7 +119,24 @@ async function main() {
             steps: ['Searched and read verified payment knowledge.', 'Inspected the payments schema.', 'Executed the incident aggregation and saved its Artifact.'],
         });
 
-        console.log(JSON.stringify({ ok: true, connectionId, workId, assetRef: ref, evidenceArtifactIds }, null, 2));
+        console.log(
+            JSON.stringify(
+                {
+                    ok: true,
+                    connectionId,
+                    workId,
+                    assetRef: ref,
+                    evidenceArtifactIds,
+                    semanticModel: {
+                        name: semanticModel.name,
+                        ossieVersion: semanticModel.ossieVersion,
+                        modelRevision: semanticModel.modelRevision,
+                    },
+                },
+                null,
+                2,
+            ),
+        );
     } finally {
         await client.close();
     }

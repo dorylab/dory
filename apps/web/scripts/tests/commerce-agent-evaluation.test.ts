@@ -6,7 +6,32 @@ import test from 'node:test';
 
 import Database from 'better-sqlite3';
 
+import { parseKnowledgeYaml, parseOssieYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
+
 import { COMMERCE_EVALUATION_COUNTS, generateCommerceAgentEvaluationSqlite } from '@/lib/demo/commerce-agent-evaluation';
+import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
+
+test('commerce evaluation Knowledge is a complete, verified Ossie 0.1.1 model', () => {
+    const connectionId = 'conn_commerce_evaluation';
+    const yaml = serializeOssieDocument(buildCommerceEvaluationOssieDocument(connectionId));
+    const document = parseOssieYaml(yaml);
+    const projection = parseKnowledgeYaml(yaml, connectionId, false);
+    const model = document.semantic_model[0];
+
+    assert.equal(document.version, '0.1.1');
+    assert.equal(model.name, 'Commerce Operations Knowledge');
+    assert.equal(model.datasets.length, 7);
+    assert.equal(model.metrics?.length, 8);
+    assert.equal(model.relationships?.length, 7);
+    assert.ok(typeof model.ai_context === 'object' && model.ai_context.examples?.includes(COMMERCE_EVALUATION_SCENARIOS[1].question));
+    assert.ok(projection.definitions.every(definition => definition.status === 'verified'));
+    assert.ok(projection.definitions.every(definition => definition.sourceConnectionId === connectionId));
+    const productRelationship = projection.definitions.find(definition => definition.id === 'relationship:order_items_product');
+    assert.equal(productRelationship?.from, 'order_items');
+    assert.equal(productRelationship?.to, 'products');
+    assert.deepEqual(productRelationship?.fromColumns, ['product_id']);
+    assert.deepEqual(productRelationship?.toColumns, ['product_id']);
+});
 
 test('commerce Agent evaluation seed is deterministic and includes the expected investigation signals', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dory-commerce-evaluation-'));
@@ -68,6 +93,22 @@ test('commerce Agent evaluation seed is deterministic and includes the expected 
                 )
                 .get() as { resolution_hours: number };
             assert.ok(ticketIncident.resolution_hours > 50);
+
+            const scenarioRows = Object.fromEntries(COMMERCE_EVALUATION_SCENARIOS.map(scenario => [scenario.id, db.prepare(scenario.sql).all()]));
+            assert.equal(scenarioRows.monthly_revenue.length, 6);
+            assert.deepEqual(scenarioRows.payment_incident[0], { provider: 'atlas_pay', attempts: 38, failed_attempts: 14, failure_rate_pct: 36.84 });
+            assert.equal((scenarioRows.category_refunds[0] as { category: string }).category, 'Premium Wearables');
+            assert.deepEqual(
+                scenarioRows.channel_retention.find(row => (row as { acquisition_channel: string }).acquisition_channel === 'affiliate'),
+                {
+                    acquisition_channel: 'affiliate',
+                    customers: 240,
+                    purchasing_customers: 229,
+                    purchase_rate_pct: 95.42,
+                    repeat_purchase_rate_pct: 0,
+                },
+            );
+            assert.deepEqual(scenarioRows.support_backlog[0], { priority: 'critical', resolved_tickets: 28, avg_resolution_hours: 75.11 });
         } finally {
             db.close();
         }

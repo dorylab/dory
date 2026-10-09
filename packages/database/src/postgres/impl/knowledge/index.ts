@@ -36,6 +36,8 @@ import {
     validateOssieDocument,
 } from './ossie';
 
+export { ossieRevision, parseOssieYaml, serializeOssieDocument, validateOssieDocument } from './ossie';
+
 export const KNOWLEDGE_SOURCE_MAX_BYTES = 10_000_000;
 export type KnowledgeModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
 export type KnowledgeModelDetail = {
