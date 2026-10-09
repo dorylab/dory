@@ -3859,12 +3859,12 @@
         "ModelActions": "ナレッジモデルの操作",
         "ViewYaml": "YAML を表示",
         "ImportYaml": "YAML をインポート",
-        "ModelYaml": "モデル YAML",
-        "ModelYamlDescription": "変更内容はナレッジモデルを更新する前に検証されます。",
+        "ModelYaml": "Apache Ossie 0.1.1 YAML",
+        "ModelYamlDescription": "変更内容は Apache Ossie 0.1.1 に対して検証されてから更新されます。",
         "SaveYaml": "YAML を保存",
         "YamlSaved": "YAML を保存しました。",
-        "ImportYamlTitle": "Cube 互換 YAML をインポート",
-        "ImportYamlDescription": "meta.dory.sourceConnectionId のない定義には選択したデータソースが使用され、レビューするまで未検証のままになります。",
+        "ImportYamlTitle": "Apache Ossie 0.1.1 YAML をインポート",
+        "ImportYamlDescription": "ドキュメントには semantic_model を1つだけ含めてください。Dory 接続メタデータがない定義は選択したデータソースを使用します。",
         "UploadYamlFile": "YAML ファイルをアップロード",
         "UploadYamlHint": ".yaml または .yml ファイルをここにドロップするか、クリックして選択してください。最大 10 MB。",
         "YamlPreview": "プレビュー",
@@ -3968,7 +3968,14 @@
             "Calculation": "計算式",
             "Filters": "フィルター",
             "TimeDimension": "時間ディメンション",
-            "AvailableDimensions": "利用可能なディメンション"
+            "AvailableDimensions": "利用可能なディメンション",
+            "FromColumns": "参照元列（カンマ区切り）",
+            "ToColumns": "参照先列（カンマ区切り）",
+            "Dialect": "SQL 方言",
+            "AiContext": "AI コンテキスト",
+            "AiInstructions": "AI 指示",
+            "AiSynonyms": "AI 同義語（カンマ区切り）",
+            "AiExamples": "AI 例（1行に1件）"
         },
         "AiOperations": {
             "GenerateDefinitions": "ナレッジ定義を生成",
@@ -4403,7 +4410,13 @@
             "Title": "使用したコンテキスト",
             "Description": "この分析の解釈のために Agent が明示的に読んだナレッジとアセットです。",
             "Table": "テーブル",
-            "Kinds": { "artifact": "Artifact", "knowledge_definition": "定義", "knowledge_source": "ナレッジソース", "verified_query": "検証済みクエリ" }
+            "Kinds": {
+                "artifact": "Artifact",
+                "knowledge_definition": "定義",
+                "knowledge_source": "ナレッジソース",
+                "verified_query": "検証済みクエリ",
+                "semantic_model": "セマンティックモデル"
+            }
         },
         "Trace": {
             "Title": "Agent が結論に至るまで",

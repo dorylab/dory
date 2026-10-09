@@ -208,71 +208,8 @@
     {
       "idx": 29,
       "version": "7",
-      "when": 1788859254000,
-      "tag": "0030_semantic_context",
-      "breakpoints": true
-    },
-    {
-      "idx": 30,
-      "version": "7",
-      "when": 1788945600000,
-      "tag": "0031_semantic_models",
-      "breakpoints": true
-    },
-    {
-      "idx": 31,
-      "version": "7",
-      "when": 1788949200000,
-      "tag": "0032_semantic_knowledge_sources",
-      "breakpoints": true
-    },
-    {
-      "idx": 32,
-      "version": "7",
-      "when": 1788949800000,
-      "tag": "0033_knowledge",
-      "breakpoints": true
-    },
-    {
-      "idx": 33,
-      "version": "7",
-      "when": 1788950400000,
-      "tag": "0034_github_knowledge_connectors",
-      "breakpoints": true
-    },
-    {
-      "idx": 34,
-      "version": "7",
-      "when": 1789430400000,
-      "tag": "0035_knowledge_traceability",
-      "breakpoints": true
-    },
-    {
-      "idx": 35,
-      "version": "7",
-      "when": 1789603200000,
-      "tag": "0036_knowledge_verified_query_updater",
-      "breakpoints": true
-    },
-    {
-      "idx": 36,
-      "version": "7",
-      "when": 1789689600000,
-      "tag": "0037_agent_assets",
-      "breakpoints": true
-    },
-    {
-      "idx": 37,
-      "version": "7",
-      "when": 1789776000000,
-      "tag": "0038_agent_activities",
-      "breakpoints": true
-    },
-    {
-      "idx": 38,
-      "version": "7",
-      "when": 1789987200000,
-      "tag": "0039_agent_run_finding_presentation",
+      "when": 1791518400000,
+      "tag": "0030_knowledge_and_agent_context",
       "breakpoints": true
     }
   ]

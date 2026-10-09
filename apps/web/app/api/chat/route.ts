@@ -28,6 +28,7 @@ import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import type { ConnectionType } from '@dory/shared/types/connections';
 import type { Locale } from '@dory/i18n/routing';
+import { recordSemanticModelUsage } from '@/lib/server/semantic-model-context';
 
 export const runtime = 'nodejs';
 
@@ -307,7 +308,30 @@ async function handleChatRequest(req: Request) {
         candidateTables,
         copilotEnvelope,
         locale,
+        question: currentUserText,
     });
+    if (db && userId && organizationId && connectionId && chatId && agentContext.semanticModelsUsed.length) {
+        try {
+            const work = await db.works.resolve({
+                organizationId,
+                userId,
+                tokenId: null,
+                connectionId,
+                externalSessionId: `chat:${chatId}`,
+                title: sessionTitle ?? 'Chat Agent Run',
+                metadata: { chatId, source: 'internal_chat' },
+            });
+            await recordSemanticModelUsage(db, {
+                organizationId,
+                userId,
+                workId: work.workId,
+                connectionId,
+                models: agentContext.semanticModelsUsed,
+            });
+        } catch (error) {
+            console.error('[chat] failed to record semantic model context', error);
+        }
+    }
     const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
     const agentInstructions = [agentContext.instructions, currentTurnExecutionInstruction].filter(Boolean).join('\n\n');
 

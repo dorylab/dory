@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
-import { parseDocument, stringify } from 'yaml';
+import { parseDocument } from 'yaml';
 
 import { getClient } from '@dory/database/postgres/client';
 import {
@@ -18,9 +18,23 @@ import {
     type KnowledgeSourceRelationType,
     type KnowledgeSourceFormat,
     type KnowledgeModelDocument,
+    OSSIE_VERSION,
+    type OssieDocumentV011,
 } from '@dory/database/postgres/schemas';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
+import {
+    applyKnowledgeDefinitions,
+    createOssieDocument,
+    markOssieDefinitionsUnverified,
+    ossieBusinessContext,
+    ossieRevision,
+    parseOssieYaml,
+    projectOssieDocument,
+    serializeOssieDocument,
+    updateOssieMetadata,
+    validateOssieDocument,
+} from './ossie';
 
 export const KNOWLEDGE_SOURCE_MAX_BYTES = 10_000_000;
 export type KnowledgeModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
@@ -32,6 +46,9 @@ export type KnowledgeModelDetail = {
     businessContextMd: string;
     modelYaml: string;
     model: KnowledgeModelDocument;
+    ossieVersion: typeof OSSIE_VERSION;
+    modelRevision: string;
+    ossieDocument: OssieDocumentV011;
     dataSources: KnowledgeModelDataSourceDetail[];
     verifiedQueryCount: number;
     knowledgeSourceCount: number;
@@ -119,6 +136,10 @@ function normalizeDefinition(value: unknown): KnowledgeDefinition {
         ...(list('dimensions') ? { dimensions: list('dimensions') } : {}),
         ...(optional('from') ? { from: optional('from') } : {}),
         ...(optional('to') ? { to: optional('to') } : {}),
+        ...(list('fromColumns') ? { fromColumns: list('fromColumns') } : {}),
+        ...(list('toColumns') ? { toColumns: list('toColumns') } : {}),
+        ...(input.aiContext ? { aiContext: input.aiContext as KnowledgeDefinition['aiContext'] } : {}),
+        ...(optional('dialect') ? { dialect: optional('dialect') as KnowledgeDefinition['dialect'] } : {}),
     };
 }
 
@@ -143,11 +164,16 @@ export function validateKnowledgeModelDocument(value: unknown, sourceIds?: Reado
     );
     for (const definition of definitions) {
         if (definition.kind !== 'relationship') continue;
-        if (!definition.from || !definition.to) throw new Error(`Relationship "${definition.name}" requires both from and to references.`);
+        if (!definition.from || !definition.to || !definition.fromColumns?.length || !definition.toColumns?.length) {
+            throw new Error(`Relationship "${definition.name}" requires datasets and column mappings.`);
+        }
+        if (definition.fromColumns.length !== definition.toColumns.length) throw new Error(`Relationship "${definition.name}" must have matching column mappings.`);
         const from = references.get(definition.from);
         const to = references.get(definition.to);
-        if (!from || !to) throw new Error(`Relationship "${definition.name}" references an unknown definition.`);
-        if (from.sourceConnectionId !== definition.sourceConnectionId || to.sourceConnectionId !== definition.sourceConnectionId) {
+        const fromEntity = from ?? definitions.find(item => item.kind === 'entity' && item.name === definition.from);
+        const toEntity = to ?? definitions.find(item => item.kind === 'entity' && item.name === definition.to);
+        if (!fromEntity || !toEntity) throw new Error(`Relationship "${definition.name}" references an unknown dataset.`);
+        if (fromEntity.sourceConnectionId !== definition.sourceConnectionId || toEntity.sourceConnectionId !== definition.sourceConnectionId) {
             throw new Error(`Relationship "${definition.name}" cannot cross data sources.`);
         }
     }
@@ -155,141 +181,19 @@ export function validateKnowledgeModelDocument(value: unknown, sourceIds?: Reado
 }
 
 export function serializeKnowledgeModel(model: KnowledgeModelDocument) {
-    const groups = new Map<string, KnowledgeDefinition[]>();
-    for (const definition of model.definitions) {
-        const key = `${definition.sourceConnectionId}:${definition.source ?? '__model__'}`;
-        groups.set(key, [...(groups.get(key) ?? []), definition]);
-    }
-    const cubes = [...groups.values()].map((definitions, index) => {
-        const first = definitions[0]!;
-        const cubeName = (first.source ?? `knowledge_source_${index + 1}`).replace(/[^a-zA-Z0-9_]/g, '_');
-        const encode = (definition: KnowledgeDefinition) => ({
-            name: definition.name,
-            ...(definition.description ? { description: definition.description } : {}),
-            ...(definition.expression ? { sql: definition.expression } : {}),
-            meta: {
-                dory: {
-                    id: definition.id,
-                    kind: definition.kind,
-                    status: definition.status,
-                    sourceConnectionId: definition.sourceConnectionId,
-                    aliases: definition.aliases,
-                    filters: definition.filters,
-                    timeDimension: definition.timeDimension,
-                    dimensions: definition.dimensions,
-                },
-            },
-        });
-        return {
-            name: cubeName,
-            ...(first.source ? { sql_table: first.source } : {}),
-            meta: {
-                dory: {
-                    sourceConnectionId: first.sourceConnectionId,
-                    entities: definitions.filter(definition => definition.kind === 'entity').map(encode),
-                },
-            },
-            measures: definitions.filter(definition => definition.kind === 'metric' || definition.kind === 'measure').map(encode),
-            dimensions: definitions.filter(definition => definition.kind === 'dimension').map(encode),
-            joins: definitions.filter(definition => definition.kind === 'relationship').map(definition => ({ ...encode(definition), from: definition.from, to: definition.to })),
-        };
-    });
-    return stringify({ cubes });
+    const first = model.definitions.find(item => item.kind === 'entity') ?? model.definitions[0];
+    if (!first) throw new Error('Apache Ossie 0.1.1 requires at least one dataset.');
+    return serializeOssieDocument(applyKnowledgeDefinitions(createOssieDocument('knowledge_model', null, first.sourceConnectionId), model.definitions));
 }
 
 export function parseKnowledgeYaml(source: string, fallbackSourceConnectionId?: string, markImportedDefinitionsUnverified = true): KnowledgeModelDocument {
-    const document = parseDocument(source);
-    if (document.errors.length) throw new Error(document.errors[0]?.message ?? 'Invalid YAML.');
-    const value = document.toJS() as { cubes?: Array<Record<string, unknown>>; definitions?: Array<Record<string, unknown>> };
-    if (value.definitions) {
-        return validateKnowledgeModelDocument({
-            definitions: value.definitions.map(item => ({
-                ...item,
-                sourceConnectionId: item.sourceConnectionId ?? fallbackSourceConnectionId,
-                status: markImportedDefinitionsUnverified ? 'unverified' : item.status,
-            })),
-        });
-    }
-    const hasJoins = (value.cubes ?? []).some(cube => {
-        const joins = cube.joins;
-        return Array.isArray(joins) ? joins.length > 0 : Boolean(joins && typeof joins === 'object' && Object.keys(joins).length);
-    });
-    const definitions = (value.cubes ?? []).flatMap((cube, cubeIndex) => {
-        const cubeDory = (cube.meta as { dory?: Record<string, unknown> } | undefined)?.dory ?? {};
-        const sourceConnectionId = String(cubeDory.sourceConnectionId ?? fallbackSourceConnectionId ?? '');
-        const sourceTable = typeof cube.sql_table === 'string' ? cube.sql_table : typeof cube.sqlTable === 'string' ? cube.sqlTable : String(cube.name ?? '');
-        const decode = (item: Record<string, unknown>, defaultKind: KnowledgeDefinition['kind']) => {
-            const dory = (item.meta as { dory?: Record<string, unknown> } | undefined)?.dory ?? {};
-            return {
-                ...item,
-                id: dory.id ?? item.id ?? `${defaultKind}:${cubeIndex}:${String(item.name ?? '')}`,
-                kind: dory.kind ?? defaultKind,
-                sourceConnectionId: dory.sourceConnectionId ?? sourceConnectionId,
-                source: sourceTable,
-                expression: item.expression ?? item.sql,
-                aliases: dory.aliases,
-                filters: dory.filters,
-                timeDimension: dory.timeDimension,
-                dimensions: dory.dimensions,
-                status: markImportedDefinitionsUnverified ? 'unverified' : (dory.status ?? item.status),
-            };
-        };
-        const asRecords = (input: unknown) =>
-            Array.isArray(input)
-                ? input
-                : input && typeof input === 'object'
-                  ? Object.entries(input as Record<string, unknown>).map(([name, item]) => ({ name, ...(item as object) }))
-                  : [];
-        const encodedEntities = asRecords(cubeDory.entities);
-        const entities = encodedEntities.length
-            ? encodedEntities.map(item => decode(item, 'entity'))
-            : hasJoins
-              ? [
-                    {
-                        id: `entity:${String(cube.name ?? cubeIndex)}`,
-                        name: String(cube.name ?? `cube_${cubeIndex + 1}`),
-                        kind: 'entity' as const,
-                        status: markImportedDefinitionsUnverified ? ('unverified' as const) : 'verified',
-                        sourceConnectionId,
-                        source: sourceTable,
-                    },
-                ]
-              : [];
-        const measures = asRecords(cube.measures).map(item => decode(item, 'measure'));
-        const dimensions = asRecords(cube.dimensions).map(item => decode(item, 'dimension'));
-        const relationships = asRecords(cube.joins).map(item => ({ ...decode(item, 'relationship'), from: item.from ?? cube.name, to: item.to ?? item.name }));
-        return [...entities, ...measures, ...dimensions, ...relationships];
-    });
-    return validateKnowledgeModelDocument({ definitions });
+    const parsed = parseOssieYaml(source);
+    const document = markImportedDefinitionsUnverified ? markOssieDefinitionsUnverified(parsed, fallbackSourceConnectionId) : parsed;
+    return validateKnowledgeModelDocument(projectOssieDocument(document, fallbackSourceConnectionId));
 }
 
 export function parseKnowledgeSourceYaml(source: string, fallbackSourceConnectionId?: string) {
-    const definitions = parseKnowledgeYaml(source, fallbackSourceConnectionId).definitions;
-    const document = parseDocument(source);
-    if (document.errors.length) throw new Error(document.errors[0]?.message ?? 'Invalid YAML.');
-    const value = document.toJS() as { verifiedQueries?: Array<Record<string, unknown>> };
-    const verifiedQueries: KnowledgeSourceVerifiedQueryImport[] = (Array.isArray(value.verifiedQueries) ? value.verifiedQueries : []).map((item, index) => {
-        const title = typeof item.title === 'string' ? item.title.trim() : '';
-        const question = typeof item.question === 'string' ? item.question.trim() : '';
-        const sql = typeof item.sql === 'string' ? item.sql.trim() : '';
-        if (!title || !question || !sql) throw new Error(`Verified query ${index + 1} requires title, question, and sql.`);
-        return {
-            ...(typeof item.id === 'string' && item.id.trim() ? { id: item.id.trim() } : {}),
-            ...(typeof item.sourceConnectionId === 'string' && item.sourceConnectionId.trim()
-                ? { sourceConnectionId: item.sourceConnectionId.trim() }
-                : fallbackSourceConnectionId
-                  ? { sourceConnectionId: fallbackSourceConnectionId }
-                  : {}),
-            title,
-            question,
-            sql,
-            ...(typeof item.description === 'string' && item.description.trim() ? { description: item.description.trim() } : {}),
-            definitionIds: Array.isArray(item.definitionIds)
-                ? item.definitionIds.filter((id): id is string => typeof id === 'string' && Boolean(id.trim())).map(id => id.trim())
-                : [],
-        };
-    });
-    return { definitions, verifiedQueries };
+    return { definitions: parseKnowledgeYaml(source, fallbackSourceConnectionId).definitions, verifiedQueries: [] as KnowledgeSourceVerifiedQueryImport[] };
 }
 
 export class PostgresKnowledgeRepository {
@@ -368,13 +272,19 @@ export class PostgresKnowledgeRepository {
             ? await this.db.select({ knowledgeModelId: knowledgeSources.knowledgeModelId }).from(knowledgeSources).where(inArray(knowledgeSources.knowledgeModelId, ids))
             : [];
         return rows.map(row => {
-            const model = validateKnowledgeModelDocument(row.modelJson);
+            const ossieDocument = validateOssieDocument(row.modelJson);
+            const model = validateKnowledgeModelDocument(projectOssieDocument(ossieDocument));
             const modelDataSources = dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source);
             const verifiedQueryCount = verified.filter(queryRow => queryRow.knowledgeModelId === row.id).length;
             const verifiedDefinitions = model.definitions.filter(definition => definition.status === 'verified' && definition.kind !== 'relationship');
             return {
                 ...row,
+                businessContextMd: ossieBusinessContext(ossieDocument),
+                modelYaml: serializeOssieDocument(ossieDocument),
                 model,
+                ossieVersion: OSSIE_VERSION,
+                modelRevision: ossieRevision(ossieDocument),
+                ossieDocument,
                 dataSources: modelDataSources,
                 verifiedQueryCount,
                 knowledgeSourceCount: sourceRows.filter(source => source.knowledgeModelId === row.id).length,
@@ -393,22 +303,39 @@ export class PostgresKnowledgeRepository {
 
     async createModel(input: { organizationId: string; name: string; description?: string | null; connectionIds: string[] }) {
         const connectionIds = await this.assertConnections(input.organizationId, input.connectionIds);
+        const ossieDocument = createOssieDocument(input.name, input.description, connectionIds[0]!);
         const [model] = await this.db
             .insert(knowledgeModels)
-            .values({ organizationId: input.organizationId, name: input.name.trim(), description: input.description?.trim() || null })
+            .values({
+                organizationId: input.organizationId,
+                name: input.name.trim(),
+                description: input.description?.trim() || null,
+                modelJson: ossieDocument,
+                modelYaml: serializeOssieDocument(ossieDocument),
+            })
             .returning();
         await this.db.insert(knowledgeModelSources).values(connectionIds.map(connectionId => ({ knowledgeModelId: model!.id, connectionId })));
         return this.getModel({ organizationId: input.organizationId, knowledgeModelId: model!.id });
     }
 
-    async updateModel(input: { organizationId: string; knowledgeModelId: string; name?: string; description?: string | null; businessContextMd?: string }) {
-        await this.getModel(input);
+    async updateModel(input: {
+        organizationId: string;
+        knowledgeModelId: string;
+        name?: string;
+        description?: string | null;
+        businessContextMd?: string;
+        aiContext?: { instructions?: string; synonyms?: string[]; examples?: string[] };
+    }) {
+        const model = await this.getModel(input);
+        const ossieDocument = updateOssieMetadata(model.ossieDocument, input);
         await this.db
             .update(knowledgeModels)
             .set({
                 ...(input.name !== undefined ? { name: input.name.trim() } : {}),
                 ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
-                ...(input.businessContextMd !== undefined ? { businessContextMd: input.businessContextMd } : {}),
+                ...(input.businessContextMd !== undefined || input.aiContext !== undefined ? { businessContextMd: ossieBusinessContext(ossieDocument) } : {}),
+                modelJson: ossieDocument,
+                modelYaml: serializeOssieDocument(ossieDocument),
             })
             .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
         return this.getModel(input);
@@ -422,9 +349,10 @@ export class PostgresKnowledgeRepository {
     async saveDefinitions(input: { organizationId: string; knowledgeModelId: string; definitions: unknown }) {
         const model = await this.getModel(input);
         const document = validateKnowledgeModelDocument({ definitions: input.definitions }, new Set(model.dataSources.map(source => source.connectionId)));
+        const ossieDocument = applyKnowledgeDefinitions(model.ossieDocument, document.definitions);
         await this.db
             .update(knowledgeModels)
-            .set({ modelJson: document, modelYaml: serializeKnowledgeModel(document) })
+            .set({ modelJson: ossieDocument, modelYaml: serializeOssieDocument(ossieDocument), businessContextMd: ossieBusinessContext(ossieDocument) })
             .where(eq(knowledgeModels.id, model.id));
         const definitionIds = document.definitions.map(definition => definition.id);
         const linkedDefinitions = await this.db
@@ -509,8 +437,25 @@ export class PostgresKnowledgeRepository {
     }
 
     async importYaml(input: { organizationId: string; knowledgeModelId: string; source: string; fallbackSourceConnectionId?: string; preserveStatus?: boolean }) {
-        const document = parseKnowledgeYaml(input.source, input.fallbackSourceConnectionId, !input.preserveStatus);
-        return this.saveDefinitions({ ...input, definitions: document.definitions });
+        const model = await this.getModel(input);
+        const parsed = parseOssieYaml(input.source);
+        const ossieDocument = input.preserveStatus ? parsed : markOssieDefinitionsUnverified(parsed, input.fallbackSourceConnectionId);
+        const projected = validateKnowledgeModelDocument(
+            projectOssieDocument(ossieDocument, input.fallbackSourceConnectionId),
+            new Set(model.dataSources.map(source => source.connectionId)),
+        );
+        const normalized = applyKnowledgeDefinitions(ossieDocument, projected.definitions);
+        await this.db
+            .update(knowledgeModels)
+            .set({
+                name: normalized.semantic_model[0].name,
+                description: normalized.semantic_model[0].description ?? null,
+                businessContextMd: ossieBusinessContext(normalized),
+                modelJson: normalized,
+                modelYaml: serializeOssieDocument(normalized),
+            })
+            .where(eq(knowledgeModels.id, model.id));
+        return this.getModel(input);
     }
 
     async addDataSource(input: { organizationId: string; knowledgeModelId: string; connectionId: string }) {

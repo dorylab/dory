@@ -18,6 +18,7 @@ import {
     knowledgeModelOutputSchema,
     knowledgeVerifiedQuerySchema,
     knowledgeSourceRelationTypeSchema,
+    ossieAiContextObjectSchema,
 } from './shared';
 
 const modelIdInput = z.object({ knowledgeModelId: z.string().min(1) });
@@ -74,6 +75,7 @@ export const knowledgeUpdateAction = defineWebAction({
         name: z.string().trim().min(1).max(160).optional(),
         description: z.string().max(4000).nullable().optional(),
         businessContextMd: z.string().max(100_000).optional(),
+        aiContext: ossieAiContextObjectSchema.optional(),
     }),
     outputSchema: knowledgeModelOutputSchema,
     permissions: writeWorkspace,

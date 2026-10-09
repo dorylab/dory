@@ -281,7 +281,13 @@ export default async function AgentRunDetailPage({
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             {agentAssetUsage.map(item => {
-                                const asset = item.assetSnapshot as { title?: string; knowledgeModelName?: string; deepLink?: string };
+                                const asset = item.assetSnapshot as {
+                                    title?: string;
+                                    knowledgeModelName?: string;
+                                    deepLink?: string;
+                                    ossieVersion?: string;
+                                    modelRevision?: string;
+                                };
                                 const content = (
                                     <>
                                         <BrainCircuit className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -290,6 +296,8 @@ export default async function AgentRunDetailPage({
                                             <span className="block truncate text-xs text-muted-foreground">
                                                 {t(`Context.Kinds.${item.assetKind}`)}
                                                 {asset.knowledgeModelName ? ` · ${asset.knowledgeModelName}` : ''}
+                                                {asset.ossieVersion ? ` · Ossie ${asset.ossieVersion}` : ''}
+                                                {asset.modelRevision ? ` · rev ${asset.modelRevision.slice(0, 8)}` : ''}
                                             </span>
                                         </span>
                                     </>

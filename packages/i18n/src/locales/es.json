@@ -3853,12 +3853,12 @@
         "ModelActions": "Acciones del modelo de conocimiento",
         "ViewYaml": "Ver YAML",
         "ImportYaml": "Importar YAML",
-        "ModelYaml": "YAML del modelo",
-        "ModelYamlDescription": "Los cambios se validan antes de actualizar el modelo de conocimiento.",
+        "ModelYaml": "YAML de Apache Ossie 0.1.1",
+        "ModelYamlDescription": "Los cambios se validan con Apache Ossie 0.1.1 antes de actualizar el modelo.",
         "SaveYaml": "Guardar YAML",
         "YamlSaved": "YAML guardado.",
-        "ImportYamlTitle": "Importar YAML compatible con Cube",
-        "ImportYamlDescription": "Las definiciones sin meta.dory.sourceConnectionId usarán la fuente de datos seleccionada y seguirán sin verificar hasta su revisión.",
+        "ImportYamlTitle": "Importar YAML de Apache Ossie 0.1.1",
+        "ImportYamlDescription": "El documento debe contener exactamente un semantic_model. Las definiciones sin metadatos de conexión de Dory usan la fuente seleccionada.",
         "UploadYamlFile": "Subir archivo YAML",
         "UploadYamlHint": "Arrastra aquí un archivo .yaml o .yml, o haz clic para elegirlo. Tamaño máximo: 10 MB.",
         "YamlPreview": "Vista previa",
@@ -3962,7 +3962,14 @@
             "Calculation": "Expresión de cálculo",
             "Filters": "Filtros",
             "TimeDimension": "Dimensión temporal",
-            "AvailableDimensions": "Dimensiones disponibles"
+            "AvailableDimensions": "Dimensiones disponibles",
+            "FromColumns": "Columnas de origen (separadas por comas)",
+            "ToColumns": "Columnas de destino (separadas por comas)",
+            "Dialect": "Dialecto SQL",
+            "AiContext": "Contexto de IA",
+            "AiInstructions": "Instrucciones de IA",
+            "AiSynonyms": "Sinónimos de IA (separados por comas)",
+            "AiExamples": "Ejemplos de IA (uno por línea)"
         },
         "AiOperations": {
             "GenerateDefinitions": "Generar definiciones de conocimiento",
@@ -4397,7 +4404,13 @@
             "Title": "Contexto utilizado",
             "Description": "Conocimiento y activos que el Agent leyó explícitamente para interpretar este análisis.",
             "Table": "Tabla",
-            "Kinds": { "artifact": "Artifact", "knowledge_definition": "Definición", "knowledge_source": "Fuente de conocimiento", "verified_query": "Consulta verificada" }
+            "Kinds": {
+                "artifact": "Artifact",
+                "knowledge_definition": "Definición",
+                "knowledge_source": "Fuente de conocimiento",
+                "verified_query": "Consulta verificada",
+                "semantic_model": "Modelo semántico"
+            }
         },
         "Trace": {
             "Title": "Cómo llegó el Agent",

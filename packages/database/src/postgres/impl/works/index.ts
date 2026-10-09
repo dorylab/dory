@@ -7,16 +7,12 @@ import {
     artifacts,
     findingArtifacts,
     findings,
-    knowledgeModels,
-    knowledgeSources,
-    knowledgeVerifiedQueries,
     queryRuns,
     resultSets as resultSetsTable,
     tabs,
     workChartStates,
     workEvents,
     workAgentAssets,
-    workKnowledgeAssets,
     workQueryResultSets,
     workQuerySessions,
     works,
@@ -44,7 +40,6 @@ const DEFAULT_WORK_TITLE = 'Agent Run';
 export type WorkRecord = typeof works.$inferSelect;
 export type WorkEventRecord = typeof workEvents.$inferSelect;
 export type AgentActivityRecord = typeof agentActivities.$inferSelect;
-export type WorkKnowledgeAssetUsage = typeof workKnowledgeAssets.$inferSelect & { available: boolean };
 export type WorkAgentAssetUsage = typeof workAgentAssets.$inferSelect;
 
 export type WorkListPage = {
@@ -85,23 +80,13 @@ export type WorkEventCreateInput = {
 
 export type AgentActivityCreateInput = Omit<WorkEventCreateInput, 'workId'>;
 
-export type WorkKnowledgeAssetUsageInput = {
-    workId: string;
-    organizationId: string;
-    userId: string;
-    knowledgeModelId: string;
-    assetType: 'definition' | 'verified_query' | 'source';
-    assetId: string;
-    assetSnapshot: Record<string, unknown>;
-};
-
 export type WorkAgentAssetUsageInput = {
     workId: string;
     organizationId: string;
     userId: string;
     principalType?: 'user' | 'service';
     principalId?: string | null;
-    assetKind: 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source';
+    assetKind: 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'semantic_model';
     assetRef: string;
     revision: string;
     assetSnapshot: Record<string, unknown>;
@@ -591,68 +576,6 @@ export class PostgresWorksRepository {
         return row as AgentActivityRecord;
     }
 
-    async recordKnowledgeAssetUsage(input: WorkKnowledgeAssetUsageInput) {
-        const work = await this.getById({ organizationId: input.organizationId, userId: input.userId, workId: input.workId });
-        if (!work) throw new Error('Agent Run not found.');
-        const [row] = await this.db
-            .insert(workKnowledgeAssets)
-            .values(input)
-            .onConflictDoUpdate({
-                target: [workKnowledgeAssets.workId, workKnowledgeAssets.assetType, workKnowledgeAssets.assetId],
-                set: {
-                    assetSnapshot: input.assetSnapshot,
-                    useCount: sql`${workKnowledgeAssets.useCount} + 1`,
-                    lastUsedAt: new Date(),
-                },
-            })
-            .returning();
-        await this.touch(input.workId);
-        return row!;
-    }
-
-    async recordKnowledgeAssetUsageEvent(input: WorkKnowledgeAssetUsageInput, event: Omit<WorkEventCreateInput, 'workId' | 'organizationId' | 'userId'>) {
-        const work = await this.getById({ organizationId: input.organizationId, userId: input.userId, workId: input.workId });
-        if (!work) throw new Error('Agent Run not found.');
-        const now = new Date();
-        const row = await this.db.transaction(async tx => {
-            await tx
-                .insert(workKnowledgeAssets)
-                .values(input)
-                .onConflictDoUpdate({
-                    target: [workKnowledgeAssets.workId, workKnowledgeAssets.assetType, workKnowledgeAssets.assetId],
-                    set: {
-                        assetSnapshot: input.assetSnapshot,
-                        useCount: sql`${workKnowledgeAssets.useCount} + 1`,
-                        lastUsedAt: now,
-                    },
-                });
-            const [eventRow] = await tx
-                .insert(workEvents)
-                .values({
-                    workId: input.workId,
-                    organizationId: input.organizationId,
-                    userId: input.userId,
-                    principalType: work.principalType,
-                    principalId: work.principalId ?? work.userId,
-                    tokenId: event.tokenId ?? null,
-                    connectionId: event.connectionId ?? null,
-                    toolName: event.toolName,
-                    actionId: event.actionId ?? null,
-                    status: event.status,
-                    inputSummary: event.inputSummary ?? null,
-                    outputSummary: event.outputSummary ?? null,
-                    errorCode: event.errorCode ?? null,
-                    errorMessage: event.errorMessage ?? null,
-                    durationMs: Math.max(0, Math.round(event.durationMs ?? 0)),
-                })
-                .returning();
-            await tx.update(works).set({ updatedAt: now, lastActiveAt: now }).where(eq(works.workId, input.workId));
-            return eventRow!;
-        });
-        await this.appendAgentRunEvent({ ...event, ...input }, row);
-        return row;
-    }
-
     async recordAgentAssetUsageEvent(input: WorkAgentAssetUsageInput, event: Omit<WorkEventCreateInput, 'workId' | 'organizationId' | 'userId'>) {
         const work = await this.getById({ organizationId: input.organizationId, userId: input.userId, workId: input.workId });
         if (!work) throw new Error('Agent Run not found.');
@@ -710,37 +633,6 @@ export class PostgresWorksRepository {
             .where(and(eq(workAgentAssets.organizationId, input.organizationId), eq(workAgentAssets.userId, input.userId), eq(workAgentAssets.workId, input.workId)))
             .orderBy(desc(workAgentAssets.lastUsedAt));
     }
-
-
-    async listKnowledgeAssetUsage(input: { organizationId: string; userId: string; workId: string }): Promise<WorkKnowledgeAssetUsage[]> {
-        const work = await this.getById(input);
-        if (!work) return [];
-        const rows = await this.db
-            .select()
-            .from(workKnowledgeAssets)
-            .where(and(eq(workKnowledgeAssets.organizationId, input.organizationId), eq(workKnowledgeAssets.userId, input.userId), eq(workKnowledgeAssets.workId, input.workId)))
-            .orderBy(desc(workKnowledgeAssets.lastUsedAt));
-        if (!rows.length) return [];
-        const modelIds = [...new Set(rows.map(row => row.knowledgeModelId))];
-        const [models, sources, queries] = await Promise.all([
-            this.db.select({ id: knowledgeModels.id, modelJson: knowledgeModels.modelJson }).from(knowledgeModels).where(inArray(knowledgeModels.id, modelIds)),
-            this.db.select({ id: knowledgeSources.id }).from(knowledgeSources).where(inArray(knowledgeSources.knowledgeModelId, modelIds)),
-            this.db.select({ id: knowledgeVerifiedQueries.id }).from(knowledgeVerifiedQueries).where(inArray(knowledgeVerifiedQueries.knowledgeModelId, modelIds)),
-        ]);
-        const definitionIds = new Set(
-            models.flatMap(model => {
-                const document = model.modelJson as { definitions?: Array<{ id?: unknown }> };
-                return (document.definitions ?? []).flatMap(definition => (typeof definition.id === 'string' ? [definition.id] : []));
-            }),
-        );
-        const sourceIds = new Set(sources.map(source => source.id));
-        const queryIds = new Set(queries.map(query => query.id));
-        return rows.map(row => ({
-            ...row,
-            available: row.assetType === 'definition' ? definitionIds.has(row.assetId) : row.assetType === 'source' ? sourceIds.has(row.assetId) : queryIds.has(row.assetId),
-        }));
-    }
-
     async finishWithSummary(input: WorkFinishInput): Promise<WorkRecord> {
         this.assertInited();
         const existing = await this.getById({

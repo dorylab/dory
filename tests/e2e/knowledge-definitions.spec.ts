@@ -14,8 +14,10 @@ const definition = {
     sourceConnectionId: 'connection-1',
     source: 'trips',
     expression: 'trip_distance',
+    dialect: 'ANSI_SQL' as const,
     description: 'Distance of the trip in miles.',
     aliases: ['distance'],
+    aiContext: { instructions: 'Use positive trip distance.', synonyms: ['distance'], examples: ['Average trip distance'] },
     filters: ['trip_distance > 0'],
     timeDimension: 'pickup_datetime',
     dimensions: ['pickup_location_id'],
@@ -27,7 +29,13 @@ let model = {
     name: 'Taxi knowledge',
     description: null,
     businessContextMd: '',
-    modelYaml: '',
+    modelYaml: 'version: 0.1.1\nsemantic_model:\n  - name: taxi_knowledge\n    datasets:\n      - name: trips\n        source: trips\n',
+    ossieVersion: '0.1.1' as const,
+    modelRevision: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    ossieDocument: {
+        version: '0.1.1',
+        semantic_model: [{ name: 'taxi_knowledge', datasets: [{ name: 'trips', source: 'trips' }], metrics: [], relationships: [] }],
+    },
     model: { definitions: [definition] },
     dataSources: [{ connectionId: 'connection-1', name: 'Taxi data', type: 'postgres', engine: 'postgres' }],
     verifiedQueryCount: 0,
@@ -97,6 +105,7 @@ test('knowledge overview separates readiness from verified query coverage', asyn
     await expect(page.getByText('Business context and rules', { exact: true })).toBeVisible();
     await expect(page.getByText('Business semantics', { exact: true })).toBeVisible();
     await expect(page.getByText('Trusted query patterns', { exact: true })).toBeVisible();
+    await expect(page.getByText('Apache Ossie 0.1.1 · rev 01234567', { exact: true })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
@@ -179,6 +188,8 @@ test('knowledge definitions open an editor and save an update', async ({ page })
             filters: ['trip_distance > 0'],
             timeDimension: 'pickup_datetime',
             dimensions: ['pickup_location_id'],
+            dialect: 'ANSI_SQL',
+            aiContext: { instructions: 'Use positive trip distance.', synonyms: ['distance'], examples: ['Average trip distance'] },
         },
     });
     await expect(page.getByRole('dialog', { name: 'Edit definition' })).toBeHidden();

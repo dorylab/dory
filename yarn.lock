@@ -3062,6 +3062,7 @@ __metadata:
     "@electric-sql/pglite": "npm:^0.4.3"
     "@types/node": "npm:^25.5.2"
     "@types/pg": "npm:^8.20.0"
+    ajv: "npm:^8.18.0"
     drizzle-orm: "npm:^0.45.2"
     pg: "npm:^8.20.0"
     typescript: "npm:^6.0.2"

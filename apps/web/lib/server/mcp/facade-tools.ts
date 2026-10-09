@@ -8,13 +8,14 @@ import { executeAction } from '@/lib/actions/server/execute';
 import { webActionRegistry } from '@/lib/actions/server/registry';
 import type { WebActionServices } from '@/lib/actions/server/types';
 import type { WorkEventCreateInput, WorkSqlSnapshotPayload } from '@dory/database/postgres/impl/works';
+import { recordSemanticModelUsage, resolveSemanticModelContext, type SemanticModelContextResult } from '@/lib/server/semantic-model-context';
 
 const DEFAULT_APPEND_SEPARATOR = '\n\n';
 const DEFAULT_WORK_TITLE = 'Agent Run';
 const MAX_WORK_TITLE_LENGTH = 240;
 const MAX_SHORT_WORK_TITLE_LENGTH = 64;
 const WORK_CONTEXT_INSTRUCTION =
-    'Call dory_create_work before SQL, SQL workspace, or saved-query tools, then pass the returned work.workId as workId. Asset, Knowledge, and schema reads can run without a workId.';
+    'Call dory_create_work with connectionId and the original userQuestion before SQL, SQL workspace, or saved-query tools. Read its semanticContext before planning SQL, then pass the returned work.workId to later tools. Asset, Knowledge, and schema reads can run without a workId.';
 
 const workResolutionInputSchema = z.object({
     workId: z.string().min(1).optional(),
@@ -229,7 +230,10 @@ const finishWorkInputSchema = z
                                 metricUnit: z.string().min(1).max(80).optional(),
                                 timeframe: z.string().min(1).max(240).optional(),
                                 dimensions: z.array(z.string().min(1).max(160)).max(8).optional(),
-                                facts: z.array(z.object({ label: z.string().min(1).max(160), value: z.string().min(1).max(240) })).max(3).optional(),
+                                facts: z
+                                    .array(z.object({ label: z.string().min(1).max(160), value: z.string().min(1).max(240) }))
+                                    .max(3)
+                                    .optional(),
                             })
                             .optional(),
                         isPrimary: z.boolean().optional(),
@@ -1312,6 +1316,44 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         inputSummary: ctx.services.db.works.summarizeInput(input),
         outputSummary: { workId: work.workId },
     });
+    let semantic: SemanticModelContextResult = { context: null, models: [] };
+    const question = getString(input.userQuestion) ?? getString(input.question) ?? getString(input.prompt);
+    if (work.connectionId && question) {
+        try {
+            semantic = await resolveSemanticModelContext(ctx.services.db, {
+                organizationId: ctx.organizationId,
+                connectionId: work.connectionId,
+                question,
+            });
+            if (semantic.models.length) {
+                await recordSemanticModelUsage(ctx.services.db, {
+                    organizationId: ctx.organizationId,
+                    userId: ctx.userId,
+                    workId: work.workId,
+                    connectionId: work.connectionId,
+                    tokenId: ctx.actor.id ?? null,
+                    models: semantic.models,
+                });
+            }
+        } catch (error) {
+            try {
+                await ctx.services.db.works.recordEvent({
+                    workId: work.workId,
+                    organizationId: ctx.organizationId,
+                    userId: ctx.userId,
+                    tokenId: ctx.actor.id ?? null,
+                    connectionId: work.connectionId,
+                    toolName: 'semantic_model_context',
+                    actionId: 'knowledge.semanticContext',
+                    status: 'error',
+                    errorCode: 'SEMANTIC_CONTEXT_FAILED',
+                    errorMessage: error instanceof Error ? error.message : 'Failed to resolve semantic model context.',
+                });
+            } catch (eventError) {
+                console.error('[mcp] failed to record semantic context error', eventError);
+            }
+        }
+    }
     return {
         workId: work.workId,
         title: work.title,
@@ -1320,6 +1362,8 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         externalSessionId: work.externalSessionId,
         workspaceUrl,
         createdAt: work.createdAt instanceof Date ? work.createdAt.toISOString() : work.createdAt,
+        semanticContext: semantic.context,
+        semanticModelsUsed: semantic.models,
         work: {
             workId: work.workId,
             workspaceUrl,
@@ -1385,18 +1429,22 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
             };
             if (work && assetType && knowledgeModelId && assetId) {
                 const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId });
-                await ctx.services.db.works.recordKnowledgeAssetUsageEvent(
+                const assetKind = assetType === 'definition' ? 'knowledge_definition' : assetType === 'source' ? 'knowledge_source' : 'verified_query';
+                const pathKind = assetType === 'definition' ? 'definitions' : assetType === 'source' ? 'sources' : 'queries';
+                const assetRef = `dory://knowledge/${encodeURIComponent(knowledgeModelId)}/${pathKind}/${encodeURIComponent(assetId)}`;
+                await ctx.services.db.works.recordAgentAssetUsageEvent(
                     {
                         workId: work.workId,
                         organizationId: ctx.organizationId,
                         userId: ctx.userId,
-                        knowledgeModelId,
-                        assetType,
-                        assetId,
+                        assetKind,
+                        assetRef,
+                        revision: model.modelRevision,
                         assetSnapshot: {
-                            name: assetName ?? assetId,
-                            kind: getString(data.kind),
-                            modelName: model.name,
+                            title: assetName ?? assetId,
+                            knowledgeModelId,
+                            knowledgeModelName: model.name,
+                            deepLink: `/${encodeURIComponent(ctx.organizationId)}/knowledge/${encodeURIComponent(knowledgeModelId)}`,
                         },
                     },
                     event,
@@ -1645,7 +1693,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_create_work',
             title: 'Create Dory Work',
             description:
-                'Create or reuse one Dory Agent Run work context before SQL execution, SQL workspace edits, or Saved Query operations. Use a short title based on the user question, then pass the returned work.workId as workId to keep preceding and subsequent non-SQL context in that Run activity timeline.',
+                'Create or reuse one Dory Agent Run before database analysis. Pass connectionId and the original userQuestion, read the returned semanticContext before planning SQL, then pass work.workId to later tools. Use a short title based on the question.',
             inputSchema: createWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

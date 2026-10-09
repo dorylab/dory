@@ -23,9 +23,89 @@ export type KnowledgeDefinition = {
     dimensions?: string[];
     from?: string;
     to?: string;
+    fromColumns?: string[];
+    toColumns?: string[];
+    aiContext?: OssieAiContext;
+    dialect?: OssieDialect;
 };
 
 export type KnowledgeModelDocument = { definitions: KnowledgeDefinition[] };
+
+export const OSSIE_VERSION = '0.1.1' as const;
+export type OssieVersion = typeof OSSIE_VERSION;
+export type OssieDialect = 'ANSI_SQL' | 'SNOWFLAKE' | 'MDX' | 'TABLEAU' | 'DATABRICKS' | 'MAQL';
+export type OssieAiContext =
+    | string
+    | {
+          instructions?: string;
+          synonyms?: string[];
+          examples?: string[];
+          [key: string]: unknown;
+      };
+export type OssieCustomExtension = { vendor_name: 'COMMON' | 'SNOWFLAKE' | 'SALESFORCE' | 'DBT' | 'DATABRICKS' | 'GOODDATA'; data: string };
+export type OssieExpression = { dialects: Array<{ dialect: OssieDialect; expression: string }> };
+export type OssieField = {
+    name: string;
+    expression: OssieExpression;
+    dimension?: { is_time?: boolean };
+    label?: string;
+    description?: string;
+    ai_context?: OssieAiContext;
+    custom_extensions?: OssieCustomExtension[];
+};
+export type OssieDataset = {
+    name: string;
+    source: string;
+    primary_key?: string[];
+    unique_keys?: string[][];
+    description?: string;
+    ai_context?: OssieAiContext;
+    fields?: OssieField[];
+    custom_extensions?: OssieCustomExtension[];
+};
+export type OssieMetric = {
+    name: string;
+    expression: OssieExpression;
+    description?: string;
+    ai_context?: OssieAiContext;
+    custom_extensions?: OssieCustomExtension[];
+};
+export type OssieRelationship = {
+    name: string;
+    from: string;
+    to: string;
+    from_columns: string[];
+    to_columns: string[];
+    ai_context?: OssieAiContext;
+    custom_extensions?: OssieCustomExtension[];
+};
+export type OssieSemanticModel = {
+    name: string;
+    description?: string;
+    ai_context?: OssieAiContext;
+    datasets: OssieDataset[];
+    relationships?: OssieRelationship[];
+    metrics?: OssieMetric[];
+    custom_extensions?: OssieCustomExtension[];
+};
+export type OssieDocumentV011 = {
+    version: OssieVersion;
+    semantic_model: [OssieSemanticModel];
+    dialects?: OssieDialect[];
+    vendors?: OssieCustomExtension['vendor_name'][];
+};
+
+export const EMPTY_OSSIE_DOCUMENT: OssieDocumentV011 = {
+    version: OSSIE_VERSION,
+    semantic_model: [
+        {
+            name: 'untitled_model',
+            datasets: [{ name: 'untitled_dataset', source: '__unconfigured__' }],
+            relationships: [],
+            metrics: [],
+        },
+    ],
+};
 
 export const knowledgeModels = pgTable(
     'knowledge_models',
@@ -37,8 +117,10 @@ export const knowledgeModels = pgTable(
         name: text('name').notNull(),
         description: text('description'),
         businessContextMd: text('business_context_md').notNull().default(''),
-        modelYaml: text('model_yaml').notNull().default('cubes: []\n'),
-        modelJson: jsonb('model_json').$type<KnowledgeModelDocument>().notNull().default({ definitions: [] }),
+        modelYaml: text('model_yaml')
+            .notNull()
+            .default('version: 0.1.1\nsemantic_model:\n  - name: untitled_model\n    datasets:\n      - name: untitled_dataset\n        source: __unconfigured__\n'),
+        modelJson: jsonb('model_json').$type<OssieDocumentV011>().notNull().default(EMPTY_OSSIE_DOCUMENT),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true })
             .notNull()

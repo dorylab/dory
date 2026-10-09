@@ -6,6 +6,8 @@ import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import type { Locale } from '@dory/i18n/routing';
 import type { ConnectionType } from '@dory/shared/types/connections';
+import { getDBService } from '@dory/database';
+import { resolveSemanticModelContext, type SemanticModelUsage } from '@/lib/server/semantic-model-context';
 
 export type DoryAgentSchemaTableRef = {
     database?: string | null;
@@ -17,6 +19,8 @@ export type DoryAgentContext = {
     instructions: string;
     schemaContext: string | null;
     schemaContextTables: DoryAgentSchemaTableRef[];
+    semanticContext: string | null;
+    semanticModelsUsed: SemanticModelUsage[];
 };
 
 type BuildDoryAgentContextOptions = {
@@ -34,6 +38,7 @@ type BuildDoryAgentContextOptions = {
     candidateTables?: DoryAgentSchemaTableRef[] | null;
     copilotEnvelope?: CopilotEnvelopeV1 | null;
     locale?: Locale;
+    question?: string | null;
 };
 
 function normalizeSchemaTableRef(value: unknown): DoryAgentSchemaTableRef | null {
@@ -87,6 +92,8 @@ function collectSchemaContextTables(candidateTables?: DoryAgentSchemaTableRef[] 
 export async function buildDoryAgentContext(options: BuildDoryAgentContextOptions): Promise<DoryAgentContext> {
     const schemaContextTables = collectSchemaContextTables(options.candidateTables, options.copilotEnvelope);
     let schemaContext: string | null = null;
+    let semanticContext: string | null = null;
+    let semanticModelsUsed: SemanticModelUsage[] = [];
 
     if (options.userId && options.organizationId && options.connectionId) {
         const defaults = getDefaultSchemaSampleLimits();
@@ -113,6 +120,21 @@ export async function buildDoryAgentContext(options: BuildDoryAgentContextOption
             tableSampleLimit: defaults.table,
             columnSampleLimit: defaults.column,
         });
+
+        try {
+            const resolved = await resolveSemanticModelContext(await getDBService(), {
+                organizationId: options.organizationId,
+                connectionId: options.connectionId,
+                question: options.question,
+                table: options.table,
+                candidateTables: schemaContextTables,
+                dialect: options.connectionType === 'snowflake' ? 'SNOWFLAKE' : 'ANSI_SQL',
+            });
+            semanticContext = resolved.context;
+            semanticModelsUsed = resolved.models;
+        } catch (error) {
+            console.error('[chat] failed to build semantic model context', error);
+        }
     }
 
     const schemaSection = schemaContext
@@ -125,8 +147,12 @@ export async function buildDoryAgentContext(options: BuildDoryAgentContextOption
     const sqlToolSection = options.sqlToolEnabled ? buildDialectSqlPrompt(options.connectionType ?? null) : '';
 
     return {
-        instructions: [options.baseSystem, options.userLanguageInstruction, SYSTEM_PROMPT, sqlToolSection, copilotContextSection, schemaSection].filter(Boolean).join('\n\n'),
+        instructions: [options.baseSystem, options.userLanguageInstruction, SYSTEM_PROMPT, sqlToolSection, copilotContextSection, semanticContext, schemaSection]
+            .filter(Boolean)
+            .join('\n\n'),
         schemaContext,
         schemaContextTables,
+        semanticContext,
+        semanticModelsUsed,
     };
 }

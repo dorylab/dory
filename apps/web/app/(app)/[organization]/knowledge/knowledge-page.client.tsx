@@ -70,6 +70,10 @@ type Definition = {
     dimensions?: string[];
     from?: string;
     to?: string;
+    fromColumns?: string[];
+    toColumns?: string[];
+    dialect?: 'ANSI_SQL' | 'SNOWFLAKE' | 'MDX' | 'TABLEAU' | 'DATABRICKS' | 'MAQL';
+    aiContext?: string | { instructions?: string; synonyms?: string[]; examples?: string[] };
 };
 type ModelDataSource = { connectionId: string; name: string; type: string; engine: string };
 export type KnowledgeModelView = {
@@ -79,6 +83,9 @@ export type KnowledgeModelView = {
     description: string | null;
     businessContextMd: string;
     modelYaml: string;
+    ossieVersion: '0.1.1';
+    modelRevision: string;
+    ossieDocument: Record<string, unknown> & { semantic_model?: Array<{ ai_context?: Definition['aiContext'] }> };
     model: { definitions: Definition[] };
     dataSources: ModelDataSource[];
     verifiedQueryCount: number;
@@ -714,6 +721,15 @@ function DefinitionExpandedRow({
         [t('DefinitionFields.AvailableDimensions'), definition.dimensions?.join(', ')],
         [t('FromDefinition'), definition.from],
         [t('ToDefinition'), definition.to],
+        [t('DefinitionFields.FromColumns'), definition.fromColumns?.join(', ')],
+        [t('DefinitionFields.ToColumns'), definition.toColumns?.join(', ')],
+        [t('DefinitionFields.Dialect'), definition.dialect],
+        [
+            t('DefinitionFields.AiContext'),
+            typeof definition.aiContext === 'string'
+                ? definition.aiContext
+                : [definition.aiContext?.instructions, definition.aiContext?.synonyms?.join(', '), definition.aiContext?.examples?.join('\n')].filter(Boolean).join('\n'),
+        ],
     ].filter(([, value]) => value);
     const hasDefinitionDetails = Boolean(definition.description || definition.expression || metadataFields.length);
 
@@ -838,6 +854,12 @@ function EditDefinitionDialog({
     const [description, setDescription] = useState('');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
+    const [fromColumns, setFromColumns] = useState('');
+    const [toColumns, setToColumns] = useState('');
+    const [dialect, setDialect] = useState<NonNullable<Definition['dialect']>>('ANSI_SQL');
+    const [aiInstructions, setAiInstructions] = useState('');
+    const [aiSynonyms, setAiSynonyms] = useState('');
+    const [aiExamples, setAiExamples] = useState('');
     const [status, setStatus] = useState<Definition['status']>('verified');
     const [isSaving, setIsSaving] = useState(false);
 
@@ -850,13 +872,19 @@ function EditDefinitionDialog({
         setDescription(definition.description ?? '');
         setFrom(definition.from ?? '');
         setTo(definition.to ?? '');
+        setFromColumns(definition.fromColumns?.join(', ') ?? '');
+        setToColumns(definition.toColumns?.join(', ') ?? '');
+        setDialect(definition.dialect ?? 'ANSI_SQL');
+        setAiInstructions(typeof definition.aiContext === 'string' ? definition.aiContext : (definition.aiContext?.instructions ?? ''));
+        setAiSynonyms(typeof definition.aiContext === 'string' ? '' : (definition.aiContext?.synonyms?.join(', ') ?? ''));
+        setAiExamples(typeof definition.aiContext === 'string' ? '' : (definition.aiContext?.examples?.join('\n') ?? ''));
         setStatus(definition.status);
     }, [definition]);
 
-    const relationshipOptions = model.model.definitions.filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship');
+    const relationshipOptions = model.model.definitions.filter(item => item.sourceConnectionId === sourceConnectionId && item.kind === 'entity');
     const kind = definition?.kind ?? 'metric';
     const save = async () => {
-        if (!definition || !name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to))) return;
+        if (!definition || !name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to || !fromColumns.trim() || !toColumns.trim()))) return;
         setIsSaving(true);
         try {
             await onSave(definition.id, {
@@ -869,6 +897,32 @@ function EditDefinitionDialog({
                 expression: kind === 'relationship' ? undefined : expression.trim() || undefined,
                 from: kind === 'relationship' ? from : undefined,
                 to: kind === 'relationship' ? to : undefined,
+                fromColumns:
+                    kind === 'relationship'
+                        ? fromColumns
+                              .split(',')
+                              .map(value => value.trim())
+                              .filter(Boolean)
+                        : undefined,
+                toColumns:
+                    kind === 'relationship'
+                        ? toColumns
+                              .split(',')
+                              .map(value => value.trim())
+                              .filter(Boolean)
+                        : undefined,
+                dialect: kind === 'relationship' || kind === 'entity' ? undefined : dialect,
+                aiContext: {
+                    instructions: aiInstructions.trim() || undefined,
+                    synonyms: aiSynonyms
+                        .split(',')
+                        .map(value => value.trim())
+                        .filter(Boolean),
+                    examples: aiExamples
+                        .split('\n')
+                        .map(value => value.trim())
+                        .filter(Boolean),
+                },
             });
             onOpenChange(false);
         } finally {
@@ -923,7 +977,7 @@ function EditDefinitionDialog({
                                     </SelectTrigger>
                                     <SelectContent>
                                         {relationshipOptions.map(item => (
-                                            <SelectItem key={item.id} value={item.id}>
+                                            <SelectItem key={item.id} value={item.name}>
                                                 {item.name}
                                             </SelectItem>
                                         ))}
@@ -938,13 +992,15 @@ function EditDefinitionDialog({
                                     </SelectTrigger>
                                     <SelectContent>
                                         {relationshipOptions.map(item => (
-                                            <SelectItem key={item.id} value={item.id}>
+                                            <SelectItem key={item.id} value={item.name}>
                                                 {item.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
+                            <Input value={fromColumns} onChange={event => setFromColumns(event.target.value)} placeholder="customer_id, tenant_id" />
+                            <Input value={toColumns} onChange={event => setToColumns(event.target.value)} placeholder="id, tenant_id" />
                         </div>
                     ) : (
                         <>
@@ -960,6 +1016,18 @@ function EditDefinitionDialog({
                                 onChange={event => setExpression(event.target.value)}
                                 placeholder={t('CalculationPlaceholder')}
                             />
+                            <Select value={dialect} onValueChange={value => setDialect(value as NonNullable<Definition['dialect']>)}>
+                                <SelectTrigger className="w-full" aria-label={t('DefinitionFields.Dialect')}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {['ANSI_SQL', 'SNOWFLAKE', 'DATABRICKS', 'TABLEAU', 'MAQL', 'MDX'].map(value => (
+                                        <SelectItem key={value} value={value}>
+                                            {value}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </>
                     )}
                     <Textarea
@@ -968,12 +1036,15 @@ function EditDefinitionDialog({
                         onChange={event => setDescription(event.target.value)}
                         placeholder={t('BusinessDefinitionPlaceholder')}
                     />
+                    <Textarea value={aiInstructions} onChange={event => setAiInstructions(event.target.value)} placeholder={t('DefinitionFields.AiInstructions')} />
+                    <Input value={aiSynonyms} onChange={event => setAiSynonyms(event.target.value)} placeholder={t('DefinitionFields.AiSynonyms')} />
+                    <Textarea value={aiExamples} onChange={event => setAiExamples(event.target.value)} placeholder={t('DefinitionFields.AiExamples')} />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                         {t('Cancel')}
                     </Button>
-                    <Button onClick={save} disabled={!name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to)) || isSaving}>
+                    <Button onClick={save} disabled={!name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to || !fromColumns || !toColumns)) || isSaving}>
                         {isSaving ? t('Saving') : t('SaveDefinition')}
                     </Button>
                 </DialogFooter>
@@ -1016,8 +1087,14 @@ function DefinitionPanel({
     const [description, setDescription] = useState('');
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
+    const [fromColumns, setFromColumns] = useState('');
+    const [toColumns, setToColumns] = useState('');
+    const [dialect, setDialect] = useState<NonNullable<Definition['dialect']>>('ANSI_SQL');
+    const [aiInstructions, setAiInstructions] = useState('');
+    const [aiSynonyms, setAiSynonyms] = useState('');
+    const [aiExamples, setAiExamples] = useState('');
     const create = () => {
-        if (!name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to))) return;
+        if (!name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to || !fromColumns.trim() || !toColumns.trim()))) return;
         onSave([
             ...model.model.definitions,
             {
@@ -1031,6 +1108,32 @@ function DefinitionPanel({
                 description: description.trim() || undefined,
                 from: kind === 'relationship' ? from : undefined,
                 to: kind === 'relationship' ? to : undefined,
+                fromColumns:
+                    kind === 'relationship'
+                        ? fromColumns
+                              .split(',')
+                              .map(value => value.trim())
+                              .filter(Boolean)
+                        : undefined,
+                toColumns:
+                    kind === 'relationship'
+                        ? toColumns
+                              .split(',')
+                              .map(value => value.trim())
+                              .filter(Boolean)
+                        : undefined,
+                dialect: kind === 'relationship' || kind === 'entity' ? undefined : dialect,
+                aiContext: {
+                    instructions: aiInstructions.trim() || undefined,
+                    synonyms: aiSynonyms
+                        .split(',')
+                        .map(value => value.trim())
+                        .filter(Boolean),
+                    examples: aiExamples
+                        .split('\n')
+                        .map(value => value.trim())
+                        .filter(Boolean),
+                },
             },
         ]);
         setOpen(false);
@@ -1040,6 +1143,12 @@ function DefinitionPanel({
         setDescription('');
         setFrom('');
         setTo('');
+        setFromColumns('');
+        setToColumns('');
+        setDialect('ANSI_SQL');
+        setAiInstructions('');
+        setAiSynonyms('');
+        setAiExamples('');
     };
     const sourceName = (id: string) => model.dataSources.find(item => item.connectionId === id)?.name ?? id;
     return (
@@ -1189,9 +1298,9 @@ function DefinitionPanel({
                                     </SelectTrigger>
                                     <SelectContent>
                                         {model.model.definitions
-                                            .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
+                                            .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind === 'entity')
                                             .map(item => (
-                                                <SelectItem key={item.id} value={item.id}>
+                                                <SelectItem key={item.id} value={item.name}>
                                                     {item.name}
                                                 </SelectItem>
                                             ))}
@@ -1203,22 +1312,39 @@ function DefinitionPanel({
                                     </SelectTrigger>
                                     <SelectContent>
                                         {model.model.definitions
-                                            .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
+                                            .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind === 'entity')
                                             .map(item => (
-                                                <SelectItem key={item.id} value={item.id}>
+                                                <SelectItem key={item.id} value={item.name}>
                                                     {item.name}
                                                 </SelectItem>
                                             ))}
                                     </SelectContent>
                                 </Select>
+                                <Input value={fromColumns} onChange={event => setFromColumns(event.target.value)} placeholder={t('DefinitionFields.FromColumns')} />
+                                <Input value={toColumns} onChange={event => setToColumns(event.target.value)} placeholder={t('DefinitionFields.ToColumns')} />
                             </div>
                         ) : (
                             <>
                                 <Input value={source} onChange={event => setSource(event.target.value)} placeholder={t('SourceTablePlaceholder')} />
                                 <Input value={expression} onChange={event => setExpression(event.target.value)} placeholder={t('CalculationPlaceholder')} />
+                                <Select value={dialect} onValueChange={value => setDialect(value as NonNullable<Definition['dialect']>)}>
+                                    <SelectTrigger className="w-full" aria-label={t('DefinitionFields.Dialect')}>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {['ANSI_SQL', 'SNOWFLAKE', 'DATABRICKS', 'TABLEAU', 'MAQL', 'MDX'].map(value => (
+                                            <SelectItem key={value} value={value}>
+                                                {value}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </>
                         )}
                         <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={t('BusinessDefinitionPlaceholder')} />
+                        <Textarea value={aiInstructions} onChange={event => setAiInstructions(event.target.value)} placeholder={t('DefinitionFields.AiInstructions')} />
+                        <Input value={aiSynonyms} onChange={event => setAiSynonyms(event.target.value)} placeholder={t('DefinitionFields.AiSynonyms')} />
+                        <Textarea value={aiExamples} onChange={event => setAiExamples(event.target.value)} placeholder={t('DefinitionFields.AiExamples')} />
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setOpen(false)}>
@@ -1576,6 +1702,8 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     const router = useRouter();
     const queryClient = useQueryClient();
     const [markdown, setMarkdown] = useState('');
+    const [modelSynonyms, setModelSynonyms] = useState('');
+    const [modelExamples, setModelExamples] = useState('');
     const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
     const [askAiOpen, setAskAiOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
@@ -1603,7 +1731,11 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
         queryFn: () => executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {}, { organizationId: organization }),
     });
     useEffect(() => {
-        if (modelQuery.data) setMarkdown(modelQuery.data.businessContextMd);
+        if (!modelQuery.data) return;
+        setMarkdown(modelQuery.data.businessContextMd);
+        const context = modelQuery.data.ossieDocument.semantic_model?.[0]?.ai_context;
+        setModelSynonyms(typeof context === 'string' ? '' : (context?.synonyms?.join(', ') ?? ''));
+        setModelExamples(typeof context === 'string' ? '' : (context?.examples?.join('\n') ?? ''));
     }, [modelQuery.data]);
     const setModel = (model: KnowledgeModelView) => queryClient.setQueryData(modelKey(knowledgeModelId), model);
     const update = useMutation({
@@ -1688,6 +1820,9 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                         </Button>
                         <h1 className="mt-2 text-2xl font-bold">{model.name}</h1>
                         {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                            Apache Ossie {model.ossieVersion} · rev {model.modelRevision.slice(0, 8)}
+                        </p>
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => setAskAiOpen(true)}>
@@ -1851,7 +1986,27 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                 onChange={event => setMarkdown(event.target.value)}
                                 placeholder={t('BusinessContextPlaceholder')}
                             />
-                            <Button onClick={() => update.mutate({ businessContextMd: markdown })}>{update.isPending ? t('Saving') : t('SaveContext')}</Button>
+                            <Input value={modelSynonyms} onChange={event => setModelSynonyms(event.target.value)} placeholder={t('DefinitionFields.AiSynonyms')} />
+                            <Textarea value={modelExamples} onChange={event => setModelExamples(event.target.value)} placeholder={t('DefinitionFields.AiExamples')} />
+                            <Button
+                                onClick={() =>
+                                    update.mutate({
+                                        aiContext: {
+                                            instructions: markdown.trim() || undefined,
+                                            synonyms: modelSynonyms
+                                                .split(',')
+                                                .map(value => value.trim())
+                                                .filter(Boolean),
+                                            examples: modelExamples
+                                                .split('\n')
+                                                .map(value => value.trim())
+                                                .filter(Boolean),
+                                        },
+                                    })
+                                }
+                            >
+                                {update.isPending ? t('Saving') : t('SaveContext')}
+                            </Button>
                         </section>
                     </TabsContent>
                     <TabsContent value="definitions" className="pt-4">

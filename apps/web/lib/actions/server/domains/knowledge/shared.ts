@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+export const ossieAiContextObjectSchema = z
+    .object({ instructions: z.string().optional(), synonyms: z.array(z.string()).optional(), examples: z.array(z.string()).optional() })
+    .passthrough();
+export const ossieAiContextSchema = z.union([z.string(), ossieAiContextObjectSchema]);
+
 export const knowledgeDefinitionSchema = z.object({
     id: z.string().min(1).optional(),
     name: z.string().min(1).max(160),
@@ -15,6 +20,10 @@ export const knowledgeDefinitionSchema = z.object({
     dimensions: z.array(z.string().min(1).max(300)).max(100).optional(),
     from: z.string().max(300).optional(),
     to: z.string().max(300).optional(),
+    fromColumns: z.array(z.string().min(1).max(300)).max(20).optional(),
+    toColumns: z.array(z.string().min(1).max(300)).max(20).optional(),
+    dialect: z.enum(['ANSI_SQL', 'SNOWFLAKE', 'MDX', 'TABLEAU', 'DATABRICKS', 'MAQL']).optional(),
+    aiContext: ossieAiContextSchema.optional(),
 });
 
 export const knowledgeDataSourceSchema = z.object({ connectionId: z.string(), name: z.string(), type: z.string(), engine: z.string() });
@@ -41,6 +50,9 @@ export const knowledgeModelOutputSchema = z.object({
     description: z.string().nullable(),
     businessContextMd: z.string(),
     modelYaml: z.string(),
+    ossieVersion: z.literal('0.1.1'),
+    modelRevision: z.string(),
+    ossieDocument: z.record(z.string(), z.unknown()),
     model: z.object({ definitions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })) }),
     dataSources: z.array(knowledgeDataSourceSchema),
     verifiedQueryCount: z.number().int().nonnegative(),

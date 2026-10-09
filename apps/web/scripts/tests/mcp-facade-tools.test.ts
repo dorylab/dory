@@ -165,8 +165,8 @@ function createWorksMock() {
             activities.push(activity);
             return { ...activity, activityId: `activity-${activities.length}`, createdAt: now };
         },
-        recordKnowledgeAssetUsageEvent: async (usage: any, event: any) => {
-            const existing = knowledgeUsage.find(item => item.workId === usage.workId && item.assetType === usage.assetType && item.assetId === usage.assetId);
+        recordAgentAssetUsageEvent: async (usage: any, event: any) => {
+            const existing = knowledgeUsage.find(item => item.workId === usage.workId && item.assetRef === usage.assetRef);
             if (existing) {
                 existing.useCount += 1;
                 existing.assetSnapshot = usage.assetSnapshot;
@@ -324,12 +324,13 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
     );
 });
 
-test('public Dory MCP descriptions scope work context to query and workspace tools', () => {
+test('public Dory MCP descriptions require semantic context for database analysis', () => {
     const createWork = getTool('dory_create_work');
     const write = getTool('dory_write');
     const listConnections = getTool('dory_list_connections');
 
-    assert.match(createWork.description, /SQL execution, SQL workspace edits, or Saved Query operations/);
+    assert.match(createWork.description, /original userQuestion/);
+    assert.match(createWork.description, /semanticContext/);
     assert.doesNotMatch(createWork.description, /every later Dory tool call/);
     assert.match(write.description, /connection\.create, connection\.update, and connection\.delete/);
     assert.match(write.description, /do not require workId/);
@@ -799,6 +800,85 @@ test('dory_create_work returns a workspace URL', async () => {
     assert.equal(output.work.workId, 'work-1');
 });
 
+test('dory_create_work returns and records relevant semantic model context', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+            knowledge: {
+                listModels: async () => [
+                    {
+                        id: 'model-1',
+                        name: 'Commerce',
+                        description: null,
+                        ossieVersion: '0.1.1',
+                        modelRevision: 'revision-1',
+                        readiness: { status: 'ready' },
+                        model: {
+                            definitions: [
+                                { name: 'orders', kind: 'entity', status: 'verified' },
+                                { name: 'amount', kind: 'dimension', status: 'verified' },
+                                { name: 'revenue', kind: 'metric', status: 'verified' },
+                            ],
+                        },
+                        ossieDocument: {
+                            version: '0.1.1',
+                            semantic_model: [
+                                {
+                                    name: 'commerce',
+                                    datasets: [
+                                        {
+                                            name: 'orders',
+                                            source: 'orders',
+                                            fields: [{ name: 'amount', expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'amount' }] } }],
+                                        },
+                                    ],
+                                    metrics: [
+                                        {
+                                            name: 'revenue',
+                                            expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'SUM(orders.amount)' }] },
+                                            ai_context: { synonyms: ['sales'] },
+                                        },
+                                    ],
+                                    relationships: [],
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    } as unknown as WebActionServices);
+
+    const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', userQuestion: 'Show sales' })) as any;
+    assert.match(output.semanticContext, /SUM\(orders\.amount\)/);
+    assert.deepEqual(
+        output.semanticModelsUsed.map((item: any) => item.modelRevision),
+        ['revision-1'],
+    );
+    assert.equal(works.knowledgeUsage[0].assetKind, 'semantic_model');
+    assert.match(works.knowledgeUsage[0].assetRef, /revision-1$/);
+});
+
+test('dory_create_work fails open when semantic context resolution fails', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+            knowledge: { listModels: async () => Promise.reject(new Error('semantic resolver unavailable')) },
+        },
+    } as unknown as WebActionServices);
+
+    const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', userQuestion: 'Show revenue' })) as any;
+    assert.equal(output.workId, 'work-1');
+    assert.equal(output.semanticContext, null);
+    assert.deepEqual(output.semanticModelsUsed, []);
+    assert.equal(
+        works.events.some(event => event.errorCode === 'SEMANTIC_CONTEXT_FAILED'),
+        true,
+    );
+});
+
 test('dory_create_work uses workspace origin before auth request origin', async () => {
     const ctx = createContext({
         db: {
@@ -1121,6 +1201,7 @@ test('knowledge search returns summaries while successful detail reads record im
             {
                 id: 'model-1',
                 name: 'Customer profile',
+                modelRevision: 'revision-1',
                 businessContextMd: 'Use consistent customer definitions.',
                 model: { definitions: [definition] },
             },
@@ -1129,6 +1210,7 @@ test('knowledge search returns summaries while successful detail reads record im
         getModel: async () => ({
             id: 'model-1',
             name: 'Customer profile',
+            modelRevision: 'revision-1',
             dataSources: [{ connectionId: 'conn-1' }],
             model: { definitions: [definition] },
         }),
@@ -1174,9 +1256,10 @@ test('knowledge search returns summaries while successful detail reads record im
     assert.equal(works.knowledgeUsage.length, 1);
     assert.equal(works.knowledgeUsage[0].useCount, 2);
     assert.deepEqual(works.knowledgeUsage[0].assetSnapshot, {
-        name: 'Age',
-        kind: 'dimension',
-        modelName: 'Customer profile',
+        title: 'Age',
+        knowledgeModelId: 'model-1',
+        knowledgeModelName: 'Customer profile',
+        deepLink: '/org-1/knowledge/model-1',
     });
     assert.equal(works.events.filter(event => event.actionId === 'knowledge.getDefinition').length, 2);
 

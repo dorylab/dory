@@ -3849,12 +3849,12 @@
         "ModelActions": "知识模型操作",
         "ViewYaml": "查看 YAML",
         "ImportYaml": "导入 YAML",
-        "ModelYaml": "模型 YAML",
-        "ModelYamlDescription": "修改内容会先经过校验，再更新知识模型。",
+        "ModelYaml": "Apache Ossie 0.1.1 YAML",
+        "ModelYamlDescription": "修改内容会先按 Apache Ossie 0.1.1 校验，再更新知识模型。",
         "SaveYaml": "保存 YAML",
         "YamlSaved": "YAML 已保存。",
-        "ImportYamlTitle": "导入 Cube 兼容 YAML",
-        "ImportYamlDescription": "缺少 meta.dory.sourceConnectionId 的定义将使用所选数据源，并在审阅前保持未验证状态。",
+        "ImportYamlTitle": "导入 Apache Ossie 0.1.1 YAML",
+        "ImportYamlDescription": "文档必须只包含一个 semantic_model；缺少 Dory 连接元数据的定义使用所选数据源，并在审阅前保持未验证。",
         "UploadYamlFile": "上传 YAML 文件",
         "UploadYamlHint": "将 .yaml 或 .yml 文件拖放到这里，或点击选择文件。最大 10 MB。",
         "YamlPreview": "文件预览",
@@ -3958,7 +3958,14 @@
             "Calculation": "计算表达式",
             "Filters": "过滤条件",
             "TimeDimension": "时间维度",
-            "AvailableDimensions": "可用维度"
+            "AvailableDimensions": "可用维度",
+            "FromColumns": "来源列（逗号分隔）",
+            "ToColumns": "目标列（逗号分隔）",
+            "Dialect": "SQL 方言",
+            "AiContext": "AI 上下文",
+            "AiInstructions": "AI 指令",
+            "AiSynonyms": "AI 同义词（逗号分隔）",
+            "AiExamples": "AI 示例（每行一条）"
         },
         "AiOperations": {
             "GenerateDefinitions": "生成知识定义",
@@ -4397,7 +4404,8 @@
                 "artifact": "Artifact",
                 "knowledge_definition": "Definition",
                 "knowledge_source": "知识来源",
-                "verified_query": "Verified Query"
+                "verified_query": "Verified Query",
+                "semantic_model": "语义模型"
             }
         },
         "Trace": {

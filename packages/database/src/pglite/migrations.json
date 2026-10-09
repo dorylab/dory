@@ -475,113 +475,30 @@
   },
   {
     "sql": [
-      "CREATE TABLE \"semantic_contexts\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"connection_id\" text NOT NULL,\n    \"business_context_md\" text DEFAULT '' NOT NULL,\n    \"model_yaml\" text DEFAULT 'cubes: []\\n' NOT NULL,\n    \"model_json\" jsonb DEFAULT '{\"definitions\":[]}'::jsonb NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE UNIQUE INDEX \"uidx_semantic_contexts_org_connection\" ON \"semantic_contexts\" USING btree (\"organization_id\", \"connection_id\");\n",
-      "\nCREATE INDEX \"idx_semantic_contexts_org\" ON \"semantic_contexts\" USING btree (\"organization_id\");\n",
-      "\nCREATE TABLE \"semantic_verified_queries\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"semantic_context_id\" text NOT NULL,\n    \"title\" text NOT NULL,\n    \"question\" text NOT NULL,\n    \"sql\" text NOT NULL,\n    \"description\" text,\n    \"source_type\" text DEFAULT 'manual' NOT NULL,\n    \"source_id\" text,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE INDEX \"idx_semantic_verified_queries_context_created\" ON \"semantic_verified_queries\" USING btree (\"semantic_context_id\", \"created_at\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1788859254000,
-    "hash": "55960d8f431e95c6bbbaaa54a0ff589c35bef804885378271409741df5ccc9d5"
-  },
-  {
-    "sql": [
-      "DROP TABLE IF EXISTS \"semantic_verified_queries\";\n",
-      "\nDROP TABLE IF EXISTS \"semantic_contexts\";\n",
-      "\nCREATE TABLE \"semantic_models\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"description\" text,\n    \"business_context_md\" text DEFAULT '' NOT NULL,\n    \"model_yaml\" text DEFAULT 'cubes: []\\n' NOT NULL,\n    \"model_json\" jsonb DEFAULT '{\"definitions\":[]}'::jsonb NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE UNIQUE INDEX \"uidx_semantic_models_org_name\" ON \"semantic_models\" USING btree (\"organization_id\", \"name\");\n",
-      "\nCREATE INDEX \"idx_semantic_models_org_updated\" ON \"semantic_models\" USING btree (\"organization_id\", \"updated_at\");\n",
-      "\nCREATE TABLE \"semantic_model_sources\" (\n    \"semantic_model_id\" text NOT NULL REFERENCES \"semantic_models\"(\"id\") ON DELETE CASCADE,\n    \"connection_id\" text NOT NULL REFERENCES \"connections\"(\"id\") ON DELETE CASCADE,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_semantic_model_sources\" PRIMARY KEY(\"semantic_model_id\", \"connection_id\")\n);\n",
-      "\nCREATE INDEX \"idx_semantic_model_sources_connection\" ON \"semantic_model_sources\" USING btree (\"connection_id\");\n",
-      "\nCREATE TABLE \"semantic_verified_queries\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"semantic_model_id\" text NOT NULL REFERENCES \"semantic_models\"(\"id\") ON DELETE CASCADE,\n    \"source_connection_id\" text NOT NULL REFERENCES \"connections\"(\"id\") ON DELETE CASCADE,\n    \"title\" text NOT NULL,\n    \"question\" text NOT NULL,\n    \"sql\" text NOT NULL,\n    \"description\" text,\n    \"definition_ids\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"source_type\" text DEFAULT 'manual' NOT NULL,\n    \"source_id\" text,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE INDEX \"idx_semantic_verified_queries_model_updated\" ON \"semantic_verified_queries\" USING btree (\"semantic_model_id\", \"updated_at\");\n",
-      "\nCREATE INDEX \"idx_semantic_verified_queries_connection\" ON \"semantic_verified_queries\" USING btree (\"source_connection_id\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1788945600000,
-    "hash": "709ee7964c68895b8396be2b765cb9f6466f5115ba64acf2dfe6ce8d7ed67d86"
-  },
-  {
-    "sql": [
-      "CREATE TABLE \"semantic_model_knowledge_sources\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"semantic_model_id\" text NOT NULL REFERENCES \"semantic_models\"(\"id\") ON DELETE CASCADE,\n    \"connection_id\" text REFERENCES \"connections\"(\"id\") ON DELETE SET NULL,\n    \"file_name\" text NOT NULL,\n    \"format\" text NOT NULL,\n    \"content_text\" text NOT NULL,\n    \"byte_size\" integer NOT NULL,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE UNIQUE INDEX \"uidx_semantic_knowledge_sources_model_file\" ON \"semantic_model_knowledge_sources\" USING btree (\"semantic_model_id\", \"file_name\");\n",
-      "\nCREATE INDEX \"idx_semantic_knowledge_sources_org_model\" ON \"semantic_model_knowledge_sources\" USING btree (\"organization_id\", \"semantic_model_id\");\n",
-      "\nCREATE INDEX \"idx_semantic_knowledge_sources_connection\" ON \"semantic_model_knowledge_sources\" USING btree (\"connection_id\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1788949200000,
-    "hash": "111e394640b3909ab353ef585d02acf1c5a46ccd8d66b40658f0918035454fd9"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"semantic_models\" RENAME TO \"knowledge_models\";\n",
-      "\nALTER TABLE \"semantic_model_sources\" RENAME TO \"knowledge_model_sources\";\n",
-      "\nALTER TABLE \"semantic_model_knowledge_sources\" RENAME TO \"knowledge_sources\";\n",
-      "\nALTER TABLE \"semantic_verified_queries\" RENAME TO \"knowledge_verified_queries\";\n",
-      "\nALTER TABLE \"knowledge_model_sources\" RENAME COLUMN \"semantic_model_id\" TO \"knowledge_model_id\";\n",
-      "\nALTER TABLE \"knowledge_sources\" RENAME COLUMN \"semantic_model_id\" TO \"knowledge_model_id\";\n",
-      "\nALTER TABLE \"knowledge_verified_queries\" RENAME COLUMN \"semantic_model_id\" TO \"knowledge_model_id\";\n",
-      "\nALTER TABLE \"knowledge_model_sources\" RENAME CONSTRAINT \"pk_semantic_model_sources\" TO \"pk_knowledge_model_sources\";\n",
-      "\nALTER TABLE \"knowledge_model_sources\" RENAME CONSTRAINT \"semantic_model_sources_semantic_model_id_fkey\" TO \"knowledge_model_sources_knowledge_model_id_fkey\";\n",
-      "\nALTER TABLE \"knowledge_model_sources\" RENAME CONSTRAINT \"semantic_model_sources_connection_id_fkey\" TO \"knowledge_model_sources_connection_id_fkey\";\n",
-      "\nALTER TABLE \"knowledge_sources\" RENAME CONSTRAINT \"semantic_model_knowledge_sources_pkey\" TO \"knowledge_sources_pkey\";\n",
-      "\nALTER TABLE \"knowledge_sources\" RENAME CONSTRAINT \"semantic_model_knowledge_sources_semantic_model_id_fkey\" TO \"knowledge_sources_knowledge_model_id_fkey\";\n",
-      "\nALTER TABLE \"knowledge_sources\" RENAME CONSTRAINT \"semantic_model_knowledge_sources_connection_id_fkey\" TO \"knowledge_sources_connection_id_fkey\";\n",
-      "\nALTER TABLE \"knowledge_verified_queries\" RENAME CONSTRAINT \"semantic_verified_queries_pkey\" TO \"knowledge_verified_queries_pkey\";\n",
-      "\nALTER TABLE \"knowledge_verified_queries\" RENAME CONSTRAINT \"semantic_verified_queries_semantic_model_id_fkey\" TO \"knowledge_verified_queries_knowledge_model_id_fkey\";\n",
-      "\nALTER TABLE \"knowledge_verified_queries\" RENAME CONSTRAINT \"semantic_verified_queries_source_connection_id_fkey\" TO \"knowledge_verified_queries_source_connection_id_fkey\";\n",
-      "\nALTER INDEX \"uidx_semantic_models_org_name\" RENAME TO \"uidx_knowledge_models_org_name\";\n",
-      "\nALTER INDEX \"idx_semantic_models_org_updated\" RENAME TO \"idx_knowledge_models_org_updated\";\n",
-      "\nALTER INDEX \"idx_semantic_model_sources_connection\" RENAME TO \"idx_knowledge_model_sources_connection\";\n",
-      "\nALTER INDEX \"uidx_semantic_knowledge_sources_model_file\" RENAME TO \"uidx_knowledge_sources_model_file\";\n",
-      "\nALTER INDEX \"idx_semantic_knowledge_sources_org_model\" RENAME TO \"idx_knowledge_sources_org_model\";\n",
-      "\nALTER INDEX \"idx_semantic_knowledge_sources_connection\" RENAME TO \"idx_knowledge_sources_connection\";\n",
-      "\nALTER INDEX \"idx_semantic_verified_queries_model_updated\" RENAME TO \"idx_knowledge_verified_queries_model_updated\";\n",
-      "\nALTER INDEX \"idx_semantic_verified_queries_connection\" RENAME TO \"idx_knowledge_verified_queries_connection\";\n"
-    ],
-    "bps": true,
-    "folderMillis": 1788949800000,
-    "hash": "a364cf46ff992a465c7fd22139007e9ee859b7b94ce953f13b47b28204bb6e35"
-  },
-  {
-    "sql": [
-      "CREATE TABLE \"knowledge_connectors\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"provider\" text NOT NULL,\n    \"installation_id\" text NOT NULL,\n    \"repository_id\" text NOT NULL,\n    \"repository_full_name\" text NOT NULL,\n    \"default_branch\" text NOT NULL,\n    \"root_path\" text DEFAULT '' NOT NULL,\n    \"status\" text DEFAULT 'pending' NOT NULL,\n    \"last_commit_sha\" text,\n    \"last_synced_at\" timestamp with time zone,\n    \"last_error\" text,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "CREATE TABLE \"knowledge_models\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"description\" text,\n    \"business_context_md\" text DEFAULT '' NOT NULL,\n    \"model_yaml\" text DEFAULT 'version: 0.1.1\\nsemantic_model:\\n  - name: untitled_model\\n    datasets:\\n      - name: untitled_dataset\\n        source: __unconfigured__\\n' NOT NULL,\n    \"model_json\" jsonb DEFAULT '{\"version\":\"0.1.1\",\"semantic_model\":[{\"name\":\"untitled_model\",\"datasets\":[{\"name\":\"untitled_dataset\",\"source\":\"__unconfigured__\"}],\"relationships\":[],\"metrics\":[]}]}'::jsonb NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_knowledge_models_org_name\" ON \"knowledge_models\" (\"organization_id\", \"name\");\n",
+      "\nCREATE INDEX \"idx_knowledge_models_org_updated\" ON \"knowledge_models\" (\"organization_id\", \"updated_at\");\n",
+      "\nCREATE TABLE \"knowledge_model_sources\" (\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"connection_id\" text NOT NULL REFERENCES \"connections\"(\"id\") ON DELETE cascade,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_knowledge_model_sources\" PRIMARY KEY(\"knowledge_model_id\", \"connection_id\")\n);\n",
+      "\nCREATE INDEX \"idx_knowledge_model_sources_connection\" ON \"knowledge_model_sources\" (\"connection_id\");\n",
+      "\nCREATE TABLE \"knowledge_sources\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"connection_id\" text REFERENCES \"connections\"(\"id\") ON DELETE SET NULL,\n    \"file_name\" text NOT NULL,\n    \"format\" text NOT NULL,\n    \"content_text\" text NOT NULL,\n    \"byte_size\" integer NOT NULL,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_knowledge_sources_model_file\" ON \"knowledge_sources\" (\"knowledge_model_id\", \"file_name\");\n",
+      "\nCREATE INDEX \"idx_knowledge_sources_org_model\" ON \"knowledge_sources\" (\"organization_id\", \"knowledge_model_id\");\n",
+      "\nCREATE INDEX \"idx_knowledge_sources_connection\" ON \"knowledge_sources\" (\"connection_id\");\n",
+      "\nCREATE TABLE \"knowledge_verified_queries\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"source_connection_id\" text NOT NULL REFERENCES \"connections\"(\"id\") ON DELETE cascade,\n    \"title\" text NOT NULL,\n    \"question\" text NOT NULL,\n    \"sql\" text NOT NULL,\n    \"description\" text,\n    \"definition_ids\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"source_type\" text DEFAULT 'manual' NOT NULL,\n    \"source_id\" text,\n    \"created_by\" text,\n    \"updated_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_knowledge_verified_queries_model_updated\" ON \"knowledge_verified_queries\" (\"knowledge_model_id\", \"updated_at\");\n",
+      "\nCREATE INDEX \"idx_knowledge_verified_queries_connection\" ON \"knowledge_verified_queries\" (\"source_connection_id\");\n",
+      "\nCREATE TABLE \"knowledge_connectors\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"provider\" text NOT NULL,\n    \"installation_id\" text NOT NULL,\n    \"repository_id\" text NOT NULL,\n    \"repository_full_name\" text NOT NULL,\n    \"default_branch\" text NOT NULL,\n    \"root_path\" text DEFAULT '' NOT NULL,\n    \"status\" text DEFAULT 'pending' NOT NULL,\n    \"last_commit_sha\" text,\n    \"last_synced_at\" timestamp with time zone,\n    \"last_error\" text,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
       "\nCREATE UNIQUE INDEX \"uidx_knowledge_connectors_model_repo_path\" ON \"knowledge_connectors\" (\"knowledge_model_id\", \"provider\", \"repository_id\", \"root_path\");\n",
       "\nCREATE INDEX \"idx_knowledge_connectors_org_model\" ON \"knowledge_connectors\" (\"organization_id\", \"knowledge_model_id\");\n",
       "\nCREATE INDEX \"idx_knowledge_connectors_installation_repo\" ON \"knowledge_connectors\" (\"installation_id\", \"repository_id\");\n",
-      "\n\nCREATE TABLE \"knowledge_connector_items\" (\n    \"connector_id\" text NOT NULL REFERENCES \"knowledge_connectors\"(\"id\") ON DELETE cascade,\n    \"knowledge_source_id\" text NOT NULL REFERENCES \"knowledge_sources\"(\"id\") ON DELETE cascade,\n    \"remote_path\" text NOT NULL,\n    \"remote_sha\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_knowledge_connector_items\" PRIMARY KEY(\"connector_id\", \"remote_path\")\n);\n",
+      "\nCREATE TABLE \"knowledge_connector_items\" (\n    \"connector_id\" text NOT NULL REFERENCES \"knowledge_connectors\"(\"id\") ON DELETE cascade,\n    \"knowledge_source_id\" text NOT NULL REFERENCES \"knowledge_sources\"(\"id\") ON DELETE cascade,\n    \"remote_path\" text NOT NULL,\n    \"remote_sha\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_knowledge_connector_items\" PRIMARY KEY(\"connector_id\", \"remote_path\")\n);\n",
       "\nCREATE UNIQUE INDEX \"uidx_knowledge_connector_items_source\" ON \"knowledge_connector_items\" (\"knowledge_source_id\");\n",
-      "\n\nCREATE TABLE \"knowledge_connector_sync_jobs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"connector_id\" text NOT NULL REFERENCES \"knowledge_connectors\"(\"id\") ON DELETE cascade,\n    \"status\" text DEFAULT 'queued' NOT NULL,\n    \"target_sha\" text,\n    \"attempts\" integer DEFAULT 0 NOT NULL,\n    \"error\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"knowledge_connector_sync_jobs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"connector_id\" text NOT NULL REFERENCES \"knowledge_connectors\"(\"id\") ON DELETE cascade,\n    \"status\" text DEFAULT 'queued' NOT NULL,\n    \"target_sha\" text,\n    \"attempts\" integer DEFAULT 0 NOT NULL,\n    \"error\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
       "\nCREATE INDEX \"idx_knowledge_connector_sync_jobs_status_created\" ON \"knowledge_connector_sync_jobs\" (\"status\", \"created_at\");\n",
-      "\nCREATE INDEX \"idx_knowledge_connector_sync_jobs_connector\" ON \"knowledge_connector_sync_jobs\" (\"connector_id\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1788950400000,
-    "hash": "c178ed5be8c1dc24dfdcdfccdcea473f4ea50f1609b5101bd44db70450041e9f"
-  },
-  {
-    "sql": [
-      "CREATE TABLE \"knowledge_asset_sources\" (\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"knowledge_source_id\" text NOT NULL REFERENCES \"knowledge_sources\"(\"id\") ON DELETE cascade,\n    \"asset_type\" text NOT NULL,\n    \"asset_id\" text NOT NULL,\n    \"relation_type\" text NOT NULL,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_knowledge_asset_sources\" PRIMARY KEY(\"knowledge_source_id\", \"asset_type\", \"asset_id\")\n);\n",
+      "\nCREATE INDEX \"idx_knowledge_connector_sync_jobs_connector\" ON \"knowledge_connector_sync_jobs\" (\"connector_id\");\n",
+      "\nCREATE TABLE \"knowledge_asset_sources\" (\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\"(\"id\") ON DELETE cascade,\n    \"knowledge_source_id\" text NOT NULL REFERENCES \"knowledge_sources\"(\"id\") ON DELETE cascade,\n    \"asset_type\" text NOT NULL,\n    \"asset_id\" text NOT NULL,\n    \"relation_type\" text NOT NULL,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_knowledge_asset_sources\" PRIMARY KEY(\"knowledge_source_id\", \"asset_type\", \"asset_id\")\n);\n",
       "\nCREATE INDEX \"idx_knowledge_asset_sources_model_asset\" ON \"knowledge_asset_sources\" (\"knowledge_model_id\", \"asset_type\", \"asset_id\");\n",
-      "\nCREATE TABLE \"work_knowledge_assets\" (\n    \"work_id\" text NOT NULL REFERENCES \"works\"(\"work_id\") ON DELETE cascade,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"knowledge_model_id\" text NOT NULL,\n    \"asset_type\" text NOT NULL,\n    \"asset_id\" text NOT NULL,\n    \"asset_snapshot\" jsonb NOT NULL,\n    \"use_count\" integer DEFAULT 1 NOT NULL,\n    \"first_used_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"last_used_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_work_knowledge_assets\" PRIMARY KEY(\"work_id\", \"asset_type\", \"asset_id\")\n);\n",
-      "\nCREATE INDEX \"idx_work_knowledge_assets_work_used\" ON \"work_knowledge_assets\" (\"work_id\", \"last_used_at\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1789430400000,
-    "hash": "4ea532a57ffca026ecdf014803cb1dfb40c8e5ed78fa735c92e5d4edb6cd6595"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"knowledge_verified_queries\" ADD COLUMN \"updated_by\" text;\n"
-    ],
-    "bps": true,
-    "folderMillis": 1789603200000,
-    "hash": "55141f5de1eb69a6f7907e06b0a8af712da6e6dfe3dc2476a00c19f6b1d87a1f"
-  },
-  {
-    "sql": [
-      "CREATE TABLE \"agent_principals\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"enabled\" boolean DEFAULT true NOT NULL,\n    \"allowed_connection_ids\" jsonb,\n    \"created_by_user_id\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"agent_principals\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"enabled\" boolean DEFAULT true NOT NULL,\n    \"allowed_connection_ids\" jsonb,\n    \"created_by_user_id\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
       "\nCREATE INDEX \"idx_agent_principals_org_created\" ON \"agent_principals\" (\"organization_id\", \"created_at\");\n",
       "\nCREATE UNIQUE INDEX \"uidx_agent_principals_org_name\" ON \"agent_principals\" (\"organization_id\", \"name\");\n",
       "\nALTER TABLE \"mcp_access_tokens\" ADD COLUMN \"principal_type\" text DEFAULT 'user' NOT NULL;\n",
@@ -598,33 +515,17 @@
       "\nCREATE TABLE \"work_agent_assets\" (\n    \"work_id\" text NOT NULL REFERENCES \"works\"(\"work_id\") ON DELETE cascade,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"principal_type\" text DEFAULT 'user' NOT NULL,\n    \"principal_id\" text,\n    \"asset_kind\" text NOT NULL,\n    \"asset_ref\" text NOT NULL,\n    \"revision\" text NOT NULL,\n    \"asset_snapshot\" jsonb NOT NULL,\n    \"use_count\" integer DEFAULT 1 NOT NULL,\n    \"first_used_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"last_used_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_work_agent_assets\" PRIMARY KEY(\"work_id\", \"asset_ref\")\n);\n",
       "\nCREATE INDEX \"idx_work_agent_assets_work_used\" ON \"work_agent_assets\" (\"work_id\", \"last_used_at\");\n",
       "\nCREATE INDEX \"idx_work_agent_assets_org_ref\" ON \"work_agent_assets\" (\"organization_id\", \"asset_ref\");\n",
-      "\nINSERT INTO \"work_agent_assets\" (\"work_id\", \"organization_id\", \"user_id\", \"principal_type\", \"principal_id\", \"asset_kind\", \"asset_ref\", \"revision\", \"asset_snapshot\", \"use_count\", \"first_used_at\", \"last_used_at\")\nSELECT\n    \"work_id\",\n    \"organization_id\",\n    \"user_id\",\n    'user',\n    \"user_id\",\n    CASE \"asset_type\" WHEN 'definition' THEN 'knowledge_definition' WHEN 'source' THEN 'knowledge_source' ELSE 'verified_query' END,\n    CASE \"asset_type\"\n        WHEN 'definition' THEN 'dory://knowledge/' || \"knowledge_model_id\" || '/definitions/' || \"asset_id\"\n        WHEN 'source' THEN 'dory://knowledge/' || \"knowledge_model_id\" || '/sources/' || \"asset_id\"\n        ELSE 'dory://knowledge/' || \"knowledge_model_id\" || '/queries/' || \"asset_id\"\n    END,\n    'legacy',\n    \"asset_snapshot\",\n    \"use_count\",\n    \"first_used_at\",\n    \"last_used_at\"\nFROM \"work_knowledge_assets\"\nON CONFLICT (\"work_id\", \"asset_ref\") DO NOTHING;\n"
-    ],
-    "bps": true,
-    "folderMillis": 1789689600000,
-    "hash": "459eed5962cb302ee06849595b9b319a2da8238879bb6d6c565493fbdbfe3e4d"
-  },
-  {
-    "sql": [
-      "CREATE TABLE \"agent_activities\" (\n    \"activity_id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"principal_type\" text DEFAULT 'user' NOT NULL,\n    \"principal_id\" text,\n    \"token_id\" text,\n    \"connection_id\" text,\n    \"tool_name\" text NOT NULL,\n    \"action_id\" text,\n    \"status\" text NOT NULL,\n    \"input_summary\" jsonb,\n    \"output_summary\" jsonb,\n    \"error_code\" text,\n    \"error_message\" text,\n    \"duration_ms\" integer DEFAULT 0 NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"agent_activities\" (\n    \"activity_id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"principal_type\" text DEFAULT 'user' NOT NULL,\n    \"principal_id\" text,\n    \"token_id\" text,\n    \"connection_id\" text,\n    \"tool_name\" text NOT NULL,\n    \"action_id\" text,\n    \"status\" text NOT NULL,\n    \"input_summary\" jsonb,\n    \"output_summary\" jsonb,\n    \"error_code\" text,\n    \"error_message\" text,\n    \"duration_ms\" integer DEFAULT 0 NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
       "\nCREATE INDEX \"idx_agent_activities_org_created\" ON \"agent_activities\" (\"organization_id\", \"created_at\");\n",
       "\nCREATE INDEX \"idx_agent_activities_principal_created\" ON \"agent_activities\" (\"organization_id\", \"principal_type\", \"principal_id\", \"created_at\");\n",
-      "\nUPDATE \"works\"\nSET \"status\" = 'archived', \"archived_at\" = now(), \"updated_at\" = now(), \"last_active_at\" = now()\nWHERE \"archived_at\" IS NULL\n  AND \"token_id\" IS NOT NULL\n  AND NOT EXISTS (SELECT 1 FROM \"work_query_sessions\" WHERE \"work_query_sessions\".\"work_id\" = \"works\".\"work_id\")\n  AND NOT EXISTS (SELECT 1 FROM \"tabs\" WHERE \"tabs\".\"work_id\" = \"works\".\"work_id\")\n  AND NOT EXISTS (SELECT 1 FROM \"artifacts\" WHERE \"artifacts\".\"work_id\" = \"works\".\"work_id\")\n  AND EXISTS (SELECT 1 FROM \"work_events\" WHERE \"work_events\".\"work_id\" = \"works\".\"work_id\")\n  AND NOT EXISTS (\n      SELECT 1 FROM \"work_events\"\n      WHERE \"work_events\".\"work_id\" = \"works\".\"work_id\"\n        AND \"work_events\".\"tool_name\" IN ('dory_run_readonly_sql', 'dory_workspace_tabs', 'dory_saved_queries')\n  );\n"
-    ],
-    "bps": true,
-    "folderMillis": 1789776000000,
-    "hash": "92c804c2efa49e617e660e000ac24aba83c0eeb646f7b03b879e014c36bd473b"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"findings\" ADD COLUMN \"presentation\" jsonb;\n",
+      "\nALTER TABLE \"findings\" ADD COLUMN \"presentation\" jsonb;\n",
       "\nALTER TABLE \"findings\" ADD COLUMN \"is_primary\" boolean DEFAULT false NOT NULL;\n",
       "\nALTER TABLE \"findings\" ADD COLUMN \"verified_at\" timestamp with time zone;\n",
       "\nALTER TABLE \"findings\" ADD COLUMN \"verified_by_user_id\" text;\n",
-      "\nCREATE UNIQUE INDEX \"uidx_findings_primary_per_work\" ON \"findings\" USING btree (\"organization_id\", \"work_id\") WHERE \"is_primary\" = true;\n"
+      "\nCREATE UNIQUE INDEX \"uidx_findings_primary_per_work\" ON \"findings\" (\"organization_id\", \"work_id\") WHERE \"is_primary\" = true;\n\n"
     ],
     "bps": true,
-    "folderMillis": 1789987200000,
-    "hash": "5b2844bce43af5c960ed994f4f7d26a6eadfe2326e49c508006c269f593d1135"
+    "folderMillis": 1791518400000,
+    "hash": "c074826e94fcd57d5bf54607a64e6a2fab0334fbbc6cff5316ea718adf4febf9"
   }
 ]
