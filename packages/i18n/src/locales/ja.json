@@ -4380,6 +4380,7 @@
         },
         "Detail": {
             "WorkspaceDescription": "この run は{tabs}と{sqlRuns}を含むワークスペースを生成しました。ワークスペースを開いて、生成された SQL 分析を確認、編集、継続できます。",
+            "ContextAssets": "{count} 件のコンテキストアセット",
             "KnowledgeDefinitions": "{count} 件の Knowledge Definition",
             "ResultSets": "{count} 件の ResultSet"
         },
@@ -4395,20 +4396,24 @@
         },
         "Findings": {
             "Title": "主な発見事項",
-            "Description": "Agent が作成した結論と、確認可能なデータ証拠です。",
+            "Description": "分析の結論と引用されたデータです。データの根拠と人によるレビュー状態を分けて表示します。",
+            "EvidenceLinked": "データの根拠あり",
+            "EvidenceMissing": "データの根拠なし",
+            "NoAnalysis": "この実行では SQL 分析を行っていません。設定や検証の結果は、以下のコンテキストと実行手順をご確認ください。",
             "Evidence": "証拠",
-            "NoEvidence": "この発見事項には結果スナップショットが引用されていません。",
+            "NoEvidence": "Agent はこの記述にデータ結果を引用していません。採用する前に元データをご確認ください。",
             "Empty": "この Run では発見事項が生成されていません。",
             "OtherOutputs": "その他の出力",
             "ViewResult": "結果を見る",
             "ViewSql": "SQL を見る",
-            "Verified": "検証済み",
-            "Verify": "発見事項を検証",
+            "Verified": "レビュー済み",
+            "Verify": "レビュー済みにする",
             "VerificationFailed": "この発見事項の検証状態を更新できませんでした。"
         },
         "Context": {
             "Title": "使用したコンテキスト",
-            "Description": "この分析の解釈のために Agent が明示的に読んだナレッジとアセットです。",
+            "Description": "自動適用されたセマンティックモデルと Agent が読んだアセットです。モデルのリビジョンで実行時のコンテキストを確認できます。",
+            "AutomaticallyApplied": "自動適用",
             "Table": "テーブル",
             "Kinds": {
                 "artifact": "Artifact",

@@ -240,10 +240,9 @@ const finishWorkInputSchema = z
                     }),
                 ]),
             )
-            .min(1)
             .max(20)
             .describe(
-                'User-facing analytical conclusions. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. When presenting a metric, include presentation with the exact measured value, time window, and up to three supporting facts from that Artifact. A structured presentation requires evidenceArtifactIds. Mark at most one Finding as isPrimary. Evidence is optional when no Artifact supports the conclusion.',
+                'User-facing analytical conclusions, not tool success messages or configuration checks. Use an empty array when the Run only checks setup or context injection; put those outcomes in steps. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. When presenting a metric, include presentation with the exact measured value, time window, and up to three supporting facts from that Artifact. A structured presentation requires evidenceArtifactIds. Mark at most one Finding as isPrimary. Conclusions without cited Artifacts are shown as statements without data evidence.',
             ),
         steps: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
     })
@@ -1707,7 +1706,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_finish_work',
             title: 'Finish Dory Work',
             description:
-                'Finish or update a Dory Agent Run with structured summary content. dory_run_readonly_sql returns persisted Artifact IDs; for every conclusion supported by one, pass a structured Finding with those IDs in evidenceArtifactIds. Evidence is optional when no Artifact supports the conclusion. Requires an existing workId.',
+                'Finish or update a Dory Agent Run with structured summary content. Use findings only for analytical conclusions; report tool success, setup checks and context injection in steps, with findings: [] when no analysis was performed. dory_run_readonly_sql returns persisted Artifact IDs; for every conclusion supported by one, pass a structured Finding with those IDs in evidenceArtifactIds. Requires an existing workId.',
             inputSchema: finishWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

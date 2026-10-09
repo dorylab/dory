@@ -4374,6 +4374,7 @@
         },
         "Detail": {
             "WorkspaceDescription": "Esta ejecución generó un espacio con {tabs} y {sqlRuns}. Abre el espacio para inspeccionar, editar y continuar el análisis SQL generado.",
+            "ContextAssets": "{count, plural, one {# activo de contexto} other {# activos de contexto}}",
             "KnowledgeDefinitions": "{count, plural, one {# definición de conocimiento} other {# definiciones de conocimiento}}",
             "ResultSets": "{count, plural, one {# conjunto de resultados} other {# conjuntos de resultados}}"
         },
@@ -4389,20 +4390,24 @@
         },
         "Findings": {
             "Title": "Hallazgos clave",
-            "Description": "Conclusiones del Agent con evidencia de datos verificable.",
+            "Description": "Conclusiones analíticas y datos citados. La evidencia y la revisión humana se muestran por separado.",
+            "EvidenceLinked": "Evidencia adjunta",
+            "EvidenceMissing": "Sin evidencia adjunta",
+            "NoAnalysis": "No se realizó análisis SQL en esta ejecución. Consulta el contexto y los pasos para ver los resultados de configuración o validación.",
             "Evidence": "Evidencia",
-            "NoEvidence": "No se citó ninguna instantánea de resultados para este hallazgo.",
+            "NoEvidence": "El Agent no citó datos para esta afirmación. Revisa los datos antes de utilizarla.",
             "Empty": "No se generaron hallazgos para esta ejecución.",
             "OtherOutputs": "Otros resultados",
             "ViewResult": "Ver resultado",
             "ViewSql": "Ver SQL",
-            "Verified": "Verificado",
-            "Verify": "Verificar hallazgo",
+            "Verified": "Revisado",
+            "Verify": "Marcar como revisado",
             "VerificationFailed": "No se pudo actualizar la verificación de este hallazgo."
         },
         "Context": {
             "Title": "Contexto utilizado",
-            "Description": "Conocimiento y activos que el Agent leyó explícitamente para interpretar este análisis.",
+            "Description": "Modelos semánticos aplicados automáticamente y activos leídos por el Agent. Las revisiones conservan el contexto de esta ejecución.",
+            "AutomaticallyApplied": "Aplicado automáticamente",
             "Table": "Tabla",
             "Kinds": {
                 "artifact": "Artifact",

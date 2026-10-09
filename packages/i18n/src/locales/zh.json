@@ -4370,6 +4370,7 @@
         },
         "Detail": {
             "WorkspaceDescription": "这个 run 生成了包含{tabs}和{sqlRuns}的工作区。打开工作区可以检查、编辑并继续生成的 SQL 分析。",
+            "ContextAssets": "{count} 个上下文资产",
             "KnowledgeDefinitions": "{count} 个 Knowledge Definition",
             "ResultSets": "{count} 个 ResultSet"
         },
@@ -4385,20 +4386,24 @@
         },
         "Findings": {
             "Title": "关键发现",
-            "Description": "Agent 产出的结论，以及可检查的数据证据。",
+            "Description": "分析结论及其引用的数据。数据证据与人工复核状态分别展示。",
+            "EvidenceLinked": "已附数据证据",
+            "EvidenceMissing": "未附数据证据",
+            "NoAnalysis": "本次运行尚未执行 SQL 分析。配置或功能验收结果请查看下方的上下文与执行步骤。",
             "Evidence": "证据",
-            "NoEvidence": "此发现没有引用结果快照。",
+            "NoEvidence": "Agent 未为这条陈述引用数据结果。采纳前请检查相关数据。",
             "Empty": "这个 Run 没有生成发现。",
             "OtherOutputs": "其他输出",
             "ViewResult": "查看结果",
             "ViewSql": "查看 SQL",
-            "Verified": "已验证",
-            "Verify": "验证发现",
+            "Verified": "已复核",
+            "Verify": "标记为已复核",
             "VerificationFailed": "无法更新这个发现的验证状态。"
         },
         "Context": {
             "Title": "使用的上下文",
-            "Description": "Agent 为解释本次分析而明确读取的知识与资产。",
+            "Description": "自动应用的语义模型，以及 Agent 主动读取的资产。模型版本保留了本次运行使用的上下文。",
+            "AutomaticallyApplied": "自动应用",
             "Table": "数据表",
             "Kinds": {
                 "artifact": "Artifact",

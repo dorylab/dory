@@ -4380,6 +4380,7 @@
         },
         "Detail": {
             "WorkspaceDescription": "This run generated a workspace with {tabs} and {sqlRuns}. Open the workspace to inspect, edit, and continue the generated SQL analysis.",
+            "ContextAssets": "{count, plural, one {# context asset} other {# context assets}}",
             "KnowledgeDefinitions": "{count, plural, one {# Knowledge Definition} other {# Knowledge Definitions}}",
             "ResultSets": "{count, plural, one {# ResultSet} other {# ResultSets}}"
         },
@@ -4395,20 +4396,24 @@
         },
         "Findings": {
             "Title": "Key findings",
-            "Description": "Conclusions the Agent produced, with inspectable data evidence.",
+            "Description": "Analytical conclusions and the data cited to support them. Evidence links and human review are shown separately.",
+            "EvidenceLinked": "Data evidence attached",
+            "EvidenceMissing": "No data evidence attached",
+            "NoAnalysis": "No SQL analysis was performed in this run. See the context and execution steps below for setup or validation results.",
             "Evidence": "Evidence",
-            "NoEvidence": "No result snapshot was cited for this finding.",
+            "NoEvidence": "The Agent did not cite a data result for this statement. Check the underlying data before relying on it.",
             "Empty": "No findings were generated for this run.",
             "OtherOutputs": "Other outputs",
             "ViewResult": "View result",
             "ViewSql": "View SQL",
-            "Verified": "Verified",
-            "Verify": "Verify finding",
+            "Verified": "Reviewed",
+            "Verify": "Mark as reviewed",
             "VerificationFailed": "Could not update this Finding's verification."
         },
         "Context": {
             "Title": "Context used",
-            "Description": "Knowledge and assets the Agent explicitly read to interpret this analysis.",
+            "Description": "Semantic models automatically applied and assets explicitly read by the Agent. Model revisions preserve the context used in this run.",
+            "AutomaticallyApplied": "Automatically applied",
             "Table": "Table",
             "Kinds": {
                 "artifact": "Artifact",

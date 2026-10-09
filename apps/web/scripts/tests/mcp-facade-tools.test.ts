@@ -1037,6 +1037,24 @@ test('dory_finish_work persists agent summary metadata and status', async () => 
     assert.equal(works.events.at(-1)?.status, 'success');
 });
 
+test('dory_finish_work can finish a setup check without inventing analytical findings', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({ db: { works } } as unknown as WebActionServices);
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Check semantic context' })) as any;
+    const output = (await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        summaryTitle: 'Semantic context check completed',
+        findings: [],
+        steps: ['Confirmed that semantic context was automatically applied.'],
+    })) as any;
+
+    assert.equal(output.status, 'completed');
+    assert.deepEqual(output.findings, []);
+    assert.deepEqual(works.finishInputs.at(-1)?.findings, []);
+    assert.deepEqual(output.steps, ['Confirmed that semantic context was automatically applied.']);
+});
+
 test('dory_finish_work accepts a structured, evidence-backed primary Finding', async () => {
     const works = createWorksMock();
     const ctx = createContext({

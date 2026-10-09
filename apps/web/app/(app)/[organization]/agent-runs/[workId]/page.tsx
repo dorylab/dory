@@ -126,7 +126,7 @@ export default async function AgentRunDetailPage({
     const primaryFinding = findings.find(finding => finding.isPrimary) ?? findings[0] ?? null;
     const legacyConclusion = summary?.findings[0] ?? null;
     const conclusion = primaryFinding?.title ?? legacyConclusion;
-    const definitionCount = agentAssetUsage.filter(item => item.assetKind === 'knowledge_definition').length;
+    const contextCount = agentAssetUsage.length;
     const resultSetCount = artifacts.filter(artifact => artifact.type === 'result_set').length;
     const referencedArtifactIds = new Set(findings.flatMap(finding => finding.evidence.map(artifact => artifact.id)));
     const otherArtifacts = artifacts.filter(artifact => !referencedArtifactIds.has(artifact.id));
@@ -172,7 +172,7 @@ export default async function AgentRunDetailPage({
                             <p className="mt-3 text-sm text-muted-foreground">
                                 {[
                                     stats.dataSource,
-                                    t('Detail.KnowledgeDefinitions', { count: definitionCount }),
+                                    t('Detail.ContextAssets', { count: contextCount }),
                                     formatter.sqlRuns(stats.sqlExecutionCount),
                                     t('Detail.ResultSets', { count: resultSetCount }),
                                 ].join(' · ')}
@@ -198,7 +198,7 @@ export default async function AgentRunDetailPage({
                             {findings.map(finding => (
                                 <article
                                     key={finding.id}
-                                    className="grid min-w-0 gap-6 rounded-lg border bg-card p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)] xl:gap-0"
+                                    className={`grid min-w-0 gap-6 rounded-lg border bg-card p-4 sm:p-5 ${finding.evidence.length ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)] xl:gap-0' : ''}`}
                                 >
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -218,7 +218,12 @@ export default async function AgentRunDetailPage({
                                                 )}
                                                 {finding.presentation?.metricValue ? <h3 className="mt-2 text-base font-medium">{finding.title}</h3> : null}
                                             </div>
-                                            <FindingVerificationButton findingId={finding.id} workId={workId} verifiedAt={finding.verifiedAt} />
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <Badge variant="secondary">{t(finding.evidence.length ? 'Findings.EvidenceLinked' : 'Findings.EvidenceMissing')}</Badge>
+                                                {finding.evidence.length || finding.verifiedAt ? (
+                                                    <FindingVerificationButton findingId={finding.id} workId={workId} verifiedAt={finding.verifiedAt} />
+                                                ) : null}
+                                            </div>
                                         </div>
                                         {finding.presentation?.timeframe ? <p className="mt-3 text-sm text-muted-foreground">{finding.presentation.timeframe}</p> : null}
                                         {finding.presentation?.dimensions?.length ? (
@@ -242,7 +247,7 @@ export default async function AgentRunDetailPage({
                                             </dl>
                                         ) : null}
                                     </div>
-                                    <div className="grid min-w-0 content-start gap-3 border-t pt-5 xl:border-t-0 xl:pl-6 xl:pt-0">
+                                    <div className={`grid min-w-0 content-start gap-3 border-t pt-5 ${finding.evidence.length ? 'xl:border-t-0 xl:pl-6 xl:pt-0' : ''}`}>
                                         <h3 className="text-sm font-semibold">{t('Findings.Evidence')}</h3>
                                         {finding.evidence.length ? (
                                             finding.evidence.map(artifact => (
@@ -269,7 +274,9 @@ export default async function AgentRunDetailPage({
                             ))}
                         </div>
                     ) : (
-                        <div className="rounded-lg border border-dashed px-5 py-8 text-sm text-muted-foreground">{t('Findings.Empty')}</div>
+                        <div className="rounded-lg border border-dashed px-5 py-8 text-sm text-muted-foreground">
+                            {t(stats.sqlExecutionCount === 0 ? 'Findings.NoAnalysis' : 'Findings.Empty')}
+                        </div>
                     )}
                 </section>
 
@@ -287,7 +294,11 @@ export default async function AgentRunDetailPage({
                                     deepLink?: string;
                                     ossieVersion?: string;
                                     modelRevision?: string;
+                                    metricNames?: string[];
+                                    relationshipNames?: string[];
                                 };
+                                // Snapshots retain organization IDs; use the current route's slug for navigation.
+                                const assetHref = asset.deepLink?.startsWith('/') ? asset.deepLink.replace(/^\/[^/]+\//, `/${encodeURIComponent(organization)}/`) : null;
                                 const content = (
                                     <>
                                         <BrainCircuit className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -295,15 +306,22 @@ export default async function AgentRunDetailPage({
                                             <span className="block truncate text-sm font-medium">{asset.title ?? item.assetRef}</span>
                                             <span className="block truncate text-xs text-muted-foreground">
                                                 {t(`Context.Kinds.${item.assetKind}`)}
-                                                {asset.knowledgeModelName ? ` · ${asset.knowledgeModelName}` : ''}
+                                                {asset.knowledgeModelName && asset.knowledgeModelName !== asset.title ? ` · ${asset.knowledgeModelName}` : ''}
                                                 {asset.ossieVersion ? ` · Ossie ${asset.ossieVersion}` : ''}
                                                 {asset.modelRevision ? ` · rev ${asset.modelRevision.slice(0, 8)}` : ''}
                                             </span>
+                                            {item.assetKind === 'semantic_model' ? (
+                                                <span className="mt-1 block text-xs text-muted-foreground">
+                                                    {t('Context.AutomaticallyApplied')}
+                                                    {asset.metricNames?.length ? ` · ${asset.metricNames.join(', ')}` : ''}
+                                                    {asset.relationshipNames?.length ? ` · ${asset.relationshipNames.join(', ')}` : ''}
+                                                </span>
+                                            ) : null}
                                         </span>
                                     </>
                                 );
-                                return asset.deepLink ? (
-                                    <Link key={item.assetRef} href={asset.deepLink} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3 hover:bg-accent">
+                                return assetHref ? (
+                                    <Link key={item.assetRef} href={assetHref} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3 hover:bg-accent">
                                         {content}
                                     </Link>
                                 ) : (
