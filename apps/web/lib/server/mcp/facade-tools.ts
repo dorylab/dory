@@ -1785,11 +1785,14 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                     const sourceResultSetId = getString(artifact.sourceResultSetId);
                     const previewRows = Math.min(getNumber(input.previewRows) ?? 100, 200);
                     const result = sourceResultSetId
-                        ? await executeInternal<UnknownRecord>(ctx, 'resultSet.rows.read', {
-                              resultSetId: sourceResultSetId,
-                              offset: 0,
-                              limit: previewRows,
-                          }).catch(() => null)
+                        ? await ctx.services.db.resultSets
+                              .readRows({
+                                  organizationId: ctx.organizationId,
+                                  resultSetId: sourceResultSetId,
+                                  offset: 0,
+                                  limit: previewRows,
+                              })
+                              .catch(() => null)
                         : null;
                     return withOptionalWork(
                         {

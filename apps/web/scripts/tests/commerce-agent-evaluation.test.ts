@@ -26,6 +26,12 @@ test('commerce evaluation Knowledge is a complete, verified Ossie 0.1.1 model', 
     assert.ok(typeof model.ai_context === 'object' && model.ai_context.examples?.includes(COMMERCE_EVALUATION_SCENARIOS[1].question));
     assert.ok(projection.definitions.every(definition => definition.status === 'verified'));
     assert.ok(projection.definitions.every(definition => definition.sourceConnectionId === connectionId));
+    for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
+        assert.ok(
+            scenario.expectedSemanticIds.every(id => (scenario.definitionIds as readonly string[]).includes(id)),
+            `${scenario.id} must link all required semantic definitions`,
+        );
+    }
     const productRelationship = projection.definitions.find(definition => definition.id === 'relationship:order_items_product');
     assert.equal(productRelationship?.from, 'order_items');
     assert.equal(productRelationship?.to, 'products');
@@ -95,24 +101,32 @@ test('commerce Agent evaluation seed is deterministic and includes the expected 
             assert.ok(ticketIncident.resolution_hours > 50);
 
             const scenarioRows = Object.fromEntries(COMMERCE_EVALUATION_SCENARIOS.map(scenario => [scenario.id, db.prepare(scenario.sql).all()]));
-            assert.equal(scenarioRows.monthly_revenue.length, 6);
-            assert.deepEqual(scenarioRows.payment_incident[0], { provider: 'atlas_pay', attempts: 38, failed_attempts: 14, failure_rate_pct: 36.84 });
-            assert.equal((scenarioRows.category_refunds[0] as { category: string }).category, 'Premium Wearables');
-            assert.deepEqual(
-                scenarioRows.channel_retention.find(row => (row as { acquisition_channel: string }).acquisition_channel === 'affiliate'),
-                {
-                    acquisition_channel: 'affiliate',
-                    customers: 240,
-                    purchasing_customers: 229,
-                    purchase_rate_pct: 95.42,
-                    repeat_purchase_rate_pct: 0,
-                },
-            );
-            assert.deepEqual(scenarioRows.support_backlog[0], { priority: 'critical', resolved_tickets: 28, avg_resolution_hours: 75.11 });
+            for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
+                assert.deepEqual(scenarioRows[scenario.id], scenario.expectedRows, scenario.id);
+            }
         } finally {
             db.close();
         }
     } finally {
         await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('repeat purchase uses purchasing customers as denominator and handles no purchasers', () => {
+    const db = new Database(':memory:');
+    try {
+        db.exec(`
+            CREATE TABLE customers (customer_id INTEGER, acquisition_channel TEXT);
+            CREATE TABLE orders (order_id INTEGER, customer_id INTEGER, status TEXT);
+            INSERT INTO customers VALUES (1, 'mixed'), (2, 'mixed'), (3, 'mixed'), (4, 'mixed'), (5, 'empty');
+            INSERT INTO orders VALUES (1, 1, 'completed'), (2, 1, 'completed'), (3, 2, 'completed'), (4, 2, 'completed'), (5, 3, 'completed'), (6, 4, 'payment_failed');
+        `);
+        const scenario = COMMERCE_EVALUATION_SCENARIOS.find(item => item.id === 'channel_retention')!;
+        assert.deepEqual(db.prepare(scenario.sql).all(), [
+            { acquisition_channel: 'mixed', customers: 4, purchasing_customers: 3, purchase_rate_pct: 75, repeat_purchase_rate_pct: 66.67 },
+            { acquisition_channel: 'empty', customers: 1, purchasing_customers: 0, purchase_rate_pct: 0, repeat_purchase_rate_pct: null },
+        ]);
+    } finally {
+        db.close();
     }
 });

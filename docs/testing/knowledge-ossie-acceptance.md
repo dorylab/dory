@@ -52,16 +52,19 @@ The machine-readable source for the questions, SQL, expected semantic IDs, and e
 Start and sign in to local Dory, then make sure an organization exists. From the repository root, run:
 
 ```bash
-yarn workspace web commerce:evaluation:seed --reset
+yarn workspace web commerce:evaluation:seed --organization-id <organizationId> --user-id <userId>
 ```
+
+Use the current test organization and user IDs explicitly. Stop the development server before seeding its PGlite directory, then restart it. If MCP facade source changed, first rebuild the shared runtime with `yarn workspace @dory/server-core build`.
 
 The command:
 
-- rebuilds `apps/web/localdata/commerce-agent-evaluation.sqlite`;
+- reuses `apps/web/localdata/commerce-agent-evaluation.sqlite`; only `--reset` rebuilds it;
 - creates or updates the `Commerce Agent Evaluation` SQLite connection;
 - imports the `Commerce Operations Knowledge` Ossie 0.1.1 YAML while preserving verified status;
 - creates four Knowledge Sources and five Verified Queries;
-- outputs the `connectionId`, `knowledgeModelId`, `ossieVersion`, and full `modelRevision`.
+- outputs the `connectionId`, `knowledgeModelId`, `ossieVersion`, and full `modelRevision`;
+- exports YAML, sources, `scenarios.json`, and `manifest.json` to `apps/web/localdata/commerce-knowledge-acceptance` (override with `--output-dir`).
 
 Run it only against a development or test organization. `--reset` rebuilds this dedicated SQLite fixture and does not modify a business database.
 
@@ -100,7 +103,7 @@ Check manually:
 Optional browser smoke test:
 
 ```bash
-E2E_COMMERCE_EVALUATION=1 yarn test:e2e tests/e2e/commerce-agent-evaluation.spec.ts
+PLAYWRIGHT_BASE_URL=http://localhost:3000 E2E_COMMERCE_EVALUATION=1 yarn test:e2e tests/e2e/commerce-agent-evaluation.spec.ts
 ```
 
 ### P0: automatic semantic context
@@ -122,7 +125,7 @@ DORY_COMMERCE_EVALUATION_CONNECTION_ID=<connectionId from seed output> \
 yarn workspace web commerce:evaluation:mcp
 ```
 
-The replay first calls `dory_create_work` and asserts that it automatically returns `payment_success_rate`, `payments_order`, Ossie 0.1.1, and a revision. Only then does it perform explicit asset discovery, schema exploration, SQL, Artifact, and finding steps.
+The replay creates one Agent Run for each of the five scenarios and checks automatic semantic context before explicit discovery. Every SQL row must match the shared `expectedRows`; it then reads each persisted Artifact and saves findings from measured results. Evidence is written to `mcp-results.json`, and any failed scenario produces a nonzero exit. Numeric strings in persisted cells are normalized only for numeric golden-result columns.
 
 ### P0: Agent Run traceability
 
@@ -161,3 +164,9 @@ All P0 checks must pass before release. Preserve the following evidence:
 - for any failure, the layer: contract, retrieval, context, SQL, result, or traceability.
 
 Do not accept a natural-language answer alone. Passing means correct semantic matches, correct SQL semantics, values that match the golden data, and a traceable model revision in the Agent Run.
+
+## Metric and replay assumptions
+
+Repeat purchase rate divides customers with two or more completed orders by customers with at least one completed order; conversion divides purchasing customers by all customers. With no purchasing customers, repeat rate is NULL.
+
+`DORY_COMMERCE_EVALUATION_OUTPUT_DIR` overrides the replay evidence directory. This exercises the MCP Agent execution chain; autonomous SQL generation in UI Chat requires a separate check.

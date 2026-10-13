@@ -58,7 +58,7 @@ function EvidenceCard({
     const artifactHref = `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}?fromAgentRun=${encodeURIComponent(workId)}`;
 
     return (
-        <div className="grid min-w-0 gap-3 rounded-md border bg-muted/30 p-3">
+        <div className="grid min-w-0 gap-3 rounded-lg border bg-muted/30 p-4">
             <div className="flex min-w-0 items-start gap-2">
                 <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
@@ -126,6 +126,8 @@ export default async function AgentRunDetailPage({
     const primaryFinding = findings.find(finding => finding.isPrimary) ?? findings[0] ?? null;
     const legacyConclusion = summary?.findings[0] ?? null;
     const conclusion = primaryFinding?.title ?? legacyConclusion;
+    const title = summary?.summaryTitle || snapshot.work.title || t('Common.AgentRun');
+    const distinctConclusion = conclusion?.trim() && conclusion.trim() !== title.trim() ? conclusion : null;
     const contextCount = agentAssetUsage.length;
     const resultSetCount = artifacts.filter(artifact => artifact.type === 'result_set').length;
     const referencedArtifactIds = new Set(findings.flatMap(finding => finding.evidence.map(artifact => artifact.id)));
@@ -152,9 +154,9 @@ export default async function AgentRunDetailPage({
     );
 
     return (
-        <div className="h-screen overflow-auto bg-n8">
-            <main className="container mx-auto flex max-w-7xl flex-col gap-7 px-4 pb-10 pt-4 sm:px-6 lg:px-8">
-                <header className="grid gap-5">
+        <div className="min-h-full bg-n8">
+            <main className="container mx-auto flex max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
+                <header className="grid gap-4">
                     <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
                         <Link href={backHref}>
                             <ArrowLeft className="h-4 w-4" />
@@ -165,11 +167,11 @@ export default async function AgentRunDetailPage({
                     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                         <div className="min-w-0 max-w-4xl">
                             <div className="flex flex-wrap items-center gap-3">
-                                <h1 className="text-2xl font-semibold tracking-normal">{summary?.summaryTitle || snapshot.work.title || t('Common.AgentRun')}</h1>
+                                <h1 className="min-w-0 break-words text-2xl font-semibold leading-tight tracking-normal">{title}</h1>
                                 <AgentRunStatusBadge status={snapshot.work.status} />
                             </div>
-                            {conclusion ? <p className="mt-3 max-w-3xl text-xl font-medium leading-snug sm:text-2xl">{conclusion}</p> : null}
-                            <p className="mt-3 text-sm text-muted-foreground">
+                            {distinctConclusion ? <p className="mt-3 max-w-3xl break-words text-base font-medium leading-relaxed sm:text-lg">{distinctConclusion}</p> : null}
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
                                 {[
                                     stats.dataSource,
                                     t('Detail.ContextAssets', { count: contextCount }),
@@ -179,11 +181,13 @@ export default async function AgentRunDetailPage({
                             </p>
                         </div>
                         {hasWorkspace ? (
-                            <Button asChild className="w-full sm:w-auto">
+                            <Button asChild className="w-full justify-self-start sm:w-auto">
                                 <Link href={workspaceHref}>{t('Actions.OpenWorkspace')}</Link>
                             </Button>
                         ) : (
-                            <Button disabled>{t('Actions.OpenWorkspace')}</Button>
+                            <Button disabled className="w-full justify-self-start sm:w-auto">
+                                {t('Actions.OpenWorkspace')}
+                            </Button>
                         )}
                     </div>
                 </header>
@@ -198,11 +202,11 @@ export default async function AgentRunDetailPage({
                             {findings.map(finding => (
                                 <article
                                     key={finding.id}
-                                    className={`grid min-w-0 gap-6 rounded-lg border bg-card p-4 sm:p-5 ${finding.evidence.length ? 'xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)] xl:gap-0' : ''}`}
+                                    className={`grid min-w-0 gap-6 rounded-lg border bg-card p-4 sm:p-5 ${finding.evidence.length ? 'xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]' : ''}`}
                                 >
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-start justify-between gap-3">
-                                            <div>
+                                            <div className="min-w-0 break-words">
                                                 {finding.presentation?.metricLabel ? (
                                                     <p className="text-sm font-medium text-muted-foreground">{finding.presentation.metricLabel}</p>
                                                 ) : null}
@@ -225,7 +229,7 @@ export default async function AgentRunDetailPage({
                                                 ) : null}
                                             </div>
                                         </div>
-                                        {finding.presentation?.timeframe ? <p className="mt-3 text-sm text-muted-foreground">{finding.presentation.timeframe}</p> : null}
+                                        {finding.presentation?.timeframe ? <p className="mt-2 text-sm leading-6 text-muted-foreground">{finding.presentation.timeframe}</p> : null}
                                         {finding.presentation?.dimensions?.length ? (
                                             <div className="mt-3 flex flex-wrap gap-2">
                                                 {finding.presentation.dimensions.map(dimension => (
@@ -235,7 +239,7 @@ export default async function AgentRunDetailPage({
                                                 ))}
                                             </div>
                                         ) : null}
-                                        {finding.content ? <p className="mt-3 text-sm leading-6 text-muted-foreground">{finding.content}</p> : null}
+                                        {finding.content ? <p className="mt-4 whitespace-pre-line break-words text-sm leading-6 text-muted-foreground">{finding.content}</p> : null}
                                         {finding.presentation?.facts?.length ? (
                                             <dl className="mt-5 grid gap-3 sm:grid-cols-3">
                                                 {finding.presentation.facts.map(fact => (
@@ -247,7 +251,7 @@ export default async function AgentRunDetailPage({
                                             </dl>
                                         ) : null}
                                     </div>
-                                    <div className={`grid min-w-0 content-start gap-3 border-t pt-5 ${finding.evidence.length ? 'xl:border-t-0 xl:pl-6 xl:pt-0' : ''}`}>
+                                    <div className={`grid min-w-0 content-start gap-3 border-t pt-5 ${finding.evidence.length ? 'xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0' : ''}`}>
                                         <h3 className="text-sm font-semibold">{t('Findings.Evidence')}</h3>
                                         {finding.evidence.length ? (
                                             finding.evidence.map(artifact => (
@@ -301,17 +305,17 @@ export default async function AgentRunDetailPage({
                                 const assetHref = asset.deepLink?.startsWith('/') ? asset.deepLink.replace(/^\/[^/]+\//, `/${encodeURIComponent(organization)}/`) : null;
                                 const content = (
                                     <>
-                                        <BrainCircuit className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <BrainCircuit className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                                         <span className="min-w-0">
-                                            <span className="block truncate text-sm font-medium">{asset.title ?? item.assetRef}</span>
-                                            <span className="block truncate text-xs text-muted-foreground">
+                                            <span className="block break-words text-sm font-medium">{asset.title ?? item.assetRef}</span>
+                                            <span className="block break-words text-xs leading-5 text-muted-foreground">
                                                 {t(`Context.Kinds.${item.assetKind}`)}
                                                 {asset.knowledgeModelName && asset.knowledgeModelName !== asset.title ? ` · ${asset.knowledgeModelName}` : ''}
                                                 {asset.ossieVersion ? ` · Ossie ${asset.ossieVersion}` : ''}
                                                 {asset.modelRevision ? ` · rev ${asset.modelRevision.slice(0, 8)}` : ''}
                                             </span>
                                             {item.assetKind === 'semantic_model' ? (
-                                                <span className="mt-1 block text-xs text-muted-foreground">
+                                                <span className="mt-2 block text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
                                                     {t('Context.AutomaticallyApplied')}
                                                     {asset.metricNames?.length ? ` · ${asset.metricNames.join(', ')}` : ''}
                                                     {asset.relationshipNames?.length ? ` · ${asset.relationshipNames.join(', ')}` : ''}
@@ -321,21 +325,21 @@ export default async function AgentRunDetailPage({
                                     </>
                                 );
                                 return assetHref ? (
-                                    <Link key={item.assetRef} href={assetHref} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3 hover:bg-accent">
+                                    <Link key={item.assetRef} href={assetHref} className="flex min-w-0 items-start gap-3 rounded-lg border bg-card p-4 hover:bg-accent">
                                         {content}
                                     </Link>
                                 ) : (
-                                    <div key={item.assetRef} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3">
+                                    <div key={item.assetRef} className="flex min-w-0 items-start gap-3 rounded-lg border bg-card p-4">
                                         {content}
                                     </div>
                                 );
                             })}
                             {inspectedTables.map(table => (
-                                <div key={`table-${table}`} className="flex min-w-0 items-center gap-3 rounded-md border bg-card p-3">
-                                    <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                <div key={`table-${table}`} className="flex min-w-0 items-start gap-3 rounded-lg border bg-card p-4">
+                                    <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                                     <span className="min-w-0">
                                         <span className="block truncate text-sm font-medium">{table}</span>
-                                        <span className="block truncate text-xs text-muted-foreground">
+                                        <span className="block break-words text-xs leading-5 text-muted-foreground">
                                             {t('Context.Table')}
                                             {connectionName ? ` · ${connectionName}` : ''}
                                         </span>

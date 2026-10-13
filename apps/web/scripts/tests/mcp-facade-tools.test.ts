@@ -1631,3 +1631,59 @@ test('dory_saved_queries dispatches v1 operations and preserves write scope chec
         /Missing action scope "saved_queries:write"/,
     );
 });
+
+test('MCP Artifact previews read persisted rows within the authorized organization', async () => {
+    const readInputs: unknown[] = [];
+    const artifact = {
+        id: 'artifact-1',
+        type: 'result_set',
+        title: 'Evidence',
+        status: 'ready',
+        resourceId: 'rs-1',
+        parentArtifactId: null,
+        sourceResultSetId: 'rs-1',
+        connectionId: 'conn-1',
+        connectionName: 'Commerce',
+        workId: null,
+        agentRunId: null,
+        runTitle: null,
+        comparisonId: null,
+        comparisonName: null,
+        sourceType: 'query-run',
+        createdByActorType: 'mcp',
+        createdByActorId: 'user-1',
+        createdByName: 'Demo User',
+        rowCount: 1,
+        byteSize: 100,
+        fileName: null,
+        fileFormat: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: null,
+        pinnedAt: null,
+        pinnedByActorId: null,
+        retentionDays: null,
+        usedByCount: 0,
+        chartState: null,
+        resultSet: null,
+        workspaceTarget: null,
+        downloadUrl: null,
+        usedBy: [],
+    };
+    const services = {
+        db: {
+            artifacts: { get: async () => artifact },
+            resultSets: {
+                readRows: async (input: unknown) => {
+                    readInputs.push(input);
+                    return { rows: [{ revenue: 123.45 }], columns: [{ name: 'revenue' }], rowCount: 1 };
+                },
+            },
+        },
+    } as unknown as WebActionServices;
+    const output = (await getTool('dory_artifacts').execute(createContext(services), { artifactId: 'artifact-1', previewRows: 20 })) as { preview: { rows: unknown[] } };
+    assert.deepEqual(output.preview.rows, [{ revenue: 123.45 }]);
+    assert.deepEqual(readInputs, [{ organizationId: 'org-1', resultSetId: 'rs-1', offset: 0, limit: 20 }]);
+    await assert.rejects(() => getTool('dory_artifacts').execute(createContext(services, []), { artifactId: 'artifact-1' }));
+    assert.equal(readInputs.length, 1, 'Missing query scope must fail before reading rows.');
+});

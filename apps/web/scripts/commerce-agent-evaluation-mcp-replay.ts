@@ -1,26 +1,31 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-type JsonRecord = Record<string, unknown>;
+import { COMMERCE_EVALUATION_KNOWLEDGE_NAME } from '@/lib/demo/commerce-agent-evaluation';
+import { COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
 
-const endpoint = process.env.DORY_MCP_URL ?? 'http://localhost:3000/api/mcp';
-const token = process.env.DORY_MCP_TOKEN;
-const configuredConnectionId = process.env.DORY_COMMERCE_EVALUATION_CONNECTION_ID;
+type JsonRecord = Record<string, unknown>;
+type CallTool = (name: string, args: JsonRecord) => Promise<JsonRecord>;
 
 function isRecord(value: unknown): value is JsonRecord {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function toolPayload(result: unknown): JsonRecord {
-    if (isRecord(result) && isRecord(result.structuredContent)) return result.structuredContent;
-    if (isRecord(result) && Array.isArray(result.content)) {
+export function toolPayload(result: unknown): JsonRecord {
+    if (!isRecord(result) || result.isError) throw new Error('MCP tool failed.');
+    let payload: unknown = result.structuredContent;
+    if (!isRecord(payload) && Array.isArray(result.content)) {
         const text = result.content.find(item => isRecord(item) && item.type === 'text');
-        if (isRecord(text) && typeof text.text === 'string') {
-            const parsed: unknown = JSON.parse(text.text);
-            if (isRecord(parsed)) return parsed;
-        }
+        if (isRecord(text) && typeof text.text === 'string') payload = JSON.parse(text.text);
     }
-    throw new Error('MCP tool returned an unexpected payload.');
+    if (!isRecord(payload)) throw new Error('MCP tool returned an unexpected payload.');
+    if (payload.error || payload.ok === false) throw new Error(`MCP tool failed: ${JSON.stringify(payload.error ?? payload)}`);
+    return payload;
 }
 
 function requireString(value: unknown, field: string) {
@@ -28,121 +33,154 @@ function requireString(value: unknown, field: string) {
     return value;
 }
 
-function assetRefs(payload: JsonRecord) {
-    const assets = Array.isArray(payload.assets) ? payload.assets : [];
-    return assets
-        .filter(isRecord)
-        .map(asset => asset.ref)
-        .filter((ref): ref is string => typeof ref === 'string');
+// Persisted result sets serialize numeric cells as strings. Normalize only columns
+// whose golden SQL output is numeric; identifiers and nulls remain unchanged.
+export function normalizeArtifactRows(value: unknown, expected: readonly JsonRecord[]) {
+    assert.ok(Array.isArray(value));
+    return value.map((row: unknown, index: number) => {
+        assert.ok(isRecord(row));
+        return Object.fromEntries(
+            Object.entries(row).map(([key, cell]) => {
+                const numeric = typeof expected[index]?.[key] === 'number' && typeof cell === 'string' && /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(cell);
+                return [key, numeric ? Number(cell) : cell];
+            }),
+        );
+    });
+}
+
+export async function replayCommerceEvaluation(call: CallTool, connectionId: string) {
+    const results: JsonRecord[] = [];
+    for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
+        let workId: string | undefined;
+        try {
+            const work = await call('dory_create_work', { connectionId, title: scenario.title, userQuestion: scenario.question });
+            workId = requireString(work.workId, 'workId');
+            const semanticContext = requireString(work.semanticContext, 'semanticContext');
+            const models = Array.isArray(work.semanticModelsUsed) ? work.semanticModelsUsed.filter(isRecord) : [];
+            const model = models.find(item => item.name === COMMERCE_EVALUATION_KNOWLEDGE_NAME);
+            assert.ok(model, 'Expected commerce semantic model before explicit Knowledge discovery.');
+            assert.equal(model.ossieVersion, '0.1.1');
+            assert.match(requireString(model.modelRevision, 'modelRevision'), /^[a-f0-9]{64}$/);
+            for (const id of scenario.expectedSemanticIds) {
+                const name = id.slice(id.indexOf(':') + 1);
+                assert.ok(semanticContext.includes(name), `Missing ${id} for ${scenario.id}`);
+                if (id.startsWith('metric:')) assert.ok(Array.isArray(model.metricNames) && model.metricNames.includes(name), `Missing selected metric ${name}`);
+                if (id.startsWith('relationship:'))
+                    assert.ok(Array.isArray(model.relationshipNames) && model.relationshipNames.includes(name), `Missing selected relationship ${name}`);
+            }
+            const assets = await call('dory_search_assets', {
+                connectionId,
+                knowledgeModelId: model.id,
+                query: scenario.question,
+                kinds: ['knowledge_definition', 'verified_query'],
+                workId,
+            });
+            const asset = Array.isArray(assets.assets) ? assets.assets.filter(isRecord)[0] : undefined;
+            const ref = requireString(asset?.ref, 'Knowledge asset ref');
+            await call('dory_read_asset', { ref, workId });
+            await call('dory_explore_schema', { operation: 'list_tables', connectionId, database: 'main', workId });
+            const sql = await call('dory_run_readonly_sql', {
+                connectionId,
+                workId,
+                database: 'main',
+                maxRows: 100,
+                workspaceMode: 'create_tab',
+                tabName: scenario.title,
+                sql: scenario.sql,
+            });
+            assert.equal(sql.truncated, false, 'Results must not be truncated.');
+            assert.deepEqual(sql.result, scenario.expectedRows, `Golden result mismatch: ${scenario.id}`);
+            const artifacts = Array.isArray(sql.artifacts) ? sql.artifacts.filter(isRecord) : [];
+            const evidenceArtifactIds = artifacts.map(item => requireString(item.artifactId, 'artifactId'));
+            assert.ok(evidenceArtifactIds.length, 'SQL must persist an Artifact.');
+            const artifactReadbacks: JsonRecord[] = [];
+            for (const artifactId of evidenceArtifactIds) {
+                const saved = await call('dory_artifacts', { artifactId, previewRows: 100, workId });
+                assert.ok(isRecord(saved.artifact) && saved.artifact.workId === workId, 'Artifact must belong to this Run.');
+                assert.ok(isRecord(saved.preview), 'Artifact must have a readable preview.');
+                assert.equal(saved.preview.limited, false);
+                assert.deepEqual(normalizeArtifactRows(saved.preview.rows, scenario.expectedRows), sql.result, 'Persisted Artifact differs from SQL result.');
+                artifactReadbacks.push({ artifactId, rows: saved.preview.rows });
+            }
+            const rows = sql.result;
+            const content = rows
+                .map(row =>
+                    Object.entries(row)
+                        .map(([key, value]) => `${key} = ${String(value)}`)
+                        .join('; '),
+                )
+                .join('\n');
+            await call('dory_finish_work', {
+                workId,
+                status: 'completed',
+                summaryTitle: scenario.title,
+                findings: [{ title: scenario.title, content, evidenceArtifactIds, isPrimary: true }],
+                steps: [
+                    'Verified automatic semantic context before explicit Knowledge discovery.',
+                    'Read verified Knowledge and inspected the source schema.',
+                    'Executed the scenario SQL and matched every row against the shared golden results.',
+                    'Read back the persisted Artifact and verified its rows and Run ownership.',
+                ],
+            });
+            results.push({
+                scenarioId: scenario.id,
+                status: 'passed',
+                question: scenario.question,
+                sql: scenario.sql,
+                expectedSemanticIds: scenario.expectedSemanticIds,
+                expectedRows: scenario.expectedRows,
+                actualRows: rows,
+                workId,
+                workspaceUrl: sql.workspaceUrl,
+                semanticModel: model,
+                evidenceArtifactIds,
+                artifactReadbacks,
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (workId) await call('dory_finish_work', { workId, status: 'error', findings: [], steps: [`Acceptance failed: ${message}`] }).catch(() => undefined);
+            results.push({ scenarioId: scenario.id, status: 'failed', question: scenario.question, sql: scenario.sql, workId, error: message });
+        }
+    }
+    return { ok: results.every(item => item.status === 'passed'), connectionId, scenarios: results };
 }
 
 async function main() {
-    if (!token) {
-        throw new Error('Set DORY_MCP_TOKEN to a read-only Commerce service-account token before running this replay.');
-    }
-
+    const token = process.env.DORY_MCP_TOKEN;
+    if (!token) throw new Error('Set DORY_MCP_TOKEN to an existing service-account token with schema, query, assets and Agent workspace scopes.');
+    const endpoint = process.env.DORY_MCP_URL ?? 'http://localhost:3000/api/mcp';
+    const connectionId = process.env.DORY_COMMERCE_EVALUATION_CONNECTION_ID;
+    if (!connectionId) throw new Error('Set DORY_COMMERCE_EVALUATION_CONNECTION_ID to the explicit seed connectionId.');
     const client = new Client({ name: 'commerce-agent-evaluation-replay', version: '1.0.0' });
-    const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
-        requestInit: { headers: { authorization: `Bearer ${token}` } },
-    });
-
-    await client.connect(transport);
+    await client.connect(new StreamableHTTPClientTransport(new URL(endpoint), { requestInit: { headers: { authorization: `Bearer ${token}` } } }));
     try {
-        const call = async (name: string, args: JsonRecord) => toolPayload(await client.callTool({ name, arguments: args }));
-
-        const connections = await call('dory_list_connections', {});
-        const connectionRows = Array.isArray(connections.connections) ? connections.connections.filter(isRecord) : [];
-        const connection = connectionRows.find(item => item.connectionId === configuredConnectionId || item.name === 'Commerce Agent Evaluation');
-        const connectionId = configuredConnectionId ?? (connection && typeof connection.connectionId === 'string' ? connection.connectionId : undefined);
-        if (!connectionId) throw new Error('Commerce Agent Evaluation is not visible to this token. Check its connection allowlist and assets:read/read scopes.');
-
-        const work = await call('dory_create_work', {
-            connectionId,
-            title: 'Commerce payment incident investigation',
-            userQuestion: 'Identify the 2026-05-11 to 2026-05-17 payment failure anomaly.',
-        });
-        const workId = requireString(work.workId, 'workId');
-        const semanticContext = requireString(work.semanticContext, 'semanticContext');
-        if (!semanticContext.includes('payment_success_rate') || !semanticContext.includes('payments_order')) {
-            throw new Error('dory_create_work did not automatically inject the expected payment metric and relationship.');
-        }
-        const semanticModelsUsed = Array.isArray(work.semanticModelsUsed) ? work.semanticModelsUsed.filter(isRecord) : [];
-        const semanticModel = semanticModelsUsed.find(item => item.name === 'Commerce Operations Knowledge');
-        if (!semanticModel || semanticModel.ossieVersion !== '0.1.1' || typeof semanticModel.modelRevision !== 'string') {
-            throw new Error('dory_create_work did not report the expected Ossie model version and revision.');
-        }
-
-        // Explicit discovery remains available, but automatic semantic context above must succeed without it.
-        const assetSearch = await call('dory_search_assets', { query: '支付渠道失败率', kinds: ['knowledge_definition', 'verified_query'], workId });
-        const ref = assetRefs(assetSearch)[0];
-        if (!ref) throw new Error('The seeded payment-success Knowledge asset was not discoverable.');
-        await call('dory_read_asset', { ref, workId });
-        await call('dory_explore_schema', { operation: 'describe_table', connectionId, database: 'main', table: 'payments', workId });
-        const sql = await call('dory_run_readonly_sql', {
-            connectionId,
-            workId,
-            database: 'main',
-            maxRows: 20,
-            workspaceMode: 'create_tab',
-            tabName: 'Payment incident evidence',
-            sql: "SELECT provider, COUNT(*) AS attempts, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_attempts, ROUND(100.0 * AVG(CASE WHEN status = 'failed' THEN 1.0 ELSE 0.0 END), 2) AS failure_rate_pct FROM payments WHERE attempted_at >= '2026-05-11' AND attempted_at < '2026-05-18' GROUP BY provider ORDER BY failure_rate_pct DESC;",
-        });
-        const artifacts = Array.isArray(sql.artifacts) ? sql.artifacts.filter(isRecord) : [];
-        const evidenceArtifactIds = artifacts.map(artifact => artifact.artifactId).filter((id): id is string => typeof id === 'string');
-        if (!evidenceArtifactIds.length) throw new Error('The SQL replay did not return a persisted Artifact ID.');
-
-        await call('dory_finish_work', {
-            workId,
-            status: 'completed',
-            summaryTitle: 'Atlas Pay failure-rate incident',
-            findings: [
-                {
-                    title: 'Atlas Pay failure rate was 36.84% during the incident week.',
-                    content:
-                        'The deterministic evaluation dataset injects an Atlas Pay timeout incident for this window. Review the Artifact for the measured rate and competing providers.',
-                    evidenceArtifactIds,
-                    isPrimary: true,
-                    presentation: {
-                        metricLabel: 'Atlas Pay failure rate',
-                        metricValue: '36.84',
-                        metricUnit: '%',
-                        timeframe: 'Incident week · 2026-05-11 to 2026-05-17',
-                        dimensions: ['Atlas Pay', 'payments'],
-                        facts: [
-                            { label: 'Failed payments', value: '14' },
-                            { label: 'Total payments', value: '38' },
-                            { label: 'Result rows', value: '3' },
-                        ],
-                    },
-                },
-            ],
-            steps: ['Searched and read verified payment knowledge.', 'Inspected the payments schema.', 'Executed the incident aggregation and saved its Artifact.'],
-        });
-
+        const report = await replayCommerceEvaluation(async (name, args) => toolPayload(await client.callTool({ name, arguments: args })), connectionId);
+        const outputDir = path.resolve(
+            process.env.DORY_COMMERCE_EVALUATION_OUTPUT_DIR ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'localdata', 'commerce-knowledge-acceptance'),
+        );
+        await mkdir(outputDir, { recursive: true });
+        await writeFile(path.join(outputDir, 'mcp-results.json'), JSON.stringify({ endpoint, recordedAt: new Date().toISOString(), ...report }, null, 2));
         console.log(
             JSON.stringify(
                 {
-                    ok: true,
+                    ok: report.ok,
                     connectionId,
-                    workId,
-                    assetRef: ref,
-                    evidenceArtifactIds,
-                    semanticModel: {
-                        name: semanticModel.name,
-                        ossieVersion: semanticModel.ossieVersion,
-                        modelRevision: semanticModel.modelRevision,
-                    },
+                    outputDir,
+                    scenarios: report.scenarios.map(item => ({ scenarioId: item.scenarioId, status: item.status, workId: item.workId, error: item.error })),
                 },
                 null,
                 2,
             ),
         );
+        if (!report.ok) process.exitCode = 1;
     } finally {
         await client.close();
     }
 }
 
-main().catch(error => {
-    console.error('[commerce-agent-evaluation:mcp] failed', error instanceof Error ? error.message : error);
-    process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main().catch(error => {
+        console.error('[commerce-agent-evaluation:mcp] failed', error instanceof Error ? error.message : error);
+        process.exitCode = 1;
+    });
+}

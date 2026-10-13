@@ -52,16 +52,19 @@
 启动并登录本地 Dory，确保已有组织。从仓库根目录执行：
 
 ```bash
-yarn workspace web commerce:evaluation:seed --reset
+yarn workspace web commerce:evaluation:seed --organization-id <organizationId> --user-id <userId>
 ```
+
+请使用当前登录测试组织和用户的 ID。命令会校验用户属于该组织；不要同时运行应用和另一个写入同一 PGlite 目录的进程，导入前停止本地开发服务，导入后重启。如果修改了 MCP facade 源码，先执行 `yarn workspace @dory/server-core build` 重建共享运行时。
 
 该命令会：
 
-- 重建 `apps/web/localdata/commerce-agent-evaluation.sqlite`；
+- 复用 `apps/web/localdata/commerce-agent-evaluation.sqlite`；仅显式传入 `--reset` 时重建；
 - 创建或更新 `Commerce Agent Evaluation` SQLite 连接；
 - 导入 `Commerce Operations Knowledge` 的 Ossie 0.1.1 YAML，并保留 verified 状态；
 - 创建 4 个 Knowledge Sources 和 5 条 Verified Queries；
-- 输出 `connectionId`、`knowledgeModelId`、`ossieVersion` 和完整 `modelRevision`。
+- 输出 `connectionId`、`knowledgeModelId`、`ossieVersion` 和完整 `modelRevision`；
+- 导出 YAML、4 份来源文档、包含完整标准结果的 `scenarios.json` 和 `manifest.json` 到 `apps/web/localdata/commerce-knowledge-acceptance`（可通过 `--output-dir` 修改）。
 
 它只应在开发或测试组织运行。`--reset` 只会重建专用 SQLite fixture，不会修改业务数据库。
 
@@ -100,7 +103,7 @@ yarn workspace web exec tsx --test ../../packages/database/scripts/tests/knowled
 可选浏览器冒烟：
 
 ```bash
-E2E_COMMERCE_EVALUATION=1 yarn test:e2e tests/e2e/commerce-agent-evaluation.spec.ts
+PLAYWRIGHT_BASE_URL=http://localhost:3000 E2E_COMMERCE_EVALUATION=1 yarn test:e2e tests/e2e/commerce-agent-evaluation.spec.ts
 ```
 
 ### P0：自动语义上下文
@@ -122,7 +125,9 @@ DORY_COMMERCE_EVALUATION_CONNECTION_ID=<seed 输出的 connectionId> \
 yarn workspace web commerce:evaluation:mcp
 ```
 
-重放脚本会先调用 `dory_create_work`，并断言它自动返回 `payment_success_rate`、`payments_order`、Ossie 0.1.1 和 revision；之后才执行显式资产检索、schema 探索、SQL、Artifact 和 finding。
+重放脚本为五个固定场景分别创建 Agent Run，先断言自动返回场景要求的语义、Ossie 0.1.1 和 revision，再执行资产检索、schema 探索和标准 SQL。所有结果行必须匹配共享 `expectedRows`（持久化单元格中的数字字符串仅在对应标准列为数字时转换），随后读回 Artifact 核验内容和 Run 归属，最后用实测结果保存 finding。失败场景标记 error，命令以非零状态退出；记录保存至 `mcp-results.json`。这验证 MCP Agent 执行链路；UI Chat 自主生成 SQL 仍需单独验收。
+
+复购率的分母是至少购买一次的客户数，购买转化率的分母是渠道全部客户数；无购买客户时复购率为 NULL。
 
 ### P0：Agent Run 追溯
 

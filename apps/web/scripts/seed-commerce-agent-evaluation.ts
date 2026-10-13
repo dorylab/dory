@@ -1,14 +1,15 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import nextEnv from '@next/env';
 
 import { getDBService } from '@dory/database';
 import { getClient } from '@dory/database/postgres/client';
 import { resetPgliteClient } from '@dory/database/postgres/client/pglite';
 import { serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
-import { organizations, user } from '@dory/database/postgres/schemas';
+import { organizations, organizationMembers, user } from '@dory/database/postgres/schemas';
 import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
 import { getDatabaseProvider } from '@dory/database/provider';
 
@@ -19,17 +20,21 @@ import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } f
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 nextEnv.loadEnvConfig(appRoot, true);
 
-type SeedArgs = { organizationId?: string; userId?: string; sqlitePath?: string; reset: boolean };
+type SeedArgs = { organizationId: string; userId: string; sqlitePath?: string; outputDir: string; reset: boolean };
 
 function parseArgs(argv: string[]): SeedArgs {
     const valueFor = (name: string) => {
         const index = argv.indexOf(name);
         return index === -1 ? undefined : argv[index + 1];
     };
+    const organizationId = valueFor('--organization-id');
+    const userId = valueFor('--user-id');
+    if (!organizationId || !userId) throw new Error('Pass --organization-id and --user-id for the current local test organization.');
     return {
-        organizationId: valueFor('--organization-id'),
-        userId: valueFor('--user-id'),
+        organizationId,
+        userId,
         sqlitePath: valueFor('--path'),
+        outputDir: path.resolve(valueFor('--output-dir') ?? path.join(appRoot, 'localdata', 'commerce-knowledge-acceptance')),
         reset: argv.includes('--reset'),
     };
 }
@@ -84,13 +89,16 @@ async function main() {
     const provider = getDatabaseProvider();
     if (provider === 'pglite') await migratePgliteDB();
     const client = await getClient();
-    const [organization] = args.organizationId
-        ? await client.select().from(organizations).where(eq(organizations.id, args.organizationId)).limit(1)
-        : await client.select().from(organizations).limit(1);
+    const [organization] = await client.select().from(organizations).where(eq(organizations.id, args.organizationId)).limit(1);
     if (!organization) throw new Error('No organization found. Create or sign into a Dory organization before seeding.');
-    const [userRow] = args.userId ? await client.select().from(user).where(eq(user.id, args.userId)).limit(1) : await client.select().from(user).limit(1);
-    const userId = args.userId ?? organization.ownerUserId ?? userRow?.id;
-    if (!userId) throw new Error('No user found for the selected organization.');
+    const [userRow] = await client.select().from(user).where(eq(user.id, args.userId)).limit(1);
+    const [membership] = await client
+        .select()
+        .from(organizationMembers)
+        .where(and(eq(organizationMembers.organizationId, organization.id), eq(organizationMembers.userId, args.userId)))
+        .limit(1);
+    if (!userRow || !membership) throw new Error('The selected user must belong to the selected test organization.');
+    const userId = userRow.id;
 
     const sqlitePath = resolveSqlitePath(args.sqlitePath);
     const generated = generateCommerceAgentEvaluationSqlite(sqlitePath, { reset: args.reset });
@@ -189,6 +197,22 @@ async function main() {
         else await db.knowledge.createVerifiedQuery({ ...input, sourceType: 'seed', sourceId: 'commerce-agent-evaluation', createdBy: userId });
     }
 
+    await mkdir(args.outputDir, { recursive: true });
+    await writeFile(path.join(args.outputDir, 'commerce-semantic-model.yaml'), ossieYaml);
+    for (const spec of sourceSpecs(ossieYaml)) await writeFile(path.join(args.outputDir, spec.fileName), spec.contentText);
+    await writeFile(path.join(args.outputDir, 'scenarios.json'), JSON.stringify(COMMERCE_EVALUATION_SCENARIOS, null, 2));
+    const manifest = {
+        organizationId: organization.id,
+        organizationSlug: organization.slug,
+        userId,
+        sqlitePath,
+        connectionId,
+        knowledgeModelId: model.id,
+        ossieVersion: model.ossieVersion,
+        modelRevision: model.modelRevision,
+        outputDir: args.outputDir,
+    };
+    await writeFile(path.join(args.outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     console.log(
         JSON.stringify(
             {
@@ -200,6 +224,7 @@ async function main() {
                 knowledgeModelId: model.id,
                 ossieVersion: model.ossieVersion,
                 modelRevision: model.modelRevision,
+                outputDir: args.outputDir,
                 scenarios: COMMERCE_EVALUATION_SCENARIOS.map(scenario => scenario.id),
             },
             null,
