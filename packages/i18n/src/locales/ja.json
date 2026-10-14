@@ -4400,19 +4400,19 @@
             "EvidenceLinked": "データの根拠あり",
             "EvidenceMissing": "データの根拠なし",
             "NoAnalysis": "この実行では SQL 分析を行っていません。設定や検証の結果は、以下のコンテキストと実行手順をご確認ください。",
-            "Evidence": "証拠",
+            "Evidence": "データの根拠",
             "NoEvidence": "Agent はこの記述にデータ結果を引用していません。採用する前に元データをご確認ください。",
             "Empty": "この Run では発見事項が生成されていません。",
-            "OtherOutputs": "その他の出力",
-            "ViewResult": "結果を見る",
+            "OtherOutputs": "その他の成果物",
+            "ViewResult": "全結果を開く",
             "ViewSql": "SQL を見る",
-            "Verified": "レビュー済み",
-            "Verify": "レビュー済みにする",
+            "Verified": "人による確認済み",
+            "Verify": "確認済みにする",
             "VerificationFailed": "この発見事項の検証状態を更新できませんでした。"
         },
         "Context": {
-            "Title": "使用したコンテキスト",
-            "Description": "自動適用されたセマンティックモデルと Agent が読んだアセットです。モデルのリビジョンで実行時のコンテキストを確認できます。",
+            "Title": "分析コンテキスト",
+            "Description": "この実行で記録された知識と参考コンテキストです。表示のバージョンは実行時のもの、リンク先は現在のソースです。",
             "AutomaticallyApplied": "自動適用",
             "Table": "テーブル",
             "Kinds": {
@@ -4424,12 +4424,12 @@
             }
         },
         "Trace": {
-            "Title": "Agent が結論に至るまで",
+            "Title": "分析手順",
             "Description": "分析経路の簡潔な記録です。",
             "Empty": "実行手順は記録されていません。"
         },
         "Activity": {
-            "Title": "アクティビティと生の実行内容",
+            "Title": "実行の詳細",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "実行中",
@@ -4523,6 +4523,34 @@
                 "Skip": "スキップ",
                 "Close": "ツアーを閉じる"
             }
+        },
+        "Report": {
+            "SavedResult": "保存されたクエリ結果",
+            "Columns": "{count} 列",
+            "PreviewFailed": "保存された結果のプレビューを読み込めませんでした。",
+            "Retry": "再試行",
+            "LoadingPreview": "保存された結果を読み込み中",
+            "PreviewUnavailable": "保存された結果データを利用できません。元のクエリは再実行していません。",
+            "NoRows": "このクエリは行を返しませんでした。",
+            "SavedPreview": "保存済みプレビュー：{count} 行。完全な結果データは利用できません。",
+            "AllRows": "保存された結果の全 {count} 行。",
+            "FirstRows": "保存された結果の先頭 {count} 行。全結果を開くと絞り込みや並べ替えができます。",
+            "ContinueWorkspace": "ワークスペースで続ける",
+            "EvidenceDetails": "根拠の詳細",
+            "DetailsFailed": "クエリとワークスペースの詳細を読み込めませんでした。",
+            "WorkspaceHint": "この分析の SQL タブと保存済み結果から、確認・編集・分析を続けます。",
+            "WorkspaceUnavailable": "この実行には利用可能なワークスペースがありません。",
+            "OtherResults": "その他のデータ結果",
+            "OtherResultsHint": "これらの保存済み結果は、まだ結論から引用されていません。",
+            "BusinessKnowledge": "業務知識と参考コンテキスト",
+            "DataSources": "データソース",
+            "InspectedTable": "確認済みのテーブル構造",
+            "AgentStepsHint": "Agent が報告した分析の概要です。実際のツール操作は実行の詳細で確認できます。",
+            "RecordedStepsHint": "記録された操作の概要です。完全な記録は実行の詳細で確認できます。",
+            "ReviewedBy": "確認者：{name}",
+            "UnknownReviewer": "不明な確認者",
+            "UndoReview": "確認を取り消す",
+            "NotReviewed": "人による確認は未実施"
         }
     },
     "OrganizationSettings": {

@@ -4400,19 +4400,19 @@
             "EvidenceLinked": "Data evidence attached",
             "EvidenceMissing": "No data evidence attached",
             "NoAnalysis": "No SQL analysis was performed in this run. See the context and execution steps below for setup or validation results.",
-            "Evidence": "Evidence",
+            "Evidence": "Data evidence",
             "NoEvidence": "The Agent did not cite a data result for this statement. Check the underlying data before relying on it.",
             "Empty": "No findings were generated for this run.",
             "OtherOutputs": "Other outputs",
-            "ViewResult": "View result",
+            "ViewResult": "Open full result",
             "ViewSql": "View SQL",
-            "Verified": "Reviewed",
+            "Verified": "Human reviewed",
             "Verify": "Mark as reviewed",
             "VerificationFailed": "Could not update this Finding's verification."
         },
         "Context": {
-            "Title": "Context used",
-            "Description": "Semantic models automatically applied and assets explicitly read by the Agent. Model revisions preserve the context used in this run.",
+            "Title": "Analysis context",
+            "Description": "Knowledge and reference context captured for this run. Links open the current source; versions below describe the captured context.",
             "AutomaticallyApplied": "Automatically applied",
             "Table": "Table",
             "Kinds": {
@@ -4424,12 +4424,12 @@
             }
         },
         "Trace": {
-            "Title": "How Agent got here",
+            "Title": "Analysis steps",
             "Description": "A concise record of the analysis path.",
             "Empty": "No execution steps were recorded."
         },
         "Activity": {
-            "Title": "Activity & raw execution",
+            "Title": "Execution details",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "active",
@@ -4523,6 +4523,34 @@
                 "Skip": "Skip",
                 "Close": "Close tour"
             }
+        },
+        "Report": {
+            "SavedResult": "Saved query result",
+            "Columns": "{count} columns",
+            "PreviewFailed": "The saved result preview could not be loaded.",
+            "Retry": "Retry",
+            "LoadingPreview": "Loading saved results",
+            "PreviewUnavailable": "Saved result data is unavailable. The original query has not been rerun.",
+            "NoRows": "This query returned no rows.",
+            "SavedPreview": "Saved preview: {count} rows. Full result data is unavailable.",
+            "AllRows": "All {count} rows from the saved result.",
+            "FirstRows": "First {count} rows of the saved result. Open the full result to filter and sort.",
+            "ContinueWorkspace": "Continue in Workspace",
+            "EvidenceDetails": "Evidence details",
+            "DetailsFailed": "Query and workspace details could not be loaded.",
+            "WorkspaceHint": "Continue with this run’s SQL tabs and saved results.",
+            "WorkspaceUnavailable": "No workspace is available for this run.",
+            "OtherResults": "Additional results",
+            "OtherResultsHint": "These saved results have not been cited by a finding.",
+            "BusinessKnowledge": "Business knowledge & reference context",
+            "DataSources": "Data sources",
+            "InspectedTable": "Inspected table schema",
+            "AgentStepsHint": "Agent-reported analysis summary. See execution details for recorded tool activity.",
+            "RecordedStepsHint": "Summary of recorded activity. See execution details for the full record.",
+            "ReviewedBy": "Reviewed by {name}",
+            "UnknownReviewer": "Unknown reviewer",
+            "UndoReview": "Undo review",
+            "NotReviewed": "Not reviewed by a person"
         }
     },
     "OrganizationSettings": {

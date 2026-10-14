@@ -4390,19 +4390,19 @@
             "EvidenceLinked": "已附数据证据",
             "EvidenceMissing": "未附数据证据",
             "NoAnalysis": "本次运行尚未执行 SQL 分析。配置或功能验收结果请查看下方的上下文与执行步骤。",
-            "Evidence": "证据",
+            "Evidence": "数据证据",
             "NoEvidence": "Agent 未为这条陈述引用数据结果。采纳前请检查相关数据。",
             "Empty": "这个 Run 没有生成发现。",
-            "OtherOutputs": "其他输出",
-            "ViewResult": "查看结果",
+            "OtherOutputs": "其他产物",
+            "ViewResult": "查看完整结果",
             "ViewSql": "查看 SQL",
-            "Verified": "已复核",
-            "Verify": "标记为已复核",
+            "Verified": "人工已复核",
+            "Verify": "标记为人工已复核",
             "VerificationFailed": "无法更新这个发现的验证状态。"
         },
         "Context": {
-            "Title": "使用的上下文",
-            "Description": "自动应用的语义模型，以及 Agent 主动读取的资产。模型版本保留了本次运行使用的上下文。",
+            "Title": "分析上下文",
+            "Description": "本次运行记录的知识与参考上下文快照。下方版本属于本次运行，链接打开的是当前来源。",
             "AutomaticallyApplied": "自动应用",
             "Table": "数据表",
             "Kinds": {
@@ -4414,12 +4414,12 @@
             }
         },
         "Trace": {
-            "Title": "Agent 如何得出结论",
+            "Title": "分析过程",
             "Description": "简明的分析路径记录。",
             "Empty": "没有记录执行步骤。"
         },
         "Activity": {
-            "Title": "活动与原始执行详情",
+            "Title": "执行详情",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "运行中",
@@ -4513,6 +4513,34 @@
                 "Skip": "跳过",
                 "Close": "关闭引导"
             }
+        },
+        "Report": {
+            "SavedResult": "已保存的查询结果",
+            "Columns": "{count} 列",
+            "PreviewFailed": "无法加载已保存的结果预览。",
+            "Retry": "重试",
+            "LoadingPreview": "正在加载已保存的结果",
+            "PreviewUnavailable": "已保存的结果数据不可用，原始查询未重新执行。",
+            "NoRows": "此查询未返回任何行。",
+            "SavedPreview": "已保存的预览：{count} 行。完整结果数据不可用。",
+            "AllRows": "已保存结果的全部 {count} 行。",
+            "FirstRows": "已保存结果的前 {count} 行。打开完整结果可筛选和排序。",
+            "ContinueWorkspace": "继续在工作区",
+            "EvidenceDetails": "证据详情",
+            "DetailsFailed": "无法加载查询与工作区详情。",
+            "WorkspaceHint": "进入本次分析的 SQL 标签页和已保存结果，继续检查、编辑与分析。",
+            "WorkspaceUnavailable": "本次运行暂无可打开的工作区。",
+            "OtherResults": "其他数据结果",
+            "OtherResultsHint": "这些已保存的结果尚未被任何关键发现引用。",
+            "BusinessKnowledge": "业务知识与参考上下文",
+            "DataSources": "数据来源",
+            "InspectedTable": "已查看表结构",
+            "AgentStepsHint": "由 Agent 提供的分析摘要；实际工具活动请查看执行详情。",
+            "RecordedStepsHint": "根据已记录活动生成的摘要；完整记录请查看执行详情。",
+            "ReviewedBy": "复核人：{name}",
+            "UnknownReviewer": "未知复核人",
+            "UndoReview": "撤销复核",
+            "NotReviewed": "尚未人工复核"
         }
     },
     "OrganizationSettings": {

@@ -10,6 +10,7 @@ import {
     queryRuns,
     resultSets as resultSetsTable,
     tabs,
+    user,
     workChartStates,
     workEvents,
     workAgentAssets,
@@ -118,6 +119,7 @@ export type WorkFinding = {
     isPrimary: boolean;
     verifiedAt: Date | null;
     verifiedByUserId: string | null;
+    verifiedByName: string | null;
     createdAt: Date;
     evidence: Array<{ id: string; title: string; type: string; rowCount: number | null }>;
 };
@@ -743,8 +745,9 @@ export class PostgresWorksRepository {
         const owned = await this.getById(input);
         if (!owned) throw new DatabaseError('Work not found', 404);
         const rows = await this.db
-            .select({ finding: findings, artifact: artifacts, rowCount: resultSetsTable.rowCount })
+            .select({ finding: findings, artifact: artifacts, rowCount: resultSetsTable.rowCount, verifiedByName: user.name })
             .from(findings)
+            .leftJoin(user, eq(user.id, findings.verifiedByUserId))
             .leftJoin(findingArtifacts, eq(findingArtifacts.findingId, findings.id))
             .leftJoin(artifacts, eq(artifacts.id, findingArtifacts.artifactId))
             .leftJoin(resultSetsTable, and(eq(resultSetsTable.organizationId, artifacts.organizationId), eq(resultSetsTable.id, artifacts.sourceResultSetId)))
@@ -760,6 +763,7 @@ export class PostgresWorksRepository {
                 isPrimary: row.finding.isPrimary,
                 verifiedAt: row.finding.verifiedAt,
                 verifiedByUserId: row.finding.verifiedByUserId,
+                verifiedByName: row.verifiedByName,
                 createdAt: row.finding.createdAt,
                 evidence: [],
             };

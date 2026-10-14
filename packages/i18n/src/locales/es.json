@@ -4394,19 +4394,19 @@
             "EvidenceLinked": "Evidencia adjunta",
             "EvidenceMissing": "Sin evidencia adjunta",
             "NoAnalysis": "No se realizó análisis SQL en esta ejecución. Consulta el contexto y los pasos para ver los resultados de configuración o validación.",
-            "Evidence": "Evidencia",
+            "Evidence": "Evidencia de datos",
             "NoEvidence": "El Agent no citó datos para esta afirmación. Revisa los datos antes de utilizarla.",
             "Empty": "No se generaron hallazgos para esta ejecución.",
-            "OtherOutputs": "Otros resultados",
-            "ViewResult": "Ver resultado",
+            "OtherOutputs": "Otros productos",
+            "ViewResult": "Ver resultado completo",
             "ViewSql": "Ver SQL",
-            "Verified": "Revisado",
+            "Verified": "Revisión humana completada",
             "Verify": "Marcar como revisado",
             "VerificationFailed": "No se pudo actualizar la verificación de este hallazgo."
         },
         "Context": {
-            "Title": "Contexto utilizado",
-            "Description": "Modelos semánticos aplicados automáticamente y activos leídos por el Agent. Las revisiones conservan el contexto de esta ejecución.",
+            "Title": "Contexto del análisis",
+            "Description": "Conocimiento y contexto de referencia capturados para esta ejecución. Las versiones corresponden a ese momento; los enlaces abren la fuente actual.",
             "AutomaticallyApplied": "Aplicado automáticamente",
             "Table": "Tabla",
             "Kinds": {
@@ -4418,12 +4418,12 @@
             }
         },
         "Trace": {
-            "Title": "Cómo llegó el Agent",
+            "Title": "Pasos del análisis",
             "Description": "Un registro breve del camino de análisis.",
             "Empty": "No se registraron pasos de ejecución."
         },
         "Activity": {
-            "Title": "Actividad y ejecución sin procesar",
+            "Title": "Detalles de ejecución",
             "Summary": "{sqlRuns} · {tabsCreated} · {status}",
             "Status": {
                 "active": "activa",
@@ -4515,6 +4515,34 @@
                 "Skip": "Omitir",
                 "Close": "Cerrar tour"
             }
+        },
+        "Report": {
+            "SavedResult": "Resultado de consulta guardado",
+            "Columns": "{count} columnas",
+            "PreviewFailed": "No se pudo cargar la vista previa del resultado guardado.",
+            "Retry": "Reintentar",
+            "LoadingPreview": "Cargando resultados guardados",
+            "PreviewUnavailable": "Los datos guardados no están disponibles. La consulta original no se ha vuelto a ejecutar.",
+            "NoRows": "Esta consulta no devolvió filas.",
+            "SavedPreview": "Vista previa guardada: {count} filas. Los datos completos no están disponibles.",
+            "AllRows": "Las {count} filas del resultado guardado.",
+            "FirstRows": "Primeras {count} filas del resultado guardado. Abre el resultado completo para filtrar y ordenar.",
+            "ContinueWorkspace": "Continuar en el espacio de trabajo",
+            "EvidenceDetails": "Detalles de la evidencia",
+            "DetailsFailed": "No se pudieron cargar los detalles de la consulta y del espacio de trabajo.",
+            "WorkspaceHint": "Continúa con las pestañas SQL y los resultados guardados de este análisis.",
+            "WorkspaceUnavailable": "Esta ejecución no tiene un espacio de trabajo disponible.",
+            "OtherResults": "Otros resultados de datos",
+            "OtherResultsHint": "Ningún hallazgo ha citado todavía estos resultados guardados.",
+            "BusinessKnowledge": "Conocimiento de negocio y contexto de referencia",
+            "DataSources": "Fuentes de datos",
+            "InspectedTable": "Estructura de tabla inspeccionada",
+            "AgentStepsHint": "Resumen del análisis comunicado por el agente. Consulta los detalles de ejecución para ver la actividad registrada.",
+            "RecordedStepsHint": "Resumen de la actividad registrada. Consulta los detalles de ejecución para ver el registro completo.",
+            "ReviewedBy": "Revisado por {name}",
+            "UnknownReviewer": "Revisor desconocido",
+            "UndoReview": "Deshacer revisión",
+            "NotReviewed": "Sin revisión humana"
         }
     },
     "OrganizationSettings": {

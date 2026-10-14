@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
-import { ArrowLeft, BrainCircuit, CheckCircle2, FileText, ListChecks } from 'lucide-react';
+import { getFormatter, getTranslations } from 'next-intl/server';
+import { ArrowLeft, ArrowUpRight, BarChart3, BrainCircuit, Database, FileText, ListChecks } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
 import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
 import { AgentRunStatusBadge } from '@/components/agent-runs/agent-run-status-badge';
 import { FindingVerificationButton } from '@/components/agent-runs/finding-verification-button';
-import { AgentRunVerifiedQueryButton } from '@/components/knowledge/agent-run-verified-query-button';
+import { AgentRunEvidence } from '@/components/agent-runs/agent-run-evidence';
+import { getSupportingFacts, orderReportFindings, shouldShowHeadlineMetric } from '@/lib/agent-runs/report';
 import { createAgentRunTextFormatter } from '@/lib/agent-runs/i18n';
 import { buildAgentRunTimeline, getAgentRunActivitySummary, getAgentRunStats, getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePathFromSnapshot, resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
@@ -15,73 +16,8 @@ import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 
-type FindingPresentation = {
-    metricLabel?: string;
-    metricValue?: string;
-    metricUnit?: string;
-    timeframe?: string;
-    dimensions?: string[];
-    facts?: Array<{ label: string; value: string }>;
-};
-
-type AgentRunFinding = {
-    id: string;
-    title: string;
-    content: string | null;
-    presentation: FindingPresentation | null;
-    isPrimary: boolean;
-    verifiedAt: Date | null;
-    evidence: Array<{ id: string; title: string; type: string; rowCount: number | null }>;
-};
-
 function unique(values: string[]) {
     return [...new Set(values.filter(Boolean))];
-}
-
-function EvidenceCard({
-    artifact,
-    organization,
-    workId,
-    workspaceHref,
-    sql,
-    connectionId,
-    labels,
-}: {
-    artifact: AgentRunFinding['evidence'][number];
-    organization: string;
-    workId: string;
-    workspaceHref: string;
-    sql: string | null;
-    connectionId: string | null;
-    labels: { viewResult: string; viewSql: string; rowCount: (count: number) => string };
-}) {
-    const artifactHref = `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}?fromAgentRun=${encodeURIComponent(workId)}`;
-
-    return (
-        <div className="grid min-w-0 gap-3 rounded-lg border bg-muted/30 p-4">
-            <div className="flex min-w-0 items-start gap-2">
-                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                    <div className="line-clamp-2 break-words text-sm font-medium" title={artifact.title}>
-                        {artifact.title}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                        {artifact.type}
-                        {artifact.rowCount == null ? '' : ` · ${labels.rowCount(artifact.rowCount)}`}
-                    </div>
-                </div>
-            </div>
-            <div className="flex flex-wrap gap-2 border-t pt-3">
-                <Button asChild variant="outline" size="sm">
-                    <Link href={artifactHref}>{labels.viewResult}</Link>
-                </Button>
-                <Button asChild variant="ghost" size="sm">
-                    <Link href={workspaceHref}>{labels.viewSql}</Link>
-                </Button>
-                {sql && connectionId ? <AgentRunVerifiedQueryButton connectionId={connectionId} sql={sql} workId={workId} title={artifact.title} /> : null}
-            </div>
-        </div>
-    );
 }
 
 export default async function AgentRunDetailPage({
@@ -94,6 +30,7 @@ export default async function AgentRunDetailPage({
     const [{ organization, workId }, { fromArtifact }] = await Promise.all([params, searchParams]);
     const [t, artifactsT] = await Promise.all([getTranslations('AgentRuns'), getTranslations('Artifacts')]);
     const formatter = createAgentRunTextFormatter(t);
+    const dateFormatter = await getFormatter();
     const bootstrap = await getAppBootstrapState({ organizationSlugOrId: organization });
     const userId = bootstrap.session?.user?.id ?? null;
     const organizationId = bootstrap.organization?.id ?? bootstrap.activeOrganizationId;
@@ -122,16 +59,14 @@ export default async function AgentRunDetailPage({
     const backToArtifacts = Boolean(fromArtifact);
     const backHref = backToArtifacts ? `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(fromArtifact!)}` : `/${encodeURIComponent(organization)}/agent-runs`;
     const backLabel = backToArtifacts ? `${artifactsT('Title')} · ${fromArtifact}` : t('List.Title');
-    const findings = persistedFindings as AgentRunFinding[];
+    const findings = orderReportFindings(persistedFindings);
     const primaryFinding = findings.find(finding => finding.isPrimary) ?? findings[0] ?? null;
-    const legacyConclusion = summary?.findings[0] ?? null;
-    const conclusion = primaryFinding?.title ?? legacyConclusion;
-    const title = summary?.summaryTitle || snapshot.work.title || t('Common.AgentRun');
-    const distinctConclusion = conclusion?.trim() && conclusion.trim() !== title.trim() ? conclusion : null;
-    const contextCount = agentAssetUsage.length;
+    const title = (findings.length ? snapshot.work.title : summary?.summaryTitle) || snapshot.work.title || t('Common.AgentRun');
+    const artifactById = new Map(artifacts.map(artifact => [artifact.id, artifact]));
     const resultSetCount = artifacts.filter(artifact => artifact.type === 'result_set').length;
     const referencedArtifactIds = new Set(findings.flatMap(finding => finding.evidence.map(artifact => artifact.id)));
-    const otherArtifacts = artifacts.filter(artifact => !referencedArtifactIds.has(artifact.id));
+    const unlinkedResults = artifacts.filter(artifact => artifact.type === 'result_set' && !referencedArtifactIds.has(artifact.id));
+    const otherArtifacts = artifacts.filter(artifact => artifact.type !== 'result_set' && !referencedArtifactIds.has(artifact.id));
     const inspectedTables = unique(
         events.flatMap(event => {
             if (!event.toolName.includes('explore_schema')) return [];
@@ -139,11 +74,6 @@ export default async function AgentRunDetailPage({
             const table = input && typeof input.table === 'string' ? input.table : null;
             return table ? [table] : [];
         }),
-    );
-    const sqlByResultSetId = new Map(
-        snapshot.sessions.flatMap(item =>
-            item.queryResultSets.flatMap(resultSet => (resultSet.resultSetId && resultSet.sqlText ? [[resultSet.resultSetId, resultSet.sqlText] as const] : [])),
-        ),
     );
     const traceSteps = unique(
         summary?.steps.length
@@ -155,12 +85,13 @@ export default async function AgentRunDetailPage({
 
     return (
         <div className="min-h-full bg-n8">
-            <main className="container mx-auto flex max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
+            <main className="container mx-auto flex max-w-6xl flex-col gap-8 px-4 py-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
                 <header className="grid gap-4">
-                    <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
+                    <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit min-w-0 max-w-full justify-start">
                         <Link href={backHref}>
                             <ArrowLeft className="h-4 w-4" />
-                            {backLabel}
+                            <span className="min-w-0 truncate">{backLabel}</span>
+                            {connectionName ? <span className="max-w-64 truncate text-muted-foreground">/ {connectionName}</span> : null}
                         </Link>
                     </Button>
 
@@ -170,11 +101,9 @@ export default async function AgentRunDetailPage({
                                 <h1 className="min-w-0 break-words text-2xl font-semibold leading-tight tracking-normal">{title}</h1>
                                 <AgentRunStatusBadge status={snapshot.work.status} />
                             </div>
-                            {distinctConclusion ? <p className="mt-3 max-w-3xl break-words text-base font-medium leading-relaxed sm:text-lg">{distinctConclusion}</p> : null}
                             <p className="mt-2 text-sm leading-6 text-muted-foreground">
                                 {[
-                                    stats.dataSource,
-                                    t('Detail.ContextAssets', { count: contextCount }),
+                                    dateFormatter.dateTime(snapshot.work.createdAt, { year: 'numeric', month: 'short', day: 'numeric' }),
                                     formatter.sqlRuns(stats.sqlExecutionCount),
                                     t('Detail.ResultSets', { count: resultSetCount }),
                                 ].join(' · ')}
@@ -182,107 +111,139 @@ export default async function AgentRunDetailPage({
                         </div>
                         {hasWorkspace ? (
                             <Button asChild className="w-full justify-self-start sm:w-auto">
-                                <Link href={workspaceHref}>{t('Actions.OpenWorkspace')}</Link>
+                                <Link href={workspaceHref}>
+                                    {t('Report.ContinueWorkspace')}
+                                    <ArrowUpRight className="h-4 w-4" />
+                                </Link>
                             </Button>
                         ) : (
                             <Button disabled className="w-full justify-self-start sm:w-auto">
-                                {t('Actions.OpenWorkspace')}
+                                {t('Report.ContinueWorkspace')}
                             </Button>
                         )}
                     </div>
+                    <p className="text-xs text-muted-foreground">{t(hasWorkspace ? 'Report.WorkspaceHint' : 'Report.WorkspaceUnavailable')}</p>
                 </header>
 
-                <section className="grid gap-3">
-                    <div>
-                        <h2 className="text-base font-semibold">{t('Findings.Title')}</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">{t('Findings.Description')}</p>
-                    </div>
+                <section className="grid gap-4" aria-labelledby="findings-heading">
+                    <h2 id="findings-heading" className="text-sm font-medium text-muted-foreground">
+                        {t('Findings.Title')}
+                    </h2>
                     {findings.length ? (
-                        <div className="grid gap-4">
-                            {findings.map(finding => (
-                                <article
-                                    key={finding.id}
-                                    className={`grid min-w-0 gap-6 rounded-lg border bg-card p-4 sm:p-5 ${finding.evidence.length ? 'xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]' : ''}`}
-                                >
-                                    <div className="min-w-0">
-                                        <div className="flex flex-wrap items-start justify-between gap-3">
-                                            <div className="min-w-0 break-words">
-                                                {finding.presentation?.metricLabel ? (
-                                                    <p className="text-sm font-medium text-muted-foreground">{finding.presentation.metricLabel}</p>
-                                                ) : null}
-                                                {finding.presentation?.metricValue ? (
-                                                    <p className="mt-1 text-4xl font-semibold tracking-tight sm:text-5xl">
+                        <div className="grid gap-6">
+                            {findings.map(finding => {
+                                const facts = getSupportingFacts(finding.presentation);
+                                return (
+                                    <article key={finding.id} id={`finding-${finding.id}`} className="min-w-0 overflow-hidden rounded-xl border bg-card">
+                                        <div className="p-5 sm:p-7">
+                                            {shouldShowHeadlineMetric(finding.title, finding.presentation) && finding.presentation ? (
+                                                <div className="mb-4">
+                                                    {finding.presentation.metricLabel ? (
+                                                        <p className="mb-2 text-sm text-muted-foreground">{finding.presentation.metricLabel}</p>
+                                                    ) : null}
+                                                    <p
+                                                        className={`font-semibold tracking-tight tabular-nums ${finding.id === primaryFinding?.id ? 'text-4xl sm:text-5xl' : 'text-3xl'}`}
+                                                    >
                                                         {finding.presentation.metricValue}
                                                         {finding.presentation.metricUnit ? (
                                                             <span className="ml-1 text-xl text-muted-foreground">{finding.presentation.metricUnit}</span>
                                                         ) : null}
                                                     </p>
-                                                ) : (
-                                                    <h3 className="text-lg font-semibold">{finding.title}</h3>
-                                                )}
-                                                {finding.presentation?.metricValue ? <h3 className="mt-2 text-base font-medium">{finding.title}</h3> : null}
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <Badge variant="secondary">{t(finding.evidence.length ? 'Findings.EvidenceLinked' : 'Findings.EvidenceMissing')}</Badge>
-                                                {finding.evidence.length || finding.verifiedAt ? (
-                                                    <FindingVerificationButton findingId={finding.id} workId={workId} verifiedAt={finding.verifiedAt} />
-                                                ) : null}
+                                                </div>
+                                            ) : null}
+                                            {finding.title.trim() !== title.trim() ? (
+                                                <h3
+                                                    className={`break-words font-semibold leading-relaxed ${finding.id === primaryFinding?.id ? 'text-xl sm:text-2xl' : 'text-lg'}`}
+                                                >
+                                                    {finding.title}
+                                                </h3>
+                                            ) : null}
+                                            {finding.content && finding.content.trim() !== finding.title.trim() ? (
+                                                <p className="mt-3 max-w-4xl whitespace-pre-line break-words text-sm leading-7">{finding.content}</p>
+                                            ) : null}
+                                            {finding.presentation?.timeframe ? <p className="mt-2 text-sm text-muted-foreground">{finding.presentation.timeframe}</p> : null}
+                                            {finding.presentation?.dimensions?.length ? (
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                    {finding.presentation.dimensions.map(dimension => (
+                                                        <Badge key={dimension} variant="secondary">
+                                                            {dimension}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            ) : null}
+                                            {facts.length ? (
+                                                <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4 border-t pt-4">
+                                                    {facts.map(fact => (
+                                                        <div key={fact.label}>
+                                                            <dt className="text-xs text-muted-foreground">{fact.label}</dt>
+                                                            <dd className="mt-1 text-lg font-semibold tabular-nums">{fact.value}</dd>
+                                                        </div>
+                                                    ))}
+                                                </dl>
+                                            ) : null}
+                                            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
+                                                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                    <Database className="h-3.5 w-3.5" />
+                                                    {t(finding.evidence.length ? 'Findings.EvidenceLinked' : 'Findings.EvidenceMissing')}
+                                                </span>
+                                                <FindingVerificationButton
+                                                    findingId={finding.id}
+                                                    workId={workId}
+                                                    verifiedAt={finding.verifiedAt}
+                                                    verifiedByName={finding.verifiedByName ?? finding.verifiedByUserId}
+                                                />
                                             </div>
                                         </div>
-                                        {finding.presentation?.timeframe ? <p className="mt-2 text-sm leading-6 text-muted-foreground">{finding.presentation.timeframe}</p> : null}
-                                        {finding.presentation?.dimensions?.length ? (
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                {finding.presentation.dimensions.map(dimension => (
-                                                    <Badge key={dimension} variant="secondary">
-                                                        {dimension}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        ) : null}
-                                        {finding.content ? <p className="mt-4 whitespace-pre-line break-words text-sm leading-6 text-muted-foreground">{finding.content}</p> : null}
-                                        {finding.presentation?.facts?.length ? (
-                                            <dl className="mt-5 grid gap-3 sm:grid-cols-3">
-                                                {finding.presentation.facts.map(fact => (
-                                                    <div key={fact.label} className="rounded-md bg-muted/50 px-3 py-2">
-                                                        <dt className="text-xs text-muted-foreground">{fact.label}</dt>
-                                                        <dd className="mt-1 text-sm font-semibold">{fact.value}</dd>
-                                                    </div>
-                                                ))}
-                                            </dl>
-                                        ) : null}
-                                    </div>
-                                    <div className={`grid min-w-0 content-start gap-3 border-t pt-5 ${finding.evidence.length ? 'xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0' : ''}`}>
-                                        <h3 className="text-sm font-semibold">{t('Findings.Evidence')}</h3>
-                                        {finding.evidence.length ? (
-                                            finding.evidence.map(artifact => (
-                                                <EvidenceCard
-                                                    key={artifact.id}
-                                                    artifact={artifact}
-                                                    organization={organization}
-                                                    workId={workId}
-                                                    workspaceHref={workspaceHref}
-                                                    sql={sqlByResultSetId.get(artifacts.find(item => item.id === artifact.id)?.sourceResultSetId ?? '') ?? null}
-                                                    connectionId={artifacts.find(item => item.id === artifact.id)?.connectionId ?? null}
-                                                    labels={{
-                                                        viewResult: t('Findings.ViewResult'),
-                                                        viewSql: t('Findings.ViewSql'),
-                                                        rowCount: count => t('Counts.Rows', { count }),
-                                                    }}
-                                                />
-                                            ))
-                                        ) : (
-                                            <p className="text-sm text-muted-foreground">{t('Findings.NoEvidence')}</p>
-                                        )}
-                                    </div>
-                                </article>
-                            ))}
+                                        <div className="grid min-w-0 gap-5 border-t bg-muted/10 p-5 sm:p-7">
+                                            <h3 className="text-sm font-semibold">{t('Findings.Evidence')}</h3>
+                                            {finding.evidence.length ? (
+                                                finding.evidence.map(artifact => (
+                                                    <AgentRunEvidence
+                                                        key={artifact.id}
+                                                        artifact={{ ...artifact, sourceResultSetId: artifactById.get(artifact.id)?.sourceResultSetId }}
+                                                        organization={organization}
+                                                        workId={workId}
+                                                    />
+                                                ))
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">{t('Findings.NoEvidence')}</p>
+                                            )}
+                                        </div>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    ) : summary?.findings.length ? (
+                        <div className="space-y-3 rounded-lg border bg-card p-5">
+                            {summary.findings
+                                .filter(finding => finding.trim() !== title.trim())
+                                .map((finding, index) => (
+                                    <p key={index} className="text-sm leading-7">
+                                        {finding}
+                                    </p>
+                                ))}
+                            <p className="text-xs text-muted-foreground">{t('Findings.NoEvidence')}</p>
                         </div>
                     ) : (
-                        <div className="rounded-lg border border-dashed px-5 py-8 text-sm text-muted-foreground">
+                        <p className="rounded-lg border border-dashed px-5 py-8 text-sm text-muted-foreground">
                             {t(stats.sqlExecutionCount === 0 ? 'Findings.NoAnalysis' : 'Findings.Empty')}
-                        </div>
+                        </p>
                     )}
                 </section>
+
+                {unlinkedResults.length ? (
+                    <section className="grid gap-4">
+                        <div>
+                            <h2 className="text-base font-semibold">{t('Report.OtherResults')}</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">{t('Report.OtherResultsHint')}</p>
+                        </div>
+                        {unlinkedResults.map(artifact => (
+                            <div key={artifact.id} className="min-w-0 rounded-lg border bg-card p-5">
+                                <AgentRunEvidence artifact={artifact} organization={organization} workId={workId} />
+                            </div>
+                        ))}
+                    </section>
+                ) : null}
 
                 {agentAssetUsage.length || inspectedTables.length ? (
                     <section className="grid gap-3">
@@ -291,6 +252,9 @@ export default async function AgentRunDetailPage({
                             <p className="mt-1 text-sm text-muted-foreground">{t('Context.Description')}</p>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {agentAssetUsage.length ? (
+                                <h3 className="text-xs font-medium text-muted-foreground sm:col-span-2 xl:col-span-3">{t('Report.BusinessKnowledge')}</h3>
+                            ) : null}
                             {agentAssetUsage.map(item => {
                                 const asset = item.assetSnapshot as {
                                     title?: string;
@@ -334,13 +298,16 @@ export default async function AgentRunDetailPage({
                                     </div>
                                 );
                             })}
+                            {inspectedTables.length ? (
+                                <h3 className="mt-2 text-xs font-medium text-muted-foreground sm:col-span-2 xl:col-span-3">{t('Report.DataSources')}</h3>
+                            ) : null}
                             {inspectedTables.map(table => (
                                 <div key={`table-${table}`} className="flex min-w-0 items-start gap-3 rounded-lg border bg-card p-4">
                                     <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                                     <span className="min-w-0">
                                         <span className="block truncate text-sm font-medium">{table}</span>
                                         <span className="block break-words text-xs leading-5 text-muted-foreground">
-                                            {t('Context.Table')}
+                                            {t('Report.InspectedTable')}
                                             {connectionName ? ` · ${connectionName}` : ''}
                                         </span>
                                     </span>
@@ -350,32 +317,18 @@ export default async function AgentRunDetailPage({
                     </section>
                 ) : null}
 
-                {otherArtifacts.length ? (
-                    <section className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">{t('Findings.OtherOutputs')}</span>
-                        {otherArtifacts.map(artifact => (
-                            <Link
-                                key={artifact.id}
-                                href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}?fromAgentRun=${encodeURIComponent(workId)}`}
-                                className="text-sm text-primary hover:underline"
-                            >
-                                {artifact.title}
-                            </Link>
-                        ))}
-                    </section>
-                ) : null}
-
                 <section className="grid gap-3">
                     <div>
                         <h2 className="text-base font-semibold">{t('Trace.Title')}</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">{t('Trace.Description')}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{t(summary?.steps.length ? 'Report.AgentStepsHint' : 'Report.RecordedStepsHint')}</p>
                     </div>
                     <div className="grid gap-3 rounded-lg border bg-card p-4 sm:p-5">
                         {traceSteps.length ? (
                             traceSteps.map((step, index) => (
                                 <div key={`${index}-${step}`} className="flex items-start gap-3 text-sm">
-                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs tabular-nums text-muted-foreground">
+                                        {index + 1}
+                                    </span>
                                     <span>{step}</span>
                                 </div>
                             ))
@@ -387,6 +340,34 @@ export default async function AgentRunDetailPage({
                         )}
                     </div>
                 </section>
+
+                {otherArtifacts.length ? (
+                    <section className="grid gap-3">
+                        <h2 className="text-base font-semibold">
+                            {t('Findings.OtherOutputs')} <span className="ml-2 text-sm font-normal text-muted-foreground">{otherArtifacts.length}</span>
+                        </h2>
+                        <div className="divide-y rounded-lg border bg-card px-4">
+                            {otherArtifacts.map(artifact => (
+                                <Link
+                                    key={artifact.id}
+                                    href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}?fromAgentRun=${encodeURIComponent(workId)}`}
+                                    className="flex items-center gap-3 py-4 hover:text-primary"
+                                >
+                                    {artifact.type === 'chart' ? (
+                                        <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    ) : (
+                                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    )}
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block break-words text-sm font-medium">{artifact.title}</span>
+                                        <span className="text-xs text-muted-foreground">{artifactsT(`Viewer.Types.${artifact.type}`)}</span>
+                                    </span>
+                                    <ArrowUpRight className="h-4 w-4 shrink-0" />
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                ) : null}
 
                 <AgentRunActivitySection items={timeline} summary={activitySummary} />
             </main>
