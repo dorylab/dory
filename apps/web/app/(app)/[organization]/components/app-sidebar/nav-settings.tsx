@@ -45,7 +45,6 @@ export function SidebarOrganizationEntry() {
 export function SidebarThemeEntry() {
     const { resolvedTheme, setTheme } = useTheme();
     const t = useTranslations('DoryUI');
-    const ThemeIcon = resolvedTheme === 'dark' ? Moon : Sun;
 
     const toggleTheme = React.useCallback(() => {
         setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
@@ -54,7 +53,8 @@ export function SidebarThemeEntry() {
     return (
         <SidebarMenuItem>
             <SidebarMenuButton className="w-full justify-start group-data-[collapsible=icon]:justify-center" onClick={toggleTheme}>
-                <ThemeIcon className="h-4 w-4 shrink-0" />
+                <Sun className="h-4 w-4 shrink-0 dark:hidden" />
+                <Moon className="hidden h-4 w-4 shrink-0 dark:block" />
                 <span>{t('ModeToggle.ToggleTheme')}</span>
             </SidebarMenuButton>
         </SidebarMenuItem>

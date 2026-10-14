@@ -7,10 +7,12 @@ import { anonymousClient, inferOrgAdditionalFields, organizationClient } from 'b
 import { translate } from '@dory/i18n/translate';
 import { getClientLocale } from '@dory/i18n/client';
 import { getAuthBaseUrl } from '@/lib/client/auth-runtime';
+import { env } from 'next-runtime-env';
 import type { getAuth } from './auth';
 import { organizationAc, organizationRoles } from './auth/organization-ac';
 
 const authBaseUrl = getAuthBaseUrl();
+const sentinelEnabled = typeof window !== 'undefined' && env('NEXT_PUBLIC_BETTER_AUTH_SENTINEL_ENABLED') === 'true';
 
 export const authClient = createAuthClient({
     // Same origin: omit baseURL
@@ -18,9 +20,7 @@ export const authClient = createAuthClient({
     ...(authBaseUrl ? { baseURL: authBaseUrl } : {}),
     plugins: [
         dashClient(),
-        sentinelClient({
-            autoSolveChallenge: true,
-        }),
+        ...(sentinelEnabled ? [sentinelClient({ identifyUrl: env('NEXT_PUBLIC_BETTER_AUTH_SENTINEL_IDENTIFY_URL') || undefined, autoSolveChallenge: true })] : []),
         anonymousClient(),
         organizationClient({
             ac: organizationAc,
