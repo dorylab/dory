@@ -138,8 +138,24 @@ export async function replayCommerceEvaluation(call: CallTool, connectionId: str
             });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            if (workId) await call('dory_finish_work', { workId, status: 'error', findings: [], steps: [`Acceptance failed: ${message}`] }).catch(() => undefined);
-            results.push({ scenarioId: scenario.id, status: 'failed', question: scenario.question, sql: scenario.sql, workId, error: message });
+            let finishError: string | undefined;
+            if (workId) {
+                try {
+                    await call('dory_finish_work', { workId, status: 'error', findings: [], steps: [`Acceptance failed: ${message}`.slice(0, 500)] });
+                } catch (error) {
+                    finishError = error instanceof Error ? error.message : String(error);
+                    console.error('[commerce-agent-evaluation:mcp] failed to finish Run', { workId, error: finishError });
+                }
+            }
+            results.push({
+                scenarioId: scenario.id,
+                status: 'failed',
+                question: scenario.question,
+                sql: scenario.sql,
+                workId,
+                error: message,
+                ...(finishError ? { finishError } : {}),
+            });
         }
     }
     return { ok: results.every(item => item.status === 'passed'), connectionId, scenarios: results };

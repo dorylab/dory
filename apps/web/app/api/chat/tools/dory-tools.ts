@@ -17,6 +17,7 @@ type CreateDoryChatToolsOptions = {
     currentConnectionId?: string | null;
     locale?: Locale;
     chatId: string;
+    resolveWork: () => ReturnType<WebActionServices['db']['works']['startChatTurn']>;
 };
 
 const AGENT_SCOPES = [
@@ -77,15 +78,7 @@ export function createDoryChatTools(options: CreateDoryChatToolsOptions) {
                     inputSchema: entry.inputSchema as any,
                     execute: async input => {
                         const ctx = await createActionContext(options);
-                        const work = await ctx.services.db.works.resolve({
-                            organizationId: ctx.organizationId,
-                            userId: ctx.userId,
-                            tokenId: null,
-                            connectionId: options.currentConnectionId ?? null,
-                            externalSessionId: `chat:${options.chatId}`,
-                            title: 'Chat Agent Run',
-                            metadata: { chatId: options.chatId, source: 'internal_chat' },
-                        });
+                        const work = await options.resolveWork();
                         const startedAt = performance.now();
                         try {
                             const result = await executeAction<Record<string, unknown>>(ctx, entry.action.id, input ?? {});

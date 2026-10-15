@@ -271,9 +271,9 @@ export class PostgresWorksRepository {
         private readonly fullDataWriter: ResultSetDataWriter = createDefaultResultSetDataWriter(),
     ) {}
 
-    async init() {
+    async init(client?: PostgresDBClient) {
         try {
-            this.db = (await getClient()) as PostgresDBClient;
+            this.db = client ?? ((await getClient()) as PostgresDBClient);
             if (!this.db) {
                 throw new DatabaseError(translateDatabase('Database.Errors.ConnectionFailed'), 500);
             }
@@ -369,6 +369,56 @@ export class PostgresWorksRepository {
     async touch(workId: string, now = new Date()) {
         this.assertInited();
         await this.db.update(works).set({ updatedAt: now, lastActiveAt: now }).where(eq(works.workId, workId));
+    }
+
+    async startChatTurn(input: ResolveWorkInput & { requestId: string }): Promise<WorkRecord> {
+        const work = await this.resolve(input);
+        const now = new Date();
+        const chatTurn = { requestId: input.requestId, startedAt: now.toISOString() };
+        const [row] = await this.db
+            .update(works)
+            .set({
+                status: 'active',
+                metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ chatTurn })}::jsonb`,
+                updatedAt: now,
+                lastActiveAt: now,
+            })
+            .where(and(eq(works.workId, work.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId), isNull(works.archivedAt)))
+            .returning();
+        if (!row) throw new DatabaseError('Chat Agent Run is no longer available', 409);
+        return row as WorkRecord;
+    }
+
+    async finishChatTurn(input: {
+        organizationId: string;
+        userId: string;
+        workId: string;
+        requestId: string;
+        outcome: 'completed' | 'failed' | 'aborted';
+    }): Promise<WorkRecord | null> {
+        this.assertInited();
+        const now = new Date();
+        const completion = { outcome: input.outcome, finishedAt: now.toISOString() };
+        const [row] = await this.db
+            .update(works)
+            .set({
+                status: input.outcome === 'completed' ? 'completed' : 'error',
+                metadata: sql`jsonb_set(${works.metadata}, '{chatTurn}', (${works.metadata}->'chatTurn') || ${JSON.stringify(completion)}::jsonb)`,
+                updatedAt: now,
+                lastActiveAt: now,
+            })
+            .where(
+                and(
+                    eq(works.workId, input.workId),
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    eq(works.status, 'active'),
+                    isNull(works.archivedAt),
+                    sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                ),
+            )
+            .returning();
+        return (row as WorkRecord | undefined) ?? null;
     }
 
     private async prepareExistingWork(row: WorkRecord, input: ResolveWorkInput, now: Date): Promise<WorkRecord> {

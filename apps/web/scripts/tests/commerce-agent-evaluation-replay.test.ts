@@ -92,6 +92,35 @@ test('replay rejects a missing selected metric before explicit Knowledge discove
     assert.equal(fixture.calls[1].name, 'dory_finish_work');
 });
 
+test('replay bounds failure steps while retaining the full error in its report', async () => {
+    const fixture = replayFixture();
+    const message = 'Artifact mismatch: '.repeat(100);
+    const report = await replayCommerceEvaluation(async (name, args) => {
+        if (name === 'dory_artifacts') throw new Error(message);
+        if (name === 'dory_finish_work') {
+            assert.ok((args.steps as string[]).every(step => step.length <= 500));
+        }
+        return fixture.call(name, args);
+    }, 'connection');
+    assert.equal(report.ok, false);
+    assert.ok(report.scenarios.every(item => item.error === message));
+    assert.equal(fixture.calls.filter(call => call.name === 'dory_finish_work' && call.args.status === 'error').length, 5);
+});
+
+test('replay reports a failed finalization instead of silently losing it', async t => {
+    const fixture = replayFixture(true);
+    const errors: unknown[][] = [];
+    t.mock.method(console, 'error', (...args: unknown[]) => errors.push(args));
+    const report = await replayCommerceEvaluation(async (name, args) => {
+        if (name === 'dory_finish_work' && args.status === 'error') throw new Error('Finalization unavailable');
+        return fixture.call(name, args);
+    }, 'connection');
+    assert.equal(report.scenarios[0].status, 'failed');
+    assert.equal(report.scenarios[0].finishError, 'Finalization unavailable');
+    assert.equal(errors.length, 1);
+    assert.ok(report.scenarios.slice(1).every(item => item.status === 'passed'));
+});
+
 test('MCP error envelopes cannot be treated as successful tool payloads', () => {
     assert.throws(() => toolPayload({ isError: true, structuredContent: {} }));
     assert.throws(() => toolPayload({ structuredContent: { error: { message: 'Denied' } } }));
