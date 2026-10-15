@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DBService } from '@dory/database';
 import type { OssieAiContext, OssieDataset, OssieDialect, OssieExpression, OssieMetric, OssieRelationship } from '@dory/database/postgres/schemas';
+import { knowledgeSearchTokens } from './knowledge-search-tokens';
 
 const MAX_MODELS = 3;
 const MAX_DATASETS = 12;
@@ -37,11 +38,6 @@ function contextText(value?: OssieAiContext) {
     if (!value) return '';
     if (typeof value === 'string') return value;
     return [value.instructions, ...(value.synonyms ?? []), ...(value.examples ?? [])].filter(Boolean).join(' ');
-}
-
-function tokens(value: string) {
-    const normalized = value.toLocaleLowerCase().trim();
-    return [...new Set([normalized, ...normalized.split(/[^\p{L}\p{N}_]+/u).filter(token => token.length >= 2)])].filter(Boolean);
 }
 
 function lexicalScore(needles: string[], values: Array<string | null | undefined>) {
@@ -105,7 +101,7 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
     const models = (await db.knowledge.listModels({ organizationId: input.organizationId, connectionId: input.connectionId })).filter(model => model.readiness.status === 'ready');
     if (!models.length) return { context: null, models: [] };
 
-    const questionTokens = tokens(input.question ?? '');
+    const questionTokens = knowledgeSearchTokens(input.question ?? '');
     const tableNames = [input.table, ...(input.candidateTables ?? []).map(table => table.name)]
         .filter((value): value is string => Boolean(value))
         .map(value => value.toLocaleLowerCase());
@@ -177,18 +173,24 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
             );
         }
         const datasetNames = new Set(datasets.map(dataset => dataset.name));
-        const relationshipCandidates = (semanticModel.relationships ?? [])
-            .filter(relationship => verifiedRelationships.has(relationship.name) && (datasetNames.has(relationship.from) || datasetNames.has(relationship.to)))
+        const verifiedEdges = (semanticModel.relationships ?? [])
+            .filter(relationship => verifiedRelationships.has(relationship.name) && verifiedEntities.has(relationship.from) && verifiedEntities.has(relationship.to))
             .sort((left, right) => left.name.localeCompare(right.name));
-        for (const relationship of relationshipCandidates) {
-            const adjacentName = datasetNames.has(relationship.from) ? relationship.to : relationship.from;
-            if (datasetNames.has(adjacentName) || datasets.length >= remainingDatasets) continue;
-            const adjacent = scoredDatasets.find(item => item.dataset.name === adjacentName)?.dataset;
-            if (!adjacent) continue;
-            datasets.push({ ...adjacent, fields: (adjacent.fields ?? []).filter(field => verifiedFields.has(field.name)) });
-            datasetNames.add(adjacent.name);
+        // Expand two stable hops; the previous single precomputed candidate list
+        // omitted relationships introduced by its own adjacent datasets.
+        for (let hop = 0; hop < 2; hop++) {
+            const frontier = new Set(datasetNames);
+            for (const relationship of verifiedEdges) {
+                if (!frontier.has(relationship.from) && !frontier.has(relationship.to)) continue;
+                const adjacentName = frontier.has(relationship.from) ? relationship.to : relationship.from;
+                if (datasetNames.has(adjacentName) || datasets.length >= remainingDatasets) continue;
+                const adjacent = scoredDatasets.find(item => item.dataset.name === adjacentName)?.dataset;
+                if (!adjacent) continue;
+                datasets.push({ ...adjacent, fields: (adjacent.fields ?? []).filter(field => verifiedFields.has(field.name)) });
+                datasetNames.add(adjacent.name);
+            }
         }
-        const relationships = relationshipCandidates.slice(0, remainingRelationships);
+        const relationships = verifiedEdges.filter(relationship => datasetNames.has(relationship.from) && datasetNames.has(relationship.to)).slice(0, remainingRelationships);
         const section = renderContext({
             name: model.name,
             ossieVersion: model.ossieVersion,

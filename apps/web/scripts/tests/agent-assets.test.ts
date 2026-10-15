@@ -197,3 +197,33 @@ test('Agent asset reads chunk untrusted sources and cap Artifact previews', asyn
     const artifact = await readAgentAsset(dbMock(), { organizationId: 'org-1', ref: artifactAgentAssetRef('art-1'), previewRows: 500 });
     assert.equal((artifact.content as any).preview.rows.length, 200);
 });
+
+test('natural Chinese questions find verified definitions without whitespace', async () => {
+    const db = dbMock();
+    const base = await db.knowledge.listModels();
+    db.knowledge.listModels = async () => [
+        {
+            ...base[0],
+            model: {
+                definitions: [
+                    {
+                        id: 'metric:late',
+                        name: 'late_delivery_rate',
+                        kind: 'metric',
+                        status: 'verified',
+                        sourceConnectionId: 'conn-1',
+                        description: '已送达订单迟到率',
+                        aliases: ['迟到率'],
+                    },
+                ],
+            },
+        },
+    ];
+    const found = await searchAgentAssets(db, {
+        organizationId: 'org-1',
+        connectionId: 'conn-1',
+        query: '2018年8月下单的已送达订单迟到率是多少？',
+        kinds: ['knowledge_definition'],
+    });
+    assert.equal(found.assets[0]?.title, 'late_delivery_rate');
+});

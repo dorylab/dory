@@ -5,6 +5,8 @@ import test from 'node:test';
 import { ossieRevision, parseKnowledgeYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
 
 import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
+import { buildOlistOssieDocument, olistScenarios } from '@/lib/demo/olist-evaluation';
+import { knowledgeSearchTokens } from '@/lib/server/knowledge-search-tokens';
 
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
@@ -131,6 +133,60 @@ test('resolver uses a single-model fallback but not an ambiguous multi-model fal
         question: 'unrelated phrase',
     });
     assert.deepEqual(multiple, { context: null, models: [] });
+});
+
+test('natural Chinese Olist questions match metrics and retain second-hop category translation', async () => {
+    const connectionId = 'olist';
+    const ossieDocument = buildOlistOssieDocument(connectionId, { min: '2016-09-04', max: '2018-10-17' });
+    const knowledgeModel = {
+        id: 'olist-model',
+        name: 'Olist Commerce Knowledge',
+        description: null,
+        ossieVersion: '0.1.1' as const,
+        modelRevision: ossieRevision(ossieDocument),
+        readiness: { status: 'ready' as const },
+        model: parseKnowledgeYaml(serializeOssieDocument(ossieDocument), connectionId, false),
+        ossieDocument,
+    };
+    for (const scenario of olistScenarios('2026-10-15')) {
+        const result = await resolveSemanticModelContext(fakeDb([knowledgeModel as any]), { organizationId: 'org', connectionId, question: scenario.question });
+        for (const name of scenario.semanticNames) {
+            assert.ok(result.context?.includes(name), `${scenario.id}: ${name}`);
+            assert.ok([...result.models[0].metricNames, ...result.models[0].relationshipNames].includes(name), `Unrecorded ${name}`);
+        }
+    }
+});
+
+test('search phrases remain bounded for long multilingual questions', () => {
+    assert.ok(knowledgeSearchTokens(Array.from({ length: 2000 }, (_, i) => `term_${i}`).join(' ')).length <= 256);
+    assert.ok(knowledgeSearchTokens('这是一条很长的客户订单复购问题'.repeat(1000)).length <= 256);
+});
+
+test('model changes produce a new revision without changing previously recorded Run context', async () => {
+    const document = buildOlistOssieDocument('olist', { min: '2016-09-04', max: '2018-10-17' });
+    const firstRevision = ossieRevision(document);
+    const snapshots: Array<{ workId: string; revision: string; assetSnapshot: Record<string, unknown> }> = [];
+    const db = {
+        works: {
+            recordAgentAssetUsageEvent: async (input: { workId: string; revision: string; assetSnapshot: Record<string, unknown> }) => snapshots.push(structuredClone(input)),
+        },
+    } as any;
+    const usage = (revision: string) => ({
+        id: 'olist-model',
+        name: 'Olist',
+        ossieVersion: '0.1.1' as const,
+        modelRevision: revision,
+        metricNames: ['merchandise_amount'],
+        relationshipNames: ['items_order'],
+        deepLink: '/org/knowledge/olist-model',
+    });
+    await recordSemanticModelUsage(db, { organizationId: 'org', userId: 'user', workId: 'old', models: [usage(firstRevision)] });
+    document.semantic_model[0].metrics![0].description += ' Changed definition.';
+    const secondRevision = ossieRevision(document);
+    assert.notEqual(firstRevision, secondRevision);
+    await recordSemanticModelUsage(db, { organizationId: 'org', userId: 'user', workId: 'new', models: [usage(secondRevision)] });
+    assert.equal(snapshots[0].assetSnapshot.modelRevision, firstRevision);
+    assert.equal(snapshots[1].assetSnapshot.modelRevision, secondRevision);
 });
 
 test('resolver excludes unverified constructs and applies metric and character budgets', async () => {

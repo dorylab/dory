@@ -3,6 +3,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 
 import type { DBService } from '@dory/database';
+import { knowledgeSearchTokens } from './knowledge-search-tokens';
 
 export const AGENT_ASSET_KINDS = ['artifact', 'knowledge_definition', 'verified_query', 'knowledge_source'] as const;
 export type AgentAssetKind = (typeof AGENT_ASSET_KINDS)[number];
@@ -151,7 +152,10 @@ function scoreAsset(query: string, title: string, aliases: string[], secondary: 
     if (normalizedTitle.includes(needle)) return 60;
     if (aliases.some(alias => alias.toLocaleLowerCase() === needle)) return 50;
     if (aliases.some(alias => alias.toLocaleLowerCase().includes(needle))) return 40;
-    return secondary.toLocaleLowerCase().includes(needle) ? 20 : 0;
+    if (secondary.toLocaleLowerCase().includes(needle)) return 20;
+    const phrases = knowledgeSearchTokens(query).filter(term => term !== needle);
+    const haystack = [normalizedTitle, ...aliases.map(alias => alias.toLocaleLowerCase()), secondary.toLocaleLowerCase()].join(' ');
+    return phrases.reduce((score, phrase) => Math.max(score, haystack.includes(phrase) ? Math.min(19, 4 + phrase.length) : 0), 0);
 }
 
 function unavailable(): never {
