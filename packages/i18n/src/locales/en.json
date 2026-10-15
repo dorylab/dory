@@ -4408,7 +4408,9 @@
             "ViewSql": "View SQL",
             "Verified": "Human reviewed",
             "Verify": "Mark as reviewed",
-            "VerificationFailed": "Could not update this Finding's verification."
+            "VerificationFailed": "Could not update this Finding's verification.",
+            "LegacyData": "Expand original data",
+            "LegacyDescription": "This older record contains data rows without an Agent-authored conclusion. Continue the analysis in the workspace to add a summary."
         },
         "Context": {
             "Title": "Analysis context",

@@ -4402,7 +4402,9 @@
             "ViewSql": "Ver SQL",
             "Verified": "Revisión humana completada",
             "Verify": "Marcar como revisado",
-            "VerificationFailed": "No se pudo actualizar la verificación de este hallazgo."
+            "VerificationFailed": "No se pudo actualizar la verificación de este hallazgo.",
+            "LegacyData": "Mostrar datos originales",
+            "LegacyDescription": "Este registro anterior contiene datos sin una conclusión redactada por el agente. Continúa el análisis en el espacio de trabajo para añadir un resumen."
         },
         "Context": {
             "Title": "Contexto del análisis",

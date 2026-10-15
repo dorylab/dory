@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowUpRight, BarChart3, BrainCircuit, Database, FileText, L
 import { getDBService } from '@dory/database';
 import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
 import { AgentRunStatusBadge } from '@/components/agent-runs/agent-run-status-badge';
+import { FindingDetails } from '@/components/agent-runs/finding-details';
 import { FindingVerificationButton } from '@/components/agent-runs/finding-verification-button';
 import { AgentRunEvidence } from '@/components/agent-runs/agent-run-evidence';
 import { getSupportingFacts, orderReportFindings, shouldShowHeadlineMetric } from '@/lib/agent-runs/report';
@@ -13,7 +14,6 @@ import { createAgentRunTextFormatter } from '@/lib/agent-runs/i18n';
 import { buildAgentRunTimeline, getAgentRunActivitySummary, getAgentRunStats, getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePathFromSnapshot, resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
-import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 
 function unique(values: string[]) {
@@ -84,7 +84,7 @@ export default async function AgentRunDetailPage({
     );
 
     return (
-        <div className="min-h-full bg-n8">
+        <div className="min-h-full shrink-0 bg-n8 text-foreground">
             <main className="container mx-auto flex max-w-6xl flex-col gap-8 px-4 py-6 sm:px-6 sm:pb-12 sm:pt-8 lg:px-8">
                 <header className="grid gap-4">
                     <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit min-w-0 max-w-full justify-start">
@@ -158,29 +158,11 @@ export default async function AgentRunDetailPage({
                                                     {finding.title}
                                                 </h3>
                                             ) : null}
-                                            {finding.content && finding.content.trim() !== finding.title.trim() ? (
-                                                <p className="mt-3 max-w-4xl whitespace-pre-line break-words text-sm leading-7">{finding.content}</p>
-                                            ) : null}
-                                            {finding.presentation?.timeframe ? <p className="mt-2 text-sm text-muted-foreground">{finding.presentation.timeframe}</p> : null}
-                                            {finding.presentation?.dimensions?.length ? (
-                                                <div className="mt-3 flex flex-wrap gap-2">
-                                                    {finding.presentation.dimensions.map(dimension => (
-                                                        <Badge key={dimension} variant="secondary">
-                                                            {dimension}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            ) : null}
-                                            {facts.length ? (
-                                                <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-4 border-t pt-4">
-                                                    {facts.map(fact => (
-                                                        <div key={fact.label}>
-                                                            <dt className="text-xs text-muted-foreground">{fact.label}</dt>
-                                                            <dd className="mt-1 text-lg font-semibold tabular-nums">{fact.value}</dd>
-                                                        </div>
-                                                    ))}
-                                                </dl>
-                                            ) : null}
+                                            <FindingDetails
+                                                content={finding.content?.trim() !== finding.title.trim() ? finding.content : null}
+                                                presentation={finding.presentation ? { ...finding.presentation, facts } : null}
+                                                labels={{ legacyData: t('Findings.LegacyData'), legacyDescription: t('Findings.LegacyDescription') }}
+                                            />
                                             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
                                                 <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                                                     <Database className="h-3.5 w-3.5" />

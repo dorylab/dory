@@ -56,7 +56,7 @@ function replayFixture(corruptArtifact = false, omitMetric = false) {
     };
 }
 
-test('replay validates five scenarios before saving findings derived from actual rows', async () => {
+test('replay validates five scenarios without fabricating Agent-authored analytical findings', async () => {
     const fixture = replayFixture();
     const report = await replayCommerceEvaluation(fixture.call, 'connection');
     assert.equal(report.ok, true);
@@ -65,9 +65,10 @@ test('replay validates five scenarios before saving findings derived from actual
     assert.equal(finished.length, 5);
     for (let index = 0; index < 5; index += 1) {
         assert.equal(finished[index].args.status, 'completed');
-        const findings = finished[index].args.findings as Array<{ content: string; evidenceArtifactIds: string[] }>;
-        assert.ok(findings[0].content.includes(String(Object.values(COMMERCE_EVALUATION_SCENARIOS[index].expectedRows[0])[0])));
-        assert.deepEqual(findings[0].evidenceArtifactIds, [`artifact-${index}`]);
+        assert.deepEqual(finished[index].args.findings, []);
+        assert.deepEqual(report.scenarios[index].evidenceArtifactIds, [`artifact-${index}`]);
+        assert.deepEqual(report.scenarios[index].actualRows, COMMERCE_EVALUATION_SCENARIOS[index].expectedRows);
+        assert.ok((finished[index].args.steps as string[]).length > 0);
     }
     assert.equal(fixture.calls[0].name, 'dory_create_work');
     assert.equal(fixture.calls[1].name, 'dory_search_assets');

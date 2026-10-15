@@ -4408,7 +4408,9 @@
             "ViewSql": "SQL を見る",
             "Verified": "人による確認済み",
             "Verify": "確認済みにする",
-            "VerificationFailed": "この発見事項の検証状態を更新できませんでした。"
+            "VerificationFailed": "この発見事項の検証状態を更新できませんでした。",
+            "LegacyData": "元のデータを展開",
+            "LegacyDescription": "この過去の記録にはデータのみが含まれ、Agent による分析結果はありません。ワークスペースで分析を続け、要約を追加できます。"
         },
         "Context": {
             "Title": "分析コンテキスト",

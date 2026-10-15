@@ -1104,6 +1104,35 @@ test('dory_finish_work accepts a structured, evidence-backed primary Finding', a
     ]);
 });
 
+test('dory_finish_work preserves Agent-authored trend conclusions and selected facts without deriving a summary', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({ db: { works } } as unknown as WebActionServices);
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: '月度净收入与订单趋势' })) as { workId: string };
+    const finding = {
+        title: '净收入在 3 月达峰后回落',
+        content: '3 月净收入与订单数均达峰，随后净收入连续三个月回落，6 月较峰值下降 9.10%。',
+        evidenceArtifactIds: ['artifact-monthly'],
+        isPrimary: true,
+        presentation: {
+            timeframe: '2026 年 1—6 月',
+            facts: [
+                { label: '3 月峰值净收入', value: '199,414.66' },
+                { label: '6 月净收入', value: '181,273.27' },
+                { label: '较峰值下降', value: '9.10%' },
+            ],
+        },
+    };
+
+    await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        findings: [finding],
+        steps: ['Analyzed the monthly SQL results.'],
+    });
+
+    assert.deepEqual(works.finishInputs.at(-1)?.findings, [finding]);
+});
+
 test('dory_finish_work appends continuation findings and steps without replacing existing summary', async () => {
     const works = createWorksMock();
     const ctx = createContext({

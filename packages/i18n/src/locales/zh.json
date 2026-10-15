@@ -4398,7 +4398,9 @@
             "ViewSql": "查看 SQL",
             "Verified": "人工已复核",
             "Verify": "标记为人工已复核",
-            "VerificationFailed": "无法更新这个发现的验证状态。"
+            "VerificationFailed": "无法更新这个发现的验证状态。",
+            "LegacyData": "展开原始数据",
+            "LegacyDescription": "这条旧记录仅包含数据明细，未提供 Agent 分析结论。可在工作区继续分析并补充总结。"
         },
         "Context": {
             "Title": "分析上下文",

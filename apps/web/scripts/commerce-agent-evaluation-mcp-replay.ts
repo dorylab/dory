@@ -104,18 +104,12 @@ export async function replayCommerceEvaluation(call: CallTool, connectionId: str
                 artifactReadbacks.push({ artifactId, rows: saved.preview.rows });
             }
             const rows = sql.result;
-            const content = rows
-                .map(row =>
-                    Object.entries(row)
-                        .map(([key, value]) => `${key} = ${String(value)}`)
-                        .join('; '),
-                )
-                .join('\n');
             await call('dory_finish_work', {
                 workId,
                 status: 'completed',
                 summaryTitle: scenario.title,
-                findings: [{ title: scenario.title, content, evidenceArtifactIds, isPrimary: true }],
+                // This deterministic replay validates transport and result integrity; it does not run an analysis Agent.
+                findings: [],
                 steps: [
                     'Verified automatic semantic context before explicit Knowledge discovery.',
                     'Read verified Knowledge and inspected the source schema.',

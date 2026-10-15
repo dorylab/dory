@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ActionContext, ActionDefinition, ActionId, ActionProjection } from '@dory/actions';
 import { DEFAULT_ACTION_PROJECTION_BY_ACTOR, hasActionScope, toActionError } from '@dory/actions';
 import { getDesktopProtocolSchemeForServer } from '@dory/shared/runtime';
+import { AGENT_RUN_FINDING_INSTRUCTIONS } from '@/lib/agent-runs/finding-instructions';
 import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { executeAction } from '@/lib/actions/server/execute';
@@ -220,8 +221,15 @@ const finishWorkInputSchema = z
                 z.union([
                     z.string().min(1).max(500),
                     z.object({
-                        title: z.string().min(1).max(500),
-                        content: z.string().max(4000).nullable().optional(),
+                        title: z.string().min(1).max(500).describe('Short, human-readable analytical finding, not a copy of the Run title.'),
+                        content: z
+                            .string()
+                            .max(4000)
+                            .nullable()
+                            .optional()
+                            .describe(
+                                'Agent-authored explanation in one or two sentences. Do not paste result rows, JSON, or field = value dumps; keep detailed data in the cited Artifact.',
+                            ),
                         evidenceArtifactIds: z.array(z.string().min(1)).max(20).optional(),
                         presentation: z
                             .object({
@@ -235,15 +243,16 @@ const finishWorkInputSchema = z
                                     .max(3)
                                     .optional(),
                             })
-                            .optional(),
+                            .optional()
+                            .describe(
+                                'Choose up to three labeled key metrics in facts and the observed timeframe. Use metricValue only for a single main measured value. All values must be supported by the cited Artifact.',
+                            ),
                         isPrimary: z.boolean().optional(),
                     }),
                 ]),
             )
             .max(20)
-            .describe(
-                'User-facing analytical conclusions, not tool success messages or configuration checks. Use an empty array when the Run only checks setup or context injection; put those outcomes in steps. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. When presenting a metric, include presentation with the exact measured value, time window, and up to three supporting facts from that Artifact. A structured presentation requires evidenceArtifactIds. Mark at most one Finding as isPrimary. Conclusions without cited Artifacts are shown as statements without data evidence.',
-            ),
+            .describe(AGENT_RUN_FINDING_INSTRUCTIONS),
         steps: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
     })
     .passthrough();
@@ -1705,8 +1714,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_finish_work',
             title: 'Finish Dory Work',
-            description:
-                'Finish or update a Dory Agent Run with structured summary content. Use findings only for analytical conclusions; report tool success, setup checks and context injection in steps, with findings: [] when no analysis was performed. dory_run_readonly_sql returns persisted Artifact IDs; for every conclusion supported by one, pass a structured Finding with those IDs in evidenceArtifactIds. Requires an existing workId.',
+            description: `Finish or update a Dory Agent Run with structured summary content. Requires an existing workId. ${AGENT_RUN_FINDING_INSTRUCTIONS}`,
             inputSchema: finishWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
