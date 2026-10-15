@@ -1,4 +1,4 @@
-# Knowledge + Apache Ossie 0.1.1 验收方案
+# Knowledge + Apache Ossie 0.2.0.dev0 验收方案
 
 [English](./knowledge-ossie-acceptance.md) | [简体中文](./knowledge-ossie-acceptance-cn.md)
 
@@ -6,11 +6,27 @@
 
 验证 Knowledge 不只是一个可编辑目录，而是在完整分析流程中提供可观察、可复现、可追溯的语义约束：
 
-1. 合法的 Ossie 0.1.1 YAML 能导入、展示、编辑和无损导出。
+1. 合法的 Ossie 0.2.0.dev0 YAML 能导入、展示、编辑和无损导出。
 2. Agent 会按当前连接和问题自动选中相关模型，并注入 Metrics、Relationships 与 AI Context。
 3. Agent 会生成符合业务口径的 SQL 和答案。
 4. 每个 Agent Run 记录精确的规范版本、模型内容 revision、命中的语义构造和 Knowledge 深链。
 5. 模型不可用时查询 fail-open：分析继续、错误可观察，且无关或未验证模型不会污染上下文。
+
+## 规范版本与升级
+
+Dory 使用 **0.2.0.dev0 开发规范**，固定采用 Apache Ossie 提交 [`32c293c79a80b0c11e01bd76357950284aeaf3f8`](https://github.com/apache/ossie/blob/32c293c79a80b0c11e01bd76357950284aeaf3f8/core-spec/ossie-schema.json)，不代表最终的 0.2.0 正式版。模型使用根节点结构：
+
+```yaml
+version: 0.2.0.dev0
+name: commerce
+datasets:
+    - name: orders
+      source: public.orders
+```
+
+文件导入仅接受此版本和结构，拒绝 0.1.1、旧 `semantic_model` 包装、混合结构和未知版本。库内已有模型在 Knowledge 初始化时通过事务迁移，与文件导入相互独立。迁移保留定义 ID、连接、验证状态和扩展，同步生成新版 JSON/YAML；历史 Agent Run 的 revision 和资产快照不变。任一模型转换失败会回滚整批转换并报告模型 ID。
+
+验收须覆盖所有声明方言、`datatype`、任意厂商扩展及多方言表达式在编辑和导出后的保留。时间类型默认视为时间维度，显式 `is_time: false` 优先；支持声明方言不代表新增对应执行引擎。
 
 ## 经典验收数据
 
@@ -26,7 +42,7 @@
 | `support_tickets` | 每工单一行       |        1,800 | 优先级、解决时长、积压事故    |
 | `events`          | 每行为事件一行   |       36,000 | 获客和漏斗探索                |
 
-配套 Knowledge Model 是原生 Apache Ossie 0.1.1 文档，包含：
+配套 Knowledge Model 是原生 Apache Ossie 0.2.0.dev0 文档，包含：
 
 - 7 个 datasets 和完整字段定义；
 - 8 个 metrics；
@@ -61,7 +77,7 @@ yarn workspace web commerce:evaluation:seed --organization-id <organizationId> -
 
 - 复用 `apps/web/localdata/commerce-agent-evaluation.sqlite`；仅显式传入 `--reset` 时重建；
 - 创建或更新 `Commerce Agent Evaluation` SQLite 连接；
-- 导入 `Commerce Operations Knowledge` 的 Ossie 0.1.1 YAML，并保留 verified 状态；
+- 导入 `Commerce Operations Knowledge` 的 Ossie 0.2.0.dev0 YAML，并保留 verified 状态；
 - 创建 4 个 Knowledge Sources 和 5 条 Verified Queries；
 - 输出 `connectionId`、`knowledgeModelId`、`ossieVersion` 和完整 `modelRevision`；
 - 导出 YAML、4 份来源文档、包含完整标准结果的 `scenarios.json` 和 `manifest.json` 到 `apps/web/localdata/commerce-knowledge-acceptance`（可通过 `--output-dir` 修改）。
@@ -81,7 +97,7 @@ yarn workspace web exec tsx --test ../../packages/database/scripts/tests/knowled
 
 验收项：
 
-- 文档通过官方 Ossie 0.1.1 schema 和 Dory profile。
+- 文档通过官方 Ossie 0.2.0.dev0 schema 和 Dory profile。
 - 全部评估定义为 verified，并绑定同一测试 connection。
 - dataset、metric、relationship 和列映射数量正确。
 - 每条金标准 SQL 都返回确定性结果。
@@ -93,7 +109,7 @@ yarn workspace web exec tsx --test ../../packages/database/scripts/tests/knowled
 人工检查：
 
 1. 打开 **Knowledge**，确认没有单独的 Ossie 产品入口。
-2. 打开 `Commerce Operations Knowledge`，确认显示 `Apache Ossie 0.1.1 · rev <8 位哈希>`。
+2. 打开 `Commerce Operations Knowledge`，确认显示 `Apache Ossie 0.2.0.dev0 · rev <8 位哈希>`。
 3. 在 Definitions 中检查 datasets、fields、8 个 metrics、7 条 relationships 及关系列映射。
 4. 检查 AI Context 的 instructions、synonyms 和 examples。
 5. 打开 YAML，确认它是 Ossie 文档且没有 `cubes:` 键。
@@ -125,7 +141,7 @@ DORY_COMMERCE_EVALUATION_CONNECTION_ID=<seed 输出的 connectionId> \
 yarn workspace web commerce:evaluation:mcp
 ```
 
-重放脚本为五个固定场景分别创建 Agent Run，先断言自动返回场景要求的语义、Ossie 0.1.1 和 revision，再执行资产检索、schema 探索和标准 SQL。所有结果行必须匹配共享 `expectedRows`（持久化单元格中的数字字符串仅在对应标准列为数字时转换），随后读回 Artifact 核验内容和 Run 归属，最后用实测结果保存 finding。失败场景标记 error，命令以非零状态退出；记录保存至 `mcp-results.json`。这验证 MCP Agent 执行链路；UI Chat 自主生成 SQL 仍需单独验收。
+重放脚本为五个固定场景分别创建 Agent Run，先断言自动返回场景要求的语义、Ossie 0.2.0.dev0 和 revision，再执行资产检索、schema 探索和标准 SQL。所有结果行必须匹配共享 `expectedRows`（持久化单元格中的数字字符串仅在对应标准列为数字时转换），随后读回 Artifact 核验内容和 Run 归属，最后用实测结果保存 finding。失败场景标记 error，命令以非零状态退出；记录保存至 `mcp-results.json`。这验证 MCP Agent 执行链路；UI Chat 自主生成 SQL 仍需单独验收。
 
 复购率的分母是至少购买一次的客户数，购买转化率的分母是渠道全部客户数；无购买客户时复购率为 NULL。
 
@@ -133,7 +149,7 @@ yarn workspace web commerce:evaluation:mcp
 
 完成 MCP 重放或 UI Chat 后，打开对应 Agent Run：
 
-1. Context 卡片显示 `Commerce Operations Knowledge · Ossie 0.1.1 · rev <8 位哈希>`。
+1. Context 卡片显示 `Commerce Operations Knowledge · Ossie 0.2.0.dev0 · rev <8 位哈希>`。
 2. 卡片深链回同一个 Knowledge Model。
 3. 快照包含命中的 metrics 和 relationships。
 4. 修改模型后新 Run 记录新 revision；旧 Run 仍显示原 revision 和快照。
@@ -151,7 +167,7 @@ yarn workspace web commerce:evaluation:mcp
 | definition 为 unverified        | 不进入上下文                                                  |
 | Resolver 抛错                   | SQL/普通回答继续；记录错误事件；不写 semantic-model asset     |
 | 上下文超过预算                  | 最多 3 个模型、12 metrics、12 datasets、16,000 字符；稳定截断 |
-| 导入 `cubes:` 或错误版本        | 明确提示仅支持 Apache Ossie 0.1.1                             |
+| 导入 `cubes:` 或错误版本        | 明确提示仅支持 Apache Ossie 0.2.0.dev0                        |
 
 `apps/web/scripts/tests/semantic-model-context.test.ts` 和 MCP facade 测试覆盖确定性路径。发布前仍应人工抽查一次 connection 隔离和一次 fail-open 行为。
 

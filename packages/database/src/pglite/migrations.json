@@ -527,5 +527,14 @@
     "bps": true,
     "folderMillis": 1791518400000,
     "hash": "c074826e94fcd57d5bf54607a64e6a2fab0334fbbc6cff5316ea718adf4febf9"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"knowledge_models\" ALTER COLUMN \"model_yaml\" SET DEFAULT E'version: 0.2.0.dev0\\nname: untitled_model\\ndatasets:\\n  - name: untitled_dataset\\n    source: __unconfigured__\\nrelationships: []\\nmetrics: []\\n';\n",
+      "\nALTER TABLE \"knowledge_models\" ALTER COLUMN \"model_json\" SET DEFAULT '{\"version\":\"0.2.0.dev0\",\"name\":\"untitled_model\",\"datasets\":[{\"name\":\"untitled_dataset\",\"source\":\"__unconfigured__\"}],\"relationships\":[],\"metrics\":[]}'::jsonb;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1792022400000,
+    "hash": "ea71ddd3b51ac6d57a2f7ed3a9bdba12e5f90e9e78edcaa0995a6596a42c8ed8"
   }
 ]

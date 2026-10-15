@@ -25,7 +25,7 @@ function model(options: { id: string; connectionId: string; synonym?: string; ve
         id: options.id,
         name: options.id,
         description: null,
-        ossieVersion: '0.1.1' as const,
+        ossieVersion: '0.2.0.dev0' as const,
         modelRevision: options.revision ?? `rev-${options.id}`,
         readiness: { status: 'ready' as const },
         model: {
@@ -36,27 +36,23 @@ function model(options: { id: string; connectionId: string; synonym?: string; ve
             ],
         },
         ossieDocument: {
-            version: '0.1.1' as const,
-            semantic_model: [
+            version: '0.2.0.dev0' as const,
+            name: options.id,
+            datasets: [
                 {
-                    name: options.id,
-                    datasets: [
+                    name: 'orders',
+                    source: 'public.orders',
+                    fields: [
                         {
-                            name: 'orders',
-                            source: 'public.orders',
-                            fields: [
-                                {
-                                    name: 'amount',
-                                    expression: { dialects: [{ dialect: 'ANSI_SQL' as const, expression: 'amount' }] },
-                                    ai_context: { synonyms: ['order value'] },
-                                },
-                            ],
+                            name: 'amount',
+                            expression: { dialects: [{ dialect: 'ANSI_SQL' as const, expression: 'amount' }] },
+                            ai_context: { synonyms: ['order value'] },
                         },
                     ],
-                    metrics,
-                    relationships: [],
                 },
             ],
+            metrics,
+            relationships: [],
         },
     };
 }
@@ -98,8 +94,8 @@ test('classic commerce questions resolve the expected Ossie metrics and relation
     const knowledgeModel = {
         id: 'commerce-operations',
         name: 'Commerce Operations Knowledge',
-        description: ossieDocument.semantic_model[0].description ?? null,
-        ossieVersion: '0.1.1' as const,
+        description: ossieDocument.description ?? null,
+        ossieVersion: '0.2.0.dev0' as const,
         modelRevision: ossieRevision(ossieDocument),
         readiness: { status: 'ready' as const },
         model: parseKnowledgeYaml(yaml, connectionId, false),
@@ -217,8 +213,24 @@ test('semantic model usage keeps exact revisions as separate Agent Run assets', 
         userId: 'user-1',
         workId: 'work-1',
         models: [
-            { id: 'model-1', name: 'Commerce', ossieVersion: '0.1.1', modelRevision: 'aaa', metricNames: ['revenue'], relationshipNames: [], deepLink: '/org-1/knowledge/model-1' },
-            { id: 'model-1', name: 'Commerce', ossieVersion: '0.1.1', modelRevision: 'bbb', metricNames: ['revenue'], relationshipNames: [], deepLink: '/org-1/knowledge/model-1' },
+            {
+                id: 'model-1',
+                name: 'Commerce',
+                ossieVersion: '0.2.0.dev0',
+                modelRevision: 'aaa',
+                metricNames: ['revenue'],
+                relationshipNames: [],
+                deepLink: '/org-1/knowledge/model-1',
+            },
+            {
+                id: 'model-1',
+                name: 'Commerce',
+                ossieVersion: '0.2.0.dev0',
+                modelRevision: 'bbb',
+                metricNames: ['revenue'],
+                relationshipNames: [],
+                deepLink: '/org-1/knowledge/model-1',
+            },
         ],
     });
     assert.equal(calls.length, 2);

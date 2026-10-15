@@ -33,6 +33,7 @@ import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
 import type { ConnectionListItem } from '@dory/shared/types/connections';
+import { OSSIE_DIALECTS, OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { executeActionClient } from '@/lib/actions/client';
 import {
     AlertDialog,
@@ -72,7 +73,8 @@ type Definition = {
     to?: string;
     fromColumns?: string[];
     toColumns?: string[];
-    dialect?: 'ANSI_SQL' | 'SNOWFLAKE' | 'MDX' | 'TABLEAU' | 'DATABRICKS' | 'MAQL';
+    dialect?: OssieDialect;
+    datatype?: OssieDataType;
     aiContext?: string | { instructions?: string; synonyms?: string[]; examples?: string[] };
 };
 type ModelDataSource = { connectionId: string; name: string; type: string; engine: string };
@@ -83,9 +85,9 @@ export type KnowledgeModelView = {
     description: string | null;
     businessContextMd: string;
     modelYaml: string;
-    ossieVersion: '0.1.1';
+    ossieVersion: OssieVersion;
     modelRevision: string;
-    ossieDocument: Record<string, unknown> & { semantic_model?: Array<{ ai_context?: Definition['aiContext'] }> };
+    ossieDocument: Record<string, unknown> & { ai_context?: Definition['aiContext'] };
     model: { definitions: Definition[] };
     dataSources: ModelDataSource[];
     verifiedQueryCount: number;
@@ -1021,7 +1023,7 @@ function EditDefinitionDialog({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {['ANSI_SQL', 'SNOWFLAKE', 'DATABRICKS', 'TABLEAU', 'MAQL', 'MDX'].map(value => (
+                                    {OSSIE_DIALECTS.map(value => (
                                         <SelectItem key={value} value={value}>
                                             {value}
                                         </SelectItem>
@@ -1332,7 +1334,7 @@ function DefinitionPanel({
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {['ANSI_SQL', 'SNOWFLAKE', 'DATABRICKS', 'TABLEAU', 'MAQL', 'MDX'].map(value => (
+                                        {OSSIE_DIALECTS.map(value => (
                                             <SelectItem key={value} value={value}>
                                                 {value}
                                             </SelectItem>
@@ -1533,7 +1535,7 @@ function ImportYamlDialog({
         >
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>{t('ImportYamlTitle')}</DialogTitle>
+                    <DialogTitle>{t('ImportYamlTitle', { version: OSSIE_VERSION })}</DialogTitle>
                     <DialogDescription>{t('ImportYamlDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -1662,8 +1664,8 @@ function YamlEditorDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>{t('ModelYaml')}</DialogTitle>
-                    <DialogDescription>{t('ModelYamlDescription')}</DialogDescription>
+                    <DialogTitle>{t('ModelYaml', { version: OSSIE_VERSION })}</DialogTitle>
+                    <DialogDescription>{t('ModelYamlDescription', { version: OSSIE_VERSION })}</DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
                     <MonacoYamlEditor
@@ -1733,7 +1735,7 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     useEffect(() => {
         if (!modelQuery.data) return;
         setMarkdown(modelQuery.data.businessContextMd);
-        const context = modelQuery.data.ossieDocument.semantic_model?.[0]?.ai_context;
+        const context = modelQuery.data.ossieDocument.ai_context;
         setModelSynonyms(typeof context === 'string' ? '' : (context?.synonyms?.join(', ') ?? ''));
         setModelExamples(typeof context === 'string' ? '' : (context?.examples?.join('\n') ?? ''));
     }, [modelQuery.data]);

@@ -19,10 +19,11 @@ import {
     type KnowledgeSourceFormat,
     type KnowledgeModelDocument,
     OSSIE_VERSION,
-    type OssieDocumentV011,
+    type OssieDocument,
 } from '@dory/database/postgres/schemas';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
+import { OSSIE_DATA_TYPES, OSSIE_DIALECTS } from '@dory/shared/types/ossie';
 import {
     applyKnowledgeDefinitions,
     createOssieDocument,
@@ -35,6 +36,7 @@ import {
     updateOssieMetadata,
     validateOssieDocument,
 } from './ossie';
+import { migrateLegacyOssieModels } from './migrate-ossie';
 
 export { ossieRevision, parseOssieYaml, serializeOssieDocument, validateOssieDocument } from './ossie';
 
@@ -50,7 +52,7 @@ export type KnowledgeModelDetail = {
     model: KnowledgeModelDocument;
     ossieVersion: typeof OSSIE_VERSION;
     modelRevision: string;
-    ossieDocument: OssieDocumentV011;
+    ossieDocument: OssieDocument;
     dataSources: KnowledgeModelDataSourceDetail[];
     verifiedQueryCount: number;
     knowledgeSourceCount: number;
@@ -123,6 +125,8 @@ function normalizeDefinition(value: unknown): KnowledgeDefinition {
     const list = (key: string) =>
         Array.isArray(input[key]) ? input[key].filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map(item => item.trim()) : undefined;
     const optional = (key: string) => (typeof input[key] === 'string' && input[key].trim() ? input[key].trim() : undefined);
+    if (input.datatype !== undefined && !OSSIE_DATA_TYPES.some(value => value === input.datatype)) throw new Error('Unsupported Ossie data type.');
+    if (input.dialect !== undefined && !OSSIE_DIALECTS.some(value => value === input.dialect)) throw new Error('Unsupported Ossie dialect.');
     return {
         id: optional('id') ?? `${kind}:${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
         name,
@@ -142,6 +146,7 @@ function normalizeDefinition(value: unknown): KnowledgeDefinition {
         ...(list('toColumns') ? { toColumns: list('toColumns') } : {}),
         ...(input.aiContext ? { aiContext: input.aiContext as KnowledgeDefinition['aiContext'] } : {}),
         ...(optional('dialect') ? { dialect: optional('dialect') as KnowledgeDefinition['dialect'] } : {}),
+        ...(optional('datatype') ? { datatype: optional('datatype') as KnowledgeDefinition['datatype'] } : {}),
     };
 }
 
@@ -184,7 +189,7 @@ export function validateKnowledgeModelDocument(value: unknown, sourceIds?: Reado
 
 export function serializeKnowledgeModel(model: KnowledgeModelDocument) {
     const first = model.definitions.find(item => item.kind === 'entity') ?? model.definitions[0];
-    if (!first) throw new Error('Apache Ossie 0.1.1 requires at least one dataset.');
+    if (!first) throw new Error(`Apache Ossie ${OSSIE_VERSION} requires at least one dataset.`);
     return serializeOssieDocument(applyKnowledgeDefinitions(createOssieDocument('knowledge_model', null, first.sourceConnectionId), model.definitions));
 }
 
@@ -201,10 +206,11 @@ export function parseKnowledgeSourceYaml(source: string, fallbackSourceConnectio
 export class PostgresKnowledgeRepository {
     private db!: PostgresDBClient;
 
-    async init() {
-        const client = await getClient();
+    async init(db?: PostgresDBClient) {
+        const client = db ?? (await getClient());
         if (!client) throw new DatabaseError('Database connection failed', 500);
         this.db = client as PostgresDBClient;
+        await migrateLegacyOssieModels(this.db);
     }
 
     private assertInited() {
@@ -450,8 +456,8 @@ export class PostgresKnowledgeRepository {
         await this.db
             .update(knowledgeModels)
             .set({
-                name: normalized.semantic_model[0].name,
-                description: normalized.semantic_model[0].description ?? null,
+                name: normalized.name,
+                description: normalized.description ?? null,
                 businessContextMd: ossieBusinessContext(normalized),
                 modelJson: normalized,
                 modelYaml: serializeOssieDocument(normalized),

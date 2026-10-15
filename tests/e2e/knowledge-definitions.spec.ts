@@ -29,13 +29,10 @@ let model = {
     name: 'Taxi knowledge',
     description: null,
     businessContextMd: '',
-    modelYaml: 'version: 0.1.1\nsemantic_model:\n  - name: taxi_knowledge\n    datasets:\n      - name: trips\n        source: trips\n',
-    ossieVersion: '0.1.1' as const,
+    modelYaml: 'version: 0.2.0.dev0\nname: taxi_knowledge\ndatasets:\n  - name: trips\n    source: trips\n',
+    ossieVersion: '0.2.0.dev0' as const,
     modelRevision: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-    ossieDocument: {
-        version: '0.1.1',
-        semantic_model: [{ name: 'taxi_knowledge', datasets: [{ name: 'trips', source: 'trips' }], metrics: [], relationships: [] }],
-    },
+    ossieDocument: { version: '0.2.0.dev0', name: 'taxi_knowledge', datasets: [{ name: 'trips', source: 'trips' }], metrics: [], relationships: [] },
     model: { definitions: [definition] },
     dataSources: [{ connectionId: 'connection-1', name: 'Taxi data', type: 'postgres', engine: 'postgres' }],
     verifiedQueryCount: 0,
@@ -105,7 +102,7 @@ test('knowledge overview separates readiness from verified query coverage', asyn
     await expect(page.getByText('Business context and rules', { exact: true })).toBeVisible();
     await expect(page.getByText('Business semantics', { exact: true })).toBeVisible();
     await expect(page.getByText('Trusted query patterns', { exact: true })).toBeVisible();
-    await expect(page.getByText('Apache Ossie 0.1.1 · rev 01234567', { exact: true })).toBeVisible();
+    await expect(page.getByText('Apache Ossie 0.2.0.dev0 · rev 01234567', { exact: true })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
@@ -253,7 +250,7 @@ test('definition details show query links and edit knowledge source relationship
     await expect(page.getByText('Provided', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: `Open ${source.fileName}` })).toHaveAttribute('href', /tab=sources&source=source-1/);
 
-    await page.getByRole('checkbox', { name: source.fileName }).uncheck();
+    await page.getByRole('checkbox', { name: source.fileName }).click();
     await expect.poll(() => updatedSourceIds).toEqual([]);
     await expect(page.getByRole('checkbox', { name: source.fileName })).not.toBeChecked();
 

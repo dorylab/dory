@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import Ajv2020 from 'ajv/dist/2020.js';
 import { parseDocument, stringify } from 'yaml';
+import { isOssieTimeField } from '@dory/shared/types/ossie';
 
 import {
     OSSIE_VERSION,
@@ -11,13 +12,14 @@ import {
     type OssieCustomExtension,
     type OssieDataset,
     type OssieDialect,
-    type OssieDocumentV011,
+    type OssieDocument,
     type OssieExpression,
     type OssieField,
     type OssieMetric,
     type OssieRelationship,
 } from '@dory/database/postgres/schemas';
-import ossieSchema from './ossie-0.1.1.schema.json' with { type: 'json' };
+// Vendored unchanged from apache/ossie commit 32c293c79a80b0c11e01bd76357950284aeaf3f8.
+import ossieSchema from './ossie-0.2.0.dev0.schema.json' with { type: 'json' };
 
 type DoryExtension = {
     dory?: {
@@ -31,7 +33,7 @@ type DoryExtension = {
 };
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
-const validateSchema = ajv.compile(ossieSchema);
+const validateSchema = ajv.compile<OssieDocument>(ossieSchema);
 
 function stable(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(stable);
@@ -84,11 +86,7 @@ function withDoryExtension(extensions: OssieCustomExtension[] | undefined, dory:
 }
 
 function expressionFor(expression: OssieExpression, preferred: OssieDialect = 'ANSI_SQL') {
-    return (
-        expression.dialects.find(item => item.dialect === preferred)?.expression ??
-        expression.dialects.find(item => item.dialect === 'ANSI_SQL')?.expression ??
-        expression.dialects[0]?.expression
-    );
+    return expression.dialects.find(item => item.dialect === preferred) ?? expression.dialects.find(item => item.dialect === 'ANSI_SQL') ?? expression.dialects[0];
 }
 
 function expression(value: string, dialect: OssieDialect = 'ANSI_SQL'): OssieExpression {
@@ -103,16 +101,15 @@ function assertUnique(values: string[], label: string) {
     }
 }
 
-export function validateOssieDocument(value: unknown): OssieDocumentV011 {
-    if ((value as { cubes?: unknown })?.cubes) throw new Error('Cube YAML is no longer supported. Import an Apache Ossie 0.1.1 document.');
+export function validateOssieDocument(value: unknown): OssieDocument {
+    if ((value as { cubes?: unknown })?.cubes) throw new Error(`Cube YAML is no longer supported. Import an Apache Ossie ${OSSIE_VERSION} document.`);
     if (!validateSchema(value)) {
         const issue = validateSchema.errors?.[0];
-        throw new Error(`Invalid Apache Ossie 0.1.1 document${issue ? ` at ${issue.instancePath || '/'}: ${issue.message}` : '.'}`);
+        throw new Error(`Invalid Apache Ossie ${OSSIE_VERSION} document${issue ? ` at ${issue.instancePath || '/'}: ${issue.message}` : '.'}`);
     }
-    const document = value as OssieDocumentV011;
+    const document = value as OssieDocument;
     if (document.version !== OSSIE_VERSION) throw new Error(`Only Apache Ossie ${OSSIE_VERSION} is supported.`);
-    if (document.semantic_model.length !== 1) throw new Error('Dory requires exactly one semantic_model per Ossie document.');
-    const model = document.semantic_model[0];
+    const model = document;
     assertUnique(
         model.datasets.map(item => item.name),
         'dataset name',
@@ -140,18 +137,18 @@ export function parseOssieYaml(source: string) {
     return validateOssieDocument(parsed.toJS());
 }
 
-export function serializeOssieDocument(document: OssieDocumentV011) {
+export function serializeOssieDocument(document: OssieDocument) {
     return stringify(validateOssieDocument(document), { lineWidth: 0 });
 }
 
-export function ossieRevision(document: OssieDocumentV011) {
+export function ossieRevision(document: OssieDocument) {
     return createHash('sha256')
         .update(JSON.stringify(stable(validateOssieDocument(document))))
         .digest('hex');
 }
 
-export function ossieBusinessContext(document: OssieDocumentV011) {
-    return aiContext(document.semantic_model[0].ai_context).instructions ?? '';
+export function ossieBusinessContext(document: OssieDocument) {
+    return aiContext(document.ai_context).instructions ?? '';
 }
 
 function definitionFromDataset(dataset: OssieDataset, fallbackSourceConnectionId?: string): KnowledgeDefinition {
@@ -181,12 +178,13 @@ function definitionFromField(dataset: OssieDataset, field: OssieField, fallbackS
         status: dory?.status ?? 'unverified',
         sourceConnectionId: dory?.sourceConnectionId ?? datasetDory?.sourceConnectionId ?? fallbackSourceConnectionId ?? '',
         source: dataset.source,
-        expression: expressionFor(field.expression),
+        expression: expressionFor(field.expression)?.expression,
         description: field.description,
         aliases: context.synonyms,
-        timeDimension: field.dimension?.is_time ? field.name : undefined,
+        timeDimension: isOssieTimeField(field) ? field.name : undefined,
+        datatype: field.datatype,
         aiContext: field.ai_context,
-        dialect: field.expression.dialects[0]?.dialect,
+        dialect: expressionFor(field.expression)?.dialect,
     };
 }
 
@@ -194,12 +192,13 @@ function referencedDataset(expressionValue: string, datasets: OssieDataset[]) {
     return datasets.find(dataset => expressionValue.includes(`${dataset.name}.`)) ?? datasets[0];
 }
 
-export function projectOssieDocument(document: OssieDocumentV011, fallbackSourceConnectionId?: string): KnowledgeModelDocument {
-    const model = document.semantic_model[0];
+export function projectOssieDocument(document: OssieDocument, fallbackSourceConnectionId?: string): KnowledgeModelDocument {
+    const model = document;
     const entities = model.datasets.map(dataset => definitionFromDataset(dataset, fallbackSourceConnectionId));
     const fields = model.datasets.flatMap(dataset => (dataset.fields ?? []).map(field => definitionFromField(dataset, field, fallbackSourceConnectionId)));
     const metrics = (model.metrics ?? []).map(metric => {
-        const expressionValue = expressionFor(metric.expression) ?? '';
+        const selectedExpression = expressionFor(metric.expression);
+        const expressionValue = selectedExpression?.expression ?? '';
         const dataset = referencedDataset(expressionValue, model.datasets);
         const dory = extensionData(metric.custom_extensions);
         const datasetDory = extensionData(dataset?.custom_extensions);
@@ -217,7 +216,8 @@ export function projectOssieDocument(document: OssieDocumentV011, fallbackSource
             filters: dory?.filters,
             dimensions: dory?.dimensions,
             aiContext: metric.ai_context,
-            dialect: metric.expression.dialects[0]?.dialect,
+            dialect: selectedExpression?.dialect,
+            datatype: metric.datatype,
         };
     });
     const relationships = (model.relationships ?? []).map(relationship => {
@@ -242,31 +242,27 @@ export function projectOssieDocument(document: OssieDocumentV011, fallbackSource
     return { definitions: [...entities, ...fields, ...metrics, ...relationships] };
 }
 
-function createModel(name: string, description: string | null | undefined, connectionId: string): OssieDocumentV011 {
+function createModel(name: string, description: string | null | undefined, connectionId: string): OssieDocument {
     const modelName = slug(name);
     const datasetName = `${modelName}_dataset`;
     return {
         version: OSSIE_VERSION,
-        semantic_model: [
+        name: modelName,
+        ...(description ? { description } : {}),
+        datasets: [
             {
-                name: modelName,
-                ...(description ? { description } : {}),
-                datasets: [
-                    {
-                        name: datasetName,
-                        source: '__unconfigured__',
-                        custom_extensions: withDoryExtension(undefined, {
-                            id: `entity:${datasetName}`,
-                            kind: 'entity',
-                            status: 'unverified',
-                            sourceConnectionId: connectionId,
-                        }),
-                    },
-                ],
-                relationships: [],
-                metrics: [],
+                name: datasetName,
+                source: '__unconfigured__',
+                custom_extensions: withDoryExtension(undefined, {
+                    id: `entity:${datasetName}`,
+                    kind: 'entity',
+                    status: 'unverified',
+                    sourceConnectionId: connectionId,
+                }),
             },
         ],
+        relationships: [],
+        metrics: [],
     };
 }
 
@@ -275,7 +271,7 @@ export function createOssieDocument(name: string, description: string | null | u
 }
 
 export function updateOssieMetadata(
-    document: OssieDocumentV011,
+    document: OssieDocument,
     patch: {
         name?: string;
         description?: string | null;
@@ -283,37 +279,33 @@ export function updateOssieMetadata(
         aiContext?: { instructions?: string; synonyms?: string[]; examples?: string[] };
     },
 ) {
-    const model = document.semantic_model[0];
+    const model = document;
     const currentContext = aiContext(model.ai_context);
     return validateOssieDocument({
         ...document,
-        semantic_model: [
-            {
-                ...model,
-                ...(patch.name !== undefined ? { name: slug(patch.name) } : {}),
-                ...(patch.description !== undefined ? { description: patch.description || undefined } : {}),
-                ...(patch.businessContextMd !== undefined || patch.aiContext !== undefined
-                    ? {
-                          ai_context: {
-                              ...currentContext,
-                              ...(patch.aiContext ?? {}),
-                              ...(patch.businessContextMd !== undefined ? { instructions: patch.businessContextMd || undefined } : {}),
-                          },
-                      }
-                    : {}),
-            },
-        ],
+        ...(patch.name !== undefined ? { name: slug(patch.name) } : {}),
+        ...(patch.description !== undefined ? { description: patch.description || undefined } : {}),
+        ...(patch.businessContextMd !== undefined || patch.aiContext !== undefined
+            ? {
+                  ai_context: {
+                      ...currentContext,
+                      ...(patch.aiContext ?? {}),
+                      ...(patch.businessContextMd !== undefined ? { instructions: patch.businessContextMd || undefined } : {}),
+                  },
+              }
+            : {}),
     });
 }
 
 function mergeExpression(current: OssieExpression | undefined, definition: KnowledgeDefinition) {
     const dialect = definition.dialect ?? 'ANSI_SQL';
-    const others = (current?.dialects ?? []).filter(item => item.dialect !== dialect);
-    return { dialects: [...others, { dialect, expression: definition.expression || definition.name }] };
+    const next = { dialect, expression: definition.expression || definition.name };
+    const existing = current?.dialects ?? [];
+    return { dialects: existing.some(item => item.dialect === dialect) ? existing.map(item => (item.dialect === dialect ? next : item)) : [...existing, next] };
 }
 
-export function applyKnowledgeDefinitions(document: OssieDocumentV011, definitions: KnowledgeDefinition[]) {
-    const current = document.semantic_model[0];
+export function applyKnowledgeDefinitions(document: OssieDocument, definitions: KnowledgeDefinition[]) {
+    const current = document;
     const entities = definitions.filter(item => item.kind === 'entity');
     const datasets = entities.map(entity => {
         const existing = current.datasets.find(dataset => extensionData(dataset.custom_extensions)?.id === entity.id || dataset.name === entity.name);
@@ -326,8 +318,9 @@ export function applyKnowledgeDefinitions(document: OssieDocumentV011, definitio
                     ...existingField,
                     name: item.name,
                     expression: mergeExpression(existingField?.expression, item),
+                    ...(item.datatype ? { datatype: item.datatype } : {}),
                     ...(item.description ? { description: item.description } : {}),
-                    ...(item.timeDimension ? { dimension: { ...(existingField?.dimension ?? {}), is_time: true } } : {}),
+                    ...(item.timeDimension && !isOssieTimeField(existingField ?? {}) ? { dimension: { ...(existingField?.dimension ?? {}), is_time: true } } : {}),
                     ...(item.aiContext || item.aliases ? { ai_context: item.aiContext ?? { ...aiContext(existingField?.ai_context), synonyms: item.aliases } } : {}),
                     custom_extensions: withDoryExtension(existingField?.custom_extensions, {
                         id: item.id,
@@ -360,6 +353,7 @@ export function applyKnowledgeDefinitions(document: OssieDocumentV011, definitio
                 ...existing,
                 name: item.name,
                 expression: mergeExpression(existing?.expression, item),
+                ...(item.datatype ? { datatype: item.datatype } : {}),
                 ...(item.description ? { description: item.description } : {}),
                 ...(item.aiContext || item.aliases ? { ai_context: item.aiContext ?? { ...aiContext(existing?.ai_context), synonyms: item.aliases } } : {}),
                 custom_extensions: withDoryExtension(existing?.custom_extensions, {
@@ -392,16 +386,16 @@ export function applyKnowledgeDefinitions(document: OssieDocumentV011, definitio
                 }),
             } satisfies OssieRelationship;
         });
-    const next = { ...document, semantic_model: [{ ...current, datasets, metrics, relationships }] } as OssieDocumentV011;
+    const next = { ...document, datasets, metrics, relationships };
     return validateOssieDocument(next);
 }
 
-export function markOssieDefinitionsUnverified(document: OssieDocumentV011, fallbackSourceConnectionId?: string) {
+export function markOssieDefinitionsUnverified(document: OssieDocument, fallbackSourceConnectionId?: string) {
     const definitions = projectOssieDocument(document, fallbackSourceConnectionId).definitions.map(item => ({ ...item, status: 'unverified' as const }));
     return applyKnowledgeDefinitions(document, definitions);
 }
 
-export function sourceConnectionIds(document: OssieDocumentV011) {
+export function sourceConnectionIds(document: OssieDocument) {
     return [
         ...new Set(
             projectOssieDocument(document)

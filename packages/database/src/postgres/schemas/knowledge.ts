@@ -1,7 +1,10 @@
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { newEntityId } from '@dory/shared/id';
+import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { connections } from './connections';
+
+export { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 
 export type KnowledgeDefinitionKind = 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
 export type KnowledgeDefinitionStatus = 'verified' | 'unverified';
@@ -27,13 +30,11 @@ export type KnowledgeDefinition = {
     toColumns?: string[];
     aiContext?: OssieAiContext;
     dialect?: OssieDialect;
+    datatype?: OssieDataType;
 };
 
 export type KnowledgeModelDocument = { definitions: KnowledgeDefinition[] };
 
-export const OSSIE_VERSION = '0.1.1' as const;
-export type OssieVersion = typeof OSSIE_VERSION;
-export type OssieDialect = 'ANSI_SQL' | 'SNOWFLAKE' | 'MDX' | 'TABLEAU' | 'DATABRICKS' | 'MAQL';
 export type OssieAiContext =
     | string
     | {
@@ -42,11 +43,12 @@ export type OssieAiContext =
           examples?: string[];
           [key: string]: unknown;
       };
-export type OssieCustomExtension = { vendor_name: 'COMMON' | 'SNOWFLAKE' | 'SALESFORCE' | 'DBT' | 'DATABRICKS' | 'GOODDATA'; data: string };
+export type OssieCustomExtension = { vendor_name: string; data: string };
 export type OssieExpression = { dialects: Array<{ dialect: OssieDialect; expression: string }> };
 export type OssieField = {
     name: string;
     expression: OssieExpression;
+    datatype?: OssieDataType;
     dimension?: { is_time?: boolean };
     label?: string;
     description?: string;
@@ -66,6 +68,7 @@ export type OssieDataset = {
 export type OssieMetric = {
     name: string;
     expression: OssieExpression;
+    datatype?: OssieDataType;
     description?: string;
     ai_context?: OssieAiContext;
     custom_extensions?: OssieCustomExtension[];
@@ -88,24 +91,19 @@ export type OssieSemanticModel = {
     metrics?: OssieMetric[];
     custom_extensions?: OssieCustomExtension[];
 };
-export type OssieDocumentV011 = {
+export type OssieDocument = OssieSemanticModel & {
     version: OssieVersion;
-    semantic_model: [OssieSemanticModel];
-    dialects?: OssieDialect[];
-    vendors?: OssieCustomExtension['vendor_name'][];
 };
 
-export const EMPTY_OSSIE_DOCUMENT: OssieDocumentV011 = {
+export const EMPTY_OSSIE_DOCUMENT: OssieDocument = {
     version: OSSIE_VERSION,
-    semantic_model: [
-        {
-            name: 'untitled_model',
-            datasets: [{ name: 'untitled_dataset', source: '__unconfigured__' }],
-            relationships: [],
-            metrics: [],
-        },
-    ],
+    name: 'untitled_model',
+    datasets: [{ name: 'untitled_dataset', source: '__unconfigured__' }],
+    relationships: [],
+    metrics: [],
 };
+
+export const EMPTY_OSSIE_YAML = `version: ${OSSIE_VERSION}\nname: untitled_model\ndatasets:\n  - name: untitled_dataset\n    source: __unconfigured__\nrelationships: []\nmetrics: []\n`;
 
 export const knowledgeModels = pgTable(
     'knowledge_models',
@@ -117,10 +115,8 @@ export const knowledgeModels = pgTable(
         name: text('name').notNull(),
         description: text('description'),
         businessContextMd: text('business_context_md').notNull().default(''),
-        modelYaml: text('model_yaml')
-            .notNull()
-            .default('version: 0.1.1\nsemantic_model:\n  - name: untitled_model\n    datasets:\n      - name: untitled_dataset\n        source: __unconfigured__\n'),
-        modelJson: jsonb('model_json').$type<OssieDocumentV011>().notNull().default(EMPTY_OSSIE_DOCUMENT),
+        modelYaml: text('model_yaml').notNull().default(EMPTY_OSSIE_YAML),
+        modelJson: jsonb('model_json').$type<OssieDocument>().notNull().default(EMPTY_OSSIE_DOCUMENT),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true })
             .notNull()

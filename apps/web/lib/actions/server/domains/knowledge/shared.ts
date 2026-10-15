@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OSSIE_DATA_TYPES, OSSIE_DIALECTS, OSSIE_VERSION } from '@dory/shared/types/ossie';
 
 export const ossieAiContextObjectSchema = z
     .object({ instructions: z.string().optional(), synonyms: z.array(z.string()).optional(), examples: z.array(z.string()).optional() })
@@ -22,7 +23,8 @@ export const knowledgeDefinitionSchema = z.object({
     to: z.string().max(300).optional(),
     fromColumns: z.array(z.string().min(1).max(300)).max(20).optional(),
     toColumns: z.array(z.string().min(1).max(300)).max(20).optional(),
-    dialect: z.enum(['ANSI_SQL', 'SNOWFLAKE', 'MDX', 'TABLEAU', 'DATABRICKS', 'MAQL']).optional(),
+    dialect: z.enum(OSSIE_DIALECTS).optional(),
+    datatype: z.enum(OSSIE_DATA_TYPES).optional(),
     aiContext: ossieAiContextSchema.optional(),
 });
 
@@ -50,7 +52,7 @@ export const knowledgeModelOutputSchema = z.object({
     description: z.string().nullable(),
     businessContextMd: z.string(),
     modelYaml: z.string(),
-    ossieVersion: z.literal('0.1.1'),
+    ossieVersion: z.literal(OSSIE_VERSION),
     modelRevision: z.string(),
     ossieDocument: z.record(z.string(), z.unknown()),
     model: z.object({ definitions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })) }),

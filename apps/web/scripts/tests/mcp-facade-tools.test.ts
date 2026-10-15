@@ -811,7 +811,7 @@ test('dory_create_work returns and records relevant semantic model context', asy
                         id: 'model-1',
                         name: 'Commerce',
                         description: null,
-                        ossieVersion: '0.1.1',
+                        ossieVersion: '0.2.0.dev0',
                         modelRevision: 'revision-1',
                         readiness: { status: 'ready' },
                         model: {
@@ -822,27 +822,23 @@ test('dory_create_work returns and records relevant semantic model context', asy
                             ],
                         },
                         ossieDocument: {
-                            version: '0.1.1',
-                            semantic_model: [
+                            version: '0.2.0.dev0',
+                            name: 'commerce',
+                            datasets: [
                                 {
-                                    name: 'commerce',
-                                    datasets: [
-                                        {
-                                            name: 'orders',
-                                            source: 'orders',
-                                            fields: [{ name: 'amount', expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'amount' }] } }],
-                                        },
-                                    ],
-                                    metrics: [
-                                        {
-                                            name: 'revenue',
-                                            expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'SUM(orders.amount)' }] },
-                                            ai_context: { synonyms: ['sales'] },
-                                        },
-                                    ],
-                                    relationships: [],
+                                    name: 'orders',
+                                    source: 'orders',
+                                    fields: [{ name: 'amount', expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'amount' }] } }],
                                 },
                             ],
+                            metrics: [
+                                {
+                                    name: 'revenue',
+                                    expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'SUM(orders.amount)' }] },
+                                    ai_context: { synonyms: ['sales'] },
+                                },
+                            ],
+                            relationships: [],
                         },
                     },
                 ],

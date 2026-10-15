@@ -1,4 +1,4 @@
-# Knowledge + Apache Ossie 0.1.1 Acceptance Plan
+# Knowledge + Apache Ossie 0.2.0.dev0 Acceptance Plan
 
 [English](./knowledge-ossie-acceptance.md) | [简体中文](./knowledge-ossie-acceptance-cn.md)
 
@@ -6,11 +6,27 @@
 
 Verify that Knowledge is not merely an editable catalog. It must provide observable, repeatable, and traceable semantic guidance throughout an analysis workflow:
 
-1. Valid Ossie 0.1.1 YAML imports, displays, edits, and exports without losing information.
+1. Valid Ossie 0.2.0.dev0 YAML imports, displays, edits, and exports without losing information.
 2. An Agent automatically selects relevant models for the active connection and question, then receives Metrics, Relationships, and AI Context.
 3. The Agent generates SQL and answers that follow the defined business semantics.
 4. Every Agent Run records the exact semantic-model specification version, content revision, matched constructs, and a deep link to Knowledge.
 5. An unavailable model fails open: analysis continues, the failure is observable, and unrelated or unverified models do not pollute context.
+
+## Specification and upgrades
+
+Dory uses the **0.2.0.dev0 development specification**, pinned to Apache Ossie commit [`32c293c79a80b0c11e01bd76357950284aeaf3f8`](https://github.com/apache/ossie/blob/32c293c79a80b0c11e01bd76357950284aeaf3f8/core-spec/ossie-schema.json). This is not a final 0.2.0 release. A model is a flat document:
+
+```yaml
+version: 0.2.0.dev0
+name: commerce
+datasets:
+    - name: orders
+      source: public.orders
+```
+
+Imports accept only this version and shape. Version 0.1.1, the former `semantic_model` wrapper, mixed shapes, and unknown versions are rejected. Existing database models are migrated transactionally during Knowledge initialization; this is separate from file import. Migration preserves definition IDs, connections, verification and custom extensions, regenerates JSON/YAML, and leaves historical Agent Run revisions and snapshots unchanged. A failed migration rolls back the whole model batch and reports the affected model.
+
+Acceptance must cover every declared dialect and `datatype`, arbitrary vendor extensions, and multi-dialect expressions surviving editing and export. Temporal data types imply a time dimension unless `is_time: false` is explicit. Declaring a dialect does not add an execution engine for it.
 
 ## Canonical evaluation data
 
@@ -26,7 +42,7 @@ The repository provides deterministic, synthetic, Northwind-style commerce opera
 | `support_tickets` | one row per ticket          |           1,800 | priority, resolution time, backlog incident   |
 | `events`          | one row per event           |          36,000 | acquisition and funnel exploration            |
 
-The companion Knowledge Model is a native Apache Ossie 0.1.1 document with:
+The companion Knowledge Model is a native Apache Ossie 0.2.0.dev0 document with:
 
 - 7 datasets with complete field definitions;
 - 8 metrics;
@@ -61,7 +77,7 @@ The command:
 
 - reuses `apps/web/localdata/commerce-agent-evaluation.sqlite`; only `--reset` rebuilds it;
 - creates or updates the `Commerce Agent Evaluation` SQLite connection;
-- imports the `Commerce Operations Knowledge` Ossie 0.1.1 YAML while preserving verified status;
+- imports the `Commerce Operations Knowledge` Ossie 0.2.0.dev0 YAML while preserving verified status;
 - creates four Knowledge Sources and five Verified Queries;
 - outputs the `connectionId`, `knowledgeModelId`, `ossieVersion`, and full `modelRevision`;
 - exports YAML, sources, `scenarios.json`, and `manifest.json` to `apps/web/localdata/commerce-knowledge-acceptance` (override with `--output-dir`).
@@ -81,7 +97,7 @@ yarn workspace web exec tsx --test ../../packages/database/scripts/tests/knowled
 
 Acceptance criteria:
 
-- The document passes the official Ossie 0.1.1 schema and the Dory profile.
+- The document passes the official Ossie 0.2.0.dev0 schema and the Dory profile.
 - All evaluation definitions are verified and bound to one test connection.
 - Dataset, metric, relationship, and column-mapping counts are correct.
 - Every golden SQL query returns deterministic results.
@@ -93,7 +109,7 @@ Acceptance criteria:
 Check manually:
 
 1. Open **Knowledge** and confirm no separate Ossie product section exists.
-2. Open `Commerce Operations Knowledge` and confirm `Apache Ossie 0.1.1 · rev <8-char hash>` is visible.
+2. Open `Commerce Operations Knowledge` and confirm `Apache Ossie 0.2.0.dev0 · rev <8-char hash>` is visible.
 3. In Definitions, verify the datasets, fields, eight metrics, seven relationships, and relationship-column mappings.
 4. Verify AI Context instructions, synonyms, and examples.
 5. Open YAML and confirm it is an Ossie document with no `cubes:` key.
@@ -131,7 +147,7 @@ The replay creates one Agent Run for each of the five scenarios and checks autom
 
 After MCP replay or UI Chat completes, open the corresponding Agent Run:
 
-1. A Context card shows `Commerce Operations Knowledge · Ossie 0.1.1 · rev <8-char hash>`.
+1. A Context card shows `Commerce Operations Knowledge · Ossie 0.2.0.dev0 · rev <8-char hash>`.
 2. The card deep-links to the same Knowledge Model.
 3. The snapshot includes matched metrics and relationships.
 4. After a model change, a new run records a new revision; the old run still displays the old revision and snapshot.
@@ -149,7 +165,7 @@ After MCP replay or UI Chat completes, open the corresponding Agent Run:
 | Definition is unverified                     | Excluded from context                                                                         |
 | Resolver throws                              | SQL/ordinary response continues; an error event is recorded; no semantic-model asset is added |
 | Context exceeds budget                       | At most 3 models, 12 metrics, 12 datasets, and 16,000 characters; truncation is stable        |
-| `cubes:` or an unsupported version imports   | A clear Apache Ossie 0.1.1-only error is returned                                             |
+| `cubes:` or an unsupported version imports   | A clear Apache Ossie 0.2.0.dev0-only error is returned                                        |
 
 `apps/web/scripts/tests/semantic-model-context.test.ts` and the MCP facade suite cover the deterministic cases. Before release, manually sample connection isolation and fail-open behavior once each.
 

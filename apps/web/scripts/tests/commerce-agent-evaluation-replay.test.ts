@@ -25,7 +25,7 @@ function replayFixture(corruptArtifact = false, omitMetric = false) {
                             {
                                 id: 'model',
                                 name: COMMERCE_EVALUATION_KNOWLEDGE_NAME,
-                                ossieVersion: '0.1.1',
+                                ossieVersion: '0.2.0.dev0',
                                 modelRevision: 'a'.repeat(64),
                                 metricNames: omitMetric && index === 0 ? [] : scenario.expectedSemanticIds.filter(id => id.startsWith('metric:')).map(id => id.split(':')[1]),
                                 relationshipNames: scenario.expectedSemanticIds.filter(id => id.startsWith('relationship:')).map(id => id.split(':')[1]),

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
 import { COMMERCE_EVALUATION_KNOWLEDGE_NAME } from '@/lib/demo/commerce-agent-evaluation';
 import { COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
@@ -59,7 +60,7 @@ export async function replayCommerceEvaluation(call: CallTool, connectionId: str
             const models = Array.isArray(work.semanticModelsUsed) ? work.semanticModelsUsed.filter(isRecord) : [];
             const model = models.find(item => item.name === COMMERCE_EVALUATION_KNOWLEDGE_NAME);
             assert.ok(model, 'Expected commerce semantic model before explicit Knowledge discovery.');
-            assert.equal(model.ossieVersion, '0.1.1');
+            assert.equal(model.ossieVersion, OSSIE_VERSION);
             assert.match(requireString(model.modelRevision, 'modelRevision'), /^[a-f0-9]{64}$/);
             for (const id of scenario.expectedSemanticIds) {
                 const name = id.slice(id.indexOf(':') + 1);

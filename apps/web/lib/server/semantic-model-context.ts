@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DBService } from '@dory/database';
+import { isOssieTimeField, type OssieVersion } from '@dory/shared/types/ossie';
 import type { OssieAiContext, OssieDataset, OssieDialect, OssieExpression, OssieMetric, OssieRelationship } from '@dory/database/postgres/schemas';
 import { knowledgeSearchTokens } from './knowledge-search-tokens';
 
@@ -13,7 +14,7 @@ const MAX_CONTEXT_CHARS = 16_000;
 export type SemanticModelUsage = {
     id: string;
     name: string;
-    ossieVersion: '0.1.1';
+    ossieVersion: OssieVersion;
     modelRevision: string;
     metricNames: string[];
     relationshipNames: string[];
@@ -73,7 +74,7 @@ function renderContext(value: {
             if (dataset.ai_context) lines.push(`  AI context: ${JSON.stringify(dataset.ai_context)}`);
             for (const field of dataset.fields ?? []) {
                 const selected = expressionFor(field.expression, value.dialect);
-                lines.push(`  - field ${field.name}: ${selected?.expression ?? ''}${field.dimension?.is_time ? ' [time]' : ''}`);
+                lines.push(`  - field ${field.name}: ${selected?.expression ?? ''}${field.datatype ? ` [${field.datatype}]` : ''}${isOssieTimeField(field) ? ' [time]' : ''}`);
                 if (field.ai_context) lines.push(`    AI context: ${JSON.stringify(field.ai_context)}`);
             }
         }
@@ -107,7 +108,7 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
         .map(value => value.toLocaleLowerCase());
     const ranked = models
         .map(model => {
-            const semanticModel = model.ossieDocument.semantic_model[0];
+            const semanticModel = model.ossieDocument;
             const tableScore = semanticModel.datasets.reduce((score, dataset) => {
                 const sourceTail = dataset.source.split('.').at(-1)?.toLocaleLowerCase();
                 const name = dataset.name.toLocaleLowerCase();
@@ -134,7 +135,7 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
     let remainingMetrics = MAX_METRICS;
     let remainingRelationships = MAX_RELATIONSHIPS;
     for (const { model } of selected) {
-        const semanticModel = model.ossieDocument.semantic_model[0];
+        const semanticModel = model.ossieDocument;
         const verified = model.model.definitions.filter(item => item.status === 'verified');
         const verifiedEntities = new Set(verified.filter(item => item.kind === 'entity').map(item => item.name));
         const verifiedFields = new Set(verified.filter(item => item.kind === 'dimension').map(item => item.name));

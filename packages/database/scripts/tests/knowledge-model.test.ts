@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { OSSIE_DATA_TYPES, OSSIE_DIALECTS, OSSIE_VERSION } from '@dory/shared/types/ossie';
+import type { OssieDocument } from '../../src/postgres/schemas/knowledge';
 
 import {
     getKnowledgeReadiness,
@@ -22,69 +26,61 @@ import {
 
 const sources = new Set(['postgres', 'clickhouse']);
 const ossieDocument = {
-    version: '0.1.1' as const,
-    semantic_model: [
+    version: '0.2.0.dev0' as const,
+    name: 'commerce',
+    ai_context: { instructions: 'Revenue excludes tax.', synonyms: ['sales'], examples: ['Show revenue by customer.'] },
+    datasets: [
         {
-            name: 'commerce',
-            ai_context: { instructions: 'Revenue excludes tax.', synonyms: ['sales'], examples: ['Show revenue by customer.'] },
-            datasets: [
+            name: 'orders',
+            source: 'public.orders',
+            fields: [
+                { name: 'customer_id', expression: { dialects: [{ dialect: 'ANSI_SQL' as const, expression: 'customer_id' }] } },
                 {
-                    name: 'orders',
-                    source: 'public.orders',
-                    fields: [
-                        { name: 'customer_id', expression: { dialects: [{ dialect: 'ANSI_SQL' as const, expression: 'customer_id' }] } },
-                        {
-                            name: 'amount',
-                            expression: {
-                                dialects: [
-                                    { dialect: 'ANSI_SQL' as const, expression: 'amount' },
-                                    { dialect: 'SNOWFLAKE' as const, expression: '"AMOUNT"' },
-                                ],
-                            },
-                        },
-                    ],
-                    custom_extensions: [
-                        { vendor_name: 'COMMON' as const, data: JSON.stringify({ dory: { id: 'entity:orders', status: 'verified', sourceConnectionId: 'postgres' } }) },
-                    ],
-                },
-                {
-                    name: 'customers',
-                    source: 'public.customers',
-                    fields: [{ name: 'id', expression: { dialects: [{ dialect: 'ANSI_SQL' as const, expression: 'id' }] } }],
-                    custom_extensions: [
-                        { vendor_name: 'COMMON' as const, data: JSON.stringify({ dory: { id: 'entity:customers', status: 'verified', sourceConnectionId: 'postgres' } }) },
-                    ],
-                },
-            ],
-            metrics: [
-                {
-                    name: 'revenue',
+                    name: 'amount',
                     expression: {
                         dialects: [
-                            { dialect: 'ANSI_SQL' as const, expression: 'SUM(orders.amount)' },
-                            { dialect: 'SNOWFLAKE' as const, expression: 'SUM(orders."AMOUNT")' },
+                            { dialect: 'ANSI_SQL' as const, expression: 'amount' },
+                            { dialect: 'SNOWFLAKE' as const, expression: '"AMOUNT"' },
                         ],
                     },
-                    ai_context: { synonyms: ['sales'], examples: ['Revenue by month'] },
-                    custom_extensions: [
-                        { vendor_name: 'COMMON' as const, data: JSON.stringify({ dory: { id: 'metric:revenue', status: 'verified', sourceConnectionId: 'postgres' } }) },
-                        { vendor_name: 'SNOWFLAKE' as const, data: JSON.stringify({ warehouse: 'ANALYTICS' }) },
-                    ],
                 },
             ],
-            relationships: [
+            custom_extensions: [{ vendor_name: 'COMMON' as const, data: JSON.stringify({ dory: { id: 'entity:orders', status: 'verified', sourceConnectionId: 'postgres' } }) }],
+        },
+        {
+            name: 'customers',
+            source: 'public.customers',
+            fields: [{ name: 'id', expression: { dialects: [{ dialect: 'ANSI_SQL' as const, expression: 'id' }] } }],
+            custom_extensions: [{ vendor_name: 'COMMON' as const, data: JSON.stringify({ dory: { id: 'entity:customers', status: 'verified', sourceConnectionId: 'postgres' } }) }],
+        },
+    ],
+    metrics: [
+        {
+            name: 'revenue',
+            expression: {
+                dialects: [
+                    { dialect: 'ANSI_SQL' as const, expression: 'SUM(orders.amount)' },
+                    { dialect: 'SNOWFLAKE' as const, expression: 'SUM(orders."AMOUNT")' },
+                ],
+            },
+            ai_context: { synonyms: ['sales'], examples: ['Revenue by month'] },
+            custom_extensions: [
+                { vendor_name: 'COMMON' as const, data: JSON.stringify({ dory: { id: 'metric:revenue', status: 'verified', sourceConnectionId: 'postgres' } }) },
+                { vendor_name: 'SNOWFLAKE' as const, data: JSON.stringify({ warehouse: 'ANALYTICS' }) },
+            ],
+        },
+    ],
+    relationships: [
+        {
+            name: 'order_customer',
+            from: 'orders',
+            to: 'customers',
+            from_columns: ['customer_id'],
+            to_columns: ['id'],
+            custom_extensions: [
                 {
-                    name: 'order_customer',
-                    from: 'orders',
-                    to: 'customers',
-                    from_columns: ['customer_id'],
-                    to_columns: ['id'],
-                    custom_extensions: [
-                        {
-                            vendor_name: 'COMMON' as const,
-                            data: JSON.stringify({ dory: { id: 'relationship:order_customer', status: 'verified', sourceConnectionId: 'postgres' } }),
-                        },
-                    ],
+                    vendor_name: 'COMMON' as const,
+                    data: JSON.stringify({ dory: { id: 'relationship:order_customer', status: 'verified', sourceConnectionId: 'postgres' } }),
                 },
             ],
         },
@@ -103,7 +99,7 @@ test('Ossie YAML round-trips dialects, AI context and extensions with a formatti
     const parsed = parseOssieYaml(yaml);
     assert.deepEqual(parsed, ossieDocument);
     assert.equal(ossieRevision(parsed), ossieRevision(parseOssieYaml(`\n${yaml}\n`)));
-    assert.equal(parsed.semantic_model[0].metrics?.[0]?.expression.dialects.length, 2);
+    assert.equal(parsed.metrics?.[0]?.expression.dialects.length, 2);
 });
 
 test('Ossie projection preserves source ownership and marks imports unverified', () => {
@@ -115,12 +111,12 @@ test('Ossie projection preserves source ownership and marks imports unverified',
     assert.equal(parseKnowledgeSourceYaml(yaml).verifiedQueries.length, 0);
 });
 
-test('UI projection serializes as Ossie 0.1.1', () => {
+test('UI projection serializes as Ossie 0.2.0.dev0', () => {
     const projected = parseKnowledgeYaml(serializeOssieDocument(ossieDocument), undefined, false);
     const serialized = parseOssieYaml(serializeKnowledgeModel(projected));
-    assert.equal(serialized.version, '0.1.1');
-    assert.equal(serialized.semantic_model.length, 1);
-    assert.equal(serialized.semantic_model[0].relationships?.[0]?.from_columns[0], 'customer_id');
+    assert.equal(serialized.version, '0.2.0.dev0');
+    assert.equal('semantic_model' in serialized, false);
+    assert.equal(serialized.relationships?.[0]?.from_columns[0], 'customer_id');
 });
 
 test('UI patch preserves hidden dialects, AI context and custom extensions', () => {
@@ -129,20 +125,73 @@ test('UI patch preserves hidden dialects, AI context and custom extensions', () 
         definition.name === 'revenue' ? { ...definition, expression: 'SUM(orders.amount) FILTER (WHERE orders.amount > 0)' } : definition,
     );
     const patched = applyKnowledgeDefinitions(ossieDocument, definitions);
-    const revenue = patched.semantic_model[0].metrics?.find(metric => metric.name === 'revenue');
+    const revenue = patched.metrics?.find(metric => metric.name === 'revenue');
     assert.equal(revenue?.expression.dialects.find(item => item.dialect === 'SNOWFLAKE')?.expression, 'SUM(orders."AMOUNT")');
-    assert.deepEqual(revenue?.ai_context, ossieDocument.semantic_model[0].metrics[0].ai_context);
+    assert.deepEqual(revenue?.ai_context, ossieDocument.metrics[0].ai_context);
     assert.equal(
         revenue?.custom_extensions?.some(extension => extension.vendor_name === 'SNOWFLAKE'),
         true,
     );
 });
 
+test('the vendored official Schema and shared vocabularies stay pinned', () => {
+    const content = readFileSync(new URL('../../src/postgres/impl/knowledge/ossie-0.2.0.dev0.schema.json', import.meta.url));
+    assert.equal(createHash('sha256').update(content).digest('hex'), 'e1a1d9ad1cf2b33bc6b05a0d0d3a91b213e7ca034828a0bb76766bdb2e0b5ce1');
+    const schema = JSON.parse(content.toString());
+    assert.equal(schema.properties.version.const, OSSIE_VERSION);
+    assert.deepEqual(schema.$defs.Dialect.enum, [...OSSIE_DIALECTS]);
+    assert.deepEqual(schema.$defs.DataType.enum, [...OSSIE_DATA_TYPES]);
+});
+
+test('new data types, dialects and arbitrary vendors survive UI and YAML round trips', () => {
+    const source: OssieDocument = structuredClone(ossieDocument);
+    source.datasets[0].fields!.push(
+        ...OSSIE_DATA_TYPES.map(datatype => ({
+            name: `typed_${datatype}`,
+            datatype,
+            expression: { dialects: [{ dialect: 'BIGQUERY' as const, expression: `typed_${datatype}` }] },
+            custom_extensions: [{ vendor_name: 'ACME_ANALYTICS', data: '{"logicalType":"preserved"}' }],
+        })),
+    );
+    const metric = source.metrics![0];
+    metric.datatype = 'Decimal';
+    metric.expression.dialects = OSSIE_DIALECTS.map(dialect => ({ dialect, expression: `${dialect}_expression` }));
+    // A vendor dialect before ANSI must not be overwritten with ANSI SQL during projection.
+    metric.expression.dialects.reverse();
+    const projected = validateKnowledgeModelDocument(projectOssieDocument(source), sources);
+    assert.equal(projected.definitions.find(item => item.name === 'revenue')?.dialect, 'ANSI_SQL');
+    const patched = parseOssieYaml(serializeOssieDocument(applyKnowledgeDefinitions(source, projected.definitions)));
+    assert.deepEqual(patched.metrics![0].expression, metric.expression);
+    assert.equal(patched.metrics![0].datatype, 'Decimal');
+    for (const datatype of OSSIE_DATA_TYPES) {
+        const field = patched.datasets[0].fields!.find(item => item.name === `typed_${datatype}`)!;
+        assert.equal(field.datatype, datatype);
+        assert.equal(field.expression.dialects[0].dialect, 'BIGQUERY');
+        assert.ok(field.custom_extensions!.some(item => item.vendor_name === 'ACME_ANALYTICS' && item.data === '{"logicalType":"preserved"}'));
+    }
+});
+
+test('time dimensions infer temporal datatypes while explicit false takes precedence', () => {
+    const source: OssieDocument = structuredClone(ossieDocument);
+    source.datasets[0].fields!.push(
+        { name: 'event_time', datatype: 'DateTimeTz', expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'event_time' }] } },
+        { name: 'audit_time', datatype: 'DateTime', dimension: { is_time: false }, expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'audit_time' }] } },
+        { name: 'year', datatype: 'Integer', dimension: { is_time: true }, expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'year' }] } },
+    );
+    const projected = projectOssieDocument(source);
+    assert.equal(projected.definitions.find(item => item.name === 'event_time')?.timeDimension, 'event_time');
+    assert.equal(projected.definitions.find(item => item.name === 'audit_time')?.timeDimension, undefined);
+    assert.equal(projected.definitions.find(item => item.name === 'year')?.timeDimension, 'year');
+    const patched = applyKnowledgeDefinitions(source, projected.definitions);
+    assert.equal(patched.datasets[0].fields!.find(item => item.name === 'event_time')?.dimension, undefined);
+    assert.deepEqual(patched.datasets[0].fields!.find(item => item.name === 'audit_time')?.dimension, { is_time: false });
+});
+
 test('model AI context patch preserves unknown external keys', () => {
     const source = structuredClone(ossieDocument);
-    source.semantic_model[0].ai_context = { ...source.semantic_model[0].ai_context, audience: 'finance' };
+    source.ai_context = { ...source.ai_context, audience: 'finance' };
     const patched = updateOssieMetadata(source, { aiContext: { synonyms: ['bookings'], examples: [] } });
-    assert.deepEqual(patched.semantic_model[0].ai_context, {
+    assert.deepEqual(patched.ai_context, {
         instructions: 'Revenue excludes tax.',
         synonyms: ['bookings'],
         examples: [],
@@ -151,25 +200,22 @@ test('model AI context patch preserves unknown external keys', () => {
 });
 
 test('Ossie validation rejects unsupported and structurally invalid documents', () => {
-    assert.throws(() => parseOssieYaml('cubes: []\n'), /no longer supported|Ossie 0\.1\.1/i);
-    assert.throws(() => validateOssieDocument({ ...ossieDocument, version: '0.2.0.dev0' }), /0\.1\.1/i);
-    assert.throws(() => validateOssieDocument({ ...ossieDocument, semantic_model: [...ossieDocument.semantic_model, ossieDocument.semantic_model[0]] }), /exactly one/i);
-    assert.throws(() => validateOssieDocument({ version: '0.1.1', semantic_model: [{ name: 'empty', datasets: [] }] }), /at least 1 item|datasets/i);
+    assert.throws(() => parseOssieYaml('cubes: []\n'), /no longer supported/i);
+    assert.throws(() => validateOssieDocument({ ...ossieDocument, version: '0.2.0' }), /0\.2\.0\.dev0/i);
+    assert.throws(() => validateOssieDocument({ version: '0.2.0.dev0', semantic_model: [ossieDocument] }), /required|additional properties/i);
+    assert.throws(() => validateOssieDocument({ ...ossieDocument, semantic_model: [ossieDocument] }), /additional properties/i);
     assert.throws(
-        () =>
-            validateOssieDocument({
-                ...ossieDocument,
-                semantic_model: [{ ...ossieDocument.semantic_model[0], datasets: [ossieDocument.semantic_model[0].datasets[0], ossieDocument.semantic_model[0].datasets[0]] }],
-            }),
-        /duplicate dataset/i,
+        () => parseOssieYaml('version: 0.1.1\nsemantic_model:\n  - name: legacy\n    datasets:\n      - name: orders\n        source: public.orders\n'),
+        /0\.2\.0\.dev0/i,
     );
+    assert.throws(() => parseKnowledgeYaml('version: 0.1.1\nsemantic_model: []\n'), /0\.2\.0\.dev0/i);
+    assert.throws(() => validateOssieDocument({ version: '0.2.0.dev0', name: 'empty', datasets: [] }), /at least 1 item|datasets/i);
+    assert.throws(() => validateOssieDocument({ ...ossieDocument, datasets: [ossieDocument.datasets[0], ossieDocument.datasets[0]] }), /duplicate dataset/i);
     assert.throws(
         () =>
             validateOssieDocument({
                 ...ossieDocument,
-                semantic_model: [
-                    { ...ossieDocument.semantic_model[0], relationships: [{ name: 'broken', from: 'orders', to: 'missing', from_columns: ['customer_id'], to_columns: ['id'] }] },
-                ],
+                relationships: [{ name: 'broken', from: 'orders', to: 'missing', from_columns: ['customer_id'], to_columns: ['id'] }],
             }),
         /unknown dataset/i,
     );
@@ -177,12 +223,7 @@ test('Ossie validation rejects unsupported and structurally invalid documents', 
         () =>
             validateOssieDocument({
                 ...ossieDocument,
-                semantic_model: [
-                    {
-                        ...ossieDocument.semantic_model[0],
-                        relationships: [{ name: 'broken', from: 'orders', to: 'customers', from_columns: ['customer_id', 'amount'], to_columns: ['id'] }],
-                    },
-                ],
+                relationships: [{ name: 'broken', from: 'orders', to: 'customers', from_columns: ['customer_id', 'amount'], to_columns: ['id'] }],
             }),
         /matching from_columns and to_columns/i,
     );

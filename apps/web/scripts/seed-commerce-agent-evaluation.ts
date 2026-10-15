@@ -12,6 +12,7 @@ import { serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
 import { organizations, organizationMembers, user } from '@dory/database/postgres/schemas';
 import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
 import { getDatabaseProvider } from '@dory/database/provider';
+import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
 import { createCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
 import { COMMERCE_EVALUATION_CONNECTION_NAME, COMMERCE_EVALUATION_KNOWLEDGE_NAME, generateCommerceAgentEvaluationSqlite } from '@/lib/demo/commerce-agent-evaluation';
@@ -115,7 +116,7 @@ async function main() {
             database: 'main',
             path: sqlitePath,
             environment: 'development',
-            tags: 'agent-evaluation,synthetic,commerce,ossie-0.1.1',
+            tags: `agent-evaluation,synthetic,commerce,ossie-${OSSIE_VERSION}`,
         },
         identities: [identity],
     };

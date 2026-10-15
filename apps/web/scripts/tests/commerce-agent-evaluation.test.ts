@@ -11,14 +11,14 @@ import { parseKnowledgeYaml, parseOssieYaml, serializeOssieDocument } from '@dor
 import { COMMERCE_EVALUATION_COUNTS, generateCommerceAgentEvaluationSqlite } from '@/lib/demo/commerce-agent-evaluation';
 import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
 
-test('commerce evaluation Knowledge is a complete, verified Ossie 0.1.1 model', () => {
+test('commerce evaluation Knowledge is a complete, verified Ossie 0.2.0.dev0 model', () => {
     const connectionId = 'conn_commerce_evaluation';
     const yaml = serializeOssieDocument(buildCommerceEvaluationOssieDocument(connectionId));
     const document = parseOssieYaml(yaml);
     const projection = parseKnowledgeYaml(yaml, connectionId, false);
-    const model = document.semantic_model[0];
+    const model = document;
 
-    assert.equal(document.version, '0.1.1');
+    assert.equal(document.version, '0.2.0.dev0');
     assert.equal(model.name, 'Commerce Operations Knowledge');
     assert.equal(model.datasets.length, 7);
     assert.equal(model.metrics?.length, 8);
