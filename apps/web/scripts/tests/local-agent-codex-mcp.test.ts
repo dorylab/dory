@@ -15,6 +15,11 @@ const {
     buildCodexDoryMcpArgs,
     buildCodexDoryMcpEnv,
     buildInstruction,
+    resolveLocalAgentDoryContext,
+    DORY_CODEX_WORK_ID_HEADER,
+    DORY_CODEX_CHAT_ID_HEADER,
+    DORY_CODEX_CONNECTION_ID_HEADER,
+    DORY_CODEX_MCP_ENDPOINT_HEADER,
     DORY_CODEX_MCP_DESKTOP_GRANT_ENV,
     DORY_CODEX_MCP_ENABLED_TOOLS,
     DORY_CODEX_MCP_TOKEN_ENV,
@@ -88,8 +93,8 @@ test('Codex MCP desktop grant config keeps grant out of args', () => {
 
     assert.ok(joined.includes('mcp_servers.dory.url="http://localhost:3000/api/mcp"'));
     assert.ok(joined.includes('mcp_servers.dory.default_tools_approval_mode="approve"'));
-    assert.ok(joined.includes('mcp_servers.dory.tools.dory_create_work.approval_mode="never_ask"'));
-    assert.ok(joined.includes('mcp_servers.dory.tools.dory_finish_work.approval_mode="never_ask"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_create_work.approval_mode="approve"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_finish_work.approval_mode="approve"'));
     assert.ok(joined.includes('mcp_servers.dory.env_http_headers'));
     assert.ok(joined.includes('"x-dory-mcp-desktop-grant"'));
     assert.ok(joined.includes(DORY_CODEX_MCP_DESKTOP_GRANT_ENV));
@@ -115,8 +120,8 @@ test('Codex MCP bearer config keeps token out of args', () => {
     const joined = args.join('\n');
 
     assert.ok(joined.includes('mcp_servers.dory.bearer_token_env_var="DORY_MCP_TOKEN"'));
-    assert.ok(joined.includes('mcp_servers.dory.tools.dory_create_work.approval_mode="never_ask"'));
-    assert.ok(joined.includes('mcp_servers.dory.tools.dory_finish_work.approval_mode="never_ask"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_create_work.approval_mode="approve"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_finish_work.approval_mode="approve"'));
     assert.ok(joined.includes('"dory_read"'));
     assert.ok(joined.includes('"dory_write"'));
     assert.ok(joined.includes('"dory_run_readonly_sql"'));
@@ -124,4 +129,32 @@ test('Codex MCP bearer config keeps token out of args', () => {
     assert.deepEqual(buildCodexDoryMcpEnv(config), {
         [DORY_CODEX_MCP_TOKEN_ENV]: token,
     });
+});
+
+for (const target of [undefined, 'bridge:test-bridge']) {
+    test(`local Codex passes the Chat Run through ${target ? 'Web bridge' : 'Desktop direct'} context`, () => {
+        const options: Parameters<typeof buildInstruction>[0] = {
+            prompt: [],
+            headers: {
+                [DORY_CODEX_WORK_ID_HEADER]: 'chat-work-1',
+                [DORY_CODEX_CHAT_ID_HEADER]: 'chat-1',
+                [DORY_CODEX_CONNECTION_ID_HEADER]: 'conn-1',
+                [DORY_CODEX_MCP_ENDPOINT_HEADER]: 'http://localhost:3000/api/mcp',
+                'x-dory-mcp-desktop-grant': 'test-grant',
+            },
+        };
+        const context = resolveLocalAgentDoryContext('codex-agent', target, options, true);
+        assert.equal(context.doryMcpAvailable, true);
+        assert.equal(context.workId, 'chat-work-1');
+        const prompt = buildInstruction(options, context);
+        assert.match(prompt, /Current Dory workId: chat-work-1/);
+        assert.match(prompt, /Always pass the current workId/);
+        assert.match(prompt, /dory_finish_work/);
+    });
+}
+
+test('Codex without an existing Run is instructed to reuse a stable external session', () => {
+    const prompt = buildInstruction({ prompt: [] }, { doryMcpAvailable: true, chatId: 'external-chat' });
+    assert.match(prompt, /stable externalSessionId/);
+    assert.match(prompt, /retries and later turns/);
 });

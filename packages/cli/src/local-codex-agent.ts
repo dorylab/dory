@@ -94,7 +94,7 @@ export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
         'mcp_servers.dory.required=true',
         '-c',
         'mcp_servers.dory.default_tools_approval_mode="approve"',
-        ...DORY_CODEX_MCP_AUTO_APPROVED_TOOLS.flatMap(tool => ['-c', `mcp_servers.dory.tools.${tool}.approval_mode=${toTomlString('never_ask')}`]),
+        ...DORY_CODEX_MCP_AUTO_APPROVED_TOOLS.flatMap(tool => ['-c', `mcp_servers.dory.tools.${tool}.approval_mode=${toTomlString('approve')}`]),
         '-c',
         `mcp_servers.dory.tool_timeout_sec=${config.toolTimeoutSec}`,
         '-c',

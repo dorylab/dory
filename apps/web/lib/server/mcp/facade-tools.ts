@@ -16,7 +16,7 @@ const DEFAULT_WORK_TITLE = 'Agent Run';
 const MAX_WORK_TITLE_LENGTH = 240;
 const MAX_SHORT_WORK_TITLE_LENGTH = 64;
 const WORK_CONTEXT_INSTRUCTION =
-    'Call dory_create_work with connectionId and the original userQuestion before SQL, SQL workspace, or saved-query tools. Read its semanticContext before planning SQL, then pass the returned work.workId to later tools. Asset, Knowledge, and schema reads can run without a workId.';
+    'Call dory_create_work with an existing workId to continue a Run, or a stable externalSessionId to create or reuse one Run per external conversation. Include connectionId and the original userQuestion before SQL, SQL workspace, or saved-query tools. Read its semanticContext before planning SQL, then pass the returned work.workId to later tools. Asset, Knowledge, and schema reads can run without a workId.';
 
 const workResolutionInputSchema = z.object({
     workId: z.string().min(1).optional(),
@@ -186,8 +186,22 @@ const savedQueriesInputSchema = z
 
 const createWorkInputSchema = z
     .object({
+        workId: z
+            .string()
+            .trim()
+            .min(1)
+            .optional()
+            .describe(
+                'Existing Run to continue, including a Run created by Chat or another Agent. Takes precedence over externalSessionId; an invalid ID fails without creating a Run.',
+            ),
         connectionId: z.string().min(1).optional(),
-        externalSessionId: z.string().min(1).optional(),
+        externalSessionId: z
+            .string()
+            .min(1)
+            .optional()
+            .describe(
+                'Stable external conversation ID. Reuse it for retries and later turns in the same authenticated session scope. Without workId or externalSessionId, each call creates an independent Run.',
+            ),
         title: z
             .string()
             .min(1)
@@ -1307,6 +1321,7 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         userId: ctx.userId,
         ...mcpPrincipal(ctx),
         tokenId: ctx.actor.id ?? null,
+        workId: input.workId,
         connectionId: input.connectionId ?? null,
         externalSessionId: input.externalSessionId ?? null,
         title,
@@ -1701,7 +1716,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_create_work',
             title: 'Create Dory Work',
             description:
-                'Create or reuse one Dory Agent Run before database analysis. Pass connectionId and the original userQuestion, read the returned semanticContext before planning SQL, then pass work.workId to later tools. Use a short title based on the question.',
+                'Create or continue one Dory Agent Run before database analysis. To continue Chat or another Agent’s Run, pass its workId. Otherwise pass a stable externalSessionId to reuse one Run per external conversation, including retries and later turns. Without either ID, each call creates an independent Run. Pass connectionId and the original userQuestion, read the returned semanticContext before planning SQL, then pass work.workId to later tools. Use a short title based on the question.',
             inputSchema: createWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

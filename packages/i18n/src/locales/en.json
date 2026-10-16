@@ -3092,6 +3092,8 @@
             "Back": "Back"
         },
         "AssistantFallback": {
+            "HistoricalTitle": "Earlier response incomplete · later reply available",
+            "HistoricalDescription": "This is a record of an earlier incomplete response. Later replies are shown below.",
             "Title": "Response error",
             "Description": "Data Agent did not return usable content. Please try again later or refine your prompt.",
             "MissingAiEnvTitle": "Missing AI configuration",

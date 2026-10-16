@@ -289,9 +289,15 @@ export class PostgresWorksRepository {
 
     async create(input: ResolveWorkInput): Promise<WorkRecord> {
         this.assertInited();
-        if (input.externalSessionId?.trim()) {
+        if (input.workId?.trim() || input.externalSessionId?.trim()) {
             const existing = await this.resolveExisting(input);
             if (existing) return existing;
+            if (input.workId?.trim()) {
+                throw Object.assign(new Error(`Work not found: ${input.workId.trim()}.`), {
+                    code: 'WORK_NOT_FOUND',
+                    status: 404,
+                });
+            }
         }
 
         const now = new Date();
@@ -338,7 +344,7 @@ export class PostgresWorksRepository {
                 userId: input.userId,
                 workId: requestedWorkId,
             });
-            if (!row) return null;
+            if (!row || row.archivedAt || row.status === 'archived') return null;
             return this.prepareExistingWork(row, input, now);
         }
 

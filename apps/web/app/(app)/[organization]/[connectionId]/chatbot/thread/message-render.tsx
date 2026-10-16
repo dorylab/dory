@@ -14,6 +14,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenuItem } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { buildAutoChartFromSql } from '@/components/@dory/ui/ai/utils/auto-charts';
 import { useTranslations } from 'next-intl';
+import { getAssistantResponseError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
 import type { CopilotActionExecutor } from '../copilot/action-bridge';
 import { SqlResultPart, SqlResultManualExecutionMode } from '@/components/@dory/ui/ai/sql-result/type';
@@ -357,8 +358,14 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         }
     }
 
-    if (assistantMessage && contentItems.length === 0 && (!isLatestAssistant || !isStreaming)) {
-        contentItems.push(<AssistantFallbackCard key={`${message.id}-fallback`} />);
+    if (assistantMessage && (contentItems.length === 0 || getAssistantResponseError(message)) && (!isLatestAssistant || !isStreaming)) {
+        contentItems.push(
+            <AssistantFallbackCard
+                key={`${message.id}-fallback`}
+                reason={getAssistantResponseError(message)}
+                historical={hasLaterAssistantResponse(messages, messageIndex, status)}
+            />,
+        );
     }
 
     if (contentItems.length === 0) return null;

@@ -3096,6 +3096,8 @@
             "Back": "返回"
         },
         "AssistantFallback": {
+            "HistoricalTitle": "此前响应未完成，后续已有回复",
+            "HistoricalDescription": "这是此前一次未完成响应的历史记录，后续回复见下方。",
             "Title": "响应异常",
             "Description": "Data Agent 暂未返回可用内容，请稍后重试或调整提问。",
             "MissingAiEnvTitle": "缺少 AI 配置",

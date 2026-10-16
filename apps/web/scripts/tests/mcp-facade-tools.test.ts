@@ -142,6 +142,13 @@ function createWorksMock() {
         works,
         summarizeInput: (input: unknown) => input,
         create: async (input: any) => {
+            if (input.workId) {
+                const existing = findByWorkId(input);
+                if (!existing || existing.archivedAt || existing.status === 'archived') {
+                    throw Object.assign(new Error(`Work not found: ${input.workId}.`), { code: 'WORK_NOT_FOUND', status: 404 });
+                }
+                return prepareExisting(existing, input);
+            }
             if (input.externalSessionId) {
                 const existing = findByExternalSessionId(input);
                 if (existing) return prepareExisting(existing, input);
@@ -976,6 +983,53 @@ test('dory_create_work is idempotent for an external session', async () => {
     assert.equal(works.works.size, 1);
 });
 
+test('dory_create_work continues a Chat Run across MCP tokens without replacing its session or metadata', async () => {
+    const works = createWorksMock();
+    const original = await works.create({
+        organizationId: 'org-1',
+        userId: 'user-1',
+        externalSessionId: 'chat:chat-1',
+        connectionId: 'conn-1',
+        metadata: { source: 'internal_chat', chatId: 'chat-1', agentRunSummary: { findings: ['existing'] } },
+    });
+    const ctx = createContext({ db: { works } } as unknown as WebActionServices);
+    const output = (await getTool('dory_create_work').execute(ctx, { workId: original.workId, externalSessionId: 'another-agent', connectionId: 'conn-1' })) as typeof original;
+    assert.equal(output.workId, original.workId);
+    assert.equal(output.externalSessionId, 'chat:chat-1');
+    assert.equal(works.works.size, 1);
+    assert.deepEqual(original.metadata, { source: 'internal_chat', chatId: 'chat-1', agentRunSummary: { findings: ['existing'] } });
+    assert.equal(works.events.at(-1)?.workId, original.workId);
+    assert.equal(works.events.at(-1)?.tokenId, 'token-1');
+});
+
+test('dory_create_work rejects invalid continuation instead of creating another Run', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({ db: { works } } as unknown as WebActionServices);
+    const input = { externalSessionId: 'external-1', connectionId: 'conn-1' };
+    const original = (await getTool('dory_create_work').execute(ctx, input)) as { workId: string };
+    for (const invalidCtx of [ctx, { ...ctx, userId: 'other-user' }, { ...ctx, organizationId: 'other-org' }]) {
+        await assert.rejects(() => getTool('dory_create_work').execute(invalidCtx, { ...input, workId: invalidCtx === ctx ? 'missing' : original.workId }), {
+            code: 'WORK_NOT_FOUND',
+        });
+    }
+    await assert.rejects(() => getTool('dory_create_work').execute(ctx, { workId: original.workId, connectionId: 'other-connection' }), { code: 'WORK_CONNECTION_MISMATCH' });
+    await assert.rejects(() => getTool('dory_create_work').execute(ctx, { ...input, workId: '   ' }));
+    works.works.get(original.workId).archivedAt = new Date();
+    await assert.rejects(() => getTool('dory_create_work').execute(ctx, { ...input, workId: original.workId }), { code: 'WORK_NOT_FOUND' });
+    assert.equal(works.works.size, 1);
+});
+
+test('external conversations stay separate even when titles match; unidentified calls remain independent', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({ db: { works } } as unknown as WebActionServices);
+    const ids = [];
+    for (const externalSessionId of ['first', 'second', undefined, undefined]) {
+        const output = (await getTool('dory_create_work').execute(ctx, { externalSessionId, title: 'Same question' })) as { workId: string };
+        ids.push(output.workId);
+    }
+    assert.equal(new Set(ids).size, 4);
+});
+
 test('dory_create_work can fill a default title when reusing an external session', async () => {
     const works = createWorksMock();
     const ctx = createContext({
@@ -1495,7 +1549,10 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         },
     } as unknown as WebActionServices);
     const tool = getTool('dory_workspace_tabs');
-    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', externalSessionId: 'session-1', title: 'Workspace tabs' })) as any;
+    const initialWork = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', externalSessionId: 'session-1', title: 'Workspace tabs' })) as any;
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', externalSessionId: 'session-1' })) as any;
+    assert.equal(work.workId, initialWork.workId);
+    assert.equal(works.works.size, 1);
 
     const listed = (await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1', workId: work.workId })) as any;
     assert.equal(listed.tabs.length, 1);
@@ -1556,6 +1613,12 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         tabId: 'tab-1',
     });
     assert.deepEqual(deleted, ['tab-1']);
+    const finished = (await getTool('dory_finish_work').execute(ctx, { workId: work.workId, status: 'completed', findings: [], steps: ['Updated workspace'] })) as {
+        work: { workId: string };
+    };
+    assert.equal(finished.work.workId, initialWork.workId);
+    assert.equal(works.works.size, 1);
+    assert.ok(works.events.every(event => event.workId === initialWork.workId));
 });
 
 test('dory_workspace_tabs reports tab work mismatches clearly', async () => {

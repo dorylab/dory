@@ -45,6 +45,7 @@ type LocalAgentDoryContext = {
     connectionId?: string | null;
     requestId?: string | null;
     chatId?: string | null;
+    workId?: string | null;
 };
 
 const LOCAL_AGENT_TIMEOUT_MS = 120_000;
@@ -55,6 +56,7 @@ export const DORY_CODEX_MCP_ENDPOINT_HEADER = 'x-dory-local-agent-mcp-endpoint';
 export const DORY_CODEX_CONNECTION_ID_HEADER = 'x-dory-local-agent-connection-id';
 export const DORY_CODEX_REQUEST_ID_HEADER = 'x-dory-local-agent-request-id';
 export const DORY_CODEX_CHAT_ID_HEADER = 'x-dory-local-agent-chat-id';
+export const DORY_CODEX_WORK_ID_HEADER = 'x-dory-local-agent-work-id';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
@@ -94,7 +96,7 @@ export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
         'mcp_servers.dory.required=true',
         '-c',
         'mcp_servers.dory.default_tools_approval_mode="approve"',
-        ...DORY_CODEX_MCP_AUTO_APPROVED_TOOLS.flatMap(tool => ['-c', `mcp_servers.dory.tools.${tool}.approval_mode=${toTomlString('never_ask')}`]),
+        ...DORY_CODEX_MCP_AUTO_APPROVED_TOOLS.flatMap(tool => ['-c', `mcp_servers.dory.tools.${tool}.approval_mode=${toTomlString('approve')}`]),
         '-c',
         `mcp_servers.dory.tool_timeout_sec=${config.toolTimeoutSec}`,
         '-c',
@@ -126,7 +128,7 @@ function getHeader(headers: Record<string, string | undefined> | undefined, name
     return typeof entry?.[1] === 'string' ? entry[1].trim() : null;
 }
 
-function resolveLocalAgentDoryContext(
+export function resolveLocalAgentDoryContext(
     providerKey: LocalAiAgentProvider,
     target: string | null | undefined,
     options: LanguageModelV4CallOptions,
@@ -136,6 +138,7 @@ function resolveLocalAgentDoryContext(
     const connectionId = getHeader(headers, DORY_CODEX_CONNECTION_ID_HEADER);
     const requestId = getHeader(headers, DORY_CODEX_REQUEST_ID_HEADER);
     const chatId = getHeader(headers, DORY_CODEX_CHAT_ID_HEADER);
+    const workId = getHeader(headers, DORY_CODEX_WORK_ID_HEADER);
 
     if (providerKey !== 'codex-agent') {
         return {
@@ -143,6 +146,7 @@ function resolveLocalAgentDoryContext(
             connectionId,
             requestId,
             chatId,
+            workId,
         };
     }
 
@@ -153,6 +157,7 @@ function resolveLocalAgentDoryContext(
             connectionId,
             requestId,
             chatId,
+            workId,
         };
     }
 
@@ -164,6 +169,7 @@ function resolveLocalAgentDoryContext(
             connectionId,
             requestId,
             chatId,
+            workId,
         };
     }
 
@@ -182,6 +188,7 @@ function resolveLocalAgentDoryContext(
         connectionId,
         requestId,
         chatId,
+        workId,
     };
 }
 
@@ -240,12 +247,15 @@ function toolInstructions(options: LanguageModelV4CallOptions, context: LocalAge
         const contextLines = [
             context.connectionId ? `- Current Dory connectionId: ${context.connectionId}` : null,
             context.chatId ? `- Current Dory chat/session id: ${context.chatId}` : null,
+            context.workId ? `- Current Dory workId: ${context.workId}` : null,
             context.requestId ? `- Current Dory request id: ${context.requestId}` : null,
         ].filter(Boolean);
 
         return [
             'Dory MCP tools are available to Codex for this request.',
-            'For database questions, call dory_create_work once first with the current connectionId and the original userQuestion. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tool calls.',
+            context.workId
+                ? 'For database questions, call dory_create_work once first with the current workId, connectionId and original userQuestion to continue the existing Run. Always pass the current workId; do not create a separate Run. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tools and dory_finish_work.'
+                : 'For database questions, call dory_create_work once first with the current connectionId, original userQuestion and a stable externalSessionId for this conversation. Reuse that externalSessionId for retries and later turns. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tools and dory_finish_work.',
             'For non-query Dory read operations, use dory_read with the actionId. For create, update, or delete operations such as connection.create, use dory_write with the actionId instead of expecting a separate tool for every action.',
             'When the user asks for query results, write read-only SQL and call dory_run_readonly_sql. Answer from the tool result; do not claim a query was run without tool output.',
             'If the schema is unclear, call dory_explore_schema before writing SQL.',

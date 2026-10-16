@@ -242,9 +242,11 @@ Dory MCP exposes a small set of workflow tools instead of one tool per business 
 
 For a task that will execute SQL or edit a SQL workspace:
 
-1. Call `dory_create_work` with a short title based on the user request.
+1. Call `dory_create_work` with `connectionId`, the original `userQuestion`, and a short title. To continue an existing Run from Chat or another Agent, pass its `workId`. Otherwise, pass a stable `externalSessionId` for the external conversation and reuse it across retries and later turns.
 2. Pass the returned `work.workId` to SQL execution, SQL workspace, Saved Query, and finish tools. Optional asset, Knowledge, connection, schema, and comparison reads with that `workId` appear in the Run's activity timeline.
 3. Use `dory_finish_work` to save findings and execution steps.
+
+An explicit `workId` takes precedence over `externalSessionId` and preserves the Run's original session and metadata. The caller must have access to the Run; a missing, archived, or incompatible Run fails without creating a replacement. Session-only reuse is scoped to the authenticated organization, user, and MCP token. Different external conversations stay independent even when their questions match. Without either identifier, each initialization creates a new Run for compatibility; Dory cannot infer conversation identity from the title.
 
 Pure discovery and knowledge tasks can start directly with their read tool and do not create an Agent Run.
 

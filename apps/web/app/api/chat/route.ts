@@ -7,7 +7,13 @@ import { resolveAiRouteExecution, isLocalMissingAiEnvError } from '@/lib/ai/exec
 import { buildDoryAgentContext, type DoryAgentSchemaTableRef } from '@/lib/ai/agents/context';
 import { resolveDoryAgentModel } from '@/lib/ai/agents/model';
 import { buildDoryChatAgent } from '@/lib/ai/agents/chat-agent';
-import { DORY_CODEX_CHAT_ID_HEADER, DORY_CODEX_CONNECTION_ID_HEADER, DORY_CODEX_MCP_ENDPOINT_HEADER, DORY_CODEX_REQUEST_ID_HEADER } from '@/lib/ai/model/providers/local-agent';
+import {
+    DORY_CODEX_CHAT_ID_HEADER,
+    DORY_CODEX_CONNECTION_ID_HEADER,
+    DORY_CODEX_MCP_ENDPOINT_HEADER,
+    DORY_CODEX_REQUEST_ID_HEADER,
+    DORY_CODEX_WORK_ID_HEADER,
+} from '@/lib/ai/model/providers/local-agent';
 import { buildCloudflareAiGatewayHeaders, assertAiQuotaAllowed, isAiQuotaExceededError, resolveAiEntitlements, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
 import { createSqlRunnerTool } from './tools/sql-runner';
@@ -30,6 +36,7 @@ import type { ConnectionType } from '@dory/shared/types/connections';
 import type { Locale } from '@dory/i18n/routing';
 import { recordSemanticModelUsage } from '@/lib/server/semantic-model-context';
 import { createChatAgentRunLifecycle } from '@/lib/server/chat-agent-run';
+import { buildChatResponseMetadata } from '@/lib/ai/chat-response-state';
 
 export const runtime = 'nodejs';
 
@@ -72,6 +79,7 @@ function buildLocalCodexHeaders(options: {
     connectionId?: string | null;
     requestId: string;
     chatId?: string | null;
+    workId?: string | null;
 }): Record<string, string> | null {
     if (options.providerKey !== 'codex-agent' || options.transport !== 'local') return null;
 
@@ -85,6 +93,10 @@ function buildLocalCodexHeaders(options: {
     }
     if (options.chatId) {
         headers[DORY_CODEX_CHAT_ID_HEADER] = options.chatId;
+    }
+
+    if (options.workId) {
+        headers[DORY_CODEX_WORK_ID_HEADER] = options.workId;
     }
 
     if (isDesktopRuntime() && options.userId && options.organizationId) {
@@ -375,6 +387,7 @@ async function handleChatRequest(req: Request) {
         },
         execution.gateway,
     );
+    const localCodexWork = execution.providerKey === 'codex-agent' && execution.transport === 'local' && connectionId && chatRun ? await chatRun.resolve() : null;
     const localCodexHeaders = buildLocalCodexHeaders({
         req,
         providerKey: execution.providerKey,
@@ -384,6 +397,7 @@ async function handleChatRequest(req: Request) {
         connectionId,
         requestId,
         chatId,
+        workId: localCodexWork?.workId,
     });
     const headers = mergeHeaders(mergeHeaders(undefined, gatewayHeaders), localCodexHeaders);
 
@@ -424,6 +438,7 @@ async function handleChatRequest(req: Request) {
         }
     }
 
+    let responseError: string | null = null;
     try {
         return await createAgentUIStreamResponse({
             agent,
@@ -458,10 +473,7 @@ async function handleChatRequest(req: Request) {
                             role: 'assistant',
                             parts: ((event.responseMessage as any).parts ?? []) as any,
                             metadata: {
-                                ...(event.responseMessage.metadata && typeof event.responseMessage.metadata === 'object'
-                                    ? (event.responseMessage.metadata as Record<string, unknown>)
-                                    : {}),
-                                finishReason: event.finishReason ?? null,
+                                ...buildChatResponseMetadata(event.responseMessage.metadata, event.finishReason, responseError),
                                 sessionTitle,
                             },
                             createdAt: new Date(),
@@ -473,6 +485,7 @@ async function handleChatRequest(req: Request) {
                 }
             },
             onError: error => {
+                responseError = error instanceof Error ? error.message : 'AI_SERVICE_UNAVAILABLE';
                 void chatRun?.fail().catch(error => console.error('[chat] failed to finish Agent Run after stream error', error));
                 void recordAiUsage({
                     requestId,
@@ -496,7 +509,7 @@ async function handleChatRequest(req: Request) {
                     error,
                 });
 
-                return error instanceof Error ? error.message : 'AI_SERVICE_UNAVAILABLE';
+                return responseError;
             },
         });
     } catch (error) {

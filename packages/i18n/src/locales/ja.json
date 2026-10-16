@@ -3090,6 +3090,8 @@
             "Back": "戻る"
         },
         "AssistantFallback": {
+            "HistoricalTitle": "以前の応答は未完了です。その後の返信があります",
+            "HistoricalDescription": "これは以前の未完了の応答の記録です。その後の返信は下に表示されています。",
             "Title": "応答エラー",
             "Description": "Data Agent が利用可能な内容を返しませんでした。後でもう一度試すか、プロンプトを調整してください。",
             "MissingAiEnvTitle": "AI 設定が不足しています",

@@ -4,13 +4,19 @@ import type { SqliteDatasource } from '../datasource';
 import { getSqliteFamilySchemaSnapshot } from './schema-snapshot';
 
 export type SqliteMetadataAPI = Required<
-    Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchemaGraph' | 'getSchemaSnapshot' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>
+    Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchema' | 'getSchemaGraph' | 'getSchemaSnapshot' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>
 >;
 
 export function createSqliteMetadataCapability(datasource: SqliteDatasource): SqliteMetadataAPI {
     return {
         async getDatabases() {
             return getSqliteDatabases();
+        },
+        async getSchema(database) {
+            const db = datasource.getDatabase();
+            const targetDatabase = database?.trim() || 'main';
+            const objects = [...getSqliteTables(db, targetDatabase), ...getSqliteViews(db, targetDatabase)];
+            return Object.fromEntries(objects.map(object => [object.name, getSqliteTableColumns(db, targetDatabase, object.name).map(column => column.columnName)]));
         },
         async getTableColumns(database, table) {
             return getSqliteTableColumns(datasource.getDatabase(), database, table);

@@ -301,7 +301,7 @@ Dory MCP exposes workflow tools plus read/write Action transports:
 - `dory_workspace_tabs`
 - `dory_saved_queries`
 
-For database analysis, call `dory_create_work` first and pass the returned `work.workId` to work-scoped tools such as `dory_list_connections`, `dory_explore_schema`, and `dory_run_readonly_sql`. Use `dory_finish_work` to save findings and execution steps.
+For database analysis, call `dory_create_work` first with a stable `externalSessionId` for the external conversation; reuse it for retries and later turns. To continue a Run from Chat or another Agent, pass its existing `workId` instead. An explicit `workId` takes precedence and must identify an accessible, unarchived Run compatible with the requested connection; invalid continuation fails without creating a replacement. Session-only reuse is scoped to the authenticated organization, user, and MCP token. Without either identifier each call creates an independent Run, even for the same question. Pass the returned `work.workId` to work-scoped tools such as `dory_list_connections`, `dory_explore_schema`, and `dory_run_readonly_sql`. Use `dory_finish_work` to save findings and execution steps.
 
 Use `dory_read` for read-only or low-risk Actions such as `connection.list`, `connection.test`, and schema exploration. Use `dory_write` for create, update, or delete Actions such as `connection.create`, `connection.update`, and `connection.delete`. Do not expect one MCP tool per business operation.
 

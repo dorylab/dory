@@ -3090,6 +3090,8 @@
             "Back": "Volver"
         },
         "AssistantFallback": {
+            "HistoricalTitle": "Respuesta anterior incompleta; hay una respuesta posterior",
+            "HistoricalDescription": "Este es el registro de una respuesta anterior incompleta. Las respuestas posteriores aparecen debajo.",
             "Title": "Error de respuesta",
             "Description": "Data Agent no devolvió contenido utilizable. Inténtalo de nuevo más tarde o ajusta tu prompt.",
             "MissingAiEnvTitle": "Falta la configuración de IA",

@@ -47,8 +47,9 @@ export function DatabaseTypeIcon({ type, className, fallbackClassName }: { type?
             <Image
                 src={meta.src}
                 alt={meta.label}
-                width={24}
-                height={24}
+                width={normalizedType === 'sqlite' ? 191 : 24}
+                height={normalizedType === 'sqlite' ? 225 : 24}
+                style={{ width: 'auto', height: 'auto' }}
                 className={cn(normalizedType === 'sqlite' ? 'max-h-5 max-w-5' : 'max-h-6 max-w-6', 'object-contain', className)}
             />
         );
