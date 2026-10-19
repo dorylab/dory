@@ -3093,7 +3093,7 @@ __metadata:
     pg: "npm:^8.20.0"
     pg-copy-streams: "npm:^7.0.0"
     pg-query-stream: "npm:^4.16.0"
-    snowflake-sdk: "npm:^3.0.0"
+    snowflake-sdk: "npm:^3.3.0"
     ssh2: "npm:^1.17.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
     tsx: "npm:^4.23.1"
@@ -3973,7 +3973,7 @@ __metadata:
     mysql2: "npm:^3.20.0"
     oracledb: "npm:^6.10.0"
     pg: "npm:^8.20.0"
-    snowflake-sdk: "npm:^3.0.0"
+    snowflake-sdk: "npm:^3.3.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
     tsx: "npm:^4.23.1"
     typescript: "npm:^6.0.2"
@@ -21864,10 +21864,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"snowflake-sdk@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "snowflake-sdk@npm:3.0.0"
+"snowflake-sdk@npm:^3.3.0":
+  version: 3.3.0
+  resolution: "snowflake-sdk@npm:3.3.0"
   dependencies:
+    "@aws-crypto/sha256-js": "npm:^5.2.0"
     "@aws-sdk/client-s3": "npm:^3.1051.0"
     "@aws-sdk/client-sts": "npm:^3.1051.0"
     "@aws-sdk/credential-provider-node": "npm:^3.972.43"
@@ -21875,6 +21876,8 @@ __metadata:
     "@azure/identity": "npm:^4.10.1"
     "@azure/storage-blob": "npm:12.26.x"
     "@smithy/node-http-handler": "npm:^4.4.9"
+    "@smithy/protocol-http": "npm:^5.3.8"
+    "@smithy/signature-v4": "npm:^5.3.8"
     "@techteamer/ocsp": "npm:1.0.1"
     asn1.js: "npm:^5.0.0"
     asn1.js-rfc2560: "npm:^5.0.0"
@@ -21899,7 +21902,7 @@ __metadata:
     winston: "npm:^3.1.0"
   peerDependencies:
     asn1.js: ^5.4.1
-  checksum: 10c0/9a0c93a61ccb7dfe475e6e826c46606d6ddd78acf1c5028eb2ea4facae1b367860e9e20ea291adde0c1c2ef7bcfb4b66bb106cd7f1bb5e2c14207c1d6cc5e050
+  checksum: 10c0/adec285b43f373ae1ffaa638eae305a9c837bb2ed91143c65cb0a5530def6a484ec6c901f6ba0083fe6e2ae70d30e17ad21476ace8035217dab03e8e14c945f8
   languageName: node
   linkType: hard
 
@@ -23863,7 +23866,7 @@ __metadata:
     server-only: "npm:0.0.1"
     shadcn: "npm:^4.1.2"
     shiki: "npm:^4.0.2"
-    snowflake-sdk: "npm:^3.0.0"
+    snowflake-sdk: "npm:^3.3.0"
     sonner: "npm:^2.0.7"
     sql-formatter: "npm:^15.7.3"
     ssh2: "npm:^1.17.0"
