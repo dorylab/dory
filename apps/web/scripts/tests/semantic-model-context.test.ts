@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 
 import { ossieRevision, parseKnowledgeYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
+import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
 import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
 import { buildOlistOssieDocument, olistScenarios } from '@/lib/demo/olist-evaluation';
@@ -138,7 +139,7 @@ test('natural Chinese Olist questions match metrics and retain second-hop catego
         id: 'olist-model',
         name: 'Olist Commerce Knowledge',
         description: null,
-        ossieVersion: '0.1.1' as const,
+        ossieVersion: OSSIE_VERSION,
         modelRevision: ossieRevision(ossieDocument),
         readiness: { status: 'ready' as const },
         model: parseKnowledgeYaml(serializeOssieDocument(ossieDocument), connectionId, false),
@@ -170,14 +171,14 @@ test('model changes produce a new revision without changing previously recorded 
     const usage = (revision: string) => ({
         id: 'olist-model',
         name: 'Olist',
-        ossieVersion: '0.1.1' as const,
+        ossieVersion: OSSIE_VERSION,
         modelRevision: revision,
         metricNames: ['merchandise_amount'],
         relationshipNames: ['items_order'],
         deepLink: '/org/knowledge/olist-model',
     });
     await recordSemanticModelUsage(db, { organizationId: 'org', userId: 'user', workId: 'old', models: [usage(firstRevision)] });
-    document.semantic_model[0].metrics![0].description += ' Changed definition.';
+    document.metrics![0].description += ' Changed definition.';
     const secondRevision = ossieRevision(document);
     assert.notEqual(firstRevision, secondRevision);
     await recordSemanticModelUsage(db, { organizationId: 'org', userId: 'user', workId: 'new', models: [usage(secondRevision)] });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
-import type { KnowledgeDefinition, OssieCustomExtension, OssieDocumentV011 } from '@dory/database/postgres/schemas';
+import type { KnowledgeDefinition, OssieCustomExtension, OssieDocument } from '@dory/database/postgres/schemas';
+import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
 export const OLIST_CONNECTION_NAME = 'Olist Commerce Evaluation';
 export const OLIST_KNOWLEDGE_NAME = 'Olist Commerce Knowledge';
@@ -92,7 +93,7 @@ const METRICS = [
     ['latest_order_time', 'MAX(orders.order_purchase_timestamp)', '全表最新下单时间，保留原始无时区值。', ['最新数据时间', '最新订单时间']],
 ] as const;
 
-export function buildOlistOssieDocument(connectionId: string, timeRange: { min: string; max: string }): OssieDocumentV011 {
+export function buildOlistOssieDocument(connectionId: string, timeRange: { min: string; max: string }): OssieDocument {
     const relationships = [
         ['orders_customer', 'orders', 'customers', 'customer_id', 'customer_id'],
         ['items_order', 'order_items', 'orders', 'order_id', 'order_id'],
@@ -103,46 +104,42 @@ export function buildOlistOssieDocument(connectionId: string, timeRange: { min: 
         ['product_category', 'products', 'category_translation', 'product_category_name', 'product_category_name'],
     ];
     return {
-        version: '0.1.1',
-        semantic_model: [
-            {
-                name: OLIST_KNOWLEDGE_NAME,
-                description: 'Official Olist v2 historical commerce evaluation; BRL, source-native timestamps.',
-                ai_context: {
-                    instructions: `数据时间 ${timeRange.min} 至 ${timeRange.max}。历史数据不能代表当前业务。金额用整数分计算、展示时除100；币种BRL。时间无时区，保持源值。成交指标只包含delivered。订单、商品明细、支付有不同粒度：先分别聚合再关联，禁止直接连接明细和支付造成放大。按指定下单日期归属，不按送达日期归属。退款率、净利润、支付成功率不可计算：缺少退款金额、成本及支付尝试/结果字段，取消率不能代替退款率。没有SQL分析时findings必须为空。`,
-                    synonyms: ['电商', 'Olist', '订单', '成交', '复购', '支付', '配送'],
-                },
-                datasets: Object.entries(OLIST_TABLES).map(([name, spec]) => ({
-                    name,
-                    source: name,
-                    primary_key: spec.keys,
-                    description: spec.description,
-                    custom_extensions: extension(connectionId, `entity:${name}`, 'entity'),
-                    fields: spec.fields.split(' ').map(field => ({
-                        name: field,
-                        expression: { dialects: [{ dialect: 'ANSI_SQL', expression: `${name}.${field}` }] },
-                        ...(field.includes('timestamp') || field.endsWith('_date') || field === 'order_approved_at' ? { dimension: { is_time: true } } : {}),
-                        custom_extensions: extension(connectionId, `dimension:${name}:${field}`, 'dimension'),
-                    })),
-                })),
-                metrics: METRICS.map(([name, expression, description, synonyms]) => ({
-                    name,
-                    description,
-                    expression: { dialects: [{ dialect: 'ANSI_SQL', expression }] },
-                    ai_context: { synonyms: [...synonyms], instructions: description },
-                    custom_extensions: extension(connectionId, `metric:${name}`, 'metric'),
-                })),
-                relationships: relationships.map(([name, from, to, fromColumn, toColumn]) => ({
-                    name,
-                    from,
-                    to,
-                    from_columns: [fromColumn],
-                    to_columns: [toColumn],
-                    ai_context: { instructions: '从左侧多行到右侧一行；先检查关联覆盖率和粒度。' },
-                    custom_extensions: extension(connectionId, `relationship:${name}`, 'relationship'),
-                })),
-            },
-        ],
+        version: OSSIE_VERSION,
+        name: OLIST_KNOWLEDGE_NAME,
+        description: 'Official Olist v2 historical commerce evaluation; BRL, source-native timestamps.',
+        ai_context: {
+            instructions: `数据时间 ${timeRange.min} 至 ${timeRange.max}。历史数据不能代表当前业务。金额用整数分计算、展示时除100；币种BRL。时间无时区，保持源值。成交指标只包含delivered。订单、商品明细、支付有不同粒度：先分别聚合再关联，禁止直接连接明细和支付造成放大。按指定下单日期归属，不按送达日期归属。退款率、净利润、支付成功率不可计算：缺少退款金额、成本及支付尝试/结果字段，取消率不能代替退款率。没有SQL分析时findings必须为空。`,
+            synonyms: ['电商', 'Olist', '订单', '成交', '复购', '支付', '配送'],
+        },
+        datasets: Object.entries(OLIST_TABLES).map(([name, spec]) => ({
+            name,
+            source: name,
+            primary_key: spec.keys,
+            description: spec.description,
+            custom_extensions: extension(connectionId, `entity:${name}`, 'entity'),
+            fields: spec.fields.split(' ').map(field => ({
+                name: field,
+                expression: { dialects: [{ dialect: 'ANSI_SQL', expression: `${name}.${field}` }] },
+                ...(field.includes('timestamp') || field.endsWith('_date') || field === 'order_approved_at' ? { dimension: { is_time: true } } : {}),
+                custom_extensions: extension(connectionId, `dimension:${name}:${field}`, 'dimension'),
+            })),
+        })),
+        metrics: METRICS.map(([name, expression, description, synonyms]) => ({
+            name,
+            description,
+            expression: { dialects: [{ dialect: 'ANSI_SQL', expression }] },
+            ai_context: { synonyms: [...synonyms], instructions: description },
+            custom_extensions: extension(connectionId, `metric:${name}`, 'metric'),
+        })),
+        relationships: relationships.map(([name, from, to, fromColumn, toColumn]) => ({
+            name,
+            from,
+            to,
+            from_columns: [fromColumn],
+            to_columns: [toColumn],
+            ai_context: { instructions: '从左侧多行到右侧一行；先检查关联覆盖率和粒度。' },
+            custom_extensions: extension(connectionId, `relationship:${name}`, 'relationship'),
+        })),
     };
 }
 
