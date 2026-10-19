@@ -336,6 +336,7 @@ test('cloud route proxy is a low-level fetch helper without runtime policy reads
 test('action and cache AI callers use unified language model resolver', () => {
     const callers = [
         '../../lib/actions/server/domains/ai/tab-title.ts',
+        '../../lib/actions/server/domains/ai/saved-query-metadata.ts',
         '../../lib/ai/runtime/features/table-summary.ts',
         '../../lib/ai/runtime/features/column-tagging.ts',
         '../../lib/ai/runtime/features/schema-explanations.ts',

@@ -1,6 +1,7 @@
 import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 import type { McpAuthorizationRequestRecord } from '@dory/database/postgres/impl/mcp';
 import { MCP_DEFAULT_SCOPES } from './auth';
+import type { AgentPrincipalRecord } from '@dory/database/postgres/impl/mcp';
 
 export function serializeMcpToken(record: McpAccessTokenRecord) {
     return {
@@ -8,9 +9,25 @@ export function serializeMcpToken(record: McpAccessTokenRecord) {
         name: record.name,
         tokenPrefix: record.tokenPrefix,
         scopes: Array.isArray(record.scopes) ? record.scopes : [],
+        principalType: record.principalType,
+        principalId: record.principalId,
+        allowedConnectionIds: Array.isArray(record.allowedConnectionIds) ? record.allowedConnectionIds : null,
+        expiresAt: record.expiresAt,
         enabled: record.enabled,
         lastUsedAt: record.lastUsedAt,
         revokedAt: record.revokedAt,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+    };
+}
+
+export function serializeAgentPrincipal(record: AgentPrincipalRecord) {
+    return {
+        id: record.id,
+        name: record.name,
+        enabled: record.enabled,
+        allowedConnectionIds: Array.isArray(record.allowedConnectionIds) ? record.allowedConnectionIds : null,
+        createdByUserId: record.createdByUserId,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
     };

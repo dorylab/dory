@@ -25,6 +25,11 @@ test.describe('instant workbench navigation', () => {
             .waitForURL(new RegExp(`/${organization}/${connectionId}/sql-console$`), { timeout: 5_000 })
             .catch(() => page.goto(`/${organization}/${connectionId}/sql-console`));
 
+        for (const title of ['Data Sources', 'Knowledge', 'Agent Runs']) {
+            await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
+        }
+        await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0);
+
         await page.evaluate(() => sessionStorage.setItem('instant-navigation-document-marker', 'preserved'));
 
         const explorerLink = page.getByRole('link', { name: 'Explorer', exact: true });

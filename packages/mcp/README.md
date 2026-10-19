@@ -6,13 +6,13 @@ Most users should start with the full [`Dory MCP Guide`](../../docs/mcp.md). Use
 
 ## When to Use This Package
 
-| Use case | Recommended package |
-| --- | --- |
+| Use case                                         | Recommended package                         |
+| ------------------------------------------------ | ------------------------------------------- |
 | Hosted Dory Web endpoint with local stdio bridge | `@getdory/mcp` or `@getdory/cli mcp bridge` |
-| Standalone local MCP server | `@getdory/cli` |
-| HTTP headless runtime | `@getdory/cli` |
-| Token management | `@getdory/cli` |
-| Direct Dory Action execution | `@getdory/cli` |
+| Standalone local MCP server                      | `@getdory/cli`                              |
+| HTTP headless runtime                            | `@getdory/cli`                              |
+| Token management                                 | `@getdory/cli`                              |
+| Direct Dory Action execution                     | `@getdory/cli`                              |
 
 ## Hosted Bridge
 
@@ -33,6 +33,10 @@ The bridge stores a personal MCP token locally and forwards stdio MCP traffic to
 ```text
 https://your-dory-host/api/mcp
 ```
+
+For unattended customer Agents, create an organization service account in **Settings → Agent Access** and configure its one-time bearer token directly against the hosted `/api/mcp` endpoint. Service accounts are read-only, can be restricted to selected connections, and support token rotation and revocation.
+
+The hosted endpoint exposes `dory_search_assets` and `dory_read_asset` for discovering and reading verified Knowledge, reference sources, and available Artifacts through stable `dory://` references. See the full MCP guide for the asset contract and citation workflow.
 
 ## Add to Codex CLI
 

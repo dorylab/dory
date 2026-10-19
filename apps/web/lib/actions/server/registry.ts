@@ -3,6 +3,7 @@ import type { WebActionServices } from './types';
 import { aiActions } from './domains/ai';
 import { artifactActions } from './domains/artifact';
 import { chartActions } from './domains/chart';
+import { catalogActions } from './domains/catalog';
 import { comparisonActions } from './domains/comparison';
 import { connectionActions } from './domains/connection';
 import { queryActions } from './domains/query';
@@ -11,6 +12,8 @@ import { savedQueryActions } from './domains/saved-query';
 import { schemaActions } from './domains/schema';
 import { tabActions } from './domains/tab';
 import { tableActions } from './domains/table';
+import { knowledgeActions } from './domains/knowledge';
+import { workActions } from './domains/work';
 
 export const webActionRegistry = new ActionRegistry<WebActionServices>();
 
@@ -23,7 +26,10 @@ webActionRegistry.registerMany([
     ...tabActions,
     ...savedQueryActions,
     ...chartActions,
+    ...catalogActions,
     ...aiActions,
     ...artifactActions,
     ...comparisonActions,
+    ...knowledgeActions,
+    ...workActions,
 ]);

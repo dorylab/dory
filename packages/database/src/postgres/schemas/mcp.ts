@@ -2,6 +2,28 @@ import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex }
 import { sql } from 'drizzle-orm';
 import { newEntityId } from '@dory/shared/id';
 
+export type McpPrincipalType = 'user' | 'service';
+
+export const agentPrincipals = pgTable(
+    'agent_principals',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `agt_${newEntityId()}`),
+        organizationId: text('organization_id').notNull(),
+        name: text('name').notNull(),
+        enabled: boolean('enabled').notNull().default(true),
+        allowedConnectionIds: jsonb('allowed_connection_ids').$type<string[] | null>(),
+        createdByUserId: text('created_by_user_id').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .defaultNow()
+            .$onUpdateFn(() => new Date()),
+    },
+    t => [index('idx_agent_principals_org_created').on(t.organizationId, t.createdAt), uniqueIndex('uidx_agent_principals_org_name').on(t.organizationId, t.name)],
+);
+
 export const mcpAccessTokens = pgTable(
     'mcp_access_tokens',
     {
@@ -15,6 +37,10 @@ export const mcpAccessTokens = pgTable(
         scopes: jsonb('scopes').$type<string[]>().notNull().default([]),
         enabled: boolean('enabled').notNull().default(true),
         createdByUserId: text('created_by_user_id').notNull(),
+        principalType: text('principal_type').$type<McpPrincipalType>().notNull().default('user'),
+        principalId: text('principal_id'),
+        allowedConnectionIds: jsonb('allowed_connection_ids').$type<string[] | null>(),
+        expiresAt: timestamp('expires_at', { withTimezone: true }),
         lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
         revokedAt: timestamp('revoked_at', { withTimezone: true }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -122,6 +148,7 @@ export const localAiJobs = pgTable(
 );
 
 export type McpAccessToken = typeof mcpAccessTokens.$inferSelect;
+export type AgentPrincipal = typeof agentPrincipals.$inferSelect;
 export type NewMcpAccessToken = typeof mcpAccessTokens.$inferInsert;
 export type McpAuthorizationRequest = typeof mcpAuthorizationRequests.$inferSelect;
 export type NewMcpAuthorizationRequest = typeof mcpAuthorizationRequests.$inferInsert;

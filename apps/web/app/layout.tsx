@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
+import Script from 'next/script';
 
 import { fontVariables } from '@/lib/fonts';
 import { Analytics } from '@/components/analytics';
@@ -19,7 +20,8 @@ import { ElectronThemeSync } from '@/components/electron-theme-sync';
 
 import { siteConfig } from './config/site';
 import { JotaiProvider } from '@/lib/providers/jotai-provider';
-import { PublicEnvProvider, PublicEnvScript } from 'next-runtime-env';
+import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
+import { EnvProvider, EnvScript } from 'next-runtime-env';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
 const META_THEME_COLORS = {
@@ -99,12 +101,19 @@ export default async function RootLayout({
 
     const locale = await getLocale();
     const messages = await getMessages({ locale });
+    const publicEnv = {
+        ...Object.fromEntries(Object.entries(process.env).filter(([key]) => /^NEXT_PUBLIC_/i.test(key))),
+        NEXT_PUBLIC_BETTER_AUTH_SENTINEL_ENABLED: String(Boolean(process.env.BETTER_AUTH_API_KEY?.trim()) || shouldProxyAuthRequest()),
+        NEXT_PUBLIC_BETTER_AUTH_SENTINEL_IDENTIFY_URL: process.env.NEXT_PUBLIC_BETTER_AUTH_SENTINEL_IDENTIFY_URL?.trim() || process.env.BETTER_AUTH_KV_URL?.trim() || '',
+    };
 
     return (
-        <html lang={locale} suppressHydrationWarning>
+        <html lang={locale} data-scroll-behavior="smooth" suppressHydrationWarning>
             <head>
-                <PublicEnvScript />
-                <script
+                <EnvScript env={publicEnv} nextScriptProps={{ id: 'dory-public-env', strategy: 'beforeInteractive' }} />
+                <Script
+                    id="dory-theme-init"
+                    strategy="beforeInteractive"
                     dangerouslySetInnerHTML={{
                         __html: `
               try {
@@ -132,7 +141,7 @@ export default async function RootLayout({
                 )}
             >
                 <FontSizeProvider />
-                <PublicEnvProvider>
+                <EnvProvider env={publicEnv}>
                     <NextIntlClientProvider locale={locale} messages={messages}>
                         <JotaiProvider>
                             <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange enableColorScheme>
@@ -148,7 +157,7 @@ export default async function RootLayout({
                             </ThemeProvider>
                         </JotaiProvider>
                     </NextIntlClientProvider>
-                </PublicEnvProvider>
+                </EnvProvider>
             </body>
         </html>
     );

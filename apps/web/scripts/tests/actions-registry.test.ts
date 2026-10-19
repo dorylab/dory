@@ -494,6 +494,7 @@ test('MCP public catalog exposes only high-level facade tools', () => {
 
     assert.deepEqual(publicTools, [
         'dory_analyze_database_changes',
+        'dory_artifacts',
         'dory_compare_schema',
         'dory_create_work',
         'dory_explore_schema',
@@ -501,8 +502,10 @@ test('MCP public catalog exposes only high-level facade tools', () => {
         'dory_get_schema_graph',
         'dory_list_connections',
         'dory_read',
+        'dory_read_asset',
         'dory_run_readonly_sql',
         'dory_saved_queries',
+        'dory_search_assets',
         'dory_workspace_tabs',
         'dory_write',
     ]);

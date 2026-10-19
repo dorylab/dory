@@ -80,6 +80,11 @@ export async function createMcpActionContextFromAuth(context: McpAuthContext): P
             type: 'mcp',
             scopes: context.scopes,
             id: context.tokenId,
+            metadata: {
+                principalType: context.principalType ?? 'user',
+                principalId: context.principalId ?? context.userId,
+                allowedConnectionIds: context.allowedConnectionIds ?? null,
+            },
         },
         runtime: getRuntimeForServer(),
         locale: null,

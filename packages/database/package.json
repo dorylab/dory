@@ -31,8 +31,10 @@
         "@dory/schema-compare": "0.1.0",
         "@dory/shared": "0.1.0",
         "@electric-sql/pglite": "^0.4.3",
+        "ajv": "^8.18.0",
         "drizzle-orm": "^0.45.2",
-        "pg": "^8.20.0"
+        "pg": "^8.20.0",
+        "yaml": "^2.8.2"
     },
     "devDependencies": {
         "@types/node": "^25.5.2",

@@ -1,0 +1,132 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import Database from 'better-sqlite3';
+
+import { parseKnowledgeYaml, parseOssieYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
+
+import { COMMERCE_EVALUATION_COUNTS, generateCommerceAgentEvaluationSqlite } from '@/lib/demo/commerce-agent-evaluation';
+import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
+
+test('commerce evaluation Knowledge is a complete, verified Ossie 0.2.0.dev0 model', () => {
+    const connectionId = 'conn_commerce_evaluation';
+    const yaml = serializeOssieDocument(buildCommerceEvaluationOssieDocument(connectionId));
+    const document = parseOssieYaml(yaml);
+    const projection = parseKnowledgeYaml(yaml, connectionId, false);
+    const model = document;
+
+    assert.equal(document.version, '0.2.0.dev0');
+    assert.equal(model.name, 'Commerce Operations Knowledge');
+    assert.equal(model.datasets.length, 7);
+    assert.equal(model.metrics?.length, 8);
+    assert.equal(model.relationships?.length, 7);
+    assert.ok(typeof model.ai_context === 'object' && model.ai_context.examples?.includes(COMMERCE_EVALUATION_SCENARIOS[1].question));
+    assert.ok(projection.definitions.every(definition => definition.status === 'verified'));
+    assert.ok(projection.definitions.every(definition => definition.sourceConnectionId === connectionId));
+    for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
+        assert.ok(
+            scenario.expectedSemanticIds.every(id => (scenario.definitionIds as readonly string[]).includes(id)),
+            `${scenario.id} must link all required semantic definitions`,
+        );
+    }
+    const productRelationship = projection.definitions.find(definition => definition.id === 'relationship:order_items_product');
+    assert.equal(productRelationship?.from, 'order_items');
+    assert.equal(productRelationship?.to, 'products');
+    assert.deepEqual(productRelationship?.fromColumns, ['product_id']);
+    assert.deepEqual(productRelationship?.toColumns, ['product_id']);
+});
+
+test('commerce Agent evaluation seed is deterministic and includes the expected investigation signals', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'dory-commerce-evaluation-'));
+    const databasePath = path.join(directory, 'commerce.sqlite');
+    try {
+        assert.equal(generateCommerceAgentEvaluationSqlite(databasePath), true);
+        assert.equal(generateCommerceAgentEvaluationSqlite(databasePath), false);
+        const db = new Database(databasePath, { readonly: true });
+        try {
+            assert.equal((db.prepare('SELECT COUNT(*) AS count FROM customers').get() as { count: number }).count, COMMERCE_EVALUATION_COUNTS.customers);
+            assert.equal((db.prepare('SELECT COUNT(*) AS count FROM products').get() as { count: number }).count, COMMERCE_EVALUATION_COUNTS.products);
+            assert.equal((db.prepare('SELECT COUNT(*) AS count FROM orders').get() as { count: number }).count, COMMERCE_EVALUATION_COUNTS.orders);
+            assert.ok((db.prepare('SELECT COUNT(*) AS count FROM order_items').get() as { count: number }).count > COMMERCE_EVALUATION_COUNTS.orders);
+            assert.ok((db.prepare('SELECT COUNT(*) AS count FROM payments').get() as { count: number }).count >= COMMERCE_EVALUATION_COUNTS.orders);
+            assert.equal((db.prepare('SELECT COUNT(*) AS count FROM support_tickets').get() as { count: number }).count, COMMERCE_EVALUATION_COUNTS.supportTickets);
+            assert.equal((db.prepare('SELECT COUNT(*) AS count FROM events').get() as { count: number }).count, COMMERCE_EVALUATION_COUNTS.events);
+            assert.equal((db.prepare('SELECT COUNT(*) AS count FROM orders WHERE customer_id NOT IN (SELECT customer_id FROM customers)').get() as { count: number }).count, 0);
+            assert.equal((db.prepare('SELECT COUNT(*) AS count FROM payments WHERE order_id NOT IN (SELECT order_id FROM orders)').get() as { count: number }).count, 0);
+            assert.equal(
+                (db.prepare('SELECT COUNT(*) AS count FROM support_tickets WHERE customer_id NOT IN (SELECT customer_id FROM customers)').get() as { count: number }).count,
+                0,
+            );
+            assert.equal(
+                (
+                    db.prepare('SELECT COUNT(*) AS count FROM events WHERE customer_id IS NOT NULL AND customer_id NOT IN (SELECT customer_id FROM customers)').get() as {
+                        count: number;
+                    }
+                ).count,
+                0,
+            );
+
+            const paymentIncident = db
+                .prepare(
+                    "SELECT provider, AVG(CASE WHEN status = 'failed' THEN 1.0 ELSE 0.0 END) AS failure_rate FROM payments WHERE attempted_at >= '2026-05-11' AND attempted_at < '2026-05-18' GROUP BY provider ORDER BY failure_rate DESC LIMIT 1",
+                )
+                .get() as { provider: string; failure_rate: number };
+            assert.equal(paymentIncident.provider, 'atlas_pay');
+            assert.ok(paymentIncident.failure_rate > 0.25);
+
+            const refundLeader = db
+                .prepare(
+                    "SELECT p.category, SUM(o.refunded_amount * oi.line_amount / NULLIF(o.gross_amount, 0)) / NULLIF(SUM(o.net_amount * oi.line_amount / NULLIF(o.gross_amount, 0)), 0) AS refund_rate FROM orders o JOIN order_items oi ON oi.order_id = o.order_id JOIN products p ON p.product_id = oi.product_id WHERE o.status != 'payment_failed' GROUP BY p.category ORDER BY refund_rate DESC LIMIT 1",
+                )
+                .get() as { category: string; refund_rate: number };
+            assert.equal(refundLeader.category, 'Premium Wearables');
+            assert.ok(refundLeader.refund_rate > 0.18);
+
+            const affiliate = db
+                .prepare(
+                    "WITH customer_orders AS (SELECT c.acquisition_channel, c.customer_id, COUNT(o.order_id) AS completed_orders FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id AND o.status != 'payment_failed' GROUP BY 1, 2) SELECT AVG(CASE WHEN completed_orders >= 1 THEN 1.0 ELSE 0.0 END) AS purchase_rate, AVG(CASE WHEN completed_orders >= 2 THEN 1.0 ELSE 0.0 END) AS repeat_rate FROM customer_orders WHERE acquisition_channel = 'affiliate'",
+                )
+                .get() as { purchase_rate: number; repeat_rate: number };
+            assert.ok(affiliate.purchase_rate > 0.9);
+            assert.ok(affiliate.repeat_rate < 0.05);
+
+            const ticketIncident = db
+                .prepare(
+                    "SELECT AVG((julianday(resolved_at) - julianday(created_at)) * 24) AS resolution_hours FROM support_tickets WHERE priority = 'critical' AND resolved_at IS NOT NULL AND created_at >= '2026-06-10' AND created_at < '2026-06-25'",
+                )
+                .get() as { resolution_hours: number };
+            assert.ok(ticketIncident.resolution_hours > 50);
+
+            const scenarioRows = Object.fromEntries(COMMERCE_EVALUATION_SCENARIOS.map(scenario => [scenario.id, db.prepare(scenario.sql).all()]));
+            for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
+                assert.deepEqual(scenarioRows[scenario.id], scenario.expectedRows, scenario.id);
+            }
+        } finally {
+            db.close();
+        }
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('repeat purchase uses purchasing customers as denominator and handles no purchasers', () => {
+    const db = new Database(':memory:');
+    try {
+        db.exec(`
+            CREATE TABLE customers (customer_id INTEGER, acquisition_channel TEXT);
+            CREATE TABLE orders (order_id INTEGER, customer_id INTEGER, status TEXT);
+            INSERT INTO customers VALUES (1, 'mixed'), (2, 'mixed'), (3, 'mixed'), (4, 'mixed'), (5, 'empty');
+            INSERT INTO orders VALUES (1, 1, 'completed'), (2, 1, 'completed'), (3, 2, 'completed'), (4, 2, 'completed'), (5, 3, 'completed'), (6, 4, 'payment_failed');
+        `);
+        const scenario = COMMERCE_EVALUATION_SCENARIOS.find(item => item.id === 'channel_retention')!;
+        assert.deepEqual(db.prepare(scenario.sql).all(), [
+            { acquisition_channel: 'mixed', customers: 4, purchasing_customers: 3, purchase_rate_pct: 75, repeat_purchase_rate_pct: 66.67 },
+            { acquisition_channel: 'empty', customers: 1, purchasing_customers: 0, purchase_rate_pct: 0, repeat_purchase_rate_pct: null },
+        ]);
+    } finally {
+        db.close();
+    }
+});

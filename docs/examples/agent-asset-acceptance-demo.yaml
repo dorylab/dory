@@ -1,0 +1,91 @@
+# Replace __DEMO_CONNECTION_ID__ with the ID of your Demo Database before import.
+# Import with "Preserve verified status" enabled for the Agent acceptance demo.
+version: 0.1.1
+semantic_model:
+    - name: commerce_demo
+      ai_context:
+          instructions: Use completed orders for revenue and order-volume analysis.
+          synonyms: [commerce, sales]
+          examples: [Show completed revenue by customer country.]
+      datasets:
+          - name: orders
+            source: orders
+            description: One record per customer order. Use order_id as the order grain.
+            ai_context:
+                synonyms: [purchases, sales orders]
+            fields:
+                - name: order_id
+                  expression:
+                      dialects: [{ dialect: ANSI_SQL, expression: order_id }]
+                - name: customer_id
+                  expression:
+                      dialects: [{ dialect: ANSI_SQL, expression: customer_id }]
+                - name: order_status
+                  description: Lifecycle state of an order.
+                  ai_context:
+                      synonyms: [status]
+                  expression:
+                      dialects: [{ dialect: ANSI_SQL, expression: status }]
+                  custom_extensions:
+                      - vendor_name: COMMON
+                        data: '{"dory":{"id":"dimension:order_status","kind":"dimension","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__"}}'
+                - name: order_created_at
+                  description: Timestamp at which the order was created.
+                  dimension: { is_time: true }
+                  expression:
+                      dialects: [{ dialect: ANSI_SQL, expression: created_at }]
+                  custom_extensions:
+                      - vendor_name: COMMON
+                        data: '{"dory":{"id":"dimension:order_created_at","kind":"dimension","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__"}}'
+            custom_extensions:
+                - vendor_name: COMMON
+                  data: '{"dory":{"id":"entity:orders","kind":"entity","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__"}}'
+          - name: users
+            source: users
+            description: One record per customer.
+            ai_context:
+                synonyms: [customers]
+            fields:
+                - name: customer_id
+                  expression:
+                      dialects: [{ dialect: ANSI_SQL, expression: id }]
+                - name: customer_country
+                  description: Country recorded for the customer.
+                  ai_context:
+                      synonyms: [country, customer geography]
+                  expression:
+                      dialects: [{ dialect: ANSI_SQL, expression: country }]
+                  custom_extensions:
+                      - vendor_name: COMMON
+                        data: '{"dory":{"id":"dimension:customer_country","kind":"dimension","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__"}}'
+            custom_extensions:
+                - vendor_name: COMMON
+                  data: '{"dory":{"id":"entity:users","kind":"entity","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__"}}'
+      metrics:
+          - name: completed_gmv
+            description: Total amount of completed orders, excluding pending, cancelled, and refunded orders.
+            ai_context:
+                synonyms: [gmv, completed revenue, revenue]
+            expression:
+                dialects: [{ dialect: ANSI_SQL, expression: "SUM(CASE WHEN orders.status = 'completed' THEN orders.amount ELSE 0 END)" }]
+            custom_extensions:
+                - vendor_name: COMMON
+                  data: '{"dory":{"id":"metric:completed_gmv","kind":"metric","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__","filters":["status = ''completed''"]}}'
+          - name: completed_order_count
+            description: Count of completed orders.
+            ai_context:
+                synonyms: [completed orders, successful orders]
+            expression:
+                dialects: [{ dialect: ANSI_SQL, expression: "COUNT(CASE WHEN orders.status = 'completed' THEN 1 END)" }]
+            custom_extensions:
+                - vendor_name: COMMON
+                  data: '{"dory":{"id":"metric:completed_order_count","kind":"metric","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__","filters":["status = ''completed''"]}}'
+      relationships:
+          - name: order_customer
+            from: orders
+            to: users
+            from_columns: [customer_id]
+            to_columns: [customer_id]
+            custom_extensions:
+                - vendor_name: COMMON
+                  data: '{"dory":{"id":"relationship:order_customer","kind":"relationship","status":"verified","sourceConnectionId":"__DEMO_CONNECTION_ID__"}}'

@@ -29,6 +29,7 @@ Use Dory as your everyday SQL client, or as the database execution layer for age
   <a href="#quick-start"><b>📦 Quick Start</b></a> &nbsp; • &nbsp;
   <a href="https://www.getdory.dev/docs/deploy/self-hosting"><b>🏠 Self-Hosting</b></a> &nbsp; • &nbsp;
   <a href="./docs/mcp.md"><b>MCP Guide</b></a> &nbsp; • &nbsp;
+  <a href="./docs/github-knowledge-connector.md"><b>GitHub Knowledge Connector</b></a> &nbsp; • &nbsp;
   <a href="./docs/contributing.md"><b>🤝 Contributing</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/stargazers"><b>⭐ Star</b></a>
 </p>

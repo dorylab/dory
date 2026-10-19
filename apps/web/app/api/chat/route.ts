@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createAgentUIStreamResponse, createIdGenerator, type UIMessage } from 'ai';
+import { consumeStream, createAgentUIStreamResponse, createIdGenerator, type UIMessage } from 'ai';
 
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { resolveAiRouteExecution, isLocalMissingAiEnvError } from '@/lib/ai/execution/route-dispatch';
@@ -28,6 +28,8 @@ import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import type { ConnectionType } from '@dory/shared/types/connections';
 import type { Locale } from '@dory/i18n/routing';
+import { recordSemanticModelUsage } from '@/lib/server/semantic-model-context';
+import { createChatAgentRunLifecycle } from '@/lib/server/chat-agent-run';
 
 export const runtime = 'nodejs';
 
@@ -263,10 +265,15 @@ async function handleChatRequest(req: Request) {
         }
     }
 
+    const chatRun =
+        db && userId && organizationId && chatId
+            ? createChatAgentRunLifecycle({ works: db.works, userId, organizationId, chatId, connectionId, requestId, title: sessionTitle, signal: req.signal })
+            : null;
+
     const tools: Record<string, any> = {
         chartBuilder: createChartBuilderTool(locale),
     };
-    if (userId && organizationId) {
+    if (userId && organizationId && chatRun) {
         Object.assign(
             tools,
             createDoryChatTools({
@@ -274,6 +281,8 @@ async function handleChatRequest(req: Request) {
                 organizationId,
                 currentConnectionId: connectionId,
                 locale,
+                chatId: chatId ?? requestMessageId ?? newEntityId(),
+                resolveWork: () => chatRun.resolve(),
             }),
         );
     }
@@ -306,6 +315,7 @@ async function handleChatRequest(req: Request) {
         candidateTables,
         copilotEnvelope,
         locale,
+        question: currentUserText,
     });
     const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
     const agentInstructions = [agentContext.instructions, currentTurnExecutionInstruction].filter(Boolean).join('\n\n');
@@ -405,70 +415,96 @@ async function handleChatRequest(req: Request) {
         },
     });
 
-    return createAgentUIStreamResponse({
-        agent,
-        uiMessages: historyMessagesForAgent as any,
-        originalMessages: historyMessagesForAgent as any,
-        generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
-        headers: chatId ? { 'x-chat-id': chatId } : undefined,
-        onEnd: async event => {
-            if (event.isAborted || !db || !userId || !organizationId || !chatId) return;
+    if (chatRun && db && userId && organizationId && connectionId && agentContext.semanticModelsUsed.length) {
+        try {
+            const work = await chatRun.resolve();
+            await recordSemanticModelUsage(db, { organizationId, userId, workId: work.workId, connectionId, models: agentContext.semanticModelsUsed });
+        } catch (error) {
+            console.error('[chat] failed to record semantic model context', error);
+        }
+    }
 
-            const messageId = typeof (event.responseMessage as any)?.id === 'string' && (event.responseMessage as any).id ? (event.responseMessage as any).id : newEntityId();
-            if (existedMessageIds.has(messageId)) return;
+    try {
+        return await createAgentUIStreamResponse({
+            agent,
+            abortSignal: req.signal,
+            consumeSseStream: ({ stream }) => consumeStream({ stream }),
+            uiMessages: historyMessagesForAgent as any,
+            originalMessages: historyMessagesForAgent as any,
+            generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
+            headers: chatId ? { 'x-chat-id': chatId } : undefined,
+            onEnd: async event => {
+                try {
+                    await chatRun?.finish(event);
+                } catch (error) {
+                    console.error('[chat] failed to finish Agent Run', error);
+                }
+                if (event.isAborted || !db || !userId || !organizationId || !chatId) return;
 
-            try {
-                await db.chat.appendMessage({
-                    organizationId,
-                    sessionId: chatId,
-                    userId,
-                    message: {
-                        id: messageId,
+                const messageId = typeof (event.responseMessage as any)?.id === 'string' && (event.responseMessage as any).id ? (event.responseMessage as any).id : newEntityId();
+                if (existedMessageIds.has(messageId)) return;
+
+                try {
+                    await db.chat.appendMessage({
                         organizationId,
                         sessionId: chatId,
-                        userId: null,
-                        connectionId: connectionId ?? null,
-                        role: 'assistant',
-                        parts: ((event.responseMessage as any).parts ?? []) as any,
-                        metadata: {
-                            ...(event.responseMessage.metadata && typeof event.responseMessage.metadata === 'object'
-                                ? (event.responseMessage.metadata as Record<string, unknown>)
-                                : {}),
-                            finishReason: event.finishReason ?? null,
-                            sessionTitle,
+                        userId,
+                        message: {
+                            id: messageId,
+                            organizationId,
+                            sessionId: chatId,
+                            userId: null,
+                            connectionId: connectionId ?? null,
+                            role: 'assistant',
+                            parts: ((event.responseMessage as any).parts ?? []) as any,
+                            metadata: {
+                                ...(event.responseMessage.metadata && typeof event.responseMessage.metadata === 'object'
+                                    ? (event.responseMessage.metadata as Record<string, unknown>)
+                                    : {}),
+                                finishReason: event.finishReason ?? null,
+                                sessionTitle,
+                            },
+                            createdAt: new Date(),
                         },
-                        createdAt: new Date(),
-                    },
-                });
-                existedMessageIds.add(messageId);
-            } catch (error) {
-                console.error('[chat] persist assistant message failed', error);
-            }
-        },
-        onError: error => {
-            void recordAiUsage({
-                requestId,
-                context: {
-                    organizationId,
-                    userId,
-                    feature: 'chat_agent',
-                    model: execution.modelName,
+                    });
+                    existedMessageIds.add(messageId);
+                } catch (error) {
+                    console.error('[chat] persist assistant message failed', error);
+                }
+            },
+            onError: error => {
+                void chatRun?.fail().catch(error => console.error('[chat] failed to finish Agent Run after stream error', error));
+                void recordAiUsage({
                     requestId,
-                    connectionId,
-                    gateway: execution.gateway,
-                    provider: execution.providerKey,
-                },
-                input: {
-                    instructions: agentContext.instructions,
-                    messages: historyMessagesForAgent as any,
-                    prompt: null,
-                },
-                latencyMs: Date.now() - startedAt,
-                status: 'error',
-                error,
-            });
+                    context: {
+                        organizationId,
+                        userId,
+                        feature: 'chat_agent',
+                        model: execution.modelName,
+                        requestId,
+                        connectionId,
+                        gateway: execution.gateway,
+                        provider: execution.providerKey,
+                    },
+                    input: {
+                        instructions: agentContext.instructions,
+                        messages: historyMessagesForAgent as any,
+                        prompt: null,
+                    },
+                    latencyMs: Date.now() - startedAt,
+                    status: 'error',
+                    error,
+                });
 
-            return error instanceof Error ? error.message : 'AI_SERVICE_UNAVAILABLE';
-        },
-    });
+                return error instanceof Error ? error.message : 'AI_SERVICE_UNAVAILABLE';
+            },
+        });
+    } catch (error) {
+        try {
+            await chatRun?.fail();
+        } catch (finishError) {
+            console.error('[chat] failed to finish Agent Run after setup error', finishError);
+        }
+        throw error;
+    }
 }

@@ -66,6 +66,10 @@ function createTokenRecord(overrides: Partial<McpAccessTokenRecord> = {}): McpAc
         scopes: ['connections:read'],
         enabled: true,
         createdByUserId: 'owner-user',
+        principalType: 'user',
+        principalId: 'owner-user',
+        allowedConnectionIds: null,
+        expiresAt: null,
         lastUsedAt: null,
         revokedAt: null,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -173,6 +177,34 @@ test('MCP auth context uses the personal token owner as the execution user', asy
     assert.equal(result.context.userId, 'owner-user');
     assert.equal(result.context.tokenId, 'token-id');
     assert.deepEqual(result.context.scopes, ['connections:read']);
+    assert.equal(result.context.principalType, 'user');
+    assert.equal(result.context.principalId, 'owner-user');
+});
+
+test('MCP auth supports read-only service principals and rejects expired tokens', async () => {
+    const service = await buildMcpAuthContextForToken(
+        createTokenRecord({
+            principalType: 'service',
+            principalId: 'agt-1',
+            allowedConnectionIds: ['conn-1'],
+            scopes: ['read'],
+        }),
+        {
+            resolvePrincipal: async () => ({ enabled: true, allowedConnectionIds: ['conn-1'] }),
+        },
+    );
+    assert.equal(service.ok, true);
+    if (service.ok) {
+        assert.equal(service.context.userId, 'agt-1');
+        assert.equal(service.context.access.role, 'viewer');
+        assert.equal(service.context.access.permissions.workspace.write, true);
+        assert.equal(service.context.access.permissions.connection.update, false);
+        assert.deepEqual(service.context.allowedConnectionIds, ['conn-1']);
+    }
+
+    const expired = await buildMcpAuthContextForToken(createTokenRecord({ expiresAt: new Date('2026-01-02T00:00:00.000Z') }));
+    assert.equal(expired.ok, false);
+    if (!expired.ok) assert.equal(expired.status, 401);
 });
 
 test('MCP auth context rejects tokens whose owner no longer has organization access', async () => {
@@ -332,11 +364,21 @@ test('web MCP link schemas validate start and poll payloads', () => {
     );
 });
 
-test('web MCP link defaults use existing MCP scopes and ten minute expiry', () => {
+test('web MCP link defaults include local Agent Knowledge scopes and ten minute expiry', () => {
     const now = Date.parse('2026-01-01T00:00:00.000Z');
 
-    assert.deepEqual(getMcpLinkScopes(), [...MCP_DEFAULT_SCOPES]);
+    assert.deepEqual(getMcpLinkScopes(), [...MCP_DEFAULT_SCOPES, 'knowledge:read', 'assets:read']);
     assert.equal(getMcpLinkExpiresAt(now).getTime(), now + MCP_LINK_TTL_MS);
+});
+
+test('local AI MCP links include the read-only Knowledge and Asset scopes', () => {
+    const scopes = getMcpLinkScopes(['connections:read', 'query:read', 'local_ai:run']);
+
+    assert.deepEqual(scopes, ['connections:read', 'query:read', 'local_ai:run', 'read', 'knowledge:read', 'assets:read']);
+});
+
+test('non-local AI MCP links do not receive additional Knowledge scopes', () => {
+    assert.deepEqual(getMcpLinkScopes(['connections:read', 'query:read']), ['connections:read', 'query:read']);
 });
 
 test('web MCP link URLs prefer the externally reachable request host', () => {

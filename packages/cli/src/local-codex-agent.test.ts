@@ -10,6 +10,7 @@ import {
     DORY_CODEX_MCP_ENABLED_TOOLS,
     DORY_CODEX_MCP_TOKEN_ENV,
     DORY_CODEX_MCP_TOOL_TIMEOUT_SEC,
+    LOCAL_AI_SCOPES,
     startCodexAgentBridge,
     type CodexDoryMcpConfig,
 } from './local-codex-agent.js';
@@ -52,6 +53,13 @@ test('Codex MCP args enable Dory tools without exposing bearer token', () => {
     assert.deepEqual(buildCodexDoryMcpEnv(config), {
         [DORY_CODEX_MCP_TOKEN_ENV]: config.auth.token,
     });
+});
+
+test('Codex Agent authorization includes the Agent Knowledge read scopes', () => {
+    assert.ok(LOCAL_AI_SCOPES.includes('read'));
+    assert.ok(LOCAL_AI_SCOPES.includes('assets:read'));
+    assert.ok(LOCAL_AI_SCOPES.includes('knowledge:read'));
+    assert.ok(LOCAL_AI_SCOPES.includes('local_ai:run'));
 });
 
 test('Codex Agent bridge runs claimed jobs with Dory MCP config', async () => {
@@ -213,6 +221,9 @@ async function assertCodexAgentReauthorizes(firstRegisterStatus: number) {
 
     assert.equal(registerCount, 2);
     assert.equal(pollCount, 1);
+    assert.ok(requestedScopes[0].includes('read'));
+    assert.ok(requestedScopes[0].includes('assets:read'));
+    assert.ok(requestedScopes[0].includes('knowledge:read'));
     assert.ok(requestedScopes[0].includes('local_ai:run'));
 }
 

@@ -24,6 +24,9 @@ const [{ getPublicDoryMcpTools, structuredMcpFacadeError }, { registerDoryMcpToo
 
 function createWorksMock() {
     const events: any[] = [];
+    const activities: any[] = [];
+    const knowledgeUsage: any[] = [];
+    const finishInputs: any[] = [];
     const works = new Map<string, any>();
     let nextId = 1;
     const now = new Date('2026-06-01T00:00:00.000Z');
@@ -133,7 +136,11 @@ function createWorksMock() {
 
     return {
         events,
+        activities,
+        knowledgeUsage,
+        finishInputs,
         works,
+        summarizeInput: (input: unknown) => input,
         create: async (input: any) => {
             if (input.externalSessionId) {
                 const existing = findByExternalSessionId(input);
@@ -154,7 +161,23 @@ function createWorksMock() {
             events.push(event);
             return { ...event, id: events.length, createdAt: now };
         },
+        recordAgentActivity: async (activity: any) => {
+            activities.push(activity);
+            return { ...activity, activityId: `activity-${activities.length}`, createdAt: now };
+        },
+        recordAgentAssetUsageEvent: async (usage: any, event: any) => {
+            const existing = knowledgeUsage.find(item => item.workId === usage.workId && item.assetRef === usage.assetRef);
+            if (existing) {
+                existing.useCount += 1;
+                existing.assetSnapshot = usage.assetSnapshot;
+            } else {
+                knowledgeUsage.push({ ...usage, useCount: 1 });
+            }
+            events.push({ ...event, workId: usage.workId, organizationId: usage.organizationId, userId: usage.userId });
+            return { ...event, id: events.length, createdAt: now };
+        },
         finishWithSummary: async (input: any) => {
+            finishInputs.push(input);
             const work = works.get(input.workId);
             if (!work || work.organizationId !== input.organizationId || work.userId !== input.userId) {
                 throw Object.assign(new Error(`Work not found: ${input.workId}.`), {
@@ -188,7 +211,6 @@ function createWorksMock() {
             work.lastActiveAt = now;
             return work;
         },
-        summarizeInput: (input: unknown) => input,
         saveSqlSnapshot: async () => {},
     };
 }
@@ -231,6 +253,10 @@ function createContext(
         services: {
             requestOrigin: 'https://dory.test',
             ...services,
+            db: {
+                ...services.db,
+                works: (services.db as any).works ?? createWorksMock(),
+            },
         },
         ...overrides,
     };
@@ -288,26 +314,29 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
             'dory_get_schema_graph',
             'dory_list_connections',
             'dory_read',
+            'dory_read_asset',
             'dory_run_readonly_sql',
             'dory_saved_queries',
+            'dory_search_assets',
             'dory_workspace_tabs',
             'dory_write',
         ],
     );
 });
 
-test('public Dory MCP descriptions scope work context to query and workspace tools', () => {
+test('public Dory MCP descriptions require semantic context for database analysis', () => {
     const createWork = getTool('dory_create_work');
     const write = getTool('dory_write');
     const listConnections = getTool('dory_list_connections');
 
-    assert.match(createWork.description, /query, analysis, SQL, schema exploration, schema comparison, workspace tab, or saved query tools/);
+    assert.match(createWork.description, /original userQuestion/);
+    assert.match(createWork.description, /semanticContext/);
     assert.doesNotMatch(createWork.description, /every later Dory tool call/);
     assert.match(write.description, /connection\.create, connection\.update, and connection\.delete/);
     assert.match(write.description, /do not require workId/);
     assert.doesNotMatch(write.description, /Call dory_create_work/);
-    assert.match(listConnections.description, /Requires an existing workId/);
-    assert.match(listConnections.description, /Call dory_create_work before query/);
+    assert.match(listConnections.description, /Without a workId this is recorded as Agent activity/);
+    assert.doesNotMatch(listConnections.description, /Requires an existing workId/);
 });
 
 test('dory_read and dory_write split MCP-runnable actions without adding domain-specific tools', async () => {
@@ -771,6 +800,81 @@ test('dory_create_work returns a workspace URL', async () => {
     assert.equal(output.work.workId, 'work-1');
 });
 
+test('dory_create_work returns and records relevant semantic model context', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+            knowledge: {
+                listModels: async () => [
+                    {
+                        id: 'model-1',
+                        name: 'Commerce',
+                        description: null,
+                        ossieVersion: '0.2.0.dev0',
+                        modelRevision: 'revision-1',
+                        readiness: { status: 'ready' },
+                        model: {
+                            definitions: [
+                                { name: 'orders', kind: 'entity', status: 'verified' },
+                                { name: 'amount', kind: 'dimension', status: 'verified' },
+                                { name: 'revenue', kind: 'metric', status: 'verified' },
+                            ],
+                        },
+                        ossieDocument: {
+                            version: '0.2.0.dev0',
+                            name: 'commerce',
+                            datasets: [
+                                {
+                                    name: 'orders',
+                                    source: 'orders',
+                                    fields: [{ name: 'amount', expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'amount' }] } }],
+                                },
+                            ],
+                            metrics: [
+                                {
+                                    name: 'revenue',
+                                    expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'SUM(orders.amount)' }] },
+                                    ai_context: { synonyms: ['sales'] },
+                                },
+                            ],
+                            relationships: [],
+                        },
+                    },
+                ],
+            },
+        },
+    } as unknown as WebActionServices);
+
+    const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', userQuestion: 'Show sales' })) as any;
+    assert.match(output.semanticContext, /SUM\(orders\.amount\)/);
+    assert.deepEqual(
+        output.semanticModelsUsed.map((item: any) => item.modelRevision),
+        ['revision-1'],
+    );
+    assert.equal(works.knowledgeUsage[0].assetKind, 'semantic_model');
+    assert.match(works.knowledgeUsage[0].assetRef, /revision-1$/);
+});
+
+test('dory_create_work fails open when semantic context resolution fails', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+            knowledge: { listModels: async () => Promise.reject(new Error('semantic resolver unavailable')) },
+        },
+    } as unknown as WebActionServices);
+
+    const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', userQuestion: 'Show revenue' })) as any;
+    assert.equal(output.workId, 'work-1');
+    assert.equal(output.semanticContext, null);
+    assert.deepEqual(output.semanticModelsUsed, []);
+    assert.equal(
+        works.events.some(event => event.errorCode === 'SEMANTIC_CONTEXT_FAILED'),
+        true,
+    );
+});
+
 test('dory_create_work uses workspace origin before auth request origin', async () => {
     const ctx = createContext({
         db: {
@@ -929,6 +1033,106 @@ test('dory_finish_work persists agent summary metadata and status', async () => 
     assert.equal(works.events.at(-1)?.status, 'success');
 });
 
+test('dory_finish_work can finish a setup check without inventing analytical findings', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({ db: { works } } as unknown as WebActionServices);
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Check semantic context' })) as any;
+    const output = (await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        summaryTitle: 'Semantic context check completed',
+        findings: [],
+        steps: ['Confirmed that semantic context was automatically applied.'],
+    })) as any;
+
+    assert.equal(output.status, 'completed');
+    assert.deepEqual(output.findings, []);
+    assert.deepEqual(works.finishInputs.at(-1)?.findings, []);
+    assert.deepEqual(output.steps, ['Confirmed that semantic context was automatically applied.']);
+});
+
+test('dory_finish_work accepts a structured, evidence-backed primary Finding', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Validate payment incident' })) as any;
+    await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        findings: [
+            {
+                title: 'Atlas Pay failure rate was 36.84% during the incident week.',
+                evidenceArtifactIds: ['artifact-payment-incident'],
+                isPrimary: true,
+                presentation: {
+                    metricLabel: 'Atlas Pay failure rate',
+                    metricValue: '36.84',
+                    metricUnit: '%',
+                    timeframe: '2026-05-11 to 2026-05-17',
+                    dimensions: ['Atlas Pay', 'payments'],
+                    facts: [
+                        { label: 'Failed payments', value: '7' },
+                        { label: 'Total payments', value: '19' },
+                    ],
+                },
+            },
+        ],
+        steps: ['Ran read-only payment incident query', 'Preserved the result set as evidence'],
+    });
+
+    assert.deepEqual(works.finishInputs.at(-1)?.findings, [
+        {
+            title: 'Atlas Pay failure rate was 36.84% during the incident week.',
+            evidenceArtifactIds: ['artifact-payment-incident'],
+            isPrimary: true,
+            presentation: {
+                metricLabel: 'Atlas Pay failure rate',
+                metricValue: '36.84',
+                metricUnit: '%',
+                timeframe: '2026-05-11 to 2026-05-17',
+                dimensions: ['Atlas Pay', 'payments'],
+                facts: [
+                    { label: 'Failed payments', value: '7' },
+                    { label: 'Total payments', value: '19' },
+                ],
+            },
+        },
+    ]);
+});
+
+test('dory_finish_work preserves Agent-authored trend conclusions and selected facts without deriving a summary', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({ db: { works } } as unknown as WebActionServices);
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: '月度净收入与订单趋势' })) as { workId: string };
+    const finding = {
+        title: '净收入在 3 月达峰后回落',
+        content: '3 月净收入与订单数均达峰，随后净收入连续三个月回落，6 月较峰值下降 9.10%。',
+        evidenceArtifactIds: ['artifact-monthly'],
+        isPrimary: true,
+        presentation: {
+            timeframe: '2026 年 1—6 月',
+            facts: [
+                { label: '3 月峰值净收入', value: '199,414.66' },
+                { label: '6 月净收入', value: '181,273.27' },
+                { label: '较峰值下降', value: '9.10%' },
+            ],
+        },
+    };
+
+    await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        findings: [finding],
+        steps: ['Analyzed the monthly SQL results.'],
+    });
+
+    assert.deepEqual(works.finishInputs.at(-1)?.findings, [finding]);
+});
+
 test('dory_finish_work appends continuation findings and steps without replacing existing summary', async () => {
     const works = createWorksMock();
     const ctx = createContext({
@@ -1001,26 +1205,130 @@ test('dory_finish_work rejects work owned by another user', async () => {
     );
 });
 
-test('ordinary MCP facade tools require an existing work context', async () => {
+test('non-SQL MCP facade tools record standalone Agent activity without creating a work', async () => {
+    const works = createWorksMock();
     const ctx = createContext({
         db: {
-            works: createWorksMock(),
+            works,
             connections: {
                 list: async () => [],
             },
         },
     } as unknown as WebActionServices);
 
-    await assertRejectsCode(() => getTool('dory_list_connections').execute(ctx, { includeRecent: true }), 'MISSING_WORK_CONTEXT');
-    await assertRejectsCode(
-        () =>
-            getTool('dory_compare_schema').execute(ctx, {
-                current: { connectionId: 'current', database: 'app' },
-                desired: { connectionId: 'desired', database: 'app' },
-            }),
-        'MISSING_WORK_CONTEXT',
+    const output = (await getTool('dory_list_connections').execute(ctx, { includeRecent: true })) as any;
+    assert.deepEqual(output.connections, []);
+    assert.equal(works.works.size, 0);
+    assert.equal(works.activities[0].toolName, 'dory_list_connections');
+    const work = (await getTool('dory_create_work').execute(ctx, { title: 'SQL analysis', connectionId: 'conn-1' })) as any;
+    await getTool('dory_list_connections').execute(ctx, { workId: work.work.workId, includeRecent: true });
+    assert.equal(works.works.size, 1);
+    assert.equal(works.events.at(-1)?.toolName, 'dory_list_connections');
+    assert.equal(getTool('dory_compare_schema').inputSchema.safeParse({ comparisonId: 'cmp_1' }).success, true);
+    assert.equal(getTool('dory_analyze_database_changes').inputSchema.safeParse({ runId: 'cmprun_1' }).success, true);
+});
+
+test('knowledge search returns summaries while successful detail reads record immutable usage', async () => {
+    const works = createWorksMock();
+    const definition = {
+        id: 'dimension:age',
+        name: 'Age',
+        kind: 'dimension' as const,
+        status: 'verified' as const,
+        sourceConnectionId: 'conn-1',
+        description: 'Customer age in whole years.',
+        expression: "date_part('year', age(current_date, birth_date))",
+    };
+    const knowledge = {
+        listModels: async () => [
+            {
+                id: 'model-1',
+                name: 'Customer profile',
+                modelRevision: 'revision-1',
+                businessContextMd: 'Use consistent customer definitions.',
+                model: { definitions: [definition] },
+            },
+        ],
+        searchKnowledgeSources: async () => [],
+        getModel: async () => ({
+            id: 'model-1',
+            name: 'Customer profile',
+            modelRevision: 'revision-1',
+            dataSources: [{ connectionId: 'conn-1' }],
+            model: { definitions: [definition] },
+        }),
+    };
+    const ctx = createContext(
+        {
+            db: { works, knowledge },
+        } as unknown as WebActionServices,
+        ['knowledge:read'],
     );
-    await assertRejectsCode(() => getTool('dory_analyze_database_changes').execute(ctx, { runId: 'cmprun_1' }), 'MISSING_WORK_CONTEXT');
+    const work = (await getTool('dory_create_work').execute(ctx, { title: 'Knowledge run', connectionId: 'conn-1' })) as any;
+    works.events.length = 0;
+
+    const standaloneSearch = (await getTool('dory_read').execute(ctx, {
+        operation: 'run',
+        actionId: 'knowledge.searchKnowledge',
+        input: { connectionId: 'conn-1', query: 'age' },
+    })) as any;
+    assert.equal(standaloneSearch.data.models[0].definitions[0].name, 'Age');
+    assert.equal(works.activities[0].actionId, 'knowledge.searchKnowledge');
+
+    const search = (await getTool('dory_read').execute(ctx, {
+        operation: 'run',
+        actionId: 'knowledge.searchKnowledge',
+        input: { connectionId: 'conn-1', query: 'age' },
+        workId: work.workId,
+        projection: 'mcp',
+    })) as any;
+    assert.equal(search.data.models[0].definitions[0].name, 'Age');
+    assert.equal('expression' in search.data.models[0].definitions[0], false);
+    assert.equal(works.knowledgeUsage.length, 0);
+    assert.equal(works.events[0].actionId, 'knowledge.searchKnowledge');
+
+    for (let read = 0; read < 2; read += 1) {
+        await getTool('dory_read').execute(ctx, {
+            operation: 'run',
+            actionId: 'knowledge.getDefinition',
+            input: { knowledgeModelId: 'model-1', definitionId: definition.id, connectionId: 'conn-1' },
+            workId: work.workId,
+            projection: 'mcp',
+        });
+    }
+    assert.equal(works.knowledgeUsage.length, 1);
+    assert.equal(works.knowledgeUsage[0].useCount, 2);
+    assert.deepEqual(works.knowledgeUsage[0].assetSnapshot, {
+        title: 'Age',
+        knowledgeModelId: 'model-1',
+        knowledgeModelName: 'Customer profile',
+        deepLink: '/org-1/knowledge/model-1',
+    });
+    assert.equal(works.events.filter(event => event.actionId === 'knowledge.getDefinition').length, 2);
+
+    await assert.rejects(() =>
+        getTool('dory_read').execute(ctx, {
+            operation: 'run',
+            actionId: 'knowledge.getDefinition',
+            input: { knowledgeModelId: 'model-1', definitionId: 'dimension:missing', connectionId: 'conn-1' },
+            workId: work.workId,
+        }),
+    );
+    assert.equal(works.knowledgeUsage.length, 1);
+    assert.equal(works.knowledgeUsage[0].useCount, 2);
+});
+
+test('generic full knowledge lists are not exposed through dory_read', async () => {
+    const ctx = createContext({ db: {} } as unknown as WebActionServices, ['knowledge:read']);
+    const output = (await getTool('dory_read').execute(ctx, { operation: 'list' })) as any;
+    const actionIds = output.actions.map((action: any) => action.id);
+
+    assert.equal(actionIds.includes('knowledge.get'), false);
+    assert.equal(actionIds.includes('knowledge.listDefinitions'), false);
+    assert.equal(actionIds.includes('knowledge.listVerifiedQueries'), false);
+    assert.equal(actionIds.includes('knowledge.listKnowledgeSources'), false);
+    assert.ok(actionIds.includes('knowledge.searchKnowledge'));
+    assert.ok(actionIds.includes('knowledge.getDefinition'));
 });
 
 test('schema Comparison MCP contracts accept saved and create-and-run paths', () => {
@@ -1347,4 +1655,60 @@ test('dory_saved_queries dispatches v1 operations and preserves write scope chec
             }),
         /Missing action scope "saved_queries:write"/,
     );
+});
+
+test('MCP Artifact previews read persisted rows within the authorized organization', async () => {
+    const readInputs: unknown[] = [];
+    const artifact = {
+        id: 'artifact-1',
+        type: 'result_set',
+        title: 'Evidence',
+        status: 'ready',
+        resourceId: 'rs-1',
+        parentArtifactId: null,
+        sourceResultSetId: 'rs-1',
+        connectionId: 'conn-1',
+        connectionName: 'Commerce',
+        workId: null,
+        agentRunId: null,
+        runTitle: null,
+        comparisonId: null,
+        comparisonName: null,
+        sourceType: 'query-run',
+        createdByActorType: 'mcp',
+        createdByActorId: 'user-1',
+        createdByName: 'Demo User',
+        rowCount: 1,
+        byteSize: 100,
+        fileName: null,
+        fileFormat: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expiresAt: null,
+        pinnedAt: null,
+        pinnedByActorId: null,
+        retentionDays: null,
+        usedByCount: 0,
+        chartState: null,
+        resultSet: null,
+        workspaceTarget: null,
+        downloadUrl: null,
+        usedBy: [],
+    };
+    const services = {
+        db: {
+            artifacts: { get: async () => artifact },
+            resultSets: {
+                readRows: async (input: unknown) => {
+                    readInputs.push(input);
+                    return { rows: [{ revenue: 123.45 }], columns: [{ name: 'revenue' }], rowCount: 1 };
+                },
+            },
+        },
+    } as unknown as WebActionServices;
+    const output = (await getTool('dory_artifacts').execute(createContext(services), { artifactId: 'artifact-1', previewRows: 20 })) as { preview: { rows: unknown[] } };
+    assert.deepEqual(output.preview.rows, [{ revenue: 123.45 }]);
+    assert.deepEqual(readInputs, [{ organizationId: 'org-1', resultSetId: 'rs-1', offset: 0, limit: 20 }]);
+    await assert.rejects(() => getTool('dory_artifacts').execute(createContext(services, []), { artifactId: 'artifact-1' }));
+    assert.equal(readInputs.length, 1, 'Missing query scope must fail before reading rows.');
 });

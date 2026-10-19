@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { Archive, ArrowDownToLine, ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
+import { Archive, ArrowDownToLine, ArrowUpCircle, Bot, BrainCircuit, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -94,6 +94,11 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const updateTooltip = updaterState.version ? t('UpdateTooltip', { version: updaterState.version }) : t('UpdateTooltipUnknown');
     const [showStarNotification, setShowStarNotification] = React.useState<boolean | null>(null);
 
+    const organizationItems = [
+        { title: t('DataSources'), url: dataSourcesUrl, icon: Database, requiresConnection: false },
+        { title: t('Knowledge'), url: `/${organization}/knowledge`, matchPrefix: `/${organization}/knowledge`, icon: BrainCircuit, requiresConnection: false },
+        { title: t('AgentRuns'), url: `/${organization}/agent-runs`, icon: Bot, requiresConnection: false },
+    ];
     const navMain = connectionId
         ? [
               {
@@ -147,36 +152,22 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                     ]
                   : []),
           ]
-        : [
-              {
-                  title: t('DataSources'),
-                  url: dataSourcesUrl,
-                  icon: Database,
-                  requiresConnection: false,
-              },
-              {
-                  title: t('AgentRuns'),
-                  url: `/${organization}/agent-runs`,
-                  icon: Bot,
-                  requiresConnection: false,
-              },
-              {
-                  title: t('SchemaCompare'),
-                  url: `/${organization}/comparisons`,
-                  icon: GitCompareArrows,
-                  requiresConnection: false,
-              },
-          ];
-    const moreItems = connectionId
-        ? []
-        : [
-              {
-                  title: t('Artifacts'),
-                  url: `/${organization}/artifacts`,
-                  icon: Archive,
-                  requiresConnection: false,
-              },
-          ];
+        : organizationItems;
+    const moreItems = [
+        {
+            title: t('SchemaCompare'),
+            url: `/${organization}/comparisons`,
+            icon: GitCompareArrows,
+            requiresConnection: false,
+        },
+        {
+            title: t('Artifacts'),
+            url: `/${organization}/artifacts`,
+            icon: Archive,
+            requiresConnection: false,
+        },
+    ];
+    const visibleMoreItems = connectionId ? [] : moreItems;
 
     React.useEffect(() => {
         if (!window.updateBridge) return;
@@ -239,7 +230,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             <SidebarHeader className="pb-2">{connectionId ? <ConnectionSwitcher /> : <ConnectionSwitcher displayMode="all-connections" />}</SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navMain} moreItems={moreItems} moreTitle={t('More')} disabled={!connectionId} hasActiveConnection={!!connectionId} />
+                <NavMain items={navMain} moreItems={visibleMoreItems} moreTitle={t('More')} disabled={!connectionId} hasActiveConnection={!!connectionId} />
                 <div className="mt-auto space-y-2">
                     {showStarNotification ? (
                         <div className="px-2 group-data-[collapsible=icon]:hidden">

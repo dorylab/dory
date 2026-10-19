@@ -117,7 +117,7 @@ export default async function AgentRunsPage({
     });
 
     return (
-        <div className="bg-n8 h-screen overflow-auto">
+        <div className="min-h-full bg-n8">
             <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="mb-0 flex items-center justify-between gap-4">
                     <div>

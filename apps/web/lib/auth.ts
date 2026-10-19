@@ -716,14 +716,12 @@ function createAuth() {
             },
 
             socialProviders: {
-                github: {
-                    clientId: process.env.GITHUB_CLIENT_ID as string,
-                    clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
-                },
-                google: {
-                    clientId: process.env.GOOGLE_CLIENT_ID as string,
-                    clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-                },
+                ...(process.env.GITHUB_CLIENT_ID?.trim() && process.env.GITHUB_CLIENT_SECRET?.trim()
+                    ? { github: { clientId: process.env.GITHUB_CLIENT_ID.trim(), clientSecret: process.env.GITHUB_CLIENT_SECRET.trim() } }
+                    : {}),
+                ...(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim()
+                    ? { google: { clientId: process.env.GOOGLE_CLIENT_ID.trim(), clientSecret: process.env.GOOGLE_CLIENT_SECRET.trim() } }
+                    : {}),
             },
         });
 

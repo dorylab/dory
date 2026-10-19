@@ -1,14 +1,17 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Folder } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { SearchableSelect, type SelectOption } from '@/components/@dory/ui/searchable-select';
 import { useAtomValue } from 'jotai';
 import { executeActionClient } from '@/lib/actions/client';
@@ -39,10 +42,16 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const [description, setDescription] = useState('');
     const [folderId, setFolderId] = useState('');
     const [folderOptions, setFolderOptions] = useState<SelectOption[]>([]);
+    const [addToBusinessKnowledge, setAddToBusinessKnowledge] = useState(true);
+    const [knowledgeModelId, setKnowledgeModelId] = useState('');
+    const [newModelName, setNewModelName] = useState('');
+    const [businessMeaning, setBusinessMeaning] = useState('');
     const [loadingFolders, setLoadingFolders] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [authSheetOpen, setAuthSheetOpen] = useState(false);
+    const descriptionEditedRef = useRef(false);
+    const businessMeaningEditedRef = useRef(false);
     const isAnonymous = isAnonymousUser(session?.user);
 
     const resolvedDefaultTitle = useMemo(() => {
@@ -57,14 +66,67 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
         const query = searchParams?.toString();
         return query ? `${pathname}?${query}` : pathname || '/';
     }, [pathname, searchParams]);
+    const sqlTextForMetadata = useMemo(() => (open && addToBusinessKnowledge ? getSqlText().trim() : ''), [addToBusinessKnowledge, getSqlText, open]);
 
     useEffect(() => {
         if (!open) return;
         setTitle(resolvedDefaultTitle);
         setDescription('');
         setFolderId('');
+        setAddToBusinessKnowledge(true);
+        setKnowledgeModelId('');
+        setNewModelName('');
+        setBusinessMeaning('');
         setError(null);
+        descriptionEditedRef.current = false;
+        businessMeaningEditedRef.current = false;
     }, [open, resolvedDefaultTitle]);
+
+    const savedQueryMetadata = useQuery({
+        queryKey: ['saved-query-metadata', connectionId, resolvedDefaultTitle, sqlTextForMetadata],
+        enabled: open && addToBusinessKnowledge && !isAnonymous && Boolean(connectionId) && Boolean(sqlTextForMetadata),
+        queryFn: async ({ signal }) => {
+            const controller = new AbortController();
+            const abort = () => controller.abort();
+            const timeout = window.setTimeout(abort, 15_000);
+            signal.addEventListener('abort', abort, { once: true });
+
+            try {
+                return await executeActionClient<{ description: string; useWhen: string }>(
+                    'ai.savedQueryMetadata',
+                    {
+                        connectionId,
+                        title: resolvedDefaultTitle,
+                        sql: sqlTextForMetadata,
+                        database: currentConnection?.connection?.database ?? null,
+                    },
+                    { currentConnectionId: connectionId, signal: controller.signal },
+                );
+            } finally {
+                window.clearTimeout(timeout);
+                signal.removeEventListener('abort', abort);
+            }
+        },
+        retry: false,
+        staleTime: Infinity,
+    });
+
+    useEffect(() => {
+        if (!savedQueryMetadata.data) return;
+        if (!descriptionEditedRef.current) setDescription(savedQueryMetadata.data.description);
+        if (!businessMeaningEditedRef.current) setBusinessMeaning(savedQueryMetadata.data.useWhen);
+    }, [savedQueryMetadata.data]);
+
+    const knowledgeModels = useQuery({
+        queryKey: ['knowledge-model-options', connectionId],
+        enabled: open && addToBusinessKnowledge && Boolean(connectionId),
+        queryFn: () => executeActionClient<{ models: Array<{ id: string; name: string }> }>('knowledge.list', { connectionId }, { currentConnectionId: connectionId }),
+    });
+
+    useEffect(() => {
+        if (!addToBusinessKnowledge) return;
+        if (!knowledgeModelId && knowledgeModels.data?.models[0]) setKnowledgeModelId(knowledgeModels.data.models[0].id);
+    }, [addToBusinessKnowledge, knowledgeModelId, knowledgeModels.data]);
 
     useEffect(() => {
         if (!open || !connectionId || isAnonymous) {
@@ -78,11 +140,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
         const loadFolders = async () => {
             setLoadingFolders(true);
             try {
-                const data = await executeActionClient<Array<{ id: string; name: string }>>(
-                    'savedQuery.listFolders',
-                    { connectionId },
-                    { currentConnectionId: connectionId },
-                );
+                const data = await executeActionClient<Array<{ id: string; name: string }>>('savedQuery.listFolders', { connectionId }, { currentConnectionId: connectionId });
 
                 if (cancelled) return;
 
@@ -134,6 +192,14 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
             toast.error(message);
             return;
         }
+        if (addToBusinessKnowledge && !businessMeaning.trim()) {
+            setError(t('SaveSql.Errors.UseWhenRequired'));
+            return;
+        }
+        if (addToBusinessKnowledge && !knowledgeModelId && !newModelName.trim()) {
+            setError(t('SaveSql.Errors.DomainRequired'));
+            return;
+        }
 
         setSaving(true);
         setError(null);
@@ -150,12 +216,33 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                 },
                 { currentConnectionId: connectionId },
             );
-
-            toast.success(t('SaveSql.Success'));
             if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('saved-queries-updated'));
             }
             await onSaved?.();
+
+            if (addToBusinessKnowledge) {
+                let targetModelId = knowledgeModelId;
+                if (!targetModelId) {
+                    const model = await executeActionClient<{ id: string }>('knowledge.create', { name: newModelName.trim(), connectionIds: [connectionId] });
+                    targetModelId = model.id;
+                }
+                await executeActionClient(
+                    'knowledge.createVerifiedQuery',
+                    {
+                        knowledgeModelId: targetModelId,
+                        sourceConnectionId: connectionId,
+                        title: title.trim(),
+                        description: description.trim() ? description.trim() : undefined,
+                        question: businessMeaning.trim(),
+                        sql: sqlText,
+                        sourceType: 'workspace',
+                    },
+                    { currentConnectionId: connectionId },
+                );
+            }
+
+            toast.success(addToBusinessKnowledge ? t('SaveSql.SuccessWithKnowledge') : t('SaveSql.Success'));
             onOpenChange(false);
         } catch (err) {
             const message = err instanceof Error ? err.message : t('SaveSql.Errors.SaveFailed');
@@ -180,7 +267,16 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                         </div>
                         <div className="grid gap-2">
                             <label className="text-sm font-medium">{t('SaveSql.DescriptionLabel')}</label>
-                            <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={t('SaveSql.DescriptionPlaceholder')} rows={3} />
+                            <Textarea
+                                value={description}
+                                onChange={event => {
+                                    descriptionEditedRef.current = true;
+                                    setDescription(event.target.value);
+                                }}
+                                placeholder={savedQueryMetadata.isPending ? t('SaveSql.GeneratingMetadata') : t('SaveSql.DescriptionPlaceholder')}
+                                rows={3}
+                                disabled={saving}
+                            />
                         </div>
                         <div className="grid gap-2">
                             <label className="text-sm font-medium">{t('SaveSql.FolderLabel')}</label>
@@ -201,13 +297,73 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                                 />
                             </div>
                         </div>
+                        <div>
+                            <div className="flex items-start gap-2">
+                                <Checkbox
+                                    id="add-to-business-knowledge"
+                                    checked={addToBusinessKnowledge}
+                                    onCheckedChange={value => setAddToBusinessKnowledge(value === true)}
+                                    disabled={saving}
+                                />
+                                <div className="grid gap-1">
+                                    <label htmlFor="add-to-business-knowledge" className="text-sm font-medium">
+                                        {t('SaveSql.AddToKnowledge')}
+                                    </label>
+                                    <p className="text-xs text-muted-foreground">{t('SaveSql.AddToKnowledgeDescription')}</p>
+                                </div>
+                            </div>
+                            {addToBusinessKnowledge ? (
+                                <div className="mt-3 grid gap-3 border-t pt-3">
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium">{t('SaveSql.DomainLabel')}</label>
+                                        {knowledgeModels.isLoading ? (
+                                            <p className="text-sm text-muted-foreground">{t('SaveSql.LoadingDomains')}</p>
+                                        ) : knowledgeModels.data?.models.length ? (
+                                            <Select value={knowledgeModelId} onValueChange={setKnowledgeModelId} disabled={saving}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder={t('SaveSql.DomainPlaceholder')} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {knowledgeModels.data.models.map(model => (
+                                                        <SelectItem key={model.id} value={model.id}>
+                                                            {model.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <Input
+                                                value={newModelName}
+                                                onChange={event => setNewModelName(event.target.value)}
+                                                placeholder={t('SaveSql.NewDomainPlaceholder')}
+                                                disabled={saving || knowledgeModels.isLoading}
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <label className="text-sm font-medium">{t('SaveSql.UseWhenLabel')}</label>
+                                        <Textarea
+                                            value={businessMeaning}
+                                            onChange={event => {
+                                                businessMeaningEditedRef.current = true;
+                                                setBusinessMeaning(event.target.value);
+                                            }}
+                                            placeholder={savedQueryMetadata.isPending ? t('SaveSql.GeneratingMetadata') : t('SaveSql.UseWhenPlaceholder')}
+                                            rows={3}
+                                            disabled={saving}
+                                        />
+                                        {savedQueryMetadata.isError ? <p className="text-xs text-destructive">{t('SaveSql.MetadataGenerationFailed')}</p> : null}
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
                         {error ? <p className="text-sm text-destructive">{error}</p> : null}
                     </div>
                     <DialogFooter className="gap-2 sm:gap-0">
                         <Button className="mr-2" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                             {t('Actions.Cancel')}
                         </Button>
-                        <Button onClick={handleSave} disabled={saving}>
+                        <Button onClick={handleSave} disabled={saving || (addToBusinessKnowledge && savedQueryMetadata.isPending)}>
                             {saving ? t('SaveSql.Saving') : t('Actions.Save')}
                         </Button>
                     </DialogFooter>

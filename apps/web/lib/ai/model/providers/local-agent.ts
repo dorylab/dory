@@ -245,7 +245,7 @@ function toolInstructions(options: LanguageModelV4CallOptions, context: LocalAge
 
         return [
             'Dory MCP tools are available to Codex for this request.',
-            'For database questions, call dory_create_work once first, then pass the returned work.workId to later Dory tool calls.',
+            'For database questions, call dory_create_work once first with the current connectionId and the original userQuestion. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tool calls.',
             'For non-query Dory read operations, use dory_read with the actionId. For create, update, or delete operations such as connection.create, use dory_write with the actionId instead of expecting a separate tool for every action.',
             'When the user asks for query results, write read-only SQL and call dory_run_readonly_sql. Answer from the tool result; do not claim a query was run without tool output.',
             'If the schema is unclear, call dory_explore_schema before writing SQL.',

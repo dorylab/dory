@@ -5,14 +5,11 @@ import type { OrganizationAccess } from '@/lib/server/authz';
 import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { getExternalRequestOrigin, getWorkspaceRequestOrigin } from '@/lib/server/request-origin';
+import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 export const MCP_DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
-export const MCP_DEFAULT_SCOPES = [
-    'read',
-    'write',
-    'local_ai:run',
-] as const;
+export const MCP_DEFAULT_SCOPES = ['read', 'write', 'local_ai:run'] as const;
 export const MCP_LEGACY_FINE_SCOPES = [
     'connections:read',
     'connections:write',
@@ -27,6 +24,9 @@ export const MCP_LEGACY_FINE_SCOPES = [
     'monitoring:read',
     'comparisons:read',
     'comparisons:write',
+    'knowledge:read',
+    'knowledge:write',
+    'assets:read',
 ] as const;
 export const MCP_LOCAL_AI_SCOPE = 'local_ai:run';
 export const MCP_ALLOWED_SCOPES = [...MCP_DEFAULT_SCOPES, ...MCP_LEGACY_FINE_SCOPES] as const;
@@ -43,6 +43,9 @@ export type McpAuthContext = {
     access: OrganizationAccess;
     requestOrigin?: string | null;
     workspaceOrigin?: string | null;
+    principalType?: 'user' | 'service';
+    principalId?: string;
+    allowedConnectionIds?: string[] | null;
 };
 
 export type McpAuthResult =
@@ -137,6 +140,7 @@ type McpTokenAccessResult =
 
 type McpTokenAccessDeps = {
     resolveAccess?: (organizationId: string, userId: string) => Promise<OrganizationAccess | null>;
+    resolvePrincipal?: (organizationId: string, principalId: string) => Promise<{ enabled: boolean; allowedConnectionIds?: string[] | null } | null>;
 };
 
 type McpDesktopGrantPayload = {
@@ -161,7 +165,45 @@ async function resolveDefaultMcpTokenAccess(organizationId: string, userId: stri
 }
 
 export async function buildMcpAuthContextForToken(record: McpAccessTokenRecord, deps: McpTokenAccessDeps = {}): Promise<McpTokenAccessResult> {
-    const access = await (deps.resolveAccess ?? resolveDefaultMcpTokenAccess)(record.organizationId, record.createdByUserId);
+    if (record.expiresAt && record.expiresAt <= new Date()) {
+        return { ok: false, status: 401, message: 'MCP bearer token is expired.' };
+    }
+
+    const principalType = record.principalType ?? 'user';
+    const principalId = record.principalId ?? record.createdByUserId;
+    let access: OrganizationAccess | null;
+    let principalAllowedConnectionIds: string[] | null = null;
+    if (principalType === 'service') {
+        const principal = deps.resolvePrincipal
+            ? await deps.resolvePrincipal(record.organizationId, principalId)
+            : await (await getDBService()).mcp.getAgentPrincipal(record.organizationId, principalId);
+        if (!principal?.enabled) {
+            return { ok: false, status: 403, message: 'Agent service account is disabled or unavailable.' };
+        }
+        principalAllowedConnectionIds = Array.isArray(principal.allowedConnectionIds) ? principal.allowedConnectionIds : null;
+        const viewerPermissions = getOrganizationPermissionMap('viewer');
+        access = {
+            source: 'local',
+            isMember: true,
+            organizationId: record.organizationId,
+            userId: principalId,
+            role: 'viewer',
+            // Service principals stay data-source viewers. They may only write their own
+            // Dory workspace metadata (Agent Runs, tabs, and Artifacts) after a read-only
+            // MCP tool succeeds; database and connection write actions still require scopes
+            // the service account never receives.
+            permissions: {
+                ...viewerPermissions,
+                workspace: {
+                    ...viewerPermissions.workspace,
+                    write: true,
+                },
+            },
+            organization: { id: record.organizationId },
+        };
+    } else {
+        access = await (deps.resolveAccess ?? resolveDefaultMcpTokenAccess)(record.organizationId, record.createdByUserId);
+    }
     if (!access?.isMember || !access.permissions.workspace.read || !access.permissions.connection.read) {
         return {
             ok: false,
@@ -175,9 +217,17 @@ export async function buildMcpAuthContextForToken(record: McpAccessTokenRecord, 
         context: {
             tokenId: record.id,
             organizationId: record.organizationId,
-            userId: record.createdByUserId,
+            userId: principalType === 'service' ? principalId : record.createdByUserId,
             scopes: Array.isArray(record.scopes) ? record.scopes : [],
             access,
+            principalType,
+            principalId,
+            allowedConnectionIds:
+                principalType === 'service' && principalAllowedConnectionIds
+                    ? principalAllowedConnectionIds
+                    : Array.isArray(record.allowedConnectionIds)
+                      ? record.allowedConnectionIds
+                      : null,
         },
     };
 }
@@ -311,6 +361,9 @@ export async function buildMcpAuthContextForDesktopGrant(
             userId: payload.userId,
             scopes: payload.scopes,
             access,
+            principalType: 'user',
+            principalId: payload.userId,
+            allowedConnectionIds: null,
         },
     };
 }

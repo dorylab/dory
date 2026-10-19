@@ -204,6 +204,20 @@
             "when": 1786291200000,
             "tag": "0029_agent_run_findings",
             "breakpoints": true
+        },
+        {
+            "idx": 29,
+            "version": "7",
+            "when": 1791518400000,
+            "tag": "0030_knowledge_and_agent_context",
+            "breakpoints": true
+        },
+        {
+            "idx": 30,
+            "version": "7",
+            "when": 1792022400000,
+            "tag": "0031_ossie_020_defaults",
+            "breakpoints": true
         }
     ]
 }

@@ -32,6 +32,7 @@ import {
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
 import { ArtifactResultTable } from './artifact-result-table';
+import { AddVerifiedQueryDialog } from '@/components/knowledge/add-verified-query-dialog';
 
 const ArtifactCharts = dynamic(() => import('../../[connectionId]/sql-console/components/result-table/components/charts').then(module => module.Charts), {
     ssr: false,
@@ -69,6 +70,7 @@ function CompactMetadata({ artifact }: { artifact: ArtifactDetail }) {
 export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }: { organization: string; artifactId: string; fromAgentRun: string | null }) {
     const t = useTranslations('Artifacts.Viewer');
     const agentRunsT = useTranslations('AgentRuns');
+    const knowledgeT = useTranslations('Knowledge');
     const router = useRouter();
     const organizationId = useOrganizationId();
     const queryClient = useQueryClient();
@@ -77,6 +79,7 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
     const [showChartBuilder, setShowChartBuilder] = useState(false);
     const [chartState, setChartState] = useState<ArtifactChartState | null>(null);
     const [deleteOpen, setDeleteOpen] = useState(false);
+    const [addToKnowledgeOpen, setAddToKnowledgeOpen] = useState(false);
     const artifactQuery = useQuery({
         queryKey: ['artifact', organizationId, artifactId],
         queryFn: () => executeActionClient<ArtifactDetail>('artifact.get', { artifactId }, { organizationId }),
@@ -265,6 +268,11 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                                 <Bot />
                                 {t('ContinueWithAgent')}
                             </Button>
+                            {artifact.connectionId && artifact.resultSet?.sql ? (
+                                <Button variant="outline" onClick={() => setAddToKnowledgeOpen(true)}>
+                                    {knowledgeT('AddToKnowledge')}
+                                </Button>
+                            ) : null}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="icon" aria-label={t('MoreActions')}>
@@ -397,6 +405,7 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                     ) : null}
                 </div>
             </main>
+            <AddVerifiedQueryDialog open={addToKnowledgeOpen} onOpenChange={setAddToKnowledgeOpen} connectionId={artifact.connectionId} sql={artifact.resultSet?.sql} sourceType="artifact" sourceId={artifact.id} initialTitle={artifact.title} />
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>

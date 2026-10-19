@@ -22,6 +22,9 @@ test('Agent Run handoff prompt includes existing workspace context', () => {
     assert.match(prompt, /summarize only the new work completed in this continuation/);
     assert.match(prompt, /structured Finding with its evidenceArtifactIds/);
     assert.match(prompt, /existing Run summary/);
+    assert.match(prompt, /Write the analytical findings yourself/);
+    assert.match(prompt, /Never paste raw result rows/);
+    assert.match(prompt, /presentation.facts/);
     assert.match(prompt, /Do not create a new Dory work/);
     assert.doesNotMatch(prompt, /Authorization/i);
     assert.doesNotMatch(prompt, /Bearer/i);
