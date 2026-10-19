@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { OSSIE_VERSION } from '@dory/shared/types/ossie';
+
 import { assertEvaluationRows, OLIST_KNOWLEDGE_NAME, olistScenarios, type EvaluationLayer, type EvaluationRow, type OlistScenario } from '@/lib/demo/olist-evaluation';
 import { toolPayload } from '../commerce-agent-evaluation-mcp-replay';
 import { updateOlistReport } from './report';
@@ -35,7 +37,7 @@ export function assertSemanticContext(work: JsonRecord, scenario: OlistScenario,
     const models = Array.isArray(work.semanticModelsUsed) ? work.semanticModelsUsed.filter(record) : [];
     const model = models.find(item => item.name === OLIST_KNOWLEDGE_NAME);
     assert.ok(model, 'Expected Olist semantic model');
-    assert.equal(model.ossieVersion, '0.1.1');
+    assert.equal(model.ossieVersion, OSSIE_VERSION);
     assert.equal(model.modelRevision, modelRevision, 'Unexpected Knowledge revision');
     const context = string(work.semanticContext, 'semanticContext');
     for (const name of scenario.semanticNames) {
