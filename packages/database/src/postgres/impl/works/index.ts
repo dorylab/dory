@@ -87,7 +87,7 @@ export type WorkAgentAssetUsageInput = {
     userId: string;
     principalType?: 'user' | 'service';
     principalId?: string | null;
-    assetKind: 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'semantic_model';
+    assetKind: 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'business_rule' | 'semantic_model';
     assetRef: string;
     revision: string;
     assetSnapshot: Record<string, unknown>;

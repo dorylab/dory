@@ -41,7 +41,8 @@ export const knowledgeSourceSummarySchema = z.object({
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
     connectorId: z.string().nullable(),
-    connectorProvider: z.enum(['github']).nullable(),
+    connectorProvider: z.enum(['github', 'linear']).nullable(),
+    sourceUrl: z.string().nullable(),
     remotePath: z.string().nullable(),
 });
 export const knowledgeSourceSchema = knowledgeSourceSummarySchema.extend({ contentText: z.string() });
@@ -68,7 +69,7 @@ export const knowledgeModelOutputSchema = z.object({
     updatedAt: z.union([z.date(), z.string()]),
 });
 
-export const knowledgeAssetTypeSchema = z.enum(['definition', 'verified_query']);
+export const knowledgeAssetTypeSchema = z.enum(['definition', 'verified_query', 'business_rule']);
 export const knowledgeSourceRelationTypeSchema = z.enum(['provided', 'generated']);
 export const knowledgeGraphSchema = z.object({
     queryDefinitionEdges: z.array(z.object({ queryId: z.string(), definitionId: z.string() })),
@@ -100,16 +101,11 @@ export const knowledgeVerifiedQuerySchema = z.object({
     updatedAt: z.union([z.date(), z.string()]),
 });
 
-export const knowledgeConnectorSchema = z.object({
+const knowledgeConnectorCommonSchema = z.object({
+    autoExtract: z.boolean().optional(),
     id: z.string(),
     organizationId: z.string(),
     knowledgeModelId: z.string(),
-    provider: z.literal('github'),
-    installationId: z.string(),
-    repositoryId: z.string(),
-    repositoryFullName: z.string(),
-    defaultBranch: z.string(),
-    rootPath: z.string(),
     status: z.enum(['pending', 'syncing', 'ready', 'error', 'disabled']),
     lastCommitSha: z.string().nullable(),
     lastSyncedAt: z.union([z.date(), z.string()]).nullable(),
@@ -118,3 +114,21 @@ export const knowledgeConnectorSchema = z.object({
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
 });
+
+export const knowledgeConnectorSchema = z.discriminatedUnion('provider', [
+    knowledgeConnectorCommonSchema.extend({
+        provider: z.literal('github'),
+        installationId: z.string(),
+        repositoryId: z.string(),
+        repositoryFullName: z.string(),
+        defaultBranch: z.string(),
+        rootPath: z.string(),
+    }),
+    knowledgeConnectorCommonSchema.extend({
+        provider: z.literal('linear'),
+        credentialId: z.string().nullable(),
+        linearWorkspaceId: z.string(),
+        linearWorkspaceName: z.string(),
+        projectIds: z.array(z.string()),
+    }),
+]);

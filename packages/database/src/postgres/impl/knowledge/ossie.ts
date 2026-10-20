@@ -29,6 +29,9 @@ type DoryExtension = {
         sourceConnectionId?: string;
         filters?: string[];
         dimensions?: string[];
+        source?: string;
+        timeDimension?: string;
+        descriptionOnly?: boolean;
     };
 };
 
@@ -209,13 +212,14 @@ export function projectOssieDocument(document: OssieDocument, fallbackSourceConn
             kind: dory?.kind === 'measure' ? ('measure' as const) : ('metric' as const),
             status: dory?.status ?? ('unverified' as const),
             sourceConnectionId: dory?.sourceConnectionId ?? datasetDory?.sourceConnectionId ?? fallbackSourceConnectionId ?? '',
-            source: dataset?.source,
-            expression: expressionValue,
+            source: dory?.descriptionOnly ? dory.source : (dory?.source ?? dataset?.source),
+            expression: dory?.descriptionOnly ? undefined : expressionValue,
+            timeDimension: dory?.timeDimension,
             description: metric.description,
             aliases: context.synonyms,
             filters: dory?.filters,
             dimensions: dory?.dimensions,
-            aiContext: metric.ai_context,
+            aiContext: dory?.descriptionOnly === undefined ? metric.ai_context : { ...aiContext(metric.ai_context), descriptionOnly: dory.descriptionOnly },
             dialect: selectedExpression?.dialect,
             datatype: metric.datatype,
         };
@@ -363,6 +367,9 @@ export function applyKnowledgeDefinitions(document: OssieDocument, definitions: 
                     sourceConnectionId: item.sourceConnectionId,
                     filters: item.filters,
                     dimensions: item.dimensions,
+                    source: item.source,
+                    timeDimension: item.timeDimension,
+                    descriptionOnly: !item.expression,
                 }),
             } satisfies OssieMetric;
         });

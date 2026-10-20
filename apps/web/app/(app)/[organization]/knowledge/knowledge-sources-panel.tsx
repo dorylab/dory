@@ -7,8 +7,12 @@ import { parseAsString, useQueryStates } from 'nuqs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconBrandGithub } from '@tabler/icons-react';
-import { FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
+import { ExternalLink, FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+
+import { LinearConnectorDialog, fetchLinearSetup, linearSetupKey, type KnowledgeConnectorView } from './linear-connector-dialog';
+import { LinearLogo } from './linear-logo';
+import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
 
 import { executeActionClient } from '@/lib/actions/client';
 import {
@@ -27,6 +31,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 
 type DataSource = { connectionId: string; name: string; type: string; engine: string };
 type Definition = {
@@ -57,7 +62,8 @@ type KnowledgeSourceSummary = {
     createdAt: string;
     updatedAt: string;
     connectorId: string | null;
-    connectorProvider: 'github' | null;
+    connectorProvider: 'github' | 'linear' | null;
+    sourceUrl: string | null;
     remotePath: string | null;
 };
 type KnowledgeSource = KnowledgeSourceSummary & { contentText: string };
@@ -72,22 +78,14 @@ type ImportVerifiedQuery = {
     description?: string;
     definitionIds: string[];
 };
-type KnowledgeConnector = {
-    id: string;
-    repositoryFullName: string;
-    defaultBranch: string;
-    rootPath: string;
-    status: 'pending' | 'syncing' | 'ready' | 'error' | 'disabled';
-    lastSyncedAt: string | null;
-    lastError: string | null;
-};
+type KnowledgeConnector = KnowledgeConnectorView;
 type GitHubRepository = { id: string; fullName: string; defaultBranch: string; private: boolean };
 type VerifiedQuery = { id: string; title: string };
 type KnowledgeGraph = {
     queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
     sourceAssetEdges: Array<{
         sourceId: string;
-        assetType: 'definition' | 'verified_query';
+        assetType: 'definition' | 'verified_query' | 'business_rule';
         assetId: string;
         relationType: 'provided' | 'generated';
     }>;
@@ -103,6 +101,12 @@ const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-edit
 
 const knowledgeSourcesKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-sources'] as const;
 const knowledgeConnectorsKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-connectors'] as const;
+
+function sourceDisplayName(source: KnowledgeSourceSummary) {
+    if (source.connectorProvider !== 'linear' || !source.connectorId || !source.remotePath) return source.fileName;
+    const suffix = ` · ${source.connectorId.slice(-8)} · ${source.remotePath.split('/').pop()}`;
+    return source.fileName.endsWith(suffix) ? source.fileName.slice(0, -suffix.length) : source.fileName;
+}
 
 function formatBytes(bytes: number) {
     if (bytes < 1_000) return `${bytes} B`;
@@ -339,7 +343,7 @@ function SourceEditorDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>{source?.fileName ?? t('Title')}</DialogTitle>
+                    <DialogTitle>{source ? sourceDisplayName(source) : t('Title')}</DialogTitle>
                     <DialogDescription>{t('EditorDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="flex shrink-0 items-center gap-3">
@@ -581,7 +585,7 @@ function GitHubConnectorDialog({
                 { organizationId: organization },
             ),
         onSuccess: () => {
-            toast.success(t('GitHubSyncQueued'));
+            toast.success(t('ConnectorSyncQueued'));
             onConnected();
             onOpenChange(false);
         },
@@ -691,6 +695,13 @@ export function KnowledgeSourcesPanel({
         { history: 'replace' },
     );
     const [selectedSourceId, setSelectedSourceId] = useQueryStates({ source: parseAsString.withDefault('') }, { history: 'replace' });
+    const [providerOpen, setProviderOpen] = useState(false);
+    const [linearOpen, setLinearOpen] = useState(false);
+    const [linearEditing, setLinearEditing] = useState<Extract<KnowledgeConnector, { provider: 'linear' }> | undefined>();
+    const linearSetup = useQuery({
+        queryKey: linearSetupKey(organization, knowledgeModelId),
+        queryFn: () => fetchLinearSetup(organization, knowledgeModelId),
+    });
     const [uploadOpen, setUploadOpen] = useState(false);
     const [connectorOpen, setConnectorOpen] = useState(Boolean(githubEntry.githubInstallationId && githubEntry.githubConnectionState));
     const [editing, setEditing] = useState<KnowledgeSourceSummary | null>(null);
@@ -699,6 +710,11 @@ export function KnowledgeSourcesPanel({
     const [suggestions, setSuggestions] = useState<ImportSuggestion[]>([]);
     const [querySuggestions, setQuerySuggestions] = useState<ImportVerifiedQuery[]>([]);
     const [disconnecting, setDisconnecting] = useState<KnowledgeConnector | null>(null);
+    const businessRules = useQuery({
+        queryKey: ['knowledge-model', knowledgeModelId, 'business-rules', organization],
+        queryFn: () =>
+            executeActionClient<{ rules: Array<{ id: string; payload: { name: string } }> }>('knowledge.listBusinessRules', { knowledgeModelId }, { organizationId: organization }),
+    });
     const sourceAssets = useMemo(() => {
         const bySource = new Map<string, KnowledgeGraph['sourceAssetEdges']>();
         for (const edge of graph.sourceAssetEdges) bySource.set(edge.sourceId, [...(bySource.get(edge.sourceId) ?? []), edge]);
@@ -716,6 +732,9 @@ export function KnowledgeSourcesPanel({
     useEffect(() => {
         if (githubEntry.githubInstallationId && githubEntry.githubConnectionState) setConnectorOpen(true);
     }, [githubEntry.githubConnectionState, githubEntry.githubInstallationId]);
+    useEffect(() => {
+        if (connectors.data) void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) });
+    }, [connectors.data, knowledgeModelId, queryClient]);
     const previewImport = useMutation({
         mutationFn: (source: KnowledgeSourceSummary) =>
             executeActionClient<{ suggestions: ImportSuggestion[]; verifiedQueries: ImportVerifiedQuery[] }>(
@@ -752,7 +771,7 @@ export function KnowledgeSourcesPanel({
         mutationFn: (connector: KnowledgeConnector) => executeActionClient('knowledge.syncConnector', { connectorId: connector.id }, { organizationId: organization }),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: knowledgeConnectorsKey(knowledgeModelId) });
-            toast.success(t('GitHubSyncQueued'));
+            toast.success(t('ConnectorSyncQueued'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('GitHubSyncFailed')),
     });
@@ -765,13 +784,13 @@ export function KnowledgeSourcesPanel({
                 queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) }),
             ]);
             setDisconnecting(null);
-            toast.success(t('GitHubDisconnected'));
+            toast.success(t('ConnectorDisconnected'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('GitHubDisconnectFailed')),
     });
     const scopeName = (source: KnowledgeSourceSummary) =>
         source.connectionId ? (dataSources.find(item => item.connectionId === source.connectionId)?.name ?? t('UnavailableDataSource')) : t('Shared');
-    const connectKnowledgeBase = () => setConnectorOpen(true);
+    const connectKnowledgeBase = () => setProviderOpen(true);
 
     return (
         <div className="space-y-4">
@@ -803,26 +822,55 @@ export function KnowledgeSourcesPanel({
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 font-medium">
-                                        <IconBrandGithub className="size-4" /> <span className="truncate">{connector.repositoryFullName}</span>
+                                        {connector.provider === 'github' ? <IconBrandGithub className="size-4" /> : <LinearLogo />}
+                                        <span className="truncate">
+                                            {connector.provider === 'github' ? connector.repositoryFullName : `Linear · ${connector.linearWorkspaceName}`}
+                                        </span>
                                     </div>
                                     <div className="mt-1 truncate text-xs text-muted-foreground">
-                                        {connector.defaultBranch} · {connector.rootPath || t('GitHubRepositoryRoot')}
+                                        {connector.provider === 'github'
+                                            ? `${connector.defaultBranch} · ${connector.rootPath || t('GitHubRepositoryRoot')}`
+                                            : `${t('LinearProjectCount', { count: connector.projectIds.length })} · ${t('LinearHourlySync')}`}
                                     </div>
                                 </div>
                                 <Badge variant={connector.status === 'error' || connector.status === 'disabled' ? 'destructive' : 'outline'}>
-                                    {t(`GitHubStatus.${connector.status}`)}
+                                    {connector.provider === 'linear' && connector.status === 'disabled' ? t('LinearNeedsApiKey') : t(`GitHubStatus.${connector.status}`)}
                                 </Badge>
                             </div>
                             {connector.lastError ? <p className="mt-3 line-clamp-2 text-xs text-destructive">{connector.lastError}</p> : null}
+                            <ExtractionConnectorStatus organization={organization} knowledgeModelId={knowledgeModelId} connectorId={connector.id} />
                             <div className="mt-3 flex items-center justify-between gap-3">
                                 <span className="text-xs text-muted-foreground">
                                     {connector.lastSyncedAt ? t('GitHubLastSynced', { date: new Date(connector.lastSyncedAt).toLocaleString() }) : t('GitHubNotSynced')}
                                 </span>
-                                <div className="flex gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => sync.mutate(connector)} disabled={sync.isPending || connector.status === 'disabled'}>
+                                <div className="flex flex-wrap gap-1">
+                                    {connector.provider === 'linear' && linearSetup.data?.canManage ? (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setLinearEditing(connector);
+                                                setLinearOpen(true);
+                                            }}
+                                        >
+                                            {t(connector.status === 'disabled' ? 'LinearUpdateApiKey' : 'LinearEditProjects')}
+                                        </Button>
+                                    ) : null}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => sync.mutate(connector)}
+                                        disabled={sync.isPending || connector.status === 'disabled' || (connector.provider === 'linear' && !linearSetup.data?.canManage)}
+                                    >
                                         <RefreshCw className={connector.status === 'syncing' ? 'animate-spin' : ''} /> {t('GitHubSyncNow')}
                                     </Button>
-                                    <Button variant="ghost" size="icon-sm" aria-label={t('GitHubDisconnect')} onClick={() => setDisconnecting(connector)}>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label={t('GitHubDisconnect')}
+                                        disabled={connector.provider === 'linear' && !linearSetup.data?.canManage}
+                                        onClick={() => setDisconnecting(connector)}
+                                    >
                                         <Unplug />
                                     </Button>
                                 </div>
@@ -851,6 +899,7 @@ export function KnowledgeSourcesPanel({
                                 const assets = sourceAssets.get(source.id) ?? [];
                                 const definitionCount = assets.filter(asset => asset.assetType === 'definition').length;
                                 const queryCount = assets.filter(asset => asset.assetType === 'verified_query').length;
+                                const ruleCount = assets.filter(asset => asset.assetType === 'business_rule').length;
                                 const selected = selectedSourceId.source === source.id;
                                 return [
                                     <tr
@@ -859,28 +908,54 @@ export function KnowledgeSourcesPanel({
                                         onClick={() => void setSelectedSourceId({ source: selected ? '' : source.id })}
                                     >
                                         <td className="px-4 py-3">
-                                            <span className="flex items-center gap-2 font-medium">
+                                            <span className="flex flex-wrap items-center gap-2 font-medium">
                                                 {source.format === 'yaml' ? (
-                                                    <FileCode2 className="size-4 text-muted-foreground" />
+                                                    <FileCode2 className="size-4 shrink-0 text-muted-foreground" />
                                                 ) : (
-                                                    <FileText className="size-4 text-muted-foreground" />
+                                                    <FileText className="size-4 shrink-0 text-muted-foreground" />
                                                 )}
-                                                {source.fileName}
-                                                {source.connectorProvider === 'github' ? <Badge variant="outline">GitHub · {t('ReadOnly')}</Badge> : null}
+                                                <span className="min-w-0 break-words">{sourceDisplayName(source)}</span>
+                                                <SourceExtractionStatus organization={organization} knowledgeModelId={knowledgeModelId} sourceId={source.id} />
+                                                {source.connectorProvider ? (
+                                                    <Badge variant="outline">
+                                                        {source.connectorProvider === 'linear' ? <LinearLogo className="size-3" /> : null}
+                                                        {source.connectorProvider === 'github' ? 'GitHub' : 'Linear'} · {t('ReadOnly')}
+                                                    </Badge>
+                                                ) : null}
+                                                {source.sourceUrl ? (
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <a
+                                                                className="inline-flex shrink-0 rounded-sm p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                                aria-label={t('OpenOriginal')}
+                                                                href={source.sourceUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                onClick={event => event.stopPropagation()}
+                                                            >
+                                                                <ExternalLink className="size-3.5" aria-hidden="true" />
+                                                            </a>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>{t('OpenOriginal')}</TooltipContent>
+                                                    </Tooltip>
+                                                ) : null}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 capitalize text-muted-foreground">{source.format}</td>
-                                        <td className="px-4 py-3 text-muted-foreground">{scopeName(source)}</td>
-                                        <td className="px-4 py-3 text-muted-foreground">{formatBytes(source.byteSize)}</td>
-                                        <td className="px-4 py-3 text-muted-foreground">{new Date(source.updatedAt).toLocaleDateString()}</td>
-                                        <td className="px-4 py-3 text-muted-foreground">{t('AssetCounts', { definitions: definitionCount, queries: queryCount })}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 capitalize text-muted-foreground">{source.format}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{scopeName(source)}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{formatBytes(source.byteSize)}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{new Date(source.updatedAt).toLocaleDateString()}</td>
+                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                                            {t('AssetCounts', { definitions: definitionCount, queries: queryCount })}
+                                            {ruleCount ? ` · ${t('RuleCount', { count: ruleCount })}` : ''}
+                                        </td>
                                         <td className="px-4 py-3 text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon-sm"
-                                                        aria-label={t('ActionsFor', { name: source.fileName })}
+                                                        aria-label={t('ActionsFor', { name: sourceDisplayName(source) })}
                                                         onClick={event => event.stopPropagation()}
                                                     >
                                                         <MoreHorizontal />
@@ -921,11 +996,13 @@ export function KnowledgeSourcesPanel({
                                                                               const label =
                                                                                   asset.assetType === 'definition'
                                                                                       ? definitions.find(item => item.id === asset.assetId)?.name
-                                                                                      : queries.find(item => item.id === asset.assetId)?.title;
+                                                                                      : asset.assetType === 'business_rule'
+                                                                                        ? businessRules.data?.rules.find(item => item.id === asset.assetId)?.payload.name
+                                                                                        : queries.find(item => item.id === asset.assetId)?.title;
                                                                               return (
                                                                                   <Button key={`${asset.assetType}:${asset.assetId}`} variant="outline" size="sm" asChild>
                                                                                       <NextLink
-                                                                                          href={`?tab=${asset.assetType === 'definition' ? 'definitions' : 'queries'}&${asset.assetType === 'definition' ? 'definition' : 'query'}=${encodeURIComponent(asset.assetId)}`}
+                                                                                          href={`?tab=${asset.assetType === 'definition' ? 'definitions' : asset.assetType === 'business_rule' ? 'rules' : 'queries'}&${asset.assetType === 'definition' ? 'definition' : asset.assetType === 'business_rule' ? 'rule' : 'query'}=${encodeURIComponent(asset.assetId)}`}
                                                                                       >
                                                                                           {label ?? asset.assetId}
                                                                                       </NextLink>
@@ -966,6 +1043,47 @@ export function KnowledgeSourcesPanel({
                 </div>
             ) : null}
             <UploadSourcesDialog open={uploadOpen} onOpenChange={setUploadOpen} organization={organization} knowledgeModelId={knowledgeModelId} dataSources={dataSources} />
+            <Dialog open={providerOpen} onOpenChange={setProviderOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{t('ConnectKnowledgeBase')}</DialogTitle>
+                        <DialogDescription>{t('ConnectorChooseProvider')}</DialogDescription>
+                    </DialogHeader>
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            setProviderOpen(false);
+                            setConnectorOpen(true);
+                        }}
+                    >
+                        <IconBrandGithub /> GitHub
+                    </Button>
+                    {linearSetup.data?.available && linearSetup.data.canManage ? (
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setProviderOpen(false);
+                                setLinearEditing(undefined);
+                                setLinearOpen(true);
+                            }}
+                        >
+                            <LinearLogo /> Linear
+                        </Button>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
+            {linearOpen ? (
+                <LinearConnectorDialog
+                    key={linearEditing?.id ?? 'new'}
+                    organization={organization}
+                    knowledgeModelId={knowledgeModelId}
+                    connector={linearEditing}
+                    onClose={() => {
+                        setLinearOpen(false);
+                        setLinearEditing(undefined);
+                    }}
+                />
+            ) : null}
             <GitHubConnectorDialog
                 open={connectorOpen}
                 onOpenChange={setConnectorOpen}
@@ -1054,8 +1172,12 @@ export function KnowledgeSourcesPanel({
             <AlertDialog open={Boolean(disconnecting)} onOpenChange={open => !open && !disconnect.isPending && setDisconnecting(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>{t('GitHubDisconnectTitle')}</AlertDialogTitle>
-                        <AlertDialogDescription>{t('GitHubDisconnectDescription', { repository: disconnecting?.repositoryFullName ?? '' })}</AlertDialogDescription>
+                        <AlertDialogTitle>{t('ConnectorDisconnectTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {t('ConnectorDisconnectDescription', {
+                                name: disconnecting?.provider === 'github' ? disconnecting.repositoryFullName : (disconnecting?.linearWorkspaceName ?? ''),
+                            })}
+                        </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={disconnect.isPending}>{t('Cancel')}</AlertDialogCancel>

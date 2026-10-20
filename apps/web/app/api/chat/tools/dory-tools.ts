@@ -89,7 +89,7 @@ export function createDoryChatTools(options: CreateDoryChatToolsOptions) {
                                         workId: work.workId,
                                         organizationId: ctx.organizationId,
                                         userId: ctx.userId,
-                                        assetKind: asset.kind as 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source',
+                                        assetKind: asset.kind as 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'business_rule',
                                         assetRef: String(asset.ref),
                                         revision: String(asset.revision),
                                         assetSnapshot: {

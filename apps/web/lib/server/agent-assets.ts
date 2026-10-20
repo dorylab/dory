@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import type { DBService } from '@dory/database';
 import { knowledgeSearchTokens } from './knowledge-search-tokens';
 
-export const AGENT_ASSET_KINDS = ['artifact', 'knowledge_definition', 'verified_query', 'knowledge_source'] as const;
+export const AGENT_ASSET_KINDS = ['artifact', 'knowledge_definition', 'verified_query', 'knowledge_source', 'business_rule'] as const;
 export type AgentAssetKind = (typeof AGENT_ASSET_KINDS)[number];
 export type AgentAssetTrustLevel = 'verified' | 'source' | 'artifact';
 
@@ -21,6 +21,8 @@ export type AgentAssetSummary = {
     updatedAt: string;
     revision: string;
     deepLink: string;
+    sourceUrl?: string | null;
+    sourceState?: 'current' | 'outdated';
 };
 
 export type SearchAgentAssetsInput = {
@@ -49,7 +51,8 @@ type ParsedAgentAssetRef =
     | { kind: 'artifact'; artifactId: string }
     | { kind: 'knowledge_definition'; knowledgeModelId: string; definitionId: string }
     | { kind: 'verified_query'; knowledgeModelId: string; queryId: string }
-    | { kind: 'knowledge_source'; knowledgeModelId: string; sourceId: string };
+    | { kind: 'knowledge_source'; knowledgeModelId: string; sourceId: string }
+    | { kind: 'business_rule'; knowledgeModelId: string; ruleId: string };
 
 type RankedAsset = AgentAssetSummary & { score: number };
 
@@ -134,6 +137,9 @@ export function parseAgentAssetRef(ref: string): ParsedAgentAssetRef {
     if (url.host === 'knowledge' && segments.length === 3 && segments[1] === 'sources') {
         return { kind: 'knowledge_source', knowledgeModelId: segments[0]!, sourceId: segments[2]! };
     }
+    if (url.host === 'knowledge' && segments.length === 3 && segments[1] === 'rules') {
+        return { kind: 'business_rule', knowledgeModelId: segments[0]!, ruleId: segments[2]! };
+    }
     return unavailable();
 }
 
@@ -173,7 +179,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
         // organization slice first so the shared lexical scorer evaluates that same
         // public title instead of filtering against the stored fallback title.
         kinds.has('artifact') ? db.artifacts.list({ organizationId: input.organizationId, limit: 100 }) : Promise.resolve({ rows: [], total: 0 }),
-        kinds.has('knowledge_definition') || kinds.has('verified_query') || kinds.has('knowledge_source')
+        kinds.has('knowledge_definition') || kinds.has('verified_query') || kinds.has('knowledge_source') || kinds.has('business_rule')
             ? db.knowledge.listModels({ organizationId: input.organizationId, connectionId: input.connectionId ?? undefined })
             : Promise.resolve([]),
     ]);
@@ -205,6 +211,34 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
         models
             .filter(model => !input.knowledgeModelId || model.id === input.knowledgeModelId)
             .map(async model => {
+                const assetEvidence = await db.knowledge.extraction.evidenceFor({ organizationId: input.organizationId, knowledgeModelId: model.id });
+                if (kinds.has('business_rule')) {
+                    const rules = await db.knowledge.extraction.listRules({ organizationId: input.organizationId, knowledgeModelId: model.id });
+                    for (const rule of rules) {
+                        if (rule.payload.sourceConnectionId && !model.dataSources.some(s => s.connectionId === rule.payload.sourceConnectionId)) continue;
+                        const connectionIds = rule.payload.sourceConnectionId ? [rule.payload.sourceConnectionId] : model.dataSources.map(s => s.connectionId);
+                        if (input.connectionId && !connectionIds.includes(input.connectionId)) continue;
+                        if (!isConnectionAllowed(connectionIds, input.allowedConnectionIds)) continue;
+                        const score = scoreAsset(query, rule.payload.name, rule.payload.aliases, rule.payload.description);
+                        if (!score) continue;
+                        candidates.push({
+                            ref: `dory://knowledge/${pathPart(model.id)}/rules/${pathPart(rule.id)}`,
+                            kind: 'business_rule',
+                            title: rule.payload.name,
+                            summary: compactText(rule.payload.description),
+                            connectionIds,
+                            knowledgeModelId: model.id,
+                            knowledgeModelName: model.name,
+                            trustLevel: 'verified',
+                            updatedAt: iso(rule.updatedAt),
+                            revision: String(rule.revision),
+                            sourceState: rule.sourceState,
+                            sourceUrl: rule.evidence[0]?.sourceUrl ?? null,
+                            deepLink: makeDeepLink(input.workspaceOrigin, `/${pathPart(input.organizationId)}/knowledge/${pathPart(model.id)}?tab=rules`),
+                            score,
+                        });
+                    }
+                }
                 if (kinds.has('knowledge_definition')) {
                     for (const definition of model.model.definitions) {
                         if (definition.status !== 'verified') continue;
@@ -227,6 +261,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                             knowledgeModelId: model.id,
                             knowledgeModelName: model.name,
                             trustLevel: 'verified',
+                            sourceState: assetEvidence.some(e => e.assetId === definition.id && e.state !== 'current') ? 'outdated' : 'current',
                             updatedAt: iso(model.updatedAt),
                             revision: revision(definition),
                             deepLink: makeDeepLink(
@@ -293,6 +328,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                     candidates.push({
                         ref: knowledgeSourceAgentAssetRef(model.id, source.id),
                         kind: 'knowledge_source',
+                        sourceUrl: source.sourceUrl,
                         title: source.fileName,
                         summary: compactText(excerpt || [source.format, source.remotePath, source.connectorProvider].filter(Boolean).join(' · ')),
                         connectionIds,
@@ -357,6 +393,38 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
 
     const model = await db.knowledge.getModel({ organizationId: input.organizationId, knowledgeModelId: parsed.knowledgeModelId }).catch(unavailable);
     const graph = await db.knowledge.getGraph({ organizationId: input.organizationId, knowledgeModelId: parsed.knowledgeModelId });
+    if (parsed.kind === 'business_rule') {
+        const rule = (await db.knowledge.extraction.listRules({ organizationId: input.organizationId, knowledgeModelId: model.id })).find(r => r.id === parsed.ruleId);
+        if (!rule || (rule.payload.sourceConnectionId && !model.dataSources.some(s => s.connectionId === rule.payload.sourceConnectionId))) unavailable();
+        const connectionIds = rule.payload.sourceConnectionId ? [rule.payload.sourceConnectionId] : model.dataSources.map(s => s.connectionId);
+        if (!isConnectionAllowed(connectionIds, input.allowedConnectionIds)) unavailable();
+        const asset = knowledgeSummary(input, model, {
+            ref: input.ref,
+            kind: parsed.kind,
+            title: rule.payload.name,
+            summary: compactText(rule.payload.description),
+            connectionIds,
+            updatedAt: rule.updatedAt,
+            revisionValue: rule.revision,
+            tab: 'rules',
+            parameter: 'rule',
+            id: rule.id,
+            trustLevel: 'verified',
+        });
+        asset.sourceState = rule.sourceState;
+        asset.sourceUrl = rule.evidence[0]?.sourceUrl ?? null;
+        return {
+            asset,
+            content: {
+                businessRule: rule.payload,
+                sourceState: rule.sourceState,
+                evidence: rule.evidence.map(e => ({ quote: e.quote, sourceUrl: e.sourceUrl, sourceHash: e.sourceHash, state: e.state })),
+                untrustedContent: true,
+            },
+            relatedRefs: rule.evidence.flatMap(e => (e.sourceId ? [knowledgeSourceAgentAssetRef(model.id, e.sourceId)] : [])),
+            citation: citation(asset),
+        };
+    }
     if (parsed.kind === 'knowledge_definition') {
         const definition = model.model.definitions.find(item => item.id === parsed.definitionId && item.status === 'verified');
         if (!definition || !isConnectionAllowed([definition.sourceConnectionId], input.allowedConnectionIds)) unavailable();
@@ -379,7 +447,19 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
                 .filter(edge => edge.assetType === 'definition' && edge.assetId === definition.id)
                 .map(edge => knowledgeSourceAgentAssetRef(model.id, edge.sourceId)),
         ];
-        return { asset, content: { definition }, relatedRefs, citation: citation(asset) };
+        const evidence = await db.knowledge.extraction.evidenceFor({ organizationId: input.organizationId, knowledgeModelId: model.id, assetId: definition.id });
+        asset.sourceState = evidence.some(e => e.state !== 'current') ? 'outdated' : 'current';
+        asset.sourceUrl = evidence[0]?.sourceUrl ?? null;
+        return {
+            asset,
+            content: {
+                definition: Object.fromEntries(Object.entries(definition).filter(([, value]) => value !== undefined)),
+                sourceState: asset.sourceState,
+                evidence: evidence.map(e => ({ quote: e.quote, sourceUrl: e.sourceUrl, sourceHash: e.sourceHash, state: e.state })),
+            },
+            relatedRefs,
+            citation: citation(asset),
+        };
     }
     if (parsed.kind === 'verified_query') {
         const verifiedQuery = await db.knowledge.getVerifiedQuery({ organizationId: input.organizationId, knowledgeModelId: model.id, id: parsed.queryId }).catch(unavailable);
@@ -426,11 +506,12 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
         id: source.id,
         trustLevel: 'source',
     });
+    asset.sourceUrl = source.sourceUrl;
     const { contentText: _contentText, ...sourceMetadata } = source;
     return {
         asset,
         content: {
-            source: sourceMetadata,
+            source: { ...sourceMetadata, createdAt: iso(source.createdAt), updatedAt: iso(source.updatedAt) },
             text: contentText,
             offset,
             nextCursor: nextOffset < source.contentText.length ? encodeCursor(nextOffset) : null,
@@ -446,7 +527,14 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
 }
 
 function citation(asset: AgentAssetSummary) {
-    return { ref: asset.ref, title: asset.title, revision: asset.revision, deepLink: asset.deepLink };
+    return {
+        ref: asset.ref,
+        title: asset.title,
+        revision: asset.revision,
+        deepLink: asset.deepLink,
+        sourceUrl: asset.sourceUrl ?? null,
+        sourceState: asset.sourceState ?? 'current',
+    };
 }
 
 function knowledgeSummary(

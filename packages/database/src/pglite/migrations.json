@@ -536,5 +536,59 @@
     "bps": true,
     "folderMillis": 1792022400000,
     "hash": "ea71ddd3b51ac6d57a2f7ed3a9bdba12e5f90e9e78edcaa0995a6596a42c8ed8"
+  },
+  {
+    "sql": [
+      "ALTER TABLE knowledge_connectors ALTER COLUMN installation_id DROP NOT NULL;\n",
+      "\nALTER TABLE knowledge_connectors ALTER COLUMN repository_id DROP NOT NULL;\n",
+      "\nALTER TABLE knowledge_connectors ALTER COLUMN repository_full_name DROP NOT NULL;\n",
+      "\nALTER TABLE knowledge_connectors ALTER COLUMN default_branch DROP NOT NULL;\n",
+      "\nCREATE TABLE knowledge_linear_authorizations (\n    id text PRIMARY KEY NOT NULL,\n    organization_id text NOT NULL,\n    workspace_id text NOT NULL,\n    workspace_name text NOT NULL,\n    access_token_encrypted text NOT NULL,\n    refresh_token_encrypted text NOT NULL,\n    expires_at timestamptz NOT NULL,\n    authorized_at timestamptz DEFAULT now() NOT NULL,\n    status text DEFAULT 'active' NOT NULL,\n    refresh_lease text,\n    refresh_lease_until timestamptz,\n    updated_at timestamptz DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX uidx_knowledge_linear_authorizations_org_workspace ON knowledge_linear_authorizations (organization_id, workspace_id);\n",
+      "\nCREATE TABLE knowledge_linear_oauth_states (\n    state_hash text PRIMARY KEY NOT NULL,\n    organization_id text NOT NULL,\n    user_id text NOT NULL,\n    knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n    return_path text NOT NULL,\n    expected_workspace_id text,\n    expires_at timestamptz NOT NULL\n);\n",
+      "\nCREATE TABLE knowledge_linear_deliveries (delivery_id text PRIMARY KEY NOT NULL, created_at timestamptz DEFAULT now() NOT NULL);\n",
+      "\nALTER TABLE knowledge_connectors ADD COLUMN authorization_id text REFERENCES knowledge_linear_authorizations(id),\n    ADD COLUMN linear_workspace_id text, ADD COLUMN linear_workspace_name text,\n    ADD COLUMN project_ids jsonb DEFAULT '[]'::jsonb NOT NULL,\n    ADD COLUMN config_revision integer DEFAULT 0 NOT NULL,\n    ADD COLUMN next_sync_at timestamptz DEFAULT now() NOT NULL;\n",
+      "\nCREATE UNIQUE INDEX uidx_knowledge_connectors_model_linear_workspace ON knowledge_connectors (knowledge_model_id, provider, linear_workspace_id);\n",
+      "\nALTER TABLE knowledge_connector_items ADD COLUMN source_url text;\n",
+      "\nALTER TABLE knowledge_connector_sync_jobs ADD COLUMN lease_token text, ADD COLUMN available_at timestamptz DEFAULT now() NOT NULL;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1792454400000,
+    "hash": "adefd41aad271a4a59c480da12acc9d091e9ad8e3becb1c98c5e2bb5a6e202b0"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"knowledge_linear_credentials\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"workspace_id\" text NOT NULL,\n    \"workspace_name\" text NOT NULL,\n    \"api_key_encrypted\" text NOT NULL,\n    \"status\" text DEFAULT 'active' NOT NULL,\n    \"version\" integer DEFAULT 1 NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_knowledge_linear_credentials_org_workspace\" ON \"knowledge_linear_credentials\" (\"organization_id\", \"workspace_id\");\n",
+      "\nALTER TABLE \"knowledge_connectors\" ADD COLUMN \"credential_id\" text REFERENCES \"knowledge_linear_credentials\"(\"id\");\n",
+      "\nUPDATE \"knowledge_connector_sync_jobs\" SET \"status\" = 'failed', \"lease_token\" = NULL, \"error\" = 'Update the Linear API Key to resume synchronization.', \"updated_at\" = now()\nWHERE \"connector_id\" IN (SELECT \"id\" FROM \"knowledge_connectors\" WHERE \"provider\" = 'linear') AND \"status\" IN ('queued', 'running');\n",
+      "\nUPDATE \"knowledge_connectors\" SET \"status\" = 'disabled', \"last_error\" = 'Update the Linear API Key to resume synchronization.', \"config_revision\" = \"config_revision\" + 1, \"updated_at\" = now() WHERE \"provider\" = 'linear';\n",
+      "\nALTER TABLE \"knowledge_connectors\" DROP COLUMN \"authorization_id\";\n",
+      "\nDROP TABLE \"knowledge_linear_oauth_states\";\n",
+      "\nDROP TABLE \"knowledge_linear_deliveries\";\n",
+      "\nDROP TABLE \"knowledge_linear_authorizations\";\n"
+    ],
+    "bps": true,
+    "folderMillis": 1792483200000,
+    "hash": "d37af12006ac533da9fb455502778c0c634113bd8f96efd5fd3aa6b60d423d5a"
+  },
+  {
+    "sql": [
+      "ALTER TABLE knowledge_connectors ADD COLUMN auto_extract boolean NOT NULL DEFAULT false;\n",
+      "\nCREATE TABLE knowledge_extraction_jobs (\n id text PRIMARY KEY, organization_id text NOT NULL, knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n connector_id text NOT NULL REFERENCES knowledge_connectors(id) ON DELETE CASCADE, source_id text REFERENCES knowledge_sources(id) ON DELETE SET NULL,\n original_source_id text NOT NULL, source_hash text NOT NULL, extraction_version integer NOT NULL DEFAULT 1,\n status text NOT NULL DEFAULT 'queued', attempts integer NOT NULL DEFAULT 0, completed_chunks integer NOT NULL DEFAULT 0, total_chunks integer NOT NULL DEFAULT 0,\n lease_token text, lease_expires_at timestamptz, available_at timestamptz NOT NULL DEFAULT now(), error text, created_by text,\n created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()\n);\n",
+      "\nCREATE UNIQUE INDEX uidx_extraction_source_version ON knowledge_extraction_jobs(original_source_id, source_hash, extraction_version);\n",
+      "\nCREATE INDEX idx_extraction_queue ON knowledge_extraction_jobs(status, available_at);\n",
+      "\nCREATE INDEX idx_extraction_model ON knowledge_extraction_jobs(organization_id, knowledge_model_id);\n",
+      "\nCREATE TABLE knowledge_candidates (\n id text PRIMARY KEY, organization_id text NOT NULL, knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n job_id text REFERENCES knowledge_extraction_jobs(id) ON DELETE SET NULL, item_key text NOT NULL, payload_hash text NOT NULL, payload jsonb NOT NULL,\n action text NOT NULL DEFAULT 'add', status text NOT NULL DEFAULT 'pending', target_asset_id text, target_revision text,\n reviewed_by text, reviewed_at timestamptz, review_note text, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()\n);\n",
+      "\nCREATE INDEX idx_candidates_model_status ON knowledge_candidates(organization_id, knowledge_model_id, status);\n",
+      "\nCREATE TABLE knowledge_business_rules (\n id text PRIMARY KEY, organization_id text NOT NULL, knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n payload jsonb NOT NULL, status text NOT NULL DEFAULT 'active', revision integer NOT NULL DEFAULT 1, updated_by text,\n created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()\n);\n",
+      "\nCREATE INDEX idx_business_rules_model ON knowledge_business_rules(organization_id, knowledge_model_id);\n",
+      "\nCREATE TABLE knowledge_evidence (\n id text PRIMARY KEY, organization_id text NOT NULL, knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n candidate_id text NOT NULL REFERENCES knowledge_candidates(id) ON DELETE CASCADE, asset_type text, asset_id text,\n source_id text REFERENCES knowledge_sources(id) ON DELETE SET NULL, original_source_id text NOT NULL, source_hash text NOT NULL,\n source_title text NOT NULL, source_url text, quote text NOT NULL, state text NOT NULL DEFAULT 'current', created_at timestamptz NOT NULL DEFAULT now()\n);\n",
+      "\nCREATE INDEX idx_evidence_asset ON knowledge_evidence(knowledge_model_id, asset_type, asset_id);\n",
+      "\nCREATE INDEX idx_evidence_source ON knowledge_evidence(original_source_id);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1792483200001,
+    "hash": "c1befa899837b24a2056b3d316236f26b1bf9d43dc1193ebf5b5d4fc1ab39604"
   }
 ]

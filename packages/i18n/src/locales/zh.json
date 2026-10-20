@@ -507,8 +507,22 @@
             "Expires": "可下载至 {date}",
             "Cancel": "取消",
             "Download": "下载",
-            "Status": { "queued": "排队中", "running": "导出中", "completed": "已完成", "failed": "失败", "canceled": "已取消" },
-            "Phase": { "queued": "等待中", "reading": "读取中", "converting": "转换中", "uploading": "上传中", "completed": "已完成", "failed": "失败", "canceled": "已取消" }
+            "Status": {
+                "queued": "排队中",
+                "running": "导出中",
+                "completed": "已完成",
+                "failed": "失败",
+                "canceled": "已取消"
+            },
+            "Phase": {
+                "queued": "等待中",
+                "reading": "读取中",
+                "converting": "转换中",
+                "uploading": "上传中",
+                "completed": "已完成",
+                "failed": "失败",
+                "canceled": "已取消"
+            }
         },
         "Failed to load data preview": "加载数据预览失败",
         "Editor": {
@@ -3570,7 +3584,14 @@
             "Title": "数据导入",
             "Description": "查看并继续当前数据源的导入任务。",
             "NewImport": "新建导入",
-            "Columns": { "Source": "源文件", "Target": "目标", "Status": "状态", "Progress": "进度", "Created": "创建时间", "Updated": "更新时间" },
+            "Columns": {
+                "Source": "源文件",
+                "Target": "目标",
+                "Status": "状态",
+                "Progress": "进度",
+                "Created": "创建时间",
+                "Updated": "更新时间"
+            },
             "SourcePending": "尚未上传源文件",
             "TargetPending": "尚未选择",
             "InsertedRows": "已插入 {rows} 行",
@@ -3588,8 +3609,19 @@
             "Dismiss": "关闭"
         },
         "Step": "第 {number} 步",
-        "Steps": { "Select": "选择文件", "Preview": "预览", "Target": "目标", "Mapping": "映射", "Clean": "清洗数据", "Options": "选项", "Execute": "执行" },
-        "Common": { "Next": "继续", "Back": "返回" },
+        "Steps": {
+            "Select": "选择文件",
+            "Preview": "预览",
+            "Target": "目标",
+            "Mapping": "映射",
+            "Clean": "清洗数据",
+            "Options": "选项",
+            "Execute": "执行"
+        },
+        "Common": {
+            "Next": "继续",
+            "Back": "返回"
+        },
         "Select": {
             "Title": "选择数据文件",
             "Description": "上传 CSV、TSV、Parquet、NDJSON 或 Arrow IPC 文件，分析后再导入当前数据源。",
@@ -3623,15 +3655,32 @@
             "Reanalyze": "重新分析文件",
             "Reanalyzed": "预览已更新"
         },
-        "Delimiters": { "Comma": "逗号", "Tab": "Tab", "Semicolon": "分号", "Pipe": "竖线" },
-        "Formats": { "csv": "CSV / TSV", "parquet": "Parquet", "ndjson": "NDJSON", "arrow": "Arrow IPC / Feather" },
+        "Delimiters": {
+            "Comma": "逗号",
+            "Tab": "Tab",
+            "Semicolon": "分号",
+            "Pipe": "竖线"
+        },
+        "Formats": {
+            "csv": "CSV / TSV",
+            "parquet": "Parquet",
+            "ndjson": "NDJSON",
+            "arrow": "Arrow IPC / Feather"
+        },
         "SourceWarnings": {
             "DECIMAL_STRINGIFIED": {
                 "Title": "Decimal 已按文本保留：{column}",
                 "Description": "{column} 使用 {sourceType}。当前导入类型体系尚无 Decimal，因此会以字符串精确保留数值。"
             }
         },
-        "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Types": {
+            "string": "String",
+            "boolean": "Boolean",
+            "int64": "Int64",
+            "float64": "Float64",
+            "date": "Date",
+            "datetime": "Datetime"
+        },
         "Quality": {
             "IssueCount": "{count} 个问题",
             "Completeness": "完整度 {rate}%",
@@ -3639,13 +3688,25 @@
             "EmptyRate": "{rate}% 为空字符串",
             "ApplyFix": "应用修复",
             "FixAdded": "已添加清洗步骤",
-            "Issues": { "all_missing": "整列缺失", "empty_string": "空字符串", "surrounding_whitespace": "首尾空格", "leading_zero": "前导零", "mixed_type": "混合类型" }
+            "Issues": {
+                "all_missing": "整列缺失",
+                "empty_string": "空字符串",
+                "surrounding_whitespace": "首尾空格",
+                "leading_zero": "前导零",
+                "mixed_type": "混合类型"
+            }
         },
         "Target": {
             "Title": "选择目标",
             "Description": "创建新表，或将源数据映射到现有表。",
-            "create": { "Title": "创建表", "Description": "根据映射后的列名和安全类型创建新表。" },
-            "existing": { "Title": "现有表", "Description": "检查现有表，并将源列映射到目标列。" },
+            "create": {
+                "Title": "创建表",
+                "Description": "根据映射后的列名和安全类型创建新表。"
+            },
+            "existing": {
+                "Title": "现有表",
+                "Description": "检查现有表，并将源列映射到目标列。"
+            },
             "Database": "数据库",
             "DatabasePlaceholder": "使用连接默认值",
             "DatabaseSelect": "选择数据库",
@@ -3693,7 +3754,13 @@
             "Result": "结果",
             "kept": "保留",
             "dropped": "移除",
-            "Operations": { "trim": "去除首尾空格", "lowercase": "转为小写", "replace": "替换", "emptyToNull": "空字符串转 NULL", "dropInvalid": "移除无效行" }
+            "Operations": {
+                "trim": "去除首尾空格",
+                "lowercase": "转为小写",
+                "replace": "替换",
+                "emptyToNull": "空字符串转 NULL",
+                "dropInvalid": "移除无效行"
+            }
         },
         "Options": {
             "Title": "设置写入选项",
@@ -3709,8 +3776,14 @@
                 "target_non_transactional": "目标表引擎不支持事务写入。",
                 "replace_not_atomic": "此数据源无法安全地清空并重写整张表。"
             },
-            "append": { "Title": "追加", "Description": "插入新行，不改变现有数据。" },
-            "replace": { "Title": "替换", "Description": "在同一事务中清空现有行并导入源数据。" },
+            "append": {
+                "Title": "追加",
+                "Description": "插入新行，不改变现有数据。"
+            },
+            "replace": {
+                "Title": "替换",
+                "Description": "在同一事务中清空现有行并导入源数据。"
+            },
             "CreateMode": "将创建新表",
             "CreateModeDescription": "创建模式会写入映射后的 Schema，并导入全部映射行。",
             "Batch": "批次大小",
@@ -3879,7 +3952,10 @@
         "NoReferences": "暂无关联资产",
         "ReferenceSources": "参考 Sources",
         "ReferenceSourcesEmpty": "请先添加 Knowledge Source，再使用 AI 生成定义。",
-        "RelationTypes": { "provided": "提供", "generated": "生成" },
+        "RelationTypes": {
+            "provided": "提供",
+            "generated": "生成"
+        },
         "OpenNamedDefinitionDetails": "展开 {name} 的详情",
         "CloseNamedDefinitionDetails": "收起 {name} 的详情",
         "CloseDefinitionDetails": "关闭定义详情",
@@ -3899,7 +3975,11 @@
             "OpenNamed": "打开 {name}"
         },
         "VerifiedQueryDetails": {
-            "Columns": { "Query": "查询", "Question": "问题", "Updated": "最近更新" },
+            "Columns": {
+                "Query": "查询",
+                "Question": "问题",
+                "Updated": "最近更新"
+            },
             "UpdatedByTime": "由 {user} 更新 · {time}",
             "UnknownUser": "未知用户",
             "ReferencedDefinitions": "引用的 Definitions",
@@ -3999,6 +4079,36 @@
             "UploadFile": "上传文件",
             "ConnectKnowledgeBase": "连接知识库",
             "ConnectKnowledgeBaseComingSoon": "知识库连接即将支持。",
+            "ConnectorChooseProvider": "选择知识连接器。",
+            "ConnectorSyncQueued": "知识同步已加入队列。",
+            "ConnectorDisconnected": "知识连接器已断开。",
+            "ConnectorDisconnectTitle": "断开知识连接器？",
+            "ConnectorDisconnectDescription": "将移除与 {name} 的连接及其管理的所有知识源。",
+            "OpenOriginal": "打开原文",
+            "LinearNeedsApiKey": "请更新 Linear API Key 以恢复同步。",
+            "LinearApiKey": "Linear API Key",
+            "LinearVerifyKey": "验证并保存 API Key",
+            "LinearUpdateApiKey": "更新 API Key",
+            "LinearKeySaved": "API Key 已验证并保存。",
+            "LinearSharedKeyNotice": "同一 Dory 组织中，连接此 Linear workspace 的知识模型共用此 Key。替换后，所有关联连接器会立即重新同步。",
+            "LinearHourlySync": "每小时同步",
+            "LinearTitle": "连接 Linear",
+            "LinearDescription": "输入 Linear API Key，选择项目后每小时自动同步。",
+            "LinearFailed": "无法连接 Linear。",
+            "LinearNotConfigured": "保存 API Key 前请配置持久化的 DS_SECRET_KEY。Desktop 会自动管理此密钥。",
+            "LinearAdminOnly": "只有工作区所有者和管理员可以管理 Linear 连接器。",
+            "LinearWorkspace": "Linear 工作区",
+            "LinearAnotherWorkspace": "连接其他 workspace",
+            "LinearSearchProjects": "搜索项目",
+            "LinearSearch": "搜索",
+            "LinearProjectCount": "已选择 {count} 个项目",
+            "LinearNoProjects": "没有找到可访问的项目。",
+            "LinearLoadMore": "加载更多项目",
+            "LinearSharingNotice": "我了解所选项目内容将共享给此 Dory 知识模型的阅读者，包括没有 Linear 访问权限的阅读者。新项目不会自动加入。",
+            "LinearSaving": "正在保存…",
+            "LinearSaveProjects": "保存并同步",
+            "LinearConnectAndSync": "连接并同步",
+            "LinearEditProjects": "修改项目",
             "GitHubTitle": "连接 GitHub",
             "GitHubDescription": "从仓库默认分支的一个目录递归同步 Markdown、YAML 和 TXT 文档。",
             "GitHubNotConfigured": "当前 Dory 部署尚未配置 GitHub 连接。",
@@ -4055,7 +4165,10 @@
             "AssetCounts": "{definitions} 个定义 · {queries} 个查询",
             "NoLinkedAssets": "暂无关联资产",
             "VerifiedQuery": "Verified Query",
-            "RelationTypes": { "provided": "提供", "generated": "生成" },
+            "RelationTypes": {
+                "provided": "提供",
+                "generated": "生成"
+            },
             "Edit": "编辑",
             "Delete": "删除",
             "RemoveFile": "移除 {name}",
@@ -4081,7 +4194,82 @@
             "DeleteTitle": "删除知识来源？",
             "DeleteDescription": "将删除 {name}。此前从该文件导入的定义不会受到影响。",
             "Deleting": "正在删除…",
-            "UnavailableDataSource": "数据源不可用"
+            "UnavailableDataSource": "数据源不可用",
+            "RuleCount": "{count} 条业务口径"
+        },
+        "Extraction": {
+            "AutomaticExtraction": "自动提取",
+            "Enabled": "已开启",
+            "Disabled": "已关闭",
+            "Disable": "关闭",
+            "EnableAndBackfill": "开启并提取已有资料",
+            "Retry": "重试提取",
+            "BusinessRules": "业务口径",
+            "PendingReview": "待审核",
+            "AdminOnly": "仅组织所有者和管理员可以审核提取草稿。",
+            "Review": "审核",
+            "ReviewNotice": "AI 草稿经审核后才会发布。请核对原文证据、计算口径及数据源映射。",
+            "NoCandidates": "暂无待审核草稿。可在连接器中开启自动提取，处理已有资料。",
+            "NoRules": "暂无已审核的业务口径。批准草稿后将在这里显示。",
+            "ApproveSelected": "批准所选（{count}）",
+            "SelectNamed": "选择 {name}",
+            "Metric": "指标定义",
+            "BusinessRule": "业务口径",
+            "Evidence": "原文证据",
+            "OpenOriginal": "打开原文",
+            "SourceChanged": "来源已变化 · 需要复审",
+            "Target": "发布目标",
+            "ChooseTarget": "请明确选择发布目标",
+            "CreateNew": "创建新条目",
+            "PublishedVersion": "当前已发布版本",
+            "SuggestedVersion": "建议版本",
+            "SourceReviewNotice": "原文已变化或移除。可以保留已审核版本并显示来源警告，或将其停用。如需替换内容，请审核当前原文生成的新草稿。",
+            "Cancel": "取消",
+            "Reject": "驳回",
+            "Archive": "停用",
+            "KeepCurrent": "保留当前版本",
+            "Approve": "批准并发布",
+            "Edit": "编辑",
+            "Save": "保存",
+            "Loading": "加载中…",
+            "NeedsMapping": "请选择数据源",
+            "ModelWide": "整个知识模型",
+            "PendingCount": "{count} 条草稿",
+            "Field": {
+                "name": "名称",
+                "description": "定义／业务含义",
+                "dataSource": "数据源",
+                "aliases": "别名（逗号分隔）",
+                "unit": "单位／币种",
+                "scope": "统计范围／排除规则",
+                "source": "来源表（可选）",
+                "expression": "字段表达式（可选）",
+                "timeDimension": "时间字段（可选）",
+                "filters": "过滤条件（每行一条）",
+                "kind": "知识类型"
+            },
+            "Job": {
+                "queued": "等待提取",
+                "running": "正在提取",
+                "completed": "提取完成",
+                "failed": "提取失败",
+                "blocked": "需要配置 AI／恢复额度",
+                "cancelled": "提取已停止"
+            },
+            "Error": {
+                "blocked": "请配置后台可用的 AI 模型或恢复 AI 额度后重试。",
+                "failed": "提取失败，已有原文和已发布知识均已保留。",
+                "quota": "AI 额度不足，请恢复组织 AI 额度后重试。",
+                "config": "缺少后台可用的 AI 模型，请配置后重试。"
+            },
+            "Action": {
+                "add": "新增条目",
+                "update": "修改建议",
+                "conflict": "口径冲突",
+                "source_changed": "来源已变化",
+                "remove": "来源已移除"
+            },
+            "Backfill": "补跑现有资料"
         }
     },
     "AppSidebar": {
@@ -4297,7 +4485,12 @@
         "KnowledgeUsed": {
             "Title": "使用的 Agent 资产",
             "Description": "本次 Run 中 Agent 明确打开过的 Artifact 与 Knowledge 资产。",
-            "Groups": { "artifact": "Artifacts", "knowledge_source": "Sources", "knowledge_definition": "Definitions", "verified_query": "Verified Queries" },
+            "Groups": {
+                "artifact": "Artifacts",
+                "knowledge_source": "Sources",
+                "knowledge_definition": "Definitions",
+                "verified_query": "Verified Queries"
+            },
             "ReadCount": "读取 {count} 次",
             "Unavailable": "已不可用",
             "None": "无",

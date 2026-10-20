@@ -22,6 +22,7 @@ import * as exportRunsSchema from './export-runs';
 import * as artifactsSchema from './artifacts';
 import * as findingsSchema from './findings';
 import * as knowledgeSchema from './knowledge';
+import * as knowledgeExtractionSchema from './knowledge-extraction';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -47,6 +48,7 @@ export * from './export-runs';
 export * from './artifacts';
 export * from './findings';
 export * from './knowledge';
+export * from './knowledge-extraction';
 
 export const schema = {
     ...tabsSchema,
@@ -73,6 +75,7 @@ export const schema = {
     ...artifactsSchema,
     ...findingsSchema,
     ...knowledgeSchema,
+    ...knowledgeExtractionSchema,
 };
 
 export type DBSchema = typeof schema;

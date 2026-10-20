@@ -73,7 +73,7 @@ test('fresh PGlite applies the complete history including Ossie 0.2 defaults', a
     const db = drizzle({ client });
     await migrate(db, { migrationsFolder: new URL('../../src/pglite/migrations', import.meta.url).pathname });
     const applied = await client.query<{ count: number }>('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
-    assert.equal(applied.rows[0]?.count, 31);
+    assert.equal(applied.rows[0]?.count, 33);
     const finalTables = await client.query<{ table_name: string }>(
         `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('knowledge_models', 'work_agent_assets', 'semantic_models', 'work_knowledge_assets') ORDER BY table_name`,
     );

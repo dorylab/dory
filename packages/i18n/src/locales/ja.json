@@ -503,7 +503,13 @@
             "Expires": "{date} までダウンロード可能",
             "Cancel": "キャンセル",
             "Download": "ダウンロード",
-            "Status": { "queued": "待機中", "running": "実行中", "completed": "完了", "failed": "失敗", "canceled": "キャンセル済み" },
+            "Status": {
+                "queued": "待機中",
+                "running": "実行中",
+                "completed": "完了",
+                "failed": "失敗",
+                "canceled": "キャンセル済み"
+            },
             "Phase": {
                 "queued": "待機中",
                 "reading": "読み込み中",
@@ -3572,7 +3578,14 @@
             "Title": "データインポート",
             "Description": "このデータソースのインポートを表示し、再開できます。",
             "NewImport": "新規インポート",
-            "Columns": { "Source": "ソースファイル", "Target": "ターゲット", "Status": "ステータス", "Progress": "進捗", "Created": "作成日時", "Updated": "更新日時" },
+            "Columns": {
+                "Source": "ソースファイル",
+                "Target": "ターゲット",
+                "Status": "ステータス",
+                "Progress": "進捗",
+                "Created": "作成日時",
+                "Updated": "更新日時"
+            },
             "SourcePending": "ソース未アップロード",
             "TargetPending": "未選択",
             "InsertedRows": "{rows} 行を挿入",
@@ -3599,7 +3612,10 @@
             "Options": "オプション",
             "Execute": "実行"
         },
-        "Common": { "Next": "続行", "Back": "戻る" },
+        "Common": {
+            "Next": "続行",
+            "Back": "戻る"
+        },
         "Select": {
             "Title": "データファイルを選択",
             "Description": "CSV、TSV、Parquet、NDJSON、Arrow IPC をアップロードし、インポート前に分析します。",
@@ -3633,15 +3649,32 @@
             "Reanalyze": "再分析",
             "Reanalyzed": "プレビューを更新しました"
         },
-        "Delimiters": { "Comma": "カンマ", "Tab": "タブ", "Semicolon": "セミコロン", "Pipe": "パイプ" },
-        "Formats": { "csv": "CSV / TSV", "parquet": "Parquet", "ndjson": "NDJSON", "arrow": "Arrow IPC / Feather" },
+        "Delimiters": {
+            "Comma": "カンマ",
+            "Tab": "タブ",
+            "Semicolon": "セミコロン",
+            "Pipe": "パイプ"
+        },
+        "Formats": {
+            "csv": "CSV / TSV",
+            "parquet": "Parquet",
+            "ndjson": "NDJSON",
+            "arrow": "Arrow IPC / Feather"
+        },
         "SourceWarnings": {
             "DECIMAL_STRINGIFIED": {
                 "Title": "Decimal をテキストとして保持: {column}",
                 "Description": "{column} は {sourceType} を使用しています。現在のインポート型に Decimal がないため、正確な値を文字列として保持します。"
             }
         },
-        "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Types": {
+            "string": "String",
+            "boolean": "Boolean",
+            "int64": "Int64",
+            "float64": "Float64",
+            "date": "Date",
+            "datetime": "Datetime"
+        },
         "Quality": {
             "IssueCount": "問題 {count} 件",
             "Completeness": "完全性 {rate}%",
@@ -3649,13 +3682,25 @@
             "EmptyRate": "空文字 {rate}%",
             "ApplyFix": "修正を適用",
             "FixAdded": "整形ステップを追加しました",
-            "Issues": { "all_missing": "全値が欠損", "empty_string": "空文字", "surrounding_whitespace": "前後の空白", "leading_zero": "先頭ゼロ", "mixed_type": "型の混在" }
+            "Issues": {
+                "all_missing": "全値が欠損",
+                "empty_string": "空文字",
+                "surrounding_whitespace": "前後の空白",
+                "leading_zero": "先頭ゼロ",
+                "mixed_type": "型の混在"
+            }
         },
         "Target": {
             "Title": "ターゲットを選択",
             "Description": "新しいテーブルを作成するか、既存テーブルへマッピングします。",
-            "create": { "Title": "テーブルを作成", "Description": "マッピングした名前と安全な型でテーブルを作成します。" },
-            "existing": { "Title": "既存テーブル", "Description": "既存テーブルを確認してソース列をマッピングします。" },
+            "create": {
+                "Title": "テーブルを作成",
+                "Description": "マッピングした名前と安全な型でテーブルを作成します。"
+            },
+            "existing": {
+                "Title": "既存テーブル",
+                "Description": "既存テーブルを確認してソース列をマッピングします。"
+            },
             "Database": "データベース",
             "DatabasePlaceholder": "接続の既定値",
             "DatabaseSelect": "データベースを選択",
@@ -3703,7 +3748,13 @@
             "Result": "結果",
             "kept": "保持",
             "dropped": "除外",
-            "Operations": { "trim": "前後の空白を削除", "lowercase": "小文字化", "replace": "置換", "emptyToNull": "空文字を NULL", "dropInvalid": "無効な行を除外" }
+            "Operations": {
+                "trim": "前後の空白を削除",
+                "lowercase": "小文字化",
+                "replace": "置換",
+                "emptyToNull": "空文字を NULL",
+                "dropInvalid": "無効な行を除外"
+            }
         },
         "Options": {
             "Title": "書き込み設定",
@@ -3719,8 +3770,14 @@
                 "target_non_transactional": "対象テーブルのエンジンはトランザクション書き込みをサポートしていません。",
                 "replace_not_atomic": "このデータソースではテーブル全体を安全に消去して再書き込みできません。"
             },
-            "append": { "Title": "追加", "Description": "既存データを変更せずに行を追加します。" },
-            "replace": { "Title": "置換", "Description": "同一トランザクションで既存行を削除してインポートします。" },
+            "append": {
+                "Title": "追加",
+                "Description": "既存データを変更せずに行を追加します。"
+            },
+            "replace": {
+                "Title": "置換",
+                "Description": "同一トランザクションで既存行を削除してインポートします。"
+            },
             "CreateMode": "テーブルを作成します",
             "CreateModeDescription": "マッピングしたスキーマを作成し、マッピングしたすべての行をインポートします。",
             "Batch": "バッチサイズ",
@@ -3889,7 +3946,10 @@
         "NoReferences": "リンクされたアセットはありません",
         "ReferenceSources": "参照ソース",
         "ReferenceSourcesEmpty": "AI で定義を生成する前にナレッジソースを追加してください。",
-        "RelationTypes": { "provided": "提供", "generated": "生成" },
+        "RelationTypes": {
+            "provided": "提供",
+            "generated": "生成"
+        },
         "OpenNamedDefinitionDetails": "{name}の詳細を表示",
         "CloseNamedDefinitionDetails": "{name}の詳細を非表示",
         "CloseDefinitionDetails": "定義の詳細を閉じる",
@@ -3909,7 +3969,11 @@
             "OpenNamed": "{name}を開く"
         },
         "VerifiedQueryDetails": {
-            "Columns": { "Query": "クエリ", "Question": "質問", "Updated": "最終更新" },
+            "Columns": {
+                "Query": "クエリ",
+                "Question": "質問",
+                "Updated": "最終更新"
+            },
             "UpdatedByTime": "{user} が更新 · {time}",
             "UnknownUser": "不明なユーザー",
             "ReferencedDefinitions": "参照する Definitions",
@@ -4009,6 +4073,36 @@
             "UploadFile": "ファイルをアップロード",
             "ConnectKnowledgeBase": "ナレッジベースに接続",
             "ConnectKnowledgeBaseComingSoon": "ナレッジベース接続は近日対応予定です。",
+            "ConnectorChooseProvider": "ナレッジコネクターを選択してください。",
+            "ConnectorSyncQueued": "ナレッジの同期をキューに追加しました。",
+            "ConnectorDisconnected": "ナレッジコネクターを切断しました。",
+            "ConnectorDisconnectTitle": "ナレッジコネクターを切断しますか？",
+            "ConnectorDisconnectDescription": "{name} との接続と、この接続が管理するすべてのナレッジソースを削除します。",
+            "OpenOriginal": "原文を開く",
+            "LinearNeedsApiKey": "同期を再開するには Linear API Key を更新してください。",
+            "LinearApiKey": "Linear API Key",
+            "LinearVerifyKey": "API Key を検証して保存",
+            "LinearUpdateApiKey": "API Key を更新",
+            "LinearKeySaved": "API Key を検証して保存しました。",
+            "LinearSharedKeyNotice": "この Key は同じ Dory 組織内で、この Linear ワークスペースに接続するすべてのナレッジモデルで共有されます。更新すると関連する接続が直ちに再同期されます。",
+            "LinearHourlySync": "毎時同期",
+            "LinearTitle": "Linear に接続",
+            "LinearDescription": "Linear API Key を入力し、プロジェクトを選択して毎時同期します。",
+            "LinearFailed": "Linear に接続できませんでした。",
+            "LinearNotConfigured": "API Key の保存には永続的な DS_SECRET_KEY が必要です。Desktop では自動で管理します。",
+            "LinearAdminOnly": "Linear コネクターを管理できるのはワークスペースのオーナーと管理者のみです。",
+            "LinearWorkspace": "Linear ワークスペース",
+            "LinearAnotherWorkspace": "別のワークスペースに接続",
+            "LinearSearchProjects": "プロジェクトを検索",
+            "LinearSearch": "検索",
+            "LinearProjectCount": "{count} 件のプロジェクトを選択中",
+            "LinearNoProjects": "アクセス可能なプロジェクトが見つかりません。",
+            "LinearLoadMore": "さらに読み込む",
+            "LinearSharingNotice": "選択したプロジェクトのすべての内容が、Linear でのアクセス権限の有無にかかわらず、この Dory ナレッジモデルの閲覧者に共有されることを理解しています。新しいプロジェクトは自動追加されません。",
+            "LinearSaving": "保存中…",
+            "LinearSaveProjects": "保存して同期",
+            "LinearConnectAndSync": "接続して同期",
+            "LinearEditProjects": "プロジェクトを編集",
             "GitHubTitle": "GitHub に接続",
             "GitHubDescription": "デフォルトブランチの1つのフォルダーから Markdown、YAML、TXT 文書を再帰的に同期します。",
             "GitHubNotConfigured": "この Dory 環境では GitHub 接続が設定されていません。",
@@ -4065,7 +4159,10 @@
             "AssetCounts": "定義 {definitions} 件 · クエリ {queries} 件",
             "NoLinkedAssets": "リンクされたアセットはありません",
             "VerifiedQuery": "検証済みクエリ",
-            "RelationTypes": { "provided": "提供", "generated": "生成" },
+            "RelationTypes": {
+                "provided": "提供",
+                "generated": "生成"
+            },
             "Edit": "編集",
             "Delete": "削除",
             "RemoveFile": "{name}を削除",
@@ -4091,7 +4188,82 @@
             "DeleteTitle": "ナレッジソースを削除しますか？",
             "DeleteDescription": "{name} を削除します。このファイルから以前にインポートした定義は変更されません。",
             "Deleting": "削除中…",
-            "UnavailableDataSource": "利用できないデータソース"
+            "UnavailableDataSource": "利用できないデータソース",
+            "RuleCount": "業務ルール {count} 件"
+        },
+        "Extraction": {
+            "AutomaticExtraction": "自動抽出",
+            "Enabled": "有効",
+            "Disabled": "無効",
+            "Disable": "無効にする",
+            "EnableAndBackfill": "有効化して既存資料を抽出",
+            "Retry": "抽出を再試行",
+            "BusinessRules": "業務ルール",
+            "PendingReview": "レビュー待ち",
+            "AdminOnly": "組織の所有者と管理者のみが草稿をレビューできます。",
+            "Review": "レビュー",
+            "ReviewNotice": "AI の草稿は公開前にレビューが必要です。原文の証拠、計算方法、データソースの対応を確認してください。",
+            "NoCandidates": "レビュー待ちの草稿はありません。コネクターの自動抽出を有効にしてください。",
+            "NoRules": "承認済みの業務ルールはまだありません。",
+            "ApproveSelected": "選択項目を承認（{count}）",
+            "SelectNamed": "{name} を選択",
+            "Metric": "指標定義",
+            "BusinessRule": "業務ルール",
+            "Evidence": "原文の証拠",
+            "OpenOriginal": "原文を開く",
+            "SourceChanged": "原文が変更されました・再レビューが必要",
+            "Target": "公開先",
+            "ChooseTarget": "公開先を選択してください",
+            "CreateNew": "新しい項目を作成",
+            "PublishedVersion": "現在の公開版",
+            "SuggestedVersion": "提案版",
+            "SourceReviewNotice": "原文が変更または削除されました。警告付きで現在の版を保持するか、無効にできます。内容を更新するには最新の草稿をレビューしてください。",
+            "Cancel": "キャンセル",
+            "Reject": "却下",
+            "Archive": "無効にする",
+            "KeepCurrent": "現在の版を保持",
+            "Approve": "承認して公開",
+            "Edit": "編集",
+            "Save": "保存",
+            "Loading": "読み込み中…",
+            "NeedsMapping": "データソースを選択",
+            "ModelWide": "知識モデル全体",
+            "PendingCount": "草稿 {count} 件",
+            "Field": {
+                "name": "名前",
+                "description": "定義／業務上の意味",
+                "dataSource": "データソース",
+                "aliases": "別名（カンマ区切り）",
+                "unit": "単位／通貨",
+                "scope": "集計範囲／除外規則",
+                "source": "ソーステーブル（任意）",
+                "expression": "フィールド式（任意）",
+                "timeDimension": "時間フィールド（任意）",
+                "filters": "フィルター（1 行に 1 件）",
+                "kind": "知識の種類"
+            },
+            "Job": {
+                "queued": "抽出待ち",
+                "running": "抽出中",
+                "completed": "抽出完了",
+                "failed": "抽出失敗",
+                "blocked": "AI 設定／利用枠が必要",
+                "cancelled": "抽出停止"
+            },
+            "Error": {
+                "blocked": "バックグラウンド AI モデルまたは利用枠を設定して再試行してください。",
+                "failed": "抽出に失敗しました。原文と公開済み知識は保持されています。",
+                "quota": "組織の AI 利用枠を回復してから再試行してください。",
+                "config": "バックグラウンドで使える AI モデルを設定して再試行してください。"
+            },
+            "Action": {
+                "add": "新規項目",
+                "update": "更新",
+                "conflict": "定義の競合",
+                "source_changed": "原文変更",
+                "remove": "原文削除"
+            },
+            "Backfill": "既存資料を抽出"
         }
     },
     "AppSidebar": {
@@ -4307,7 +4479,12 @@
         "KnowledgeUsed": {
             "Title": "使用した Agent アセット",
             "Description": "この Run で Agent が明示的に開いた Artifact とナレッジアセットです。",
-            "Groups": { "artifact": "Artifacts", "knowledge_source": "ソース", "knowledge_definition": "定義", "verified_query": "検証済みクエリ" },
+            "Groups": {
+                "artifact": "Artifacts",
+                "knowledge_source": "ソース",
+                "knowledge_definition": "定義",
+                "verified_query": "検証済みクエリ"
+            },
             "ReadCount": "{count} 回読み取り",
             "Unavailable": "利用不可",
             "None": "なし",

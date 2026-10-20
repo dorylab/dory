@@ -94,6 +94,7 @@ function dbMock() {
             }),
         },
         knowledge: {
+            extraction: { evidenceFor: async () => [], listRules: async () => [] },
             listModels: async () => [model],
             getModel: async () => model,
             listVerifiedQueries: async () => [
@@ -131,6 +132,7 @@ function dbMock() {
                     connectorId: null,
                     connectorProvider: null,
                     remotePath: null,
+                    sourceUrl: 'https://linear.app/dory/document/revenue',
                 },
             ],
             searchKnowledgeSources: async () => [{ id: 'source-1', fileName: 'metrics.md', format: 'markdown', connectionId: 'conn-1', excerpt: 'Recurring revenue' }],
@@ -193,6 +195,12 @@ test('Agent asset reads chunk untrusted sources and cap Artifact previews', asyn
     assert.equal((source.content as any).text, 'abcdefghij');
     assert.equal((source.content as any).untrustedContent, true);
     assert.ok((source.content as any).nextCursor);
+    assert.equal(source.asset.sourceUrl, 'https://linear.app/dory/document/revenue');
+    assert.equal(source.citation.sourceUrl, source.asset.sourceUrl);
+    const metadata = (source.content as { source: { createdAt: unknown; updatedAt: unknown } }).source;
+    assert.equal(metadata.createdAt, now.toISOString());
+    assert.equal(metadata.updatedAt, now.toISOString());
+    assert.deepEqual(JSON.parse(JSON.stringify(source)), source, 'Agent tool results must be JSON values accepted by the model SDK');
 
     const artifact = await readAgentAsset(dbMock(), { organizationId: 'org-1', ref: artifactAgentAssetRef('art-1'), previewRows: 500 });
     assert.equal((artifact.content as any).preview.rows.length, 200);
@@ -226,4 +234,38 @@ test('natural Chinese questions find verified definitions without whitespace', a
         kinds: ['knowledge_definition'],
     });
     assert.equal(found.assets[0]?.title, 'late_delivery_rate');
+});
+
+test('approved business rules expose evidence and staleness while respecting model and data-source scope', async () => {
+    const db = dbMock();
+    const evidence = {
+        id: 'ev-1',
+        sourceId: null,
+        originalSourceId: 'deleted-source',
+        sourceHash: 'v1',
+        sourceTitle: 'Policy',
+        sourceUrl: 'https://linear.app/test/document/policy',
+        quote: 'Reports use UTC.',
+        state: 'missing',
+    };
+    db.knowledge.extraction.listRules = async () => [
+        {
+            id: 'rule-1',
+            revision: 1,
+            status: 'active',
+            sourceState: 'outdated',
+            payload: { kind: 'business_rule', name: 'Reporting timezone', description: 'Reports use UTC.', aliases: [], sourceConnectionId: null },
+            evidence: [evidence],
+        },
+    ];
+    const found = await searchAgentAssets(db, { organizationId: 'org-1', knowledgeModelId: 'kn-1', query: 'timezone', kinds: ['business_rule'], allowedConnectionIds: ['conn-1'] });
+    assert.equal(found.assets.length, 1);
+    assert.equal(found.assets[0].sourceState, 'outdated');
+    const read = await readAgentAsset(db, { organizationId: 'org-1', ref: found.assets[0].ref, allowedConnectionIds: ['conn-1'] });
+    assert.equal(read.citation.sourceState, 'outdated');
+    assert.equal(read.citation.sourceUrl, evidence.sourceUrl);
+    assert.deepEqual(JSON.parse(JSON.stringify(read)), read);
+    const denied = await searchAgentAssets(db, { organizationId: 'org-1', query: 'timezone', kinds: ['business_rule'], allowedConnectionIds: ['conn-other'] });
+    assert.equal(denied.assets.length, 0);
+    await assert.rejects(readAgentAsset(db, { organizationId: 'org-1', ref: found.assets[0].ref, allowedConnectionIds: ['conn-other'] }));
 });

@@ -55,6 +55,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { KnowledgeSourcesPanel } from './knowledge-sources-panel';
+import { BusinessRulesPanel, KnowledgeReviewPanel, KnowledgeEvidenceWarning, useExtractionStatus } from './knowledge-extraction-panel';
 
 type Definition = {
     id: string;
@@ -122,7 +123,7 @@ type KnowledgeGraph = {
     queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
     sourceAssetEdges: Array<{
         sourceId: string;
-        assetType: 'definition' | 'verified_query';
+        assetType: 'definition' | 'verified_query' | 'business_rule';
         assetId: string;
         relationType: 'provided' | 'generated';
     }>;
@@ -1229,6 +1230,7 @@ function DefinitionPanel({
                                                     aria-hidden="true"
                                                 />
                                                 <span>{definition.name}</span>
+                                                <KnowledgeEvidenceWarning organization={organization} knowledgeModelId={model.id} assetId={definition.id} />
                                             </button>
                                         </td>
                                         <td className="p-3">{t(`Kinds.${definition.kind}`)}</td>
@@ -1703,6 +1705,7 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     const t = useTranslations('Knowledge');
     const router = useRouter();
     const queryClient = useQueryClient();
+    const extraction = useExtractionStatus(organization, knowledgeModelId);
     const [markdown, setMarkdown] = useState('');
     const [modelSynonyms, setModelSynonyms] = useState('');
     const [modelExamples, setModelExamples] = useState('');
@@ -1853,6 +1856,12 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                         <TabsTrigger value="definitions">{t('Definitions')}</TabsTrigger>
                         <TabsTrigger value="queries">{t('VerifiedQueries')}</TabsTrigger>
                         <TabsTrigger value="sources">{t('KnowledgeSources.Tab')}</TabsTrigger>
+                        <TabsTrigger value="rules">{t('Extraction.BusinessRules')}</TabsTrigger>
+                        {extraction.data?.canManage ? (
+                            <TabsTrigger value="review">
+                                {t('Extraction.PendingReview')} {extraction.data.pendingCount || ''}
+                            </TabsTrigger>
+                        ) : null}
                     </TabsList>
                     <TabsContent value="overview" className="space-y-5 pt-4">
                         <Card className={model.readiness.status === 'ready' ? 'border-primary/30' : 'border-amber-500/30'}>
@@ -2153,6 +2162,12 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                 await saveDefinitionsWithSources.mutateAsync({ definitions, assetIds: importedIds, sourceIds: [sourceId], relationType: 'provided' });
                             }}
                         />
+                    </TabsContent>
+                    <TabsContent value="review" className="pt-4">
+                        <KnowledgeReviewPanel organization={organization} knowledgeModelId={knowledgeModelId} dataSources={model.dataSources} />
+                    </TabsContent>
+                    <TabsContent value="rules" className="pt-4">
+                        <BusinessRulesPanel organization={organization} knowledgeModelId={knowledgeModelId} dataSources={model.dataSources} />
                     </TabsContent>
                 </Tabs>
                 <AskAiDialog

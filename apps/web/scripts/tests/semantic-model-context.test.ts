@@ -63,6 +63,7 @@ function fakeDb(models: ReturnType<typeof model>[]) {
     return {
         listInputs,
         knowledge: {
+            extraction: { evidenceFor: async () => [], listRules: async () => [] },
             listModels: async (input: unknown) => {
                 listInputs.push(input);
                 return models;

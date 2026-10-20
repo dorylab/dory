@@ -503,7 +503,13 @@
             "Expires": "Available until {date}",
             "Cancel": "Cancel",
             "Download": "Download",
-            "Status": { "queued": "Queued", "running": "Running", "completed": "Completed", "failed": "Failed", "canceled": "Canceled" },
+            "Status": {
+                "queued": "Queued",
+                "running": "Running",
+                "completed": "Completed",
+                "failed": "Failed",
+                "canceled": "Canceled"
+            },
             "Phase": {
                 "queued": "Waiting",
                 "reading": "Reading",
@@ -3574,7 +3580,14 @@
             "Title": "Data import",
             "Description": "View and resume imports for this data source.",
             "NewImport": "New import",
-            "Columns": { "Source": "Source file", "Target": "Target", "Status": "Status", "Progress": "Progress", "Created": "Created", "Updated": "Updated" },
+            "Columns": {
+                "Source": "Source file",
+                "Target": "Target",
+                "Status": "Status",
+                "Progress": "Progress",
+                "Created": "Created",
+                "Updated": "Updated"
+            },
             "SourcePending": "Source not uploaded",
             "TargetPending": "Not selected",
             "InsertedRows": "{rows} inserted",
@@ -3592,8 +3605,19 @@
             "Dismiss": "Close"
         },
         "Step": "Step {number}",
-        "Steps": { "Select": "Select file", "Preview": "Preview", "Target": "Target", "Mapping": "Mapping", "Clean": "Clean data", "Options": "Options", "Execute": "Execute" },
-        "Common": { "Next": "Continue", "Back": "Back" },
+        "Steps": {
+            "Select": "Select file",
+            "Preview": "Preview",
+            "Target": "Target",
+            "Mapping": "Mapping",
+            "Clean": "Clean data",
+            "Options": "Options",
+            "Execute": "Execute"
+        },
+        "Common": {
+            "Next": "Continue",
+            "Back": "Back"
+        },
         "Select": {
             "Title": "Choose a data file",
             "Description": "Upload CSV, TSV, Parquet, NDJSON, or Arrow IPC to analyze it before importing.",
@@ -3627,15 +3651,32 @@
             "Reanalyze": "Reanalyze file",
             "Reanalyzed": "Preview updated"
         },
-        "Delimiters": { "Comma": "Comma", "Tab": "Tab", "Semicolon": "Semicolon", "Pipe": "Pipe" },
-        "Formats": { "csv": "CSV / TSV", "parquet": "Parquet", "ndjson": "NDJSON", "arrow": "Arrow IPC / Feather" },
+        "Delimiters": {
+            "Comma": "Comma",
+            "Tab": "Tab",
+            "Semicolon": "Semicolon",
+            "Pipe": "Pipe"
+        },
+        "Formats": {
+            "csv": "CSV / TSV",
+            "parquet": "Parquet",
+            "ndjson": "NDJSON",
+            "arrow": "Arrow IPC / Feather"
+        },
         "SourceWarnings": {
             "DECIMAL_STRINGIFIED": {
                 "Title": "Decimal preserved as text: {column}",
                 "Description": "{column} uses {sourceType}. Exact values are preserved as strings because the current import type system has no Decimal type."
             }
         },
-        "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Types": {
+            "string": "String",
+            "boolean": "Boolean",
+            "int64": "Int64",
+            "float64": "Float64",
+            "date": "Date",
+            "datetime": "Datetime"
+        },
         "Quality": {
             "IssueCount": "{count} issues",
             "Completeness": "{rate}% complete",
@@ -3654,8 +3695,14 @@
         "Target": {
             "Title": "Choose the target",
             "Description": "Create a new table or map the source into an existing table.",
-            "create": { "Title": "Create table", "Description": "Create a table from the mapped names and safe database types." },
-            "existing": { "Title": "Existing table", "Description": "Inspect an existing table and map source columns to it." },
+            "create": {
+                "Title": "Create table",
+                "Description": "Create a table from the mapped names and safe database types."
+            },
+            "existing": {
+                "Title": "Existing table",
+                "Description": "Inspect an existing table and map source columns to it."
+            },
             "Database": "Database",
             "DatabasePlaceholder": "Connection default",
             "DatabaseSelect": "Select a database",
@@ -3703,7 +3750,13 @@
             "Result": "Result",
             "kept": "Kept",
             "dropped": "Dropped",
-            "Operations": { "trim": "Trim", "lowercase": "Lowercase", "replace": "Replace", "emptyToNull": "Empty to NULL", "dropInvalid": "Remove invalid rows" }
+            "Operations": {
+                "trim": "Trim",
+                "lowercase": "Lowercase",
+                "replace": "Replace",
+                "emptyToNull": "Empty to NULL",
+                "dropInvalid": "Remove invalid rows"
+            }
         },
         "Options": {
             "Title": "Set write options",
@@ -3719,8 +3772,14 @@
                 "target_non_transactional": "The target table engine does not support transactional writes.",
                 "replace_not_atomic": "This data source cannot safely clear and rewrite the complete table."
             },
-            "append": { "Title": "Append", "Description": "Insert rows without changing existing data." },
-            "replace": { "Title": "Replace", "Description": "Clear existing rows and import the source in the same transaction." },
+            "append": {
+                "Title": "Append",
+                "Description": "Insert rows without changing existing data."
+            },
+            "replace": {
+                "Title": "Replace",
+                "Description": "Clear existing rows and import the source in the same transaction."
+            },
             "CreateMode": "The table will be created",
             "CreateModeDescription": "Create mode writes the mapped schema and then imports every mapped row.",
             "Batch": "Batch size",
@@ -3889,7 +3948,10 @@
         "NoReferences": "No linked assets",
         "ReferenceSources": "Reference sources",
         "ReferenceSourcesEmpty": "Add a knowledge source before generating definitions with AI.",
-        "RelationTypes": { "provided": "Provided", "generated": "Generated" },
+        "RelationTypes": {
+            "provided": "Provided",
+            "generated": "Generated"
+        },
         "OpenNamedDefinitionDetails": "Show details for {name}",
         "CloseNamedDefinitionDetails": "Hide details for {name}",
         "CloseDefinitionDetails": "Close definition details",
@@ -3909,7 +3971,11 @@
             "OpenNamed": "Open {name}"
         },
         "VerifiedQueryDetails": {
-            "Columns": { "Query": "Query", "Question": "Question", "Updated": "Last updated" },
+            "Columns": {
+                "Query": "Query",
+                "Question": "Question",
+                "Updated": "Last updated"
+            },
             "UpdatedByTime": "Updated by {user} · {time}",
             "UnknownUser": "Unknown user",
             "ReferencedDefinitions": "Referenced Definitions",
@@ -4009,6 +4075,36 @@
             "UploadFile": "Upload file",
             "ConnectKnowledgeBase": "Connect knowledge base",
             "ConnectKnowledgeBaseComingSoon": "Knowledge base connections are coming soon.",
+            "ConnectorChooseProvider": "Choose a knowledge connector.",
+            "ConnectorSyncQueued": "Knowledge synchronization queued.",
+            "ConnectorDisconnected": "Knowledge connector disconnected.",
+            "ConnectorDisconnectTitle": "Disconnect knowledge connector?",
+            "ConnectorDisconnectDescription": "The connection to {name} and all knowledge sources managed by it will be removed.",
+            "OpenOriginal": "Open original",
+            "LinearNeedsApiKey": "Update the Linear API Key to resume synchronization.",
+            "LinearApiKey": "Linear API Key",
+            "LinearVerifyKey": "Verify and save API Key",
+            "LinearUpdateApiKey": "Update API Key",
+            "LinearKeySaved": "API Key verified and saved.",
+            "LinearSharedKeyNotice": "This key is shared by all knowledge models connected to this Linear workspace in your Dory organization. Saving a replacement updates and immediately syncs all of them.",
+            "LinearHourlySync": "Syncs hourly",
+            "LinearTitle": "Connect Linear",
+            "LinearDescription": "Connect a Linear workspace with an API Key, then select projects to sync hourly.",
+            "LinearFailed": "Could not connect Linear.",
+            "LinearNotConfigured": "Configure a persistent DS_SECRET_KEY before saving an API Key. Desktop manages this key automatically.",
+            "LinearAdminOnly": "Only workspace owners and administrators can manage Linear connectors.",
+            "LinearWorkspace": "Linear workspace",
+            "LinearAnotherWorkspace": "Connect another workspace",
+            "LinearSearchProjects": "Search projects",
+            "LinearSearch": "Search",
+            "LinearProjectCount": "{count} projects selected",
+            "LinearNoProjects": "No accessible projects found.",
+            "LinearLoadMore": "Load more projects",
+            "LinearSharingNotice": "I understand that all selected project content will be shared with readers of this Dory knowledge model, including readers without access in Linear. New projects are not added automatically.",
+            "LinearSaving": "Saving…",
+            "LinearSaveProjects": "Save and sync",
+            "LinearConnectAndSync": "Connect and sync",
+            "LinearEditProjects": "Edit projects",
             "GitHubTitle": "Connect GitHub",
             "GitHubDescription": "Synchronize Markdown, YAML, and TXT documents from one repository folder on its default branch.",
             "GitHubNotConfigured": "GitHub connections are not configured for this Dory deployment.",
@@ -4065,7 +4161,10 @@
             "AssetCounts": "{definitions} definitions · {queries} queries",
             "NoLinkedAssets": "No linked assets",
             "VerifiedQuery": "Verified Query",
-            "RelationTypes": { "provided": "Provided", "generated": "Generated" },
+            "RelationTypes": {
+                "provided": "Provided",
+                "generated": "Generated"
+            },
             "Edit": "Edit",
             "Delete": "Delete",
             "RemoveFile": "Remove {name}",
@@ -4091,7 +4190,82 @@
             "DeleteTitle": "Delete knowledge source?",
             "DeleteDescription": "{name} will be removed. Definitions previously imported from this file will not be changed.",
             "Deleting": "Deleting…",
-            "UnavailableDataSource": "Unavailable data source"
+            "UnavailableDataSource": "Unavailable data source",
+            "RuleCount": "{count} business rules"
+        },
+        "Extraction": {
+            "AutomaticExtraction": "Automatic extraction",
+            "Enabled": "On",
+            "Disabled": "Off",
+            "Disable": "Turn off",
+            "EnableAndBackfill": "Enable and extract existing sources",
+            "Retry": "Retry extraction",
+            "BusinessRules": "Business rules",
+            "PendingReview": "Pending review",
+            "AdminOnly": "Only organization owners and administrators can review extraction drafts.",
+            "Review": "Review",
+            "ReviewNotice": "AI drafts require review before publication. Verify the source evidence, calculation and data source mapping.",
+            "NoCandidates": "No drafts awaiting review. Enable automatic extraction on a connector to process its sources.",
+            "NoRules": "No reviewed business rules yet. Approve drafts to publish rules here.",
+            "ApproveSelected": "Approve selected ({count})",
+            "SelectNamed": "Select {name}",
+            "Metric": "Metric definition",
+            "BusinessRule": "Business rule",
+            "Evidence": "Source evidence",
+            "OpenOriginal": "Open original",
+            "SourceChanged": "Source changed · review needed",
+            "Target": "Publication target",
+            "ChooseTarget": "Choose an explicit publication target",
+            "CreateNew": "Create a new item",
+            "PublishedVersion": "Current published version",
+            "SuggestedVersion": "Suggested version",
+            "SourceReviewNotice": "The source changed or was removed. Keep the reviewed version with a source warning, or deactivate it. Publish a current extraction draft to replace its contents.",
+            "Cancel": "Cancel",
+            "Reject": "Reject",
+            "Archive": "Deactivate",
+            "KeepCurrent": "Keep current version",
+            "Approve": "Approve and publish",
+            "Edit": "Edit",
+            "Save": "Save",
+            "Loading": "Loading…",
+            "NeedsMapping": "Data source mapping required",
+            "ModelWide": "Entire knowledge model",
+            "PendingCount": "{count} drafts",
+            "Field": {
+                "name": "Name",
+                "description": "Definition / business meaning",
+                "dataSource": "Data source",
+                "aliases": "Aliases (comma separated)",
+                "unit": "Unit / currency",
+                "scope": "Statistical scope / exclusions",
+                "source": "Source table (optional)",
+                "expression": "Field expression (optional)",
+                "timeDimension": "Time field (optional)",
+                "filters": "Filters (one per line)",
+                "kind": "Knowledge type"
+            },
+            "Job": {
+                "queued": "Extraction queued",
+                "running": "Extracting",
+                "completed": "Extraction completed",
+                "failed": "Extraction failed",
+                "blocked": "AI configuration / quota required",
+                "cancelled": "Extraction stopped"
+            },
+            "Error": {
+                "blocked": "Configure a background AI model or restore the AI quota, then retry.",
+                "failed": "Extraction failed. Existing sources and published knowledge are preserved.",
+                "quota": "Restore the organization AI quota, then retry.",
+                "config": "Configure an AI model available to background jobs, then retry."
+            },
+            "Action": {
+                "add": "New item",
+                "update": "Update",
+                "conflict": "Conflicting definitions",
+                "source_changed": "Source changed",
+                "remove": "Source removed"
+            },
+            "Backfill": "Extract existing sources"
         }
     },
     "AppSidebar": {
@@ -4307,7 +4481,12 @@
         "KnowledgeUsed": {
             "Title": "Agent assets used",
             "Description": "Artifacts and Knowledge assets explicitly opened by the Agent during this Run.",
-            "Groups": { "artifact": "Artifacts", "knowledge_source": "Sources", "knowledge_definition": "Definitions", "verified_query": "Verified Queries" },
+            "Groups": {
+                "artifact": "Artifacts",
+                "knowledge_source": "Sources",
+                "knowledge_definition": "Definitions",
+                "verified_query": "Verified Queries"
+            },
             "ReadCount": "Read {count} times",
             "Unavailable": "Unavailable",
             "None": "None",

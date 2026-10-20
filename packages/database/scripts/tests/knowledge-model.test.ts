@@ -258,3 +258,31 @@ test('knowledge sources validate supported text formats, size and YAML syntax', 
     assert.doesNotThrow(() => validateKnowledgeSource('large.md', 'x'.repeat(KNOWLEDGE_SOURCE_MAX_BYTES)));
     assert.throws(() => validateKnowledgeSource('large.md', 'x'.repeat(KNOWLEDGE_SOURCE_MAX_BYTES + 1)), /10 MB/i);
 });
+
+test('reviewed text metrics retain no executable mapping until a human supplies an expression', () => {
+    const text = {
+        id: 'metric:text',
+        kind: 'metric' as const,
+        name: 'Text revenue',
+        status: 'verified' as const,
+        sourceConnectionId: 'postgres',
+        description: 'Revenue excludes failed orders.',
+        aliases: [],
+        aiContext: { descriptionOnly: true },
+    };
+    const textDocument = applyKnowledgeDefinitions(ossieDocument, [...projectOssieDocument(ossieDocument).definitions, text]);
+    const projected = projectOssieDocument(textDocument).definitions.find(d => d.id === text.id)!;
+    assert.equal(projected.expression, undefined);
+    assert.equal(projected.source, undefined);
+    assert.equal(typeof projected.aiContext === 'object' && projected.aiContext.descriptionOnly, true);
+    const mapped = projectOssieDocument(
+        applyKnowledgeDefinitions(
+            textDocument,
+            projectOssieDocument(textDocument).definitions.map(d => (d.id === text.id ? { ...d, source: 'orders', expression: 'SUM(amount)' } : d)),
+        ),
+    ).definitions.find(d => d.id === text.id)!;
+    assert.equal(mapped.id, text.id);
+    assert.equal(mapped.source, 'orders');
+    assert.equal(mapped.expression, 'SUM(amount)');
+    assert.equal(typeof mapped.aiContext === 'object' && mapped.aiContext.descriptionOnly, false);
+});

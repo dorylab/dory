@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, lte, getTableColumns, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { parseDocument } from 'yaml';
 
 import { getClient } from '@dory/database/postgres/client';
 import {
     connections,
     knowledgeAssetSources,
+    knowledgeLinearCredentials,
     knowledgeConnectorItems,
     knowledgeConnectorSyncJobs,
     knowledgeConnectors,
@@ -37,10 +38,22 @@ import {
     validateOssieDocument,
 } from './ossie';
 import { migrateLegacyOssieModels } from './migrate-ossie';
+import { LinearKnowledgeStore } from './linear';
+import { KnowledgeExtractionStore, enqueueSourceExtraction, invalidateSourceEvidence } from './extraction';
+import { newEntityId } from '@dory/shared/id';
 
 export { ossieRevision, parseOssieYaml, serializeOssieDocument, validateOssieDocument } from './ossie';
+export { knowledgeHash } from './extraction';
 
 export const KNOWLEDGE_SOURCE_MAX_BYTES = 10_000_000;
+export const LINEAR_SYNC_INTERVAL_MS = 3600_000;
+
+// Keep the GitHub snapshot wire names while treating paths as provider-stable IDs
+// and SHAs as opaque content fingerprints for every provider.
+export type KnowledgeConnectorSnapshot = {
+    commitSha?: string;
+    files: Array<{ path: string; sha: string; contentText: string; format?: KnowledgeSourceFormat; title?: string; sourceUrl?: string }>;
+};
 export type KnowledgeModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
 export type KnowledgeModelDetail = {
     id: string;
@@ -205,6 +218,14 @@ export function parseKnowledgeSourceYaml(source: string, fallbackSourceConnectio
 
 export class PostgresKnowledgeRepository {
     private db!: PostgresDBClient;
+
+    get linear() {
+        return new LinearKnowledgeStore(this.db);
+    }
+
+    get extraction() {
+        return new KnowledgeExtractionStore(this.db);
+    }
 
     async init(db?: PostgresDBClient) {
         const client = db ?? (await getClient());
@@ -479,6 +500,8 @@ export class PostgresKnowledgeRepository {
         if (model.dataSources.length <= 1) throw new Error('A knowledge model must have at least one data source.');
         if (model.model.definitions.some(item => item.sourceConnectionId === input.connectionId))
             throw new Error('Remove or reassign definitions that use this data source first.');
+        if ((await this.extraction.listRules(input)).some(rule => rule.payload.sourceConnectionId === input.connectionId))
+            throw new Error('Reassign or deactivate business rules that use this data source first.');
         const [query] = await this.db
             .select({ id: knowledgeVerifiedQueries.id })
             .from(knowledgeVerifiedQueries)
@@ -504,10 +527,13 @@ export class PostgresKnowledgeRepository {
         const nextIds = new Set(connectionIds);
         const removedIds = model.dataSources.map(source => source.connectionId).filter(connectionId => !nextIds.has(connectionId));
 
+        const businessRules = await this.extraction.listRules(input);
         for (const connectionId of removedIds) {
             if (model.model.definitions.some(definition => definition.sourceConnectionId === connectionId)) {
                 throw new Error('Remove or reassign definitions that use this data source first.');
             }
+            if (businessRules.some(rule => rule.payload.sourceConnectionId === connectionId))
+                throw new Error('Reassign or deactivate business rules that use this data source first.');
             const [query] = await this.db
                 .select({ id: knowledgeVerifiedQueries.id })
                 .from(knowledgeVerifiedQueries)
@@ -554,6 +580,7 @@ export class PostgresKnowledgeRepository {
                 connectorId: knowledgeConnectorItems.connectorId,
                 connectorProvider: knowledgeConnectors.provider,
                 remotePath: knowledgeConnectorItems.remotePath,
+                sourceUrl: knowledgeConnectorItems.sourceUrl,
             })
             .from(knowledgeSources)
             .leftJoin(knowledgeConnectorItems, eq(knowledgeConnectorItems.knowledgeSourceId, knowledgeSources.id))
@@ -569,8 +596,9 @@ export class PostgresKnowledgeRepository {
         const conditions = [eq(knowledgeSources.organizationId, input.organizationId), eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId)];
         if (input.connectionId) conditions.push(or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId))!);
         const rows = await this.db
-            .select()
+            .select({ ...getTableColumns(knowledgeSources), sourceUrl: knowledgeConnectorItems.sourceUrl })
             .from(knowledgeSources)
+            .leftJoin(knowledgeConnectorItems, eq(knowledgeSources.id, knowledgeConnectorItems.knowledgeSourceId))
             .where(and(...conditions))
             .orderBy(desc(knowledgeSources.updatedAt));
         const needle = input.query.trim().toLowerCase();
@@ -582,7 +610,7 @@ export class PostgresKnowledgeRepository {
                 const contentIndex = source.contentText.toLowerCase().indexOf(needle);
                 const start = Math.max(0, contentIndex < 0 ? 0 : contentIndex - 240);
                 const excerpt = source.contentText.slice(start, start + 800).trim();
-                return { id: source.id, fileName: source.fileName, format: source.format, connectionId: source.connectionId, excerpt };
+                return { id: source.id, fileName: source.fileName, format: source.format, connectionId: source.connectionId, sourceUrl: source.sourceUrl, excerpt };
             })
             .filter((source): source is NonNullable<typeof source> => Boolean(source))
             .slice(0, 10);
@@ -606,6 +634,7 @@ export class PostgresKnowledgeRepository {
                 connectorId: knowledgeConnectorItems.connectorId,
                 connectorProvider: knowledgeConnectors.provider,
                 remotePath: knowledgeConnectorItems.remotePath,
+                sourceUrl: knowledgeConnectorItems.sourceUrl,
             })
             .from(knowledgeSources)
             .leftJoin(knowledgeConnectorItems, eq(knowledgeConnectorItems.knowledgeSourceId, knowledgeSources.id))
@@ -656,7 +685,7 @@ export class PostgresKnowledgeRepository {
     async updateKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string; contentText: string; connectionId?: string | null }) {
         const model = await this.getModel(input);
         const existing = await this.getKnowledgeSource(input);
-        if (existing.connectorId) throw new Error('GitHub-managed knowledge sources are read-only. Edit the file in GitHub and sync again.');
+        if (existing.connectorId) throw new Error('Connector-managed knowledge sources are read-only. Edit the original content and sync again.');
         await this.assertKnowledgeSourceConnection(model, input.connectionId);
         const value = validateKnowledgeSource(existing.fileName, input.contentText);
         const [source] = await this.db
@@ -670,7 +699,7 @@ export class PostgresKnowledgeRepository {
 
     async deleteKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         const source = await this.getKnowledgeSource(input);
-        if (source.connectorId) throw new Error('GitHub-managed knowledge sources can only be removed by disconnecting their connector.');
+        if (source.connectorId) throw new Error('Connector-managed knowledge sources can only be removed by disconnecting their connector.');
         await this.db.delete(knowledgeSources).where(eq(knowledgeSources.id, source.id));
         await this.touchModel(input.knowledgeModelId);
     }
@@ -713,18 +742,22 @@ export class PostgresKnowledgeRepository {
         await this.getModel(input);
         const [connector] = await this.db
             .insert(knowledgeConnectors)
-            .values({ ...input, provider: 'github', rootPath: input.rootPath.replace(/^\/+|\/+$/g, '') })
+            .values({ ...input, provider: 'github', autoExtract: true, rootPath: input.rootPath.replace(/^\/+|\/+$/g, '') })
             .returning();
         return connector!;
     }
 
     async deleteConnector(input: { organizationId: string; connectorId: string }) {
         const connector = await this.getConnector(input);
-        const items = await this.db
-            .select({ sourceId: knowledgeConnectorItems.knowledgeSourceId })
-            .from(knowledgeConnectorItems)
-            .where(eq(knowledgeConnectorItems.connectorId, connector.id));
         await this.db.transaction(async tx => {
+            const [locked] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, connector.id)).for('update');
+            if (!locked) return;
+            await tx.select({ id: knowledgeModels.id }).from(knowledgeModels).where(eq(knowledgeModels.id, connector.knowledgeModelId)).for('update');
+            const items = await tx
+                .select({ sourceId: knowledgeConnectorItems.knowledgeSourceId })
+                .from(knowledgeConnectorItems)
+                .where(eq(knowledgeConnectorItems.connectorId, connector.id));
+            for (const item of items) await invalidateSourceEvidence(tx, item.sourceId, 'missing');
             await tx.delete(knowledgeConnectors).where(eq(knowledgeConnectors.id, connector.id));
             if (items.length)
                 await tx.delete(knowledgeSources).where(
@@ -737,89 +770,302 @@ export class PostgresKnowledgeRepository {
         await this.touchModel(connector.knowledgeModelId);
     }
 
+    async createLinearConnector(input: { organizationId: string; knowledgeModelId: string; credentialId: string; projectIds: string[]; createdBy: string }) {
+        await this.getModel(input);
+        return this.db.transaction(async tx => {
+            const [credential] = await tx
+                .select()
+                .from(knowledgeLinearCredentials)
+                .where(and(eq(knowledgeLinearCredentials.id, input.credentialId), eq(knowledgeLinearCredentials.organizationId, input.organizationId)))
+                .for('update');
+            if (!credential || credential.status !== 'active') throw new Error('Update the Linear API Key before syncing.');
+            const [connector] = await tx
+                .insert(knowledgeConnectors)
+                .values({
+                    ...input,
+                    provider: 'linear',
+                    autoExtract: true,
+                    linearWorkspaceId: credential.workspaceId,
+                    linearWorkspaceName: credential.workspaceName,
+                    projectIds: [...new Set(input.projectIds)],
+                    nextSyncAt: new Date(),
+                })
+                .onConflictDoNothing({ target: [knowledgeConnectors.knowledgeModelId, knowledgeConnectors.provider, knowledgeConnectors.linearWorkspaceId] })
+                .returning();
+            if (!connector) throw new Error('A Linear connector already exists for this workspace. Edit its project selection instead.');
+            await tx.insert(knowledgeConnectorSyncJobs).values({ connectorId: connector.id });
+            return connector;
+        });
+    }
+
+    async updateLinearProjects(input: { organizationId: string; connectorId: string; projectIds: string[] }) {
+        return this.db.transaction(async tx => {
+            const [connector] = await tx
+                .select()
+                .from(knowledgeConnectors)
+                .where(and(eq(knowledgeConnectors.id, input.connectorId), eq(knowledgeConnectors.organizationId, input.organizationId)))
+                .for('update');
+            if (!connector || connector.provider !== 'linear') throw new Error('Linear connector not found.');
+            const [updated] = await tx
+                .update(knowledgeConnectors)
+                .set({
+                    projectIds: [...new Set(input.projectIds)],
+                    nextSyncAt: new Date(),
+                    configRevision: connector.configRevision + 1,
+                    status: connector.status === 'disabled' ? 'disabled' : 'pending',
+                })
+                .where(eq(knowledgeConnectors.id, connector.id))
+                .returning();
+            await tx
+                .update(knowledgeConnectorSyncJobs)
+                .set({ status: 'failed', leaseToken: null, error: 'Project selection changed.' })
+                .where(and(eq(knowledgeConnectorSyncJobs.connectorId, connector.id), inArray(knowledgeConnectorSyncJobs.status, ['running', 'queued'])));
+            if (updated.status !== 'disabled') await tx.insert(knowledgeConnectorSyncJobs).values({ connectorId: connector.id });
+            return updated;
+        });
+    }
+
     async queueConnectorSync(input: { connectorId: string; targetSha?: string | null }) {
-        const [existing] = await this.db
-            .select()
+        return this.db.transaction(async tx => {
+            const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, input.connectorId)).for('update');
+            if (!connector || connector.status === 'disabled') throw new Error('Knowledge connector is unavailable.');
+            const [existing] = await tx
+                .select()
+                .from(knowledgeConnectorSyncJobs)
+                .where(and(eq(knowledgeConnectorSyncJobs.connectorId, input.connectorId), eq(knowledgeConnectorSyncJobs.status, 'queued')))
+                .limit(1);
+            if (existing) {
+                if (input.targetSha) await tx.update(knowledgeConnectorSyncJobs).set({ targetSha: input.targetSha }).where(eq(knowledgeConnectorSyncJobs.id, existing.id));
+                return existing;
+            }
+            const [job] = await tx
+                .insert(knowledgeConnectorSyncJobs)
+                .values({ connectorId: input.connectorId, targetSha: input.targetSha ?? null })
+                .returning();
+            return job;
+        });
+    }
+
+    async recoverConnectorSyncJobs() {
+        const staleBefore = new Date(Date.now() - 5 * 60_000);
+        const stale = await this.db
+            .select({ connectorId: knowledgeConnectorSyncJobs.connectorId })
             .from(knowledgeConnectorSyncJobs)
-            .where(and(eq(knowledgeConnectorSyncJobs.connectorId, input.connectorId), eq(knowledgeConnectorSyncJobs.status, 'queued')))
-            .limit(1);
-        if (existing) {
-            if (input.targetSha) await this.db.update(knowledgeConnectorSyncJobs).set({ targetSha: input.targetSha }).where(eq(knowledgeConnectorSyncJobs.id, existing.id));
-            return existing;
-        }
-        const [job] = await this.db
-            .insert(knowledgeConnectorSyncJobs)
-            .values({ connectorId: input.connectorId, targetSha: input.targetSha ?? null })
-            .returning();
-        return job!;
+            .where(and(eq(knowledgeConnectorSyncJobs.status, 'running'), lt(knowledgeConnectorSyncJobs.updatedAt, staleBefore)));
+        for (const connectorId of new Set(stale.map(job => job.connectorId)))
+            await this.db.transaction(async tx => {
+                const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, connectorId)).for('update');
+                if (!connector) return;
+                const recovered = await tx
+                    .update(knowledgeConnectorSyncJobs)
+                    .set({ status: connector.status === 'disabled' ? 'failed' : 'queued', leaseToken: null, availableAt: new Date() })
+                    .where(
+                        and(
+                            eq(knowledgeConnectorSyncJobs.connectorId, connectorId),
+                            eq(knowledgeConnectorSyncJobs.status, 'running'),
+                            lt(knowledgeConnectorSyncJobs.updatedAt, staleBefore),
+                        ),
+                    )
+                    .returning();
+                const [active] = await tx
+                    .select({ id: knowledgeConnectorSyncJobs.id })
+                    .from(knowledgeConnectorSyncJobs)
+                    .where(and(eq(knowledgeConnectorSyncJobs.connectorId, connectorId), eq(knowledgeConnectorSyncJobs.status, 'running')))
+                    .limit(1);
+                if (recovered.length && !active && connector.status === 'syncing')
+                    await tx.update(knowledgeConnectors).set({ status: 'pending' }).where(eq(knowledgeConnectors.id, connectorId));
+            });
+    }
+
+    async queueDueLinearConnectors() {
+        const due = await this.db
+            .select({ id: knowledgeConnectors.id })
+            .from(knowledgeConnectors)
+            .where(and(eq(knowledgeConnectors.provider, 'linear'), ne(knowledgeConnectors.status, 'disabled'), lte(knowledgeConnectors.nextSyncAt, new Date())));
+        for (const connector of due)
+            await this.db.transaction(async tx => {
+                const [claimed] = await tx
+                    .select()
+                    .from(knowledgeConnectors)
+                    .where(and(eq(knowledgeConnectors.id, connector.id), lte(knowledgeConnectors.nextSyncAt, new Date()), ne(knowledgeConnectors.status, 'disabled')))
+                    .for('update');
+                if (!claimed) return;
+                const [existing] = await tx
+                    .select({ id: knowledgeConnectorSyncJobs.id })
+                    .from(knowledgeConnectorSyncJobs)
+                    .where(and(eq(knowledgeConnectorSyncJobs.connectorId, connector.id), eq(knowledgeConnectorSyncJobs.status, 'queued')))
+                    .limit(1);
+                if (!existing) await tx.insert(knowledgeConnectorSyncJobs).values({ connectorId: connector.id });
+                await tx
+                    .update(knowledgeConnectors)
+                    .set({ nextSyncAt: new Date(Date.now() + LINEAR_SYNC_INTERVAL_MS) })
+                    .where(eq(knowledgeConnectors.id, connector.id));
+            });
     }
 
     async claimConnectorSyncJob() {
-        const [candidate] = await this.db
-            .select()
+        // Scan candidates so a busy connector cannot block unrelated work.
+        const candidates = await this.db
+            .select({ job: knowledgeConnectorSyncJobs })
             .from(knowledgeConnectorSyncJobs)
-            .where(eq(knowledgeConnectorSyncJobs.status, 'queued'))
+            .innerJoin(knowledgeConnectors, eq(knowledgeConnectors.id, knowledgeConnectorSyncJobs.connectorId))
+            .where(
+                and(
+                    eq(knowledgeConnectorSyncJobs.status, 'queued'),
+                    lte(knowledgeConnectorSyncJobs.availableAt, new Date()),
+                    ne(knowledgeConnectors.status, 'disabled'),
+                    ne(knowledgeConnectors.status, 'syncing'),
+                ),
+            )
             .orderBy(asc(knowledgeConnectorSyncJobs.createdAt))
-            .limit(1);
-        if (!candidate) return null;
-        const [claimed] = await this.db
-            .update(knowledgeConnectorSyncJobs)
-            .set({ status: 'running', attempts: candidate.attempts + 1, updatedAt: new Date() })
-            .where(and(eq(knowledgeConnectorSyncJobs.id, candidate.id), eq(knowledgeConnectorSyncJobs.status, 'queued')))
-            .returning();
-        if (!claimed) return null;
-        const staleBefore = new Date(Date.now() - 10 * 60_000);
-        const [lockedConnector] = await this.db
-            .update(knowledgeConnectors)
-            .set({ status: 'syncing', lastError: null, updatedAt: new Date() })
-            .where(and(eq(knowledgeConnectors.id, claimed.connectorId), or(ne(knowledgeConnectors.status, 'syncing'), lt(knowledgeConnectors.updatedAt, staleBefore))))
-            .returning({ id: knowledgeConnectors.id });
-        if (!lockedConnector) {
-            await this.db.update(knowledgeConnectorSyncJobs).set({ status: 'queued' }).where(eq(knowledgeConnectorSyncJobs.id, claimed.id));
-            return null;
+            .limit(20);
+        for (const { job } of candidates) {
+            const claimed = await this.db.transaction(async tx => {
+                const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, job.connectorId)).for('update');
+                if (!connector || connector.status === 'disabled' || connector.status === 'syncing') return null;
+                const [current] = await tx
+                    .select()
+                    .from(knowledgeConnectorSyncJobs)
+                    .where(and(eq(knowledgeConnectorSyncJobs.id, job.id), eq(knowledgeConnectorSyncJobs.status, 'queued')));
+                if (!current) return null;
+                if (current.attempts >= 5) {
+                    await tx
+                        .update(knowledgeConnectorSyncJobs)
+                        .set({ status: 'failed', error: 'Synchronization exhausted five attempts.' })
+                        .where(eq(knowledgeConnectorSyncJobs.id, job.id));
+                    await tx
+                        .update(knowledgeConnectors)
+                        .set({ status: 'error', lastError: 'Synchronization exhausted five attempts.' })
+                        .where(eq(knowledgeConnectors.id, connector.id));
+                    return null;
+                }
+                const [result] = await tx
+                    .update(knowledgeConnectorSyncJobs)
+                    .set({ status: 'running', attempts: current.attempts + 1, leaseToken: newEntityId(), updatedAt: new Date() })
+                    .where(eq(knowledgeConnectorSyncJobs.id, job.id))
+                    .returning();
+                await tx.update(knowledgeConnectors).set({ status: 'syncing', lastError: null, updatedAt: new Date() }).where(eq(knowledgeConnectors.id, connector.id));
+                return { ...result, configRevision: connector.configRevision };
+            });
+            if (claimed) return claimed;
         }
-        return claimed;
+        return null;
     }
 
-    async finishConnectorSyncJob(input: { jobId: string; connectorId: string; error?: string | null }) {
-        const status = input.error ? 'failed' : 'completed';
-        await this.db
-            .update(knowledgeConnectorSyncJobs)
-            .set({ status, error: input.error ?? null, updatedAt: new Date() })
-            .where(eq(knowledgeConnectorSyncJobs.id, input.jobId));
-        if (input.error)
-            await this.db
-                .update(knowledgeConnectors)
-                .set({ status: 'error', lastError: input.error.slice(0, 2000) })
-                .where(eq(knowledgeConnectors.id, input.connectorId));
-    }
-
-    async applyConnectorSnapshot(input: { connectorId: string; commitSha: string; files: Array<{ path: string; sha: string; contentText: string }> }) {
-        const [connector] = await this.db.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, input.connectorId)).limit(1);
-        if (!connector || connector.status === 'disabled') throw new Error('Knowledge connector is unavailable.');
-        const validated = input.files.map(file => ({ ...file, value: validateKnowledgeSource(file.path.split('/').pop() ?? file.path, file.contentText) }));
+    async heartbeatConnectorSyncJob(jobId: string, connectorId: string, leaseToken: string) {
         await this.db.transaction(async tx => {
+            // The connector lock fences recovery against a heartbeat.
+            await tx.select({ id: knowledgeConnectors.id }).from(knowledgeConnectors).where(eq(knowledgeConnectors.id, connectorId)).for('update');
+            const [job] = await tx
+                .update(knowledgeConnectorSyncJobs)
+                .set({ updatedAt: new Date() })
+                .where(and(eq(knowledgeConnectorSyncJobs.id, jobId), eq(knowledgeConnectorSyncJobs.leaseToken, leaseToken), eq(knowledgeConnectorSyncJobs.status, 'running')))
+                .returning();
+            if (job) await tx.update(knowledgeConnectors).set({ updatedAt: new Date() }).where(eq(knowledgeConnectors.id, connectorId));
+        });
+    }
+
+    async finishConnectorSyncJob(input: { jobId: string; connectorId: string; leaseToken?: string; error?: string | null; retryAt?: Date }) {
+        await this.db.transaction(async tx => {
+            const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, input.connectorId)).for('update');
+            if (!connector) return;
+            if (input.retryAt) {
+                const [owned] = await tx
+                    .select({ id: knowledgeConnectorSyncJobs.id })
+                    .from(knowledgeConnectorSyncJobs)
+                    .where(
+                        and(
+                            eq(knowledgeConnectorSyncJobs.id, input.jobId),
+                            eq(knowledgeConnectorSyncJobs.status, 'running'),
+                            input.leaseToken ? eq(knowledgeConnectorSyncJobs.leaseToken, input.leaseToken) : undefined,
+                        ),
+                    );
+                if (!owned) return;
+                await tx
+                    .update(knowledgeConnectorSyncJobs)
+                    .set({ status: 'failed', error: 'Coalesced into the pending retry.' })
+                    .where(and(eq(knowledgeConnectorSyncJobs.connectorId, connector.id), eq(knowledgeConnectorSyncJobs.status, 'queued')));
+            }
+            const [job] = await tx
+                .update(knowledgeConnectorSyncJobs)
+                .set({
+                    status: input.retryAt ? 'queued' : input.error ? 'failed' : 'completed',
+                    error: input.error ?? null,
+                    availableAt: input.retryAt ?? new Date(),
+                    leaseToken: null,
+                    updatedAt: new Date(),
+                })
+                .where(
+                    and(
+                        eq(knowledgeConnectorSyncJobs.id, input.jobId),
+                        eq(knowledgeConnectorSyncJobs.status, 'running'),
+                        input.leaseToken ? eq(knowledgeConnectorSyncJobs.leaseToken, input.leaseToken) : undefined,
+                    ),
+                )
+                .returning();
+            if (job && input.error && connector.status !== 'disabled')
+                await tx
+                    .update(knowledgeConnectors)
+                    .set({ status: input.retryAt ? 'pending' : 'error', lastError: input.error.slice(0, 2000) })
+                    .where(eq(knowledgeConnectors.id, connector.id));
+        });
+    }
+
+    async applyConnectorSnapshot(input: KnowledgeConnectorSnapshot & { connectorId: string; configRevision?: number; jobId?: string; leaseToken?: string }) {
+        const validated = input.files.map(file => ({
+            ...file,
+            value: validateKnowledgeSource(
+                file.format ? `source.${file.format === 'markdown' ? 'md' : file.format === 'text' ? 'txt' : 'yaml'}` : (file.path.split('/').pop() ?? file.path),
+                file.contentText,
+            ),
+        }));
+        if (new Set(input.files.map(file => file.path)).size !== input.files.length) throw new Error('Duplicate remote knowledge item.');
+        await this.db.transaction(async tx => {
+            const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, input.connectorId)).for('update');
+            if (!connector || connector.status === 'disabled') throw new Error('Knowledge connector is unavailable.');
+            // Serialize source invalidation with review/publication before reading evidence.
+            await tx.select({ id: knowledgeModels.id }).from(knowledgeModels).where(eq(knowledgeModels.id, connector.knowledgeModelId)).for('update');
+            if (input.configRevision !== undefined && connector.configRevision !== input.configRevision) throw new Error('Connector selection changed during synchronization.');
+            if (input.jobId && input.leaseToken) {
+                const [job] = await tx
+                    .select()
+                    .from(knowledgeConnectorSyncJobs)
+                    .where(
+                        and(
+                            eq(knowledgeConnectorSyncJobs.id, input.jobId),
+                            eq(knowledgeConnectorSyncJobs.leaseToken, input.leaseToken),
+                            eq(knowledgeConnectorSyncJobs.status, 'running'),
+                        ),
+                    );
+                if (!job) throw new Error('Synchronization lease expired.');
+            }
             const existing = await tx.select().from(knowledgeConnectorItems).where(eq(knowledgeConnectorItems.connectorId, connector.id));
             const byPath = new Map(existing.map(item => [item.remotePath, item]));
             for (const file of validated) {
+                const baseName = file.title ?? `${connector.repositoryFullName} · ${file.path.replaceAll('/', ' › ')}`;
+                const suffix = ` · ${connector.id.slice(-8)} · ${file.path.split('/').pop()}`;
+                const fileName = file.title
+                    ? `${baseName.slice(0, Math.max(20, 240 - suffix.length))}${suffix}`
+                    : `${baseName.slice(0, 240 - ` · ${connector.id.slice(-8)}`.length)} · ${connector.id.slice(-8)}`;
                 const item = byPath.get(file.path);
                 if (item) {
                     if (item.remoteSha !== file.sha) {
-                        await tx
+                        await invalidateSourceEvidence(tx, item.knowledgeSourceId, 'outdated');
+                        const [updatedSource] = await tx
                             .update(knowledgeSources)
-                            .set({ contentText: file.value.contentText, byteSize: file.value.byteSize, format: file.value.format })
-                            .where(eq(knowledgeSources.id, item.knowledgeSourceId));
+                            .set({ contentText: file.value.contentText, byteSize: file.value.byteSize, format: file.value.format, fileName })
+                            .where(eq(knowledgeSources.id, item.knowledgeSourceId))
+                            .returning();
+                        if (updatedSource) await enqueueSourceExtraction(tx, connector, updatedSource);
+                    }
+                    if (item.remoteSha !== file.sha || item.sourceUrl !== (file.sourceUrl ?? null))
                         await tx
                             .update(knowledgeConnectorItems)
-                            .set({ remoteSha: file.sha, updatedAt: new Date() })
+                            .set({ remoteSha: file.sha, sourceUrl: file.sourceUrl ?? null, updatedAt: new Date() })
                             .where(and(eq(knowledgeConnectorItems.connectorId, connector.id), eq(knowledgeConnectorItems.remotePath, file.path)));
-                    }
                     byPath.delete(file.path);
                     continue;
                 }
-                const baseName = `${connector.repositoryFullName} · ${file.path.replaceAll('/', ' › ')}`;
-                const suffix = ` · ${connector.id.slice(-8)}`;
-                const fileName = `${baseName.slice(0, 240 - suffix.length)}${suffix}`;
                 const [source] = await tx
                     .insert(knowledgeSources)
                     .values({
@@ -832,13 +1078,24 @@ export class PostgresKnowledgeRepository {
                         createdBy: connector.createdBy,
                     })
                     .returning();
-                await tx.insert(knowledgeConnectorItems).values({ connectorId: connector.id, knowledgeSourceId: source!.id, remotePath: file.path, remoteSha: file.sha });
+                await tx
+                    .insert(knowledgeConnectorItems)
+                    .values({ connectorId: connector.id, knowledgeSourceId: source.id, remotePath: file.path, remoteSha: file.sha, sourceUrl: file.sourceUrl ?? null });
+                await enqueueSourceExtraction(tx, connector, source);
             }
             const removed = [...byPath.values()].map(item => item.knowledgeSourceId);
+            for (const sourceId of removed) await invalidateSourceEvidence(tx, sourceId, 'missing');
             if (removed.length) await tx.delete(knowledgeSources).where(inArray(knowledgeSources.id, removed));
             await tx
                 .update(knowledgeConnectors)
-                .set({ status: 'ready', lastCommitSha: input.commitSha, lastSyncedAt: new Date(), lastError: null, updatedAt: new Date() })
+                .set({
+                    status: 'ready',
+                    lastCommitSha: input.commitSha ?? null,
+                    ...(connector.provider === 'linear' ? { nextSyncAt: new Date(Date.now() + LINEAR_SYNC_INTERVAL_MS) } : {}),
+                    lastSyncedAt: new Date(),
+                    lastError: null,
+                    updatedAt: new Date(),
+                })
                 .where(eq(knowledgeConnectors.id, connector.id));
             await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, connector.knowledgeModelId));
         });
@@ -854,7 +1111,7 @@ export class PostgresKnowledgeRepository {
     }
 
     async disableConnectors(input: { installationId: string; repositoryIds?: string[] }) {
-        const conditions = [eq(knowledgeConnectors.installationId, input.installationId)];
+        const conditions = [eq(knowledgeConnectors.provider, 'github'), eq(knowledgeConnectors.installationId, input.installationId)];
         if (input.repositoryIds?.length) conditions.push(inArray(knowledgeConnectors.repositoryId, input.repositoryIds));
         await this.db
             .update(knowledgeConnectors)

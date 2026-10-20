@@ -36,11 +36,11 @@ const artifactReadInputSchema = z
     })
     .merge(workResolutionInputSchema);
 
-const agentAssetKindSchema = z.enum(['artifact', 'knowledge_definition', 'verified_query', 'knowledge_source']);
+const agentAssetKindSchema = z.enum(['artifact', 'knowledge_definition', 'verified_query', 'knowledge_source', 'business_rule']);
 const agentAssetSearchInputSchema = z
     .object({
         query: z.string().max(240).optional(),
-        kinds: z.array(agentAssetKindSchema).max(4).optional(),
+        kinds: z.array(agentAssetKindSchema).max(5).optional(),
         connectionId: z.string().min(1).optional(),
         knowledgeModelId: z.string().min(1).optional(),
         limit: z.number().int().positive().max(100).optional(),
@@ -1577,7 +1577,7 @@ async function readAgentAssetFacade(ctx: ActionContext<WebActionServices>, rawIn
                     workId: work.workId,
                     organizationId: ctx.organizationId,
                     userId: ctx.userId,
-                    assetKind: requireString(asset.kind, 'asset.kind') as 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source',
+                    assetKind: requireString(asset.kind, 'asset.kind') as 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'business_rule',
                     assetRef: requireString(asset.ref, 'asset.ref'),
                     revision: requireString(asset.revision, 'asset.revision'),
                     assetSnapshot: {

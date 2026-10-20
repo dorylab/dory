@@ -4,7 +4,7 @@ import type { ResultSetArtifactRef } from '@dory/resultset';
 
 export type WorkStatus = 'active' | 'completed' | 'error' | 'archived';
 export type WorkEventStatus = 'success' | 'error';
-export type WorkAgentAssetKind = 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'semantic_model';
+export type WorkAgentAssetKind = 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'business_rule' | 'semantic_model';
 export type WorkPrincipalType = 'user' | 'service';
 
 export const works = pgTable(

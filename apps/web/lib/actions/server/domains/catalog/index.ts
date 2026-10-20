@@ -17,6 +17,8 @@ const agentAssetSummarySchema = z.object({
     updatedAt: z.string(),
     revision: z.string(),
     deepLink: z.string(),
+    sourceUrl: z.string().nullable().optional(),
+    sourceState: z.enum(['current', 'outdated']).optional(),
 });
 
 function allowedConnectionIds(metadata: Record<string, unknown> | null | undefined) {
@@ -31,7 +33,7 @@ export const catalogSearchAction = defineWebAction({
     risk: 'read',
     inputSchema: z.object({
         query: z.string().max(240).optional(),
-        kinds: z.array(agentAssetKindSchema).max(4).optional(),
+        kinds: z.array(agentAssetKindSchema).max(5).optional(),
         connectionId: z.string().min(1).optional(),
         knowledgeModelId: z.string().min(1).optional(),
         limit: z.number().int().positive().max(100).optional(),
@@ -75,7 +77,14 @@ export const catalogReadAction = defineWebAction({
         asset: agentAssetSummarySchema,
         content: z.record(z.string(), z.unknown()),
         relatedRefs: z.array(z.string()),
-        citation: z.object({ ref: z.string(), title: z.string(), revision: z.string(), deepLink: z.string() }),
+        citation: z.object({
+            ref: z.string(),
+            title: z.string(),
+            revision: z.string(),
+            deepLink: z.string(),
+            sourceUrl: z.string().nullable().optional(),
+            sourceState: z.enum(['current', 'outdated']).optional(),
+        }),
     }),
     permissions: readWorkspace,
     scopes: ['assets:read', 'knowledge:read'],

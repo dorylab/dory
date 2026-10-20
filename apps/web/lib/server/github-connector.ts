@@ -73,22 +73,21 @@ function supportedPath(path: string) {
 }
 
 export async function readGitHubConnectorSnapshot(connector: KnowledgeConnector, options?: GitHubClientOptions) {
-    const tree = await repositoryTree(connector.installationId, connector.repositoryFullName, connector.defaultBranch, options);
+    if (connector.provider !== 'github' || !connector.installationId || !connector.repositoryFullName || !connector.defaultBranch)
+        throw new Error('Invalid GitHub connector configuration.');
+    const { installationId, repositoryFullName, defaultBranch } = connector;
+    const tree = await repositoryTree(installationId, repositoryFullName, defaultBranch, options);
     const prefix = connector.rootPath ? `${connector.rootPath.replace(/\/+$/g, '')}/` : '';
     const blobs = tree.tree.filter(item => item.type === 'blob' && item.path.startsWith(prefix) && supportedPath(item.path));
     const tooLarge = blobs.find(item => (item.size ?? 0) > KNOWLEDGE_SOURCE_MAX_BYTES);
     if (tooLarge) throw new Error(`${tooLarge.path} exceeds the 10 MB knowledge-source limit.`);
-    const repoPath = connector.repositoryFullName
+    const repoPath = repositoryFullName
         .split('/')
         .map(segment => encodeURIComponent(segment))
         .join('/');
     const files = await Promise.all(
         blobs.map(async blob => {
-            const result = await githubFetch<{ content: string; encoding: string }>(
-                connector.installationId,
-                `/repos/${repoPath}/git/blobs/${encodeURIComponent(blob.sha)}`,
-                options,
-            );
+            const result = await githubFetch<{ content: string; encoding: string }>(installationId, `/repos/${repoPath}/git/blobs/${encodeURIComponent(blob.sha)}`, options);
             if (result.encoding !== 'base64') throw new Error(`GitHub returned an unsupported encoding for ${blob.path}.`);
             const bytes = Buffer.from(result.content.replace(/\s/g, ''), 'base64');
             if (bytes.byteLength > KNOWLEDGE_SOURCE_MAX_BYTES) throw new Error(`${blob.path} exceeds the 10 MB knowledge-source limit.`);
@@ -97,7 +96,12 @@ export async function readGitHubConnectorSnapshot(connector: KnowledgeConnector,
                 const document = parseDocument(contentText);
                 if (document.errors.length) throw new Error(`${blob.path}: ${document.errors[0]?.message ?? 'Invalid YAML.'}`);
             }
-            return { path: blob.path, sha: blob.sha, contentText };
+            return {
+                path: blob.path,
+                sha: blob.sha,
+                contentText,
+                sourceUrl: `https://github.com/${repoPath}/blob/${encodeURIComponent(defaultBranch)}/${blob.path.split('/').map(encodeURIComponent).join('/')}`,
+            };
         }),
     );
     return { commitSha: tree.sha, files };

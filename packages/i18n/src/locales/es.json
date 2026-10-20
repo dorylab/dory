@@ -503,7 +503,13 @@
             "Expires": "Disponible hasta {date}",
             "Cancel": "Cancelar",
             "Download": "Descargar",
-            "Status": { "queued": "En cola", "running": "En curso", "completed": "Completada", "failed": "Fallida", "canceled": "Cancelada" },
+            "Status": {
+                "queued": "En cola",
+                "running": "En curso",
+                "completed": "Completada",
+                "failed": "Fallida",
+                "canceled": "Cancelada"
+            },
             "Phase": {
                 "queued": "En espera",
                 "reading": "Leyendo",
@@ -3568,7 +3574,14 @@
             "Title": "Importación de datos",
             "Description": "Consulta y reanuda las importaciones de esta fuente de datos.",
             "NewImport": "Nueva importación",
-            "Columns": { "Source": "Archivo de origen", "Target": "Destino", "Status": "Estado", "Progress": "Progreso", "Created": "Creada", "Updated": "Actualizada" },
+            "Columns": {
+                "Source": "Archivo de origen",
+                "Target": "Destino",
+                "Status": "Estado",
+                "Progress": "Progreso",
+                "Created": "Creada",
+                "Updated": "Actualizada"
+            },
             "SourcePending": "Origen no cargado",
             "TargetPending": "Sin seleccionar",
             "InsertedRows": "{rows} insertadas",
@@ -3586,8 +3599,19 @@
             "Dismiss": "Cerrar"
         },
         "Step": "Paso {number}",
-        "Steps": { "Select": "Archivo", "Preview": "Vista previa", "Target": "Destino", "Mapping": "Asignación", "Clean": "Limpiar", "Options": "Opciones", "Execute": "Ejecutar" },
-        "Common": { "Next": "Continuar", "Back": "Atrás" },
+        "Steps": {
+            "Select": "Archivo",
+            "Preview": "Vista previa",
+            "Target": "Destino",
+            "Mapping": "Asignación",
+            "Clean": "Limpiar",
+            "Options": "Opciones",
+            "Execute": "Ejecutar"
+        },
+        "Common": {
+            "Next": "Continuar",
+            "Back": "Atrás"
+        },
         "Select": {
             "Title": "Elige un archivo de datos",
             "Description": "Carga CSV, TSV, Parquet, NDJSON o Arrow IPC para analizarlo antes de importarlo.",
@@ -3621,15 +3645,32 @@
             "Reanalyze": "Volver a analizar",
             "Reanalyzed": "Vista previa actualizada"
         },
-        "Delimiters": { "Comma": "Coma", "Tab": "Tabulador", "Semicolon": "Punto y coma", "Pipe": "Barra vertical" },
-        "Formats": { "csv": "CSV / TSV", "parquet": "Parquet", "ndjson": "NDJSON", "arrow": "Arrow IPC / Feather" },
+        "Delimiters": {
+            "Comma": "Coma",
+            "Tab": "Tabulador",
+            "Semicolon": "Punto y coma",
+            "Pipe": "Barra vertical"
+        },
+        "Formats": {
+            "csv": "CSV / TSV",
+            "parquet": "Parquet",
+            "ndjson": "NDJSON",
+            "arrow": "Arrow IPC / Feather"
+        },
         "SourceWarnings": {
             "DECIMAL_STRINGIFIED": {
                 "Title": "Decimal conservado como texto: {column}",
                 "Description": "{column} usa {sourceType}. Los valores exactos se conservan como cadenas porque el sistema de importación actual no tiene un tipo Decimal."
             }
         },
-        "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Types": {
+            "string": "String",
+            "boolean": "Boolean",
+            "int64": "Int64",
+            "float64": "Float64",
+            "date": "Date",
+            "datetime": "Datetime"
+        },
         "Quality": {
             "IssueCount": "{count} problemas",
             "Completeness": "{rate}% completo",
@@ -3648,8 +3689,14 @@
         "Target": {
             "Title": "Elige el destino",
             "Description": "Crea una tabla o asigna los datos a una tabla existente.",
-            "create": { "Title": "Crear tabla", "Description": "Crea una tabla con nombres asignados y tipos seguros." },
-            "existing": { "Title": "Tabla existente", "Description": "Inspecciona y asigna columnas a una tabla existente." },
+            "create": {
+                "Title": "Crear tabla",
+                "Description": "Crea una tabla con nombres asignados y tipos seguros."
+            },
+            "existing": {
+                "Title": "Tabla existente",
+                "Description": "Inspecciona y asigna columnas a una tabla existente."
+            },
             "Database": "Base de datos",
             "DatabasePlaceholder": "Valor predeterminado",
             "DatabaseSelect": "Selecciona una base de datos",
@@ -3697,7 +3744,13 @@
             "Result": "Resultado",
             "kept": "Conservada",
             "dropped": "Eliminada",
-            "Operations": { "trim": "Recortar", "lowercase": "Minúsculas", "replace": "Reemplazar", "emptyToNull": "Vacío a NULL", "dropInvalid": "Eliminar filas no válidas" }
+            "Operations": {
+                "trim": "Recortar",
+                "lowercase": "Minúsculas",
+                "replace": "Reemplazar",
+                "emptyToNull": "Vacío a NULL",
+                "dropInvalid": "Eliminar filas no válidas"
+            }
         },
         "Options": {
             "Title": "Configura la escritura",
@@ -3713,8 +3766,14 @@
                 "target_non_transactional": "El motor de la tabla destino no admite escrituras transaccionales.",
                 "replace_not_atomic": "Esta fuente no puede vaciar y reescribir toda la tabla de forma segura."
             },
-            "append": { "Title": "Añadir", "Description": "Inserta filas sin modificar los datos existentes." },
-            "replace": { "Title": "Reemplazar", "Description": "Borra las filas e importa el origen en la misma transacción." },
+            "append": {
+                "Title": "Añadir",
+                "Description": "Inserta filas sin modificar los datos existentes."
+            },
+            "replace": {
+                "Title": "Reemplazar",
+                "Description": "Borra las filas e importa el origen en la misma transacción."
+            },
             "CreateMode": "Se creará la tabla",
             "CreateModeDescription": "Se crea el esquema asignado y se importan todas las filas asignadas.",
             "Batch": "Tamaño del lote",
@@ -3883,7 +3942,10 @@
         "NoReferences": "No hay activos vinculados",
         "ReferenceSources": "Fuentes de referencia",
         "ReferenceSourcesEmpty": "Añade una fuente de conocimiento antes de generar definiciones con IA.",
-        "RelationTypes": { "provided": "Proporcionado", "generated": "Generado" },
+        "RelationTypes": {
+            "provided": "Proporcionado",
+            "generated": "Generado"
+        },
         "OpenNamedDefinitionDetails": "Mostrar detalles de {name}",
         "CloseNamedDefinitionDetails": "Ocultar detalles de {name}",
         "CloseDefinitionDetails": "Cerrar detalles de la definición",
@@ -3903,7 +3965,11 @@
             "OpenNamed": "Abrir {name}"
         },
         "VerifiedQueryDetails": {
-            "Columns": { "Query": "Consulta", "Question": "Pregunta", "Updated": "Última actualización" },
+            "Columns": {
+                "Query": "Consulta",
+                "Question": "Pregunta",
+                "Updated": "Última actualización"
+            },
             "UpdatedByTime": "Actualizado por {user} · {time}",
             "UnknownUser": "Usuario desconocido",
             "ReferencedDefinitions": "Definitions referenciadas",
@@ -4003,6 +4069,36 @@
             "UploadFile": "Subir archivo",
             "ConnectKnowledgeBase": "Conectar base de conocimiento",
             "ConnectKnowledgeBaseComingSoon": "Las conexiones con bases de conocimiento estarán disponibles pronto.",
+            "ConnectorChooseProvider": "Selecciona un conector de conocimiento.",
+            "ConnectorSyncQueued": "Sincronización de conocimiento en cola.",
+            "ConnectorDisconnected": "Conector de conocimiento desconectado.",
+            "ConnectorDisconnectTitle": "¿Desconectar el conector de conocimiento?",
+            "ConnectorDisconnectDescription": "Se eliminarán la conexión con {name} y todas las fuentes de conocimiento que gestiona.",
+            "OpenOriginal": "Abrir original",
+            "LinearNeedsApiKey": "Actualiza la API Key de Linear para reanudar la sincronización.",
+            "LinearApiKey": "API Key de Linear",
+            "LinearVerifyKey": "Verificar y guardar API Key",
+            "LinearUpdateApiKey": "Actualizar API Key",
+            "LinearKeySaved": "API Key verificada y guardada.",
+            "LinearSharedKeyNotice": "Todos los modelos de conocimiento de tu organización Dory conectados a este espacio de Linear comparten esta Key. Al reemplazarla, todos los conectores se sincronizan inmediatamente.",
+            "LinearHourlySync": "Sincronización cada hora",
+            "LinearTitle": "Conectar Linear",
+            "LinearDescription": "Introduce una API Key de Linear y selecciona proyectos para sincronizarlos cada hora.",
+            "LinearFailed": "No se pudo conectar Linear.",
+            "LinearNotConfigured": "Configura una DS_SECRET_KEY persistente antes de guardar la API Key. Desktop la gestiona automáticamente.",
+            "LinearAdminOnly": "Solo los propietarios y administradores del espacio de trabajo pueden gestionar conectores de Linear.",
+            "LinearWorkspace": "Espacio de trabajo de Linear",
+            "LinearAnotherWorkspace": "Conectar otro espacio de trabajo",
+            "LinearSearchProjects": "Buscar proyectos",
+            "LinearSearch": "Buscar",
+            "LinearProjectCount": "{count} proyectos seleccionados",
+            "LinearNoProjects": "No se encontraron proyectos accesibles.",
+            "LinearLoadMore": "Cargar más proyectos",
+            "LinearSharingNotice": "Entiendo que todo el contenido seleccionado se compartirá con los lectores de este modelo de conocimiento de Dory, incluidos quienes no tengan acceso en Linear. Los proyectos nuevos no se añaden automáticamente.",
+            "LinearSaving": "Guardando…",
+            "LinearSaveProjects": "Guardar y sincronizar",
+            "LinearConnectAndSync": "Conectar y sincronizar",
+            "LinearEditProjects": "Editar proyectos",
             "GitHubTitle": "Conectar GitHub",
             "GitHubDescription": "Sincroniza documentos Markdown, YAML y TXT de forma recursiva desde una carpeta de la rama predeterminada.",
             "GitHubNotConfigured": "Las conexiones de GitHub no están configuradas en este despliegue de Dory.",
@@ -4059,7 +4155,10 @@
             "AssetCounts": "{definitions} definiciones · {queries} consultas",
             "NoLinkedAssets": "No hay activos vinculados",
             "VerifiedQuery": "Consulta verificada",
-            "RelationTypes": { "provided": "Proporcionado", "generated": "Generado" },
+            "RelationTypes": {
+                "provided": "Proporcionado",
+                "generated": "Generado"
+            },
             "Edit": "Editar",
             "Delete": "Eliminar",
             "RemoveFile": "Quitar {name}",
@@ -4085,7 +4184,82 @@
             "DeleteTitle": "¿Eliminar la fuente de conocimiento?",
             "DeleteDescription": "Se eliminará {name}. Las definiciones importadas anteriormente no cambiarán.",
             "Deleting": "Eliminando…",
-            "UnavailableDataSource": "Fuente de datos no disponible"
+            "UnavailableDataSource": "Fuente de datos no disponible",
+            "RuleCount": "{count} reglas de negocio"
+        },
+        "Extraction": {
+            "AutomaticExtraction": "Extracción automática",
+            "Enabled": "Activada",
+            "Disabled": "Desactivada",
+            "Disable": "Desactivar",
+            "EnableAndBackfill": "Activar y extraer fuentes existentes",
+            "Retry": "Reintentar extracción",
+            "BusinessRules": "Reglas de negocio",
+            "PendingReview": "Pendiente de revisión",
+            "AdminOnly": "Solo los propietarios y administradores pueden revisar borradores.",
+            "Review": "Revisar",
+            "ReviewNotice": "Los borradores de IA requieren revisión antes de publicarse. Comprueba las evidencias, el cálculo y la fuente de datos.",
+            "NoCandidates": "No hay borradores pendientes. Activa la extracción automática en un conector.",
+            "NoRules": "Todavía no hay reglas de negocio aprobadas.",
+            "ApproveSelected": "Aprobar selección ({count})",
+            "SelectNamed": "Seleccionar {name}",
+            "Metric": "Definición de métrica",
+            "BusinessRule": "Regla de negocio",
+            "Evidence": "Evidencia original",
+            "OpenOriginal": "Abrir original",
+            "SourceChanged": "Fuente modificada · requiere revisión",
+            "Target": "Destino de publicación",
+            "ChooseTarget": "Selecciona un destino explícito",
+            "CreateNew": "Crear un elemento nuevo",
+            "PublishedVersion": "Versión publicada actual",
+            "SuggestedVersion": "Versión propuesta",
+            "SourceReviewNotice": "La fuente cambió o se eliminó. Puedes conservar la versión revisada con una advertencia o desactivarla. Para sustituir el contenido, revisa un borrador de la fuente actual.",
+            "Cancel": "Cancelar",
+            "Reject": "Rechazar",
+            "Archive": "Desactivar",
+            "KeepCurrent": "Conservar versión actual",
+            "Approve": "Aprobar y publicar",
+            "Edit": "Editar",
+            "Save": "Guardar",
+            "Loading": "Cargando…",
+            "NeedsMapping": "Selecciona una fuente de datos",
+            "ModelWide": "Todo el modelo de conocimiento",
+            "PendingCount": "{count} borradores",
+            "Field": {
+                "name": "Nombre",
+                "description": "Definición / significado de negocio",
+                "dataSource": "Fuente de datos",
+                "aliases": "Alias separados por comas",
+                "unit": "Unidad / moneda",
+                "scope": "Ámbito estadístico / exclusiones",
+                "source": "Tabla de origen (opcional)",
+                "expression": "Expresión de campo (opcional)",
+                "timeDimension": "Campo temporal (opcional)",
+                "filters": "Filtros, uno por línea",
+                "kind": "Tipo de conocimiento"
+            },
+            "Job": {
+                "queued": "Extracción en cola",
+                "running": "Extrayendo",
+                "completed": "Extracción completada",
+                "failed": "Error de extracción",
+                "blocked": "Se requiere configuración de IA / cuota",
+                "cancelled": "Extracción detenida"
+            },
+            "Error": {
+                "blocked": "Configura un modelo de IA en segundo plano o restablece la cuota y vuelve a intentarlo.",
+                "failed": "La extracción falló. Se conservan las fuentes y el conocimiento publicado.",
+                "quota": "Restaura la cuota de IA de la organización y vuelve a intentar.",
+                "config": "Configura un modelo de IA disponible en segundo plano y vuelve a intentar."
+            },
+            "Action": {
+                "add": "Elemento nuevo",
+                "update": "Actualización",
+                "conflict": "Definiciones en conflicto",
+                "source_changed": "Fuente modificada",
+                "remove": "Fuente eliminada"
+            },
+            "Backfill": "Extraer fuentes existentes"
         }
     },
     "AppSidebar": {
@@ -4301,7 +4475,12 @@
         "KnowledgeUsed": {
             "Title": "Activos usados por el Agent",
             "Description": "Artifacts y activos de conocimiento abiertos explícitamente durante esta ejecución.",
-            "Groups": { "artifact": "Artifacts", "knowledge_source": "Fuentes", "knowledge_definition": "Definiciones", "verified_query": "Consultas verificadas" },
+            "Groups": {
+                "artifact": "Artifacts",
+                "knowledge_source": "Fuentes",
+                "knowledge_definition": "Definiciones",
+                "verified_query": "Consultas verificadas"
+            },
             "ReadCount": "Leído {count} veces",
             "Unavailable": "No disponible",
             "None": "Ninguno",

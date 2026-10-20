@@ -5,9 +5,12 @@ import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { createGitHubInstallationUrl, githubAppConfigured, signGitHubConnectorState, verifyGitHubConnectorState } from '@/lib/server/github-app';
 import { listGitHubDirectories, listGitHubRepositories } from '@/lib/server/github-connector';
 import { getKnowledgeConnectorSyncRunner } from '@/lib/server/knowledge-connector-sync';
+import { assertLinearAdmin, assertLinearAvailable } from '@/lib/server/linear-credentials';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
+import { linearKnowledgeActions } from './linear';
+import { extractionKnowledgeActions } from './extraction';
 import {
     knowledgeConnectorSchema,
     knowledgeAssetTypeSchema,
@@ -515,7 +518,15 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
                         description: z.string().optional(),
                     }),
                 ),
-                knowledgeSources: z.array(z.object({ id: z.string(), fileName: z.string(), format: z.enum(['markdown', 'yaml', 'text']), connectionId: z.string().nullable() })),
+                knowledgeSources: z.array(
+                    z.object({
+                        id: z.string(),
+                        fileName: z.string(),
+                        format: z.enum(['markdown', 'yaml', 'text']),
+                        connectionId: z.string().nullable(),
+                        sourceUrl: z.string().nullable(),
+                    }),
+                ),
             }),
         ),
     }),
@@ -550,7 +561,7 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
                         connectionId: input.connectionId,
                         query: input.query,
                     })
-                ).map(({ id, fileName, format, connectionId }) => ({ id, fileName, format, connectionId })),
+                ).map(({ id, fileName, format, connectionId, sourceUrl }) => ({ id, fileName, format, connectionId, sourceUrl })),
             })),
         );
         return { models: results.filter(model => model.businessContext || model.definitions.length || model.knowledgeSources.length) };
@@ -790,7 +801,7 @@ export const knowledgeCreateGitHubConnectorAction = defineWebAction({
         });
         await ctx.services.db.knowledge.queueConnectorSync({ connectorId: connector.id });
         getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
-        return connector;
+        return knowledgeConnectorSchema.parse(connector);
     },
 });
 
@@ -807,7 +818,7 @@ export const knowledgeListConnectorsAction = defineWebAction({
     handler: async (ctx, input) => {
         const connectors = await ctx.services.db.knowledge.listConnectors({ organizationId: ctx.organizationId, ...input });
         if (githubAppConfigured()) getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
-        return { connectors };
+        return { connectors: connectors.map(connector => knowledgeConnectorSchema.parse(connector)) };
     },
 });
 
@@ -824,7 +835,11 @@ export const knowledgeSyncConnectorAction = defineWebAction({
     actors: ['user'],
     handler: async (ctx, input) => {
         const connector = await ctx.services.db.knowledge.getConnector({ organizationId: ctx.organizationId, ...input });
-        if (connector.status === 'disabled') throw new Error('Reconnect the GitHub App before syncing.');
+        if (connector.provider === 'linear') {
+            assertLinearAdmin(ctx);
+            assertLinearAvailable();
+        }
+        if (connector.status === 'disabled') throw new Error('Reconnect the knowledge connector before syncing.');
         await ctx.services.db.knowledge.queueConnectorSync({ connectorId: connector.id });
         getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
         return { queued: true };
@@ -842,12 +857,16 @@ export const knowledgeDeleteConnectorAction = defineWebAction({
     scopes: ['knowledge:write'],
     actors: ['user'],
     handler: async (ctx, input) => {
+        const connector = await ctx.services.db.knowledge.getConnector({ organizationId: ctx.organizationId, ...input });
+        if (connector.provider === 'linear') assertLinearAdmin(ctx);
         await ctx.services.db.knowledge.deleteConnector({ organizationId: ctx.organizationId, ...input });
         return { id: input.connectorId };
     },
 });
 
 export const knowledgeActions = [
+    ...extractionKnowledgeActions,
+    ...linearKnowledgeActions,
     knowledgeListAction,
     knowledgeGetAction,
     knowledgeCreateAction,

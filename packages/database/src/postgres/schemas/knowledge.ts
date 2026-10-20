@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { newEntityId } from '@dory/shared/id';
 import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
@@ -8,7 +8,7 @@ export { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion
 
 export type KnowledgeDefinitionKind = 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
 export type KnowledgeDefinitionStatus = 'verified' | 'unverified';
-export type KnowledgeAssetType = 'definition' | 'verified_query';
+export type KnowledgeAssetType = 'definition' | 'verified_query' | 'business_rule';
 export type KnowledgeSourceRelationType = 'provided' | 'generated';
 
 export type KnowledgeDefinition = {
@@ -147,9 +147,26 @@ export const knowledgeModelSources = pgTable(
 );
 
 export type KnowledgeSourceFormat = 'markdown' | 'yaml' | 'text';
-export type KnowledgeConnectorProvider = 'github';
+export type KnowledgeConnectorProvider = 'github' | 'linear';
 export type KnowledgeConnectorStatus = 'pending' | 'syncing' | 'ready' | 'error' | 'disabled';
 export type KnowledgeConnectorSyncJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+
+export const knowledgeLinearCredentials = pgTable(
+    'knowledge_linear_credentials',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `klc_${newEntityId()}`),
+        organizationId: text('organization_id').notNull(),
+        workspaceId: text('workspace_id').notNull(),
+        workspaceName: text('workspace_name').notNull(),
+        apiKeyEncrypted: text('api_key_encrypted').notNull(),
+        status: text('status').$type<'active' | 'invalid'>().notNull().default('active'),
+        version: integer('version').notNull().default(1),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [uniqueIndex('uidx_knowledge_linear_credentials_org_workspace').on(table.organizationId, table.workspaceId)],
+);
 
 export const knowledgeConnectors = pgTable(
     'knowledge_connectors',
@@ -162,11 +179,18 @@ export const knowledgeConnectors = pgTable(
             .notNull()
             .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
         provider: text('provider').$type<KnowledgeConnectorProvider>().notNull(),
-        installationId: text('installation_id').notNull(),
-        repositoryId: text('repository_id').notNull(),
-        repositoryFullName: text('repository_full_name').notNull(),
-        defaultBranch: text('default_branch').notNull(),
+        installationId: text('installation_id'),
+        repositoryId: text('repository_id'),
+        repositoryFullName: text('repository_full_name'),
+        defaultBranch: text('default_branch'),
         rootPath: text('root_path').notNull().default(''),
+        credentialId: text('credential_id').references(() => knowledgeLinearCredentials.id),
+        linearWorkspaceId: text('linear_workspace_id'),
+        linearWorkspaceName: text('linear_workspace_name'),
+        projectIds: jsonb('project_ids').$type<string[]>().notNull().default([]),
+        configRevision: integer('config_revision').notNull().default(0),
+        autoExtract: boolean('auto_extract').notNull().default(false),
+        nextSyncAt: timestamp('next_sync_at', { withTimezone: true }).notNull().defaultNow(),
         status: text('status').$type<KnowledgeConnectorStatus>().notNull().default('pending'),
         lastCommitSha: text('last_commit_sha'),
         lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
@@ -180,6 +204,7 @@ export const knowledgeConnectors = pgTable(
     },
     table => [
         uniqueIndex('uidx_knowledge_connectors_model_repo_path').on(table.knowledgeModelId, table.provider, table.repositoryId, table.rootPath),
+        uniqueIndex('uidx_knowledge_connectors_model_linear_workspace').on(table.knowledgeModelId, table.provider, table.linearWorkspaceId),
         index('idx_knowledge_connectors_org_model').on(table.organizationId, table.knowledgeModelId),
         index('idx_knowledge_connectors_installation_repo').on(table.installationId, table.repositoryId),
     ],
@@ -225,6 +250,7 @@ export const knowledgeConnectorItems = pgTable(
             .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
         remotePath: text('remote_path').notNull(),
         remoteSha: text('remote_sha').notNull(),
+        sourceUrl: text('source_url'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true })
             .notNull()
@@ -249,6 +275,8 @@ export const knowledgeConnectorSyncJobs = pgTable(
         status: text('status').$type<KnowledgeConnectorSyncJobStatus>().notNull().default('queued'),
         targetSha: text('target_sha'),
         attempts: integer('attempts').notNull().default(0),
+        leaseToken: text('lease_token'),
+        availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
         error: text('error'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true })
