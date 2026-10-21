@@ -1,3 +1,5 @@
+import { isPublishedDefinition } from '@dory/database/postgres/schemas/knowledge';
+
 import { ruleAppliesToMetric, ruleConnectionIds, ruleScope } from './knowledge-rule-scope';
 
 import 'server-only';
@@ -9,7 +11,7 @@ import { knowledgeSearchTokens } from './knowledge-search-tokens';
 
 export const AGENT_ASSET_KINDS = ['artifact', 'knowledge_definition', 'verified_query', 'knowledge_source', 'business_rule'] as const;
 export type AgentAssetKind = (typeof AGENT_ASSET_KINDS)[number];
-export type AgentAssetTrustLevel = 'verified' | 'source' | 'artifact';
+export type AgentAssetTrustLevel = 'verified' | 'automatic' | 'source' | 'artifact';
 
 export type AgentAssetSummary = {
     ref: string;
@@ -233,7 +235,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                             connectionIds,
                             knowledgeModelId: model.id,
                             knowledgeModelName: model.name,
-                            trustLevel: 'verified',
+                            trustLevel: rule.publicationMethod === 'automatic' ? 'automatic' : 'verified',
                             updatedAt: iso(rule.updatedAt),
                             revision: String(rule.revision),
                             sourceState: rule.sourceState,
@@ -245,7 +247,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                 }
                 if (kinds.has('knowledge_definition')) {
                     for (const definition of model.model.definitions) {
-                        if (definition.status !== 'verified') continue;
+                        if (!isPublishedDefinition(definition)) continue;
                         if (input.connectionId && definition.sourceConnectionId !== input.connectionId) continue;
                         const connectionIds = [definition.sourceConnectionId];
                         if (!isConnectionAllowed(connectionIds, input.allowedConnectionIds)) continue;
@@ -264,7 +266,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                             connectionIds,
                             knowledgeModelId: model.id,
                             knowledgeModelName: model.name,
-                            trustLevel: 'verified',
+                            trustLevel: definition.status === 'auto_published' ? 'automatic' : 'verified',
                             sourceState: assetEvidence.some(e => e.assetId === definition.id && e.state !== 'current') ? 'outdated' : 'current',
                             updatedAt: iso(model.updatedAt),
                             revision: revision({ definition, rules: modelRules.filter(r => ruleAppliesToMetric(r, definition)).map(r => [r.id, r.revision]) }),
@@ -327,14 +329,15 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                     if (input.connectionId && !connectionIds.includes(input.connectionId)) continue;
                     if (!isConnectionAllowed(connectionIds, input.allowedConnectionIds)) continue;
                     const excerpt = sourceExcerptById.get(source.id);
-                    const score = scoreAsset(query, source.fileName, [source.remotePath ?? ''], [source.format, source.connectorProvider, excerpt].filter(Boolean).join(' '));
+                    const readablePath = source.connectorProvider === 'linear' ? null : source.remotePath;
+                    const score = scoreAsset(query, source.fileName, [readablePath ?? ''], [source.format, source.connectorProvider, excerpt].filter(Boolean).join(' '));
                     if (!score) continue;
                     candidates.push({
                         ref: knowledgeSourceAgentAssetRef(model.id, source.id),
                         kind: 'knowledge_source',
                         sourceUrl: source.sourceUrl,
                         title: source.fileName,
-                        summary: compactText(excerpt || [source.format, source.remotePath, source.connectorProvider].filter(Boolean).join(' · ')),
+                        summary: compactText(excerpt || [source.format, readablePath, source.connectorProvider].filter(Boolean).join(' · ')),
                         connectionIds,
                         knowledgeModelId: model.id,
                         knowledgeModelName: model.name,
@@ -414,7 +417,7 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
             tab: 'rules',
             parameter: 'rule',
             id: rule.id,
-            trustLevel: 'verified',
+            trustLevel: rule.publicationMethod === 'automatic' ? 'automatic' : 'verified',
         });
         asset.sourceState = rule.sourceState;
         asset.sourceUrl = rule.evidence[0]?.sourceUrl ?? null;
@@ -422,6 +425,7 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
             asset,
             content: {
                 businessRule: rule.payload,
+                publicationMethod: rule.publicationMethod ?? 'human',
                 applicationScope: ruleScope(rule),
                 applicableMetrics: rule.metrics ?? [],
                 revision: rule.revision,
@@ -437,7 +441,7 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
         };
     }
     if (parsed.kind === 'knowledge_definition') {
-        const definition = model.model.definitions.find(item => item.id === parsed.definitionId && item.status === 'verified');
+        const definition = model.model.definitions.find(item => item.id === parsed.definitionId && isPublishedDefinition(item));
         if (!definition || !isConnectionAllowed([definition.sourceConnectionId], input.allowedConnectionIds)) unavailable();
         const effectiveRules = (await db.knowledge.extraction.listRules({ organizationId: input.organizationId, knowledgeModelId: model.id })).filter(r =>
             ruleAppliesToMetric(r, definition),
@@ -454,7 +458,7 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
             tab: 'definitions',
             parameter: 'definition',
             id: definition.id,
-            trustLevel: 'verified',
+            trustLevel: definition.status === 'auto_published' ? 'automatic' : 'verified',
         });
         const relatedRefs = [
             ...effectiveRules.map(r => `dory://knowledge/${pathPart(model.id)}/rules/${pathPart(r.id)}`),
@@ -473,6 +477,7 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
                     id: r.id,
                     revision: r.revision,
                     applicationScope: ruleScope(r),
+                    publicationMethod: r.publicationMethod ?? 'human',
                     name: r.payload.name,
                     description: r.payload.description,
                     sourceState: r.sourceState,
@@ -522,7 +527,7 @@ export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) 
         ref: input.ref,
         kind: parsed.kind,
         title: source.fileName,
-        summary: [source.format, source.remotePath, source.connectorProvider].filter(Boolean).join(' · '),
+        summary: [source.format, source.connectorProvider === 'linear' ? null : source.remotePath, source.connectorProvider].filter(Boolean).join(' · '),
         connectionIds,
         updatedAt: source.updatedAt,
         revisionValue: { id: source.id, contentText: source.contentText },

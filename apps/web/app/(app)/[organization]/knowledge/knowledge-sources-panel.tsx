@@ -39,7 +39,7 @@ type Definition = {
     id: string;
     name: string;
     kind: 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
-    status: 'verified' | 'unverified';
+    status: 'verified' | 'unverified' | 'auto_published';
     sourceConnectionId: string;
     description?: string;
     aliases?: string[];
@@ -440,7 +440,7 @@ function ImportReviewDialog({
         <Dialog open={Boolean(source && suggestions.length)} onOpenChange={onOpenChange}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader>
-                    <DialogTitle>{t('ReviewTitle', { name: source?.fileName ?? '' })}</DialogTitle>
+                    <DialogTitle>{t('ReviewTitle', { name: source ? knowledgeSourceDisplayName(source) : '' })}</DialogTitle>
                     <DialogDescription>{t('ReviewDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 divide-y overflow-y-auto rounded-md border">
@@ -1150,7 +1150,7 @@ export function KnowledgeSourcesPanel({
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>{t('DeleteTitle')}</AlertDialogTitle>
-                        <AlertDialogDescription>{t('DeleteDescription', { name: deleting?.fileName ?? '' })}</AlertDialogDescription>
+                        <AlertDialogDescription>{t('DeleteDescription', { name: deleting ? knowledgeSourceDisplayName(deleting) : '' })}</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={remove.isPending}>{t('Cancel')}</AlertDialogCancel>

@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
+import { isPublishedDefinition } from '@dory/shared/types/knowledge';
 import { OSSIE_DIALECTS, OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -57,6 +58,7 @@ import { toast } from 'sonner';
 import { executeActionClient } from '@/lib/actions/client';
 
 import { BusinessRulesPanel, KnowledgeEvidenceWarning, KnowledgeReviewPanel, MetricRulesPanel, useExtractionStatus } from './knowledge-extraction-panel';
+import { KnowledgePublicationControls } from './knowledge-publication-controls';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
 import { KnowledgeSourcesPanel } from './knowledge-sources-panel';
 
@@ -64,7 +66,7 @@ type Definition = {
     id: string;
     name: string;
     kind: 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
-    status: 'verified' | 'unverified';
+    status: 'verified' | 'unverified' | 'auto_published';
     sourceConnectionId: string;
     description?: string;
     aliases?: string[];
@@ -560,6 +562,7 @@ function EditKnowledgeModelDialog({
                     <DialogDescription>{t('EditDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
+                    {model ? <KnowledgePublicationControls organization={organization} modelId={model.id} settingsOnly /> : null}
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">{t('Name')}</label>
                         <Input value={name} onChange={event => setName(event.target.value)} />
@@ -826,7 +829,9 @@ function DefinitionExpandedRow({
                             <div className="text-base font-semibold">{definition.name}</div>
                             <div className="mt-2 flex flex-wrap gap-2">
                                 <Badge variant="outline">{t(`Kinds.${definition.kind}`)}</Badge>
-                                {definition.status === 'verified' ? (
+                                {definition.status === 'auto_published' ? (
+                                    <Badge variant="outline">{t('Extraction.AutomaticPublished')}</Badge>
+                                ) : definition.status === 'verified' ? (
                                     <Badge variant="secondary">
                                         <CheckCircle2 />
                                         {t('Verified')}
@@ -955,7 +960,7 @@ function EditDefinitionDialog({
         setAiInstructions(typeof definition.aiContext === 'string' ? definition.aiContext : (definition.aiContext?.instructions ?? ''));
         setAiSynonyms(typeof definition.aiContext === 'string' ? '' : (definition.aiContext?.synonyms?.join(', ') ?? ''));
         setAiExamples(typeof definition.aiContext === 'string' ? '' : (definition.aiContext?.examples?.join('\n') ?? ''));
-        setStatus(definition.status);
+        setStatus(definition.status === 'auto_published' ? 'verified' : definition.status);
     }, [definition]);
 
     const relationshipOptions = model.model.definitions.filter(item => item.sourceConnectionId === sourceConnectionId && item.kind === 'entity');
@@ -1310,7 +1315,9 @@ function DefinitionPanel({
                                         <td className="p-3">{t(`Kinds.${definition.kind}`)}</td>
                                         <td className="p-3">{definition.source || sourceName(definition.sourceConnectionId)}</td>
                                         <td className="p-3">
-                                            {definition.status === 'verified' ? (
+                                            {definition.status === 'auto_published' ? (
+                                                <Badge variant="outline">{t('Extraction.AutomaticPublished')}</Badge>
+                                            ) : definition.status === 'verified' ? (
                                                 <Badge variant="secondary">
                                                     <CheckCircle2 />
                                                     {t('Verified')}
@@ -1495,7 +1502,7 @@ function AskAiDialog({
                                     checked={sourceIds.includes(source.id)}
                                     onChange={() => setSourceIds(current => (current.includes(source.id) ? current.filter(id => id !== source.id) : [...current, source.id]))}
                                 />
-                                {source.fileName}
+                                {knowledgeSourceDisplayName(source)}
                             </label>
                         ))}
                         {sources.data && !sources.data.sources.length ? <p className="text-sm text-muted-foreground">{t('ReferenceSourcesEmpty')}</p> : null}
@@ -1883,7 +1890,7 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     const model = modelQuery.data;
     let verifiedDefinitionCount = 0;
     for (const definition of model.model.definitions) {
-        if (definition.status === 'verified' && definition.kind !== 'relationship') verifiedDefinitionCount += 1;
+        if (isPublishedDefinition(definition) && definition.kind !== 'relationship') verifiedDefinitionCount += 1;
     }
     const knowledgeSourceCount = sources.data?.sources.length ?? model.knowledgeSourceCount;
     return (

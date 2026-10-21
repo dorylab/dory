@@ -10,7 +10,7 @@ export const knowledgeDefinitionSchema = z.object({
     id: z.string().min(1).optional(),
     name: z.string().min(1).max(160),
     kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']),
-    status: z.enum(['verified', 'unverified']).default('verified'),
+    status: z.enum(['verified', 'unverified', 'auto_published']).default('verified'),
     sourceConnectionId: z.string().min(1),
     description: z.string().max(4000).optional(),
     aliases: z.array(z.string().min(1).max(160)).max(30).optional(),

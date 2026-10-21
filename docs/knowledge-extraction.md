@@ -1,7 +1,7 @@
 # 同步后提取与审核知识
 
 Linear 和 GitHub 连接器在完整快照同步成功后，可以自动提取指标定义与共享业务规则。
-提取结果先进入“待审核”；只有管理员批准的条目才进入正式知识和 Agent 检索。
+默认提取结果先进入“待审核”，管理员批准后进入正式知识和 Agent 检索。模型也可启用“自动发布符合条件的新内容”。
 不会生成已验证 SQL、实体或关系，也不会修改人工维护的模型业务背景。
 
 ## 开启与日常使用
@@ -43,7 +43,7 @@ Linear 和 GitHub 连接器在完整快照同步成功后，可以自动提取�
 停用规则停止其作用，已有引用保留提示；删除指标只清理关联，保留规则。
 
 来源 AI 提取结果先暂存，由独立的持久化模型整理任务综合完整结果、未审核草稿和正式知识整理分类、重复与引用。
-所有输入必须被完整保留在整理结果中，证据来自原始版本；失败保留旧草稿，可在“待审核”点击“整理待审核草稿”重试。
+所有输入都必须有可追溯的处理结果：指标、共享业务规则或“仅保留在原文”。背景分类记录保存原因及证据；失败保留旧草稿，可在“待审核”点击“AI 整理草稿”重试。
 共享范围不确定时保留为指标条件或等待管理员明确范围，不自动扩大为全局规则。
 新指标依赖未发布规则时，审核窗口同时显示依赖规则及证据，一起事务发布；也可以明确把该条件保留在指标内。
 存在冲突时必须明确选择目标。审核再次校验来源、正式条目、规则及引用版本。
@@ -87,7 +87,38 @@ Desktop 使用同一应用和队列，运行期间处理，关闭／休眠后在
 - `knowledge.organizeCandidates`、`knowledge.updateMetricRules`、`knowledge.reviewCandidateBundle`
 - `knowledge.listCandidates`、`knowledge.getCandidate`、`knowledge.reviewCandidate`、`knowledge.approveCandidates`
 - `knowledge.listBusinessRules`、`knowledge.getBusinessRule`、`knowledge.updateBusinessRule`、`knowledge.getAssetEvidence`
+- `knowledge.getPublicationPolicy`、`knowledge.setPublicationPolicy`、`knowledge.getProcessingHistory`
+- `knowledge.restoreBackground`、`knowledge.withdrawAutomaticPublication`、`knowledge.retryPublication`
 
 Action 请求继续使用现有 `/api/actions/execute` 入口；不提供绕过审核的自动发布接口。
 
 测试与真实电商验收记录见 [提取验收](testing/knowledge-extraction-acceptance-cn.md)。
+
+## 模型发布设置与处理历史
+
+在模型编辑或“待审核 → 发布设置”选择生效方式。所有新旧模型默认“审核后生效”。
+自动发布仅适用于开启后新提取的内容；既有草稿、同版本重跑及恢复项保持人工审核。
+关闭或重新开启会更新策略版本，旧发布任务不能借此重新发布。设置不会开启连接器提取或触发历史补跑。
+
+自动发布要求当前原文证据、明确适用范围且没有冲突。指标还需要原文明确提供关联数据源、表和表达式，
+字段通过 Schema 校验；不运行 SQL，不猜测映射。共享规则若影响已有正式指标（含全局和数据源范围）仍需审核。
+需要共同审核、覆盖正式内容、存在未发布依赖或分类不确定的条目都进入待审核。
+
+自动发布内容显示“AI 自动发布”，Agent 收到 `automatic` 信任标记，不把它当成人工验证。
+后台发布独立于同步和提取，具有持久队列、租约、重启恢复及最多五次临时失败重试。
+“处理历史”可查看发布方式、原文证据、分类原因以及失败任务的重试入口。
+自动发布的未修改、无新增引用条目可撤回；撤回后退出正式检索并恢复到人工待审核。
+已编辑或被引用的条目应通过现有编辑／停用流程处理。人工编辑记录为人工维护，自动流程不会覆盖。
+
+## 背景资料分类
+
+临时评估范围、某次测试的“最近完整季度”、历史事故、调查假设及示例仅保留在原文，继续按原文检索规则可读，
+不会成为独立的长期业务规则。UTC／USD 等明确共享约定仍可提取；日期和术语本身不构成共享依据。
+时间字段、分母及专属排除条件属于对应指标。无法确认分类或映射时保留待审核。
+背景记录可从处理历史恢复，但来源版本变化后必须重新提取，不能批准旧证据。
+
+0037 在 Postgres／PGlite 增加发布策略、任务及处理记录，并为有待审核草稿的存量模型安排一次分类整理。
+0036 历史迁移保留不变。整理不修改既有正式条目或连接器开关，失败保留旧草稿。
+Web／Docker 需要持续运行 Node 服务；Desktop 在运行期间处理，重启后恢复。
+
+本次发布策略、分类整理与兼容性验证见 [模型发布验收记录](testing/knowledge-publication-acceptance-cn.md)。

@@ -83,7 +83,7 @@ test('semantic model and rule scope labels are distinct and a metric reviews dep
         await page.goto(`/${organization}/knowledge/${model.id}?tab=review`);
         await expect(page.getByRole('tab', { name: 'Semantic model', exact: true })).toBeVisible();
         await expect(page.getByRole('tab', { name: 'Business rules', exact: true })).toBeVisible();
-        const row = page.locator('div.rounded-md.border.p-4').filter({ hasText: 'Net revenue' });
+        const row = page.getByRole('list', { name: 'Pending review', exact: true }).getByRole('listitem').filter({ hasText: 'Net revenue' });
         await expect(row.getByRole('checkbox')).toBeDisabled();
         await row.getByRole('button', { name: 'Review', exact: true }).click();
         const dialog = page.getByRole('dialog');

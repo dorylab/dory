@@ -1,4 +1,5 @@
 import { knowledgeHash } from '@dory/database/postgres/impl/knowledge';
+import { isPublishedDefinition } from '@dory/database/postgres/schemas/knowledge';
 
 import { ruleAppliesToMetric, ruleScope } from './knowledge-rule-scope';
 
@@ -112,12 +113,12 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
             const rules = await db.knowledge.extraction.listRules({ organizationId: input.organizationId, knowledgeModelId: model.id });
             const evidence = await db.knowledge.extraction.evidenceFor({ organizationId: input.organizationId, knowledgeModelId: model.id });
             const staleWarnings = model.model.definitions
-                .filter(d => d.status === 'verified' && d.sourceConnectionId === input.connectionId && evidence.some(e => e.assetId === d.id && e.state !== 'current'))
+                .filter(d => isPublishedDefinition(d) && d.sourceConnectionId === input.connectionId && evidence.some(e => e.assetId === d.id && e.state !== 'current'))
                 .map(d => `- ${d.name}: SOURCE CHANGED; reviewed version retained pending re-review.`);
             const textualMetrics = model.model.definitions
                 .filter(
                     d =>
-                        d.status === 'verified' &&
+                        isPublishedDefinition(d) &&
                         d.kind === 'metric' &&
                         typeof d.aiContext === 'object' &&
                         d.aiContext?.descriptionOnly === true &&
@@ -131,7 +132,7 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
                     return model.model.definitions.some(
                         d =>
                             d.kind === 'metric' &&
-                            d.status === 'verified' &&
+                            isPublishedDefinition(d) &&
                             d.sourceConnectionId === input.connectionId &&
                             ruleAppliesToMetric(r, d) &&
                             Boolean(input.question && [d.name, ...(d.aliases ?? [])].some(name => input.question!.toLocaleLowerCase().includes(name.toLocaleLowerCase()))),
@@ -146,10 +147,16 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
                 .slice(0, 10);
             return {
                 modelId: model.id,
-                baseLines: [...staleWarnings, ...textualMetrics],
+                baseLines: [
+                    ...staleWarnings,
+                    ...textualMetrics,
+                    ...model.model.definitions
+                        .filter(d => d.status === 'auto_published' && d.sourceConnectionId === input.connectionId)
+                        .map(d => `- ${d.name}: AI AUTOMATICALLY PUBLISHED; not human-verified. Refer to source evidence before use.`),
+                ],
                 entries: selectedRules.map(r => ({
                     rule: r,
-                    text: `- ${r.payload.name} [scope=${ruleScope(r)}${ruleScope(r) === 'metrics' ? `; ONLY metrics: ${r.metrics?.map(m => m.name).join(', ')}` : ''}; revision=${r.revision}]: ${r.payload.description.slice(0, 1200)}${r.sourceState === 'outdated' ? ' [SOURCE CHANGED: pending re-review]' : ''}\n  Reference: dory://knowledge/${model.id}/rules/${r.id}${r.evidence[0]?.sourceUrl ? `\n  Source: ${r.evidence[0].sourceUrl}` : ''}`,
+                    text: `- ${r.payload.name} [scope=${ruleScope(r)}${ruleScope(r) === 'metrics' ? `; ONLY metrics: ${r.metrics?.map(m => m.name).join(', ')}` : ''}; publication=${r.publicationMethod}; revision=${r.revision}]: ${r.payload.description.slice(0, 1200)}${r.sourceState === 'outdated' ? ' [SOURCE CHANGED: pending re-review]' : ''}\n  Reference: dory://knowledge/${model.id}/rules/${r.id}${r.evidence[0]?.sourceUrl ? `\n  Source: ${r.evidence[0].sourceUrl}` : ''}`,
                 })),
             };
         }),
@@ -220,7 +227,7 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
     let remainingRelationships = MAX_RELATIONSHIPS;
     for (const { model } of selected) {
         const semanticModel = model.ossieDocument;
-        const verified = model.model.definitions.filter(item => item.status === 'verified');
+        const verified = model.model.definitions.filter(item => isPublishedDefinition(item));
         const verifiedEntities = new Set(verified.filter(item => item.kind === 'entity').map(item => item.name));
         const verifiedFields = new Set(verified.filter(item => item.kind === 'dimension').map(item => item.name));
         const verifiedMetrics = new Set(

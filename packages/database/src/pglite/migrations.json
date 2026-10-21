@@ -606,5 +606,33 @@
     "bps": true,
     "folderMillis": 1792483200002,
     "hash": "a6fb43e79a8876e8e125b9d9d1a2946bdcf038fb7c039760d27c382ab5b43ca6"
+  },
+  {
+    "sql": [
+      "ALTER TABLE knowledge_organization_jobs ADD COLUMN last_completed_at timestamp with time zone;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1792483200003,
+    "hash": "1801a1e673f8071d350cd2fe3688073af2f90c7000a65948edcecb82ceda6ba0"
+  },
+  {
+    "sql": [
+      "ALTER TABLE knowledge_models ADD COLUMN publication_mode text NOT NULL DEFAULT 'review';\n",
+      "\nALTER TABLE knowledge_models ADD COLUMN publication_epoch integer NOT NULL DEFAULT 0;\n",
+      "\nALTER TABLE knowledge_extraction_jobs ADD COLUMN publication_epoch integer;\n",
+      "\nALTER TABLE knowledge_candidates ADD COLUMN publication_epoch integer;\n",
+      "\nALTER TABLE knowledge_candidates ADD COLUMN manual_only integer NOT NULL DEFAULT 0;\n",
+      "\nALTER TABLE knowledge_candidates ADD COLUMN classification_reason text;\n",
+      "\nALTER TABLE knowledge_business_rules ADD COLUMN publication_method text NOT NULL DEFAULT 'human';\n",
+      "\nCREATE TABLE knowledge_publication_jobs (\n id text PRIMARY KEY, organization_id text NOT NULL,\n knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n candidate_id text NOT NULL REFERENCES knowledge_candidates(id) ON DELETE CASCADE,\n publication_epoch integer NOT NULL, status text NOT NULL DEFAULT 'queued', attempts integer NOT NULL DEFAULT 0,\n lease_token text, lease_expires_at timestamptz, available_at timestamptz NOT NULL DEFAULT now(), error text,\n updated_at timestamptz NOT NULL DEFAULT now()\n);\n",
+      "\nCREATE UNIQUE INDEX uidx_publication_candidate ON knowledge_publication_jobs(candidate_id);\n",
+      "\nCREATE INDEX idx_publication_queue ON knowledge_publication_jobs(status, available_at);\n",
+      "\nCREATE TABLE knowledge_processing_history (\n id text PRIMARY KEY, organization_id text NOT NULL,\n knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n candidate_id text REFERENCES knowledge_candidates(id) ON DELETE SET NULL,\n kind text NOT NULL, asset_id text, asset_revision text, publication_epoch integer, actor_id text, reason text,\n payload jsonb NOT NULL, evidence jsonb NOT NULL DEFAULT '[]'::jsonb, created_at timestamptz NOT NULL DEFAULT now()\n);\n",
+      "\nCREATE INDEX idx_processing_history_model ON knowledge_processing_history(organization_id, knowledge_model_id);\n",
+      "\nINSERT INTO knowledge_organization_jobs(id, organization_id, knowledge_model_id)\nSELECT 'koj_classification_' || knowledge_model_id, organization_id, knowledge_model_id\nFROM knowledge_candidates WHERE status = 'pending' AND action NOT IN ('source_changed', 'remove') GROUP BY organization_id, knowledge_model_id\nON CONFLICT (knowledge_model_id) DO UPDATE SET status = 'queued', attempts = 0, generation = knowledge_organization_jobs.generation + 1, lease_token = NULL, error = NULL, available_at = now();\n"
+    ],
+    "bps": true,
+    "folderMillis": 1792483200004,
+    "hash": "8aa939aa8076c6a1b38c0b576c2a9cf056fdbd9ee160960d781f3f01ebef07c0"
   }
 ]

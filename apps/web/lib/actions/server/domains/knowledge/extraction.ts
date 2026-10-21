@@ -36,6 +36,102 @@ async function review(ctx: ActionContext<WebActionServices>, input: z.infer<type
 }
 export const extractionKnowledgeActions = [
     defineWebAction({
+        id: 'knowledge.getPublicationPolicy',
+        domain: 'knowledge',
+        kind: 'query',
+        risk: 'read',
+        inputSchema: modelInput,
+        outputSchema: z.object({ mode: z.enum(['review', 'automatic']), version: z.number(), canManage: z.boolean() }),
+        permissions: readWorkspace,
+        scopes: ['knowledge:read'],
+        actors: ['user'],
+        handler: async (ctx, input) => ({
+            ...(await ctx.services.db.knowledge.extraction.publication.policy({ ...input, organizationId: ctx.organizationId })),
+            canManage: ctx.access.role === 'owner' || ctx.access.role === 'admin',
+        }),
+    }),
+    defineWebAction({
+        id: 'knowledge.setPublicationPolicy',
+        domain: 'knowledge',
+        kind: 'command',
+        risk: 'write',
+        requiresConfirmation: false,
+        inputSchema: modelInput.extend({ mode: z.enum(['review', 'automatic']), expectedVersion: z.number().int() }),
+        outputSchema: z.unknown(),
+        permissions: writeWorkspace,
+        scopes: ['knowledge:write'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            return ctx.services.db.knowledge.extraction.publication.setPolicy({ ...input, organizationId: ctx.organizationId });
+        },
+    }),
+    defineWebAction({
+        id: 'knowledge.getProcessingHistory',
+        domain: 'knowledge',
+        kind: 'query',
+        risk: 'read',
+        inputSchema: modelInput,
+        outputSchema: z.unknown(),
+        permissions: readWorkspace,
+        scopes: ['knowledge:read'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            return ctx.services.db.knowledge.extraction.publication.history({ ...input, organizationId: ctx.organizationId });
+        },
+    }),
+    defineWebAction({
+        id: 'knowledge.restoreBackground',
+        domain: 'knowledge',
+        kind: 'command',
+        risk: 'write',
+        requiresConfirmation: false,
+        inputSchema: modelInput.extend({ id: z.string() }),
+        outputSchema: z.unknown(),
+        permissions: writeWorkspace,
+        scopes: ['knowledge:write'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            return ctx.services.db.knowledge.extraction.publication.restore({ ...input, organizationId: ctx.organizationId, userId: ctx.userId });
+        },
+    }),
+    defineWebAction({
+        id: 'knowledge.withdrawAutomaticPublication',
+        domain: 'knowledge',
+        kind: 'command',
+        risk: 'write',
+        requiresConfirmation: false,
+        inputSchema: modelInput.extend({ id: z.string(), expectedRevision: z.string() }),
+        outputSchema: z.unknown(),
+        permissions: writeWorkspace,
+        scopes: ['knowledge:write'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            return ctx.services.db.knowledge.extraction.publication.withdraw({ ...input, organizationId: ctx.organizationId, userId: ctx.userId });
+        },
+    }),
+    defineWebAction({
+        id: 'knowledge.retryPublication',
+        domain: 'knowledge',
+        kind: 'command',
+        risk: 'write',
+        requiresConfirmation: false,
+        inputSchema: modelInput.extend({ id: z.string() }),
+        outputSchema: z.unknown(),
+        permissions: writeWorkspace,
+        scopes: ['knowledge:write'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            await ctx.services.db.knowledge.extraction.publication.retry({ ...input, organizationId: ctx.organizationId });
+            getKnowledgeExtractionRunner(ctx.services.db).wake();
+            return { ok: true };
+        },
+    }),
+    defineWebAction({
         id: 'knowledge.organizeCandidates',
         domain: 'knowledge',
         kind: 'command',
@@ -72,7 +168,7 @@ export const extractionKnowledgeActions = [
         actors: ['user'],
         handler: async (ctx, input) => {
             admin(ctx);
-            return ctx.services.db.knowledge.extraction.updateMetricRules({ ...input, organizationId: ctx.organizationId });
+            return ctx.services.db.knowledge.extraction.updateMetricRules({ ...input, organizationId: ctx.organizationId, userId: ctx.userId });
         },
     }),
     defineWebAction({
@@ -240,7 +336,7 @@ export const extractionKnowledgeActions = [
             const results: Array<{ id: string; approved: boolean; error?: string }> = [];
             for (const id of [...new Set(input.candidateIds)]) {
                 const draft = pending.find(d => d.id === id);
-                if (!draft || draft.action !== 'add' || draft.targetAssetId) {
+                if (!draft || draft.action !== 'add' || draft.targetAssetId || draft.classificationReason) {
                     results.push({ id, approved: false, error: 'Review conflicting or changed knowledge individually.' });
                     continue;
                 }

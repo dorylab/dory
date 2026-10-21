@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { AGENT_ASSET_KINDS, readAgentAsset, searchAgentAssets } from '@/lib/server/agent-assets';
+
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace } from '../../policies';
 
@@ -13,7 +14,7 @@ const agentAssetSummarySchema = z.object({
     connectionIds: z.array(z.string()),
     knowledgeModelId: z.string().nullable(),
     knowledgeModelName: z.string().nullable(),
-    trustLevel: z.enum(['verified', 'source', 'artifact']),
+    trustLevel: z.enum(['verified', 'automatic', 'source', 'artifact']),
     updatedAt: z.string(),
     revision: z.string(),
     deepLink: z.string(),

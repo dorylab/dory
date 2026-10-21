@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-
+import type { PostgresDBClient } from '@dory/shared';
+import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 
-import type { PostgresDBClient } from '@dory/shared';
-import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 import { PostgresKnowledgeRepository } from '../../src/postgres/impl/knowledge';
 import { migrateLegacyOssieModels } from '../../src/postgres/impl/knowledge/migrate-ossie';
 import { ossieRevision, parseOssieYaml, projectOssieDocument } from '../../src/postgres/impl/knowledge/ossie';
@@ -16,6 +15,7 @@ async function fixture() {
     const client = new PGlite();
     await client.exec(`CREATE TABLE knowledge_models (
         id text PRIMARY KEY, organization_id text NOT NULL, name text NOT NULL, description text,
+        publication_mode text NOT NULL DEFAULT 'review', publication_epoch integer NOT NULL DEFAULT 0,
         business_context_md text NOT NULL DEFAULT '', model_yaml text NOT NULL, model_json jsonb NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
     );

@@ -82,3 +82,25 @@ test('single-metric conditions fold into a review preserving official ID mapping
     assert.equal(shared.payload.applicationScope, 'metrics');
     assert.deepEqual(shared.payload.metricIds, ['net']);
 });
+
+test('organization accounts for background without publishing rules, and preserves manually restored input', () => {
+    const item = {
+        id: 'context',
+        payload: { ...rule.payload, name: 'Historical incident' },
+        evidence: [{ sourceId: 's', sourceHash: 'h', sourceTitle: 'Incident', sourceUrl: null, quote: 'Historical incident is an unverified hypothesis.' }],
+    };
+    const output = JSON.stringify({ items: [{ payload: item.payload, inputIds: ['context'], disposition: 'background', reason: 'A historical investigation hypothesis.' }] });
+    const result = parseKnowledgeOrganization(output, [item]);
+    assert.equal(reconcileOrganizedItems(result)[0].disposition, 'background');
+    assert.throws(() => parseKnowledgeOrganization(output, [{ ...item, manualOnly: true }]), /Protected/);
+    assert.throws(() => parseKnowledgeOrganization(output, [{ ...item, targetAssetId: 'published-rule' }]), /Protected/);
+    assert.throws(() => parseKnowledgeOrganization('{"items":[]}', [item]), /preserve/);
+});
+
+test('explicit table field mappings cannot be discarded as background', () => {
+    const payload = { ...rule.payload, name: 'Time mapping', description: 'Orders use orders.ordered_at.' };
+    const input = { id: 'I1', payload, evidence: [{ sourceId: 's', sourceHash: 'h', sourceTitle: 'Mappings', sourceUrl: null, quote: payload.description }] };
+    const result = parseKnowledgeOrganization(JSON.stringify({ items: [{ payload, inputIds: ['I1'], disposition: 'background', reason: 'Context only' }] }), [input]);
+    assert.equal(result[0].disposition, 'knowledge');
+    assert.match(result[0].reason!, /review/);
+});

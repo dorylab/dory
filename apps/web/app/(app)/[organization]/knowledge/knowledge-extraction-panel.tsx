@@ -11,17 +11,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { ExtractedKnowledge } from '@dory/database/postgres/schemas/knowledge-extraction';
+import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, RefreshCw } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+
+import { KnowledgePublicationControls } from './knowledge-publication-controls';
 
 type Metric = { id: string; name: string; sourceConnectionId: string; revision?: string };
 type DataSource = { connectionId: string; name: string };
 type Evidence = { id: string; quote: string; sourceUrl: string | null; sourceTitle: string; state: string };
 type Candidate = {
+    publicationReason?: string | null;
+    classificationReason?: string | null;
     id: string;
     payload: ExtractedKnowledge;
     action: 'add' | 'update' | 'conflict' | 'source_changed' | 'remove';
@@ -31,6 +36,7 @@ type Candidate = {
 };
 type Target = { id: string; name: string; kind: string; revision: string; content: Partial<ExtractedKnowledge> };
 type Rule = {
+    publicationMethod?: 'human' | 'automatic';
     id: string;
     payload: ExtractedKnowledge;
     status: string;
@@ -42,7 +48,7 @@ type Rule = {
     metrics?: Metric[];
 };
 export type ExtractionStatus = {
-    organizationJob?: { status: string; error: string | null } | null;
+    organizationJob?: { status: string; error: string | null; lastCompletedAt?: string | null } | null;
     canManage: boolean;
     connectors: Array<{ id: string; autoExtract: boolean }>;
     pendingCount: number;
@@ -62,7 +68,10 @@ export function useExtractionStatus(organization: string, knowledgeModelId: stri
     return useQuery({
         queryKey: extractionStatusKey(organization, knowledgeModelId),
         queryFn: () => executeActionClient<ExtractionStatus>('knowledge.getExtractionStatus', { knowledgeModelId }, { organizationId: organization }),
-        refetchInterval: query => (query.state.data?.jobs.some(j => ['queued', 'running'].includes(j.status)) ? 2000 : 10_000),
+        refetchInterval: query =>
+            query.state.data?.jobs.some(j => ['queued', 'running'].includes(j.status)) || ['queued', 'running'].includes(query.state.data?.organizationJob?.status ?? '')
+                ? 2000
+                : 10_000,
     });
 }
 function useExtractionAction(organization: string, knowledgeModelId: string) {
@@ -188,7 +197,7 @@ function EvidenceList({ evidence }: { evidence: Evidence[] }) {
             {evidence.map(e => (
                 <div key={e.id} className="rounded-md border bg-muted/30 p-3 text-sm">
                     <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{e.sourceTitle.split(' · ')[0]}</span>
+                        <span>{knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl })}</span>
                         {e.state !== 'current' ? <Badge variant="outline">{t('SourceChanged')}</Badge> : null}
                         {e.sourceUrl ? (
                             <Tooltip>
@@ -637,11 +646,22 @@ function CandidateReview({
         </Dialog>
     );
 }
+function bulkReviewRestriction(candidate: Candidate, dataSources: DataSource[]) {
+    if (candidate.action !== 'add' || candidate.targetAssetId || candidate.classificationReason) return 'IndividualReviewRequired';
+    if (candidate.payload.ruleCandidateIds?.length) return 'JointReviewRequired';
+    if (candidate.payload.kind === 'metric' && !dataSources.some(source => source.connectionId === candidate.payload.sourceConnectionId)) return 'NeedsMapping';
+    return null;
+}
+
 export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSources }: { organization: string; knowledgeModelId: string; dataSources: DataSource[] }) {
     const t = useTranslations('Knowledge.Extraction');
+    const pub = useTranslations('Knowledge.Publication');
+    const locale = useLocale();
+    const client = useQueryClient();
     const status = useExtractionStatus(organization, knowledgeModelId);
     const action = useExtractionAction(organization, knowledgeModelId);
     const [selected, setSelected] = useState<string[]>([]);
+    const [approvalErrors, setApprovalErrors] = useState<string[]>([]);
     const [reviewing, setReviewing] = useState<Candidate | null>(null);
     const query = useQuery({
         queryKey: ['knowledge-model', knowledgeModelId, 'candidates', organization],
@@ -654,86 +674,202 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
         enabled: status.data?.canManage === true,
         refetchInterval: 5000,
     });
+    const candidates = query.data?.candidates ?? [];
+    const eligibleIds = candidates.filter(candidate => !bulkReviewRestriction(candidate, dataSources)).map(candidate => candidate.id);
+    const selectedIds = eligibleIds.filter(id => selected.includes(id));
+    const batch = useMutation({
+        retry: false,
+        mutationFn: async (ids: string[]) => {
+            const expectedRuleRevisions = Object.fromEntries((query.data?.rules ?? []).map(rule => [rule.id, rule.revision]));
+            const expectedMetricRevisions = Object.fromEntries((query.data?.metrics ?? []).map(metric => [metric.id, metric.revision]));
+            let approvedCount = 0;
+            for (let offset = 0; offset < ids.length; offset += 50) {
+                const candidateIds = ids.slice(offset, offset + 50);
+                const result = await executeActionClient<{ results: Array<{ id: string; approved: boolean; error?: string }> }>(
+                    'knowledge.approveCandidates',
+                    { knowledgeModelId, candidateIds, expectedRuleRevisions, expectedMetricRevisions },
+                    { organizationId: organization },
+                );
+                const approved = new Set(result.results.filter(item => item.approved).map(item => item.id));
+                approvedCount += approved.size;
+                setSelected(current => current.filter(id => !approved.has(id)));
+                const failures = candidateIds
+                    .filter(id => !approved.has(id))
+                    .map(id => {
+                        const name = candidates.find(candidate => candidate.id === id)?.payload.name ?? id;
+                        return `${name}: ${result.results.find(item => item.id === id)?.error ?? t('ApprovalFailed')}`;
+                    });
+                if (failures.length) setApprovalErrors(current => [...current, ...failures]);
+            }
+            return approvedCount;
+        },
+        onMutate: () => setApprovalErrors([]),
+        onSuccess: count => {
+            if (count) toast.success(t('ApprovedCount', { count }));
+        },
+        onError: error => {
+            const message = error instanceof Error ? error.message : t('ApprovalFailed');
+            setApprovalErrors(current => [...current, message]);
+            toast.error(t('BatchInterrupted'));
+        },
+        onSettled: () => client.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] }),
+    });
+    const organizing = ['queued', 'running'].includes(status.data?.organizationJob?.status ?? '');
+    const busy = organizing || action.isPending || batch.isPending;
+    const organizationJob = status.data?.organizationJob;
+    if (status.isPending)
+        return (
+            <p role="status" className="text-sm text-muted-foreground">
+                {t('Loading')}
+            </p>
+        );
+    if (status.error)
+        return (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                <span className="min-w-0 break-words">{status.error.message}</span>
+                <Button variant="outline" size="sm" onClick={() => void status.refetch()}>
+                    {t('RetryLoading')}
+                </Button>
+            </div>
+        );
     if (!status.data?.canManage) return <p className="text-sm text-muted-foreground">{t('AdminOnly')}</p>;
     return (
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4 text-foreground">
             <p className="text-sm text-muted-foreground">{t('ReviewNotice')}</p>
-            <div className="flex flex-wrap items-center gap-3">
-                <Button
-                    variant="outline"
-                    disabled={action.isPending || status.data?.organizationJob?.status === 'running'}
-                    onClick={() => action.mutate({ actionId: 'knowledge.organizeCandidates', input: {} })}
-                >
-                    {t('Organize')}
-                </Button>
-                {status.data?.organizationJob ? (
-                    <span className="text-sm text-muted-foreground" role="status">
-                        {t('OrganizationStatus')}: {t(`Job.${status.data.organizationJob.status}`)}
-                        {status.data.organizationJob.error ? ` · ${status.data.organizationJob.error}` : ''}
+            <KnowledgePublicationControls organization={organization} modelId={knowledgeModelId} />
+            <div role="toolbar" aria-label={t('ReviewToolbar')} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <label className="flex items-center gap-2">
+                        <Checkbox
+                            aria-label={t('SelectAll')}
+                            checked={selectedIds.length > 0 && selectedIds.length === eligibleIds.length ? true : selectedIds.length ? 'indeterminate' : false}
+                            disabled={!eligibleIds.length || busy || query.isPending || query.isError}
+                            onCheckedChange={checked => setSelected(checked === true ? eligibleIds : [])}
+                        />
+                        {t('SelectAll')}
+                    </label>
+                    <span role="status" className="text-muted-foreground">
+                        {t('SelectedCount', { count: selectedIds.length })}
                     </span>
-                ) : null}
-            </div>
-            <Button
-                variant="outline"
-                disabled={!selected.length || action.isPending}
-                onClick={() =>
-                    action.mutate(
-                        {
-                            actionId: 'knowledge.approveCandidates',
-                            input: {
-                                candidateIds: selected,
-                                expectedRuleRevisions: Object.fromEntries((query.data?.rules ?? []).map(r => [r.id, r.revision])),
-                                expectedMetricRevisions: Object.fromEntries((query.data?.metrics ?? []).map(m => [m.id, m.revision])),
-                            },
-                        },
-                        { onSuccess: () => setSelected([]) },
-                    )
-                }
-            >
-                {t('ApproveSelected', { count: selected.length })}
-            </Button>
-            {query.error ? (
-                <p role="alert" className="text-sm text-destructive">
-                    {query.error.message}
-                </p>
-            ) : null}
-            {query.isLoading ? (
-                <p>{t('Loading')}</p>
-            ) : !query.data?.candidates.length ? (
-                <p className="text-sm text-muted-foreground">{t('NoCandidates')}</p>
-            ) : (
-                query.data.candidates.map(candidate => (
-                    <div key={candidate.id} className="flex items-center justify-between gap-3 rounded-md border p-4">
-                        <div className="flex items-center gap-3">
-                            <Checkbox
-                                aria-label={t('SelectNamed', { name: candidate.payload.name })}
-                                checked={selected.includes(candidate.id)}
-                                disabled={
-                                    Boolean(candidate.payload.ruleCandidateIds?.length) ||
-                                    candidate.action !== 'add' ||
-                                    (candidate.payload.kind === 'metric' && !candidate.payload.sourceConnectionId)
-                                }
-                                onCheckedChange={checked => setSelected(ids => (checked ? [...ids, candidate.id] : ids.filter(id => id !== candidate.id)))}
-                            />
-                            <div>
-                                <div className="font-medium">{candidate.payload.name}</div>
-                                <div className="mt-1 flex flex-wrap gap-2">
-                                    <Badge variant="outline">{t(candidate.payload.kind === 'metric' ? 'Metric' : 'BusinessRule')}</Badge>
-                                    <Badge variant="outline">{t(`Action.${candidate.action}`)}</Badge>
-                                </div>
+                </div>
+                <div className="ml-auto flex flex-wrap justify-end gap-2">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="inline-flex" tabIndex={busy || query.isPending || query.isError ? 0 : undefined}>
+                                <Button
+                                    variant="outline"
+                                    className="border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+                                    aria-description={t('OrganizeHelp')}
+                                    disabled={busy || query.isPending || query.isError}
+                                    onClick={() => action.mutate({ actionId: 'knowledge.organizeCandidates', input: {} })}
+                                >
+                                    {organizing || action.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                                    {t('Organize')}
+                                </Button>
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-[min(22rem,calc(100vw-2rem))] space-y-2 leading-relaxed">
+                            <p>{t('OrganizeHelp')}</p>
+                            <div className="space-y-1 border-t border-current/20 pt-2">
+                                {organizationJob ? (
+                                    <p>
+                                        {t('OrganizationStatus')}: {t(`OrganizationJob.${organizationJob.status}`)}
+                                    </p>
+                                ) : null}
+                                <p>
+                                    {t('LastCompleted')}{' '}
+                                    {organizationJob?.lastCompletedAt ? (
+                                        <time dateTime={organizationJob.lastCompletedAt}>{new Date(organizationJob.lastCompletedAt).toLocaleString(locale)}</time>
+                                    ) : (
+                                        <span>{t('NoOrganizationCompleted')}</span>
+                                    )}
+                                </p>
+                                {organizationJob?.error ? (
+                                    <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{organizationJob.error}</p>
+                                ) : null}
                             </div>
-                        </div>
-                        <Button variant="outline" onClick={() => setReviewing(candidate)}>
-                            {t('Review')}
-                        </Button>
-                    </div>
-                ))
+                        </TooltipContent>
+                    </Tooltip>
+                    <Button disabled={!selectedIds.length || busy || query.isError} onClick={() => batch.mutate(selectedIds)}>
+                        {batch.isPending ? <Loader2 className="animate-spin" /> : null}
+                        {batch.isPending ? t('Approving') : t('ApproveSelected', { count: selectedIds.length })}
+                    </Button>
+                </div>
+            </div>
+            {approvalErrors.length ? (
+                <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                    <p className="text-destructive">{t('BatchFailureNotice')}</p>
+                    <ul className="mt-1 list-inside list-disc space-y-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                        {approvalErrors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+            {query.error ? (
+                <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                    <span className="min-w-0 break-words">{query.error.message}</span>
+                    <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+                        {t('RetryLoading')}
+                    </Button>
+                </div>
+            ) : null}
+            {query.isPending ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                    {t('Loading')}
+                </p>
+            ) : !candidates.length ? (
+                !query.error ? (
+                    <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">{t('NoCandidates')}</p>
+                ) : null
+            ) : (
+                <ul aria-label={t('PendingReview')} className="divide-y overflow-hidden rounded-md border">
+                    {candidates.map(candidate => {
+                        const restriction = bulkReviewRestriction(candidate, dataSources);
+                        const checked = selectedIds.includes(candidate.id);
+                        return (
+                            <li key={candidate.id} className={`flex items-center gap-3 px-4 py-3 transition-colors ${checked ? 'bg-primary/5' : 'hover:bg-muted/30'}`}>
+                                <Checkbox
+                                    aria-label={t('SelectNamed', { name: candidate.payload.name })}
+                                    aria-describedby={restriction ? `review-restriction-${candidate.id}` : undefined}
+                                    checked={checked}
+                                    disabled={Boolean(restriction) || busy || query.isError}
+                                    onCheckedChange={value => setSelected(ids => (value === true ? [...new Set([...ids, candidate.id])] : ids.filter(id => id !== candidate.id)))}
+                                />
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                    <div className="break-words font-medium [overflow-wrap:anywhere]">{candidate.payload.name}</div>
+                                    {candidate.classificationReason ? <p className="text-xs text-muted-foreground">{pub('NeedsAttention')}</p> : null}
+                                    {candidate.publicationReason ? (
+                                        <p className="text-xs text-muted-foreground">
+                                            {pub.has(`Reasons.${candidate.publicationReason}`) ? pub(`Reasons.${candidate.publicationReason}`) : pub('NeedsAttention')}
+                                        </p>
+                                    ) : null}
+                                    {candidate.payload.description ? (
+                                        <p className="line-clamp-2 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{candidate.payload.description}</p>
+                                    ) : null}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="outline">{t(candidate.payload.kind === 'metric' ? 'Metric' : 'BusinessRule')}</Badge>
+                                        <Badge variant="outline">{t(`Action.${candidate.action}`)}</Badge>
+                                        {restriction ? (
+                                            <span id={`review-restriction-${candidate.id}`} className="text-xs text-muted-foreground">
+                                                {t(restriction)}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={() => setReviewing(candidate)}>
+                                    {t('Review')}
+                                </Button>
+                            </li>
+                        );
+                    })}
+                </ul>
             )}
             {reviewing ? (
                 <CandidateReview
                     key={reviewing.id}
                     candidate={reviewing}
-                    candidates={query.data?.candidates ?? []}
+                    candidates={candidates}
                     metrics={query.data?.metrics ?? []}
                     rules={query.data?.rules ?? []}
                     targets={query.data?.targets ?? []}
@@ -789,6 +925,7 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
                                 <h3 className="font-medium">{rule.payload.name}</h3>
                                 <p className="text-xs text-muted-foreground">
                                     {t(`Scope.${rule.applicationScope ?? rule.payload.applicationScope ?? (rule.payload.sourceConnectionId ? 'data_source' : 'model')}`)} ·{' '}
+                                    {rule.publicationMethod === 'automatic' ? `${t('AutomaticPublished')} · ` : ''}
                                     {t('LinkedMetricCount', { count: rule.metricIds?.length ?? 0 })} · v{rule.revision}
                                     {rule.status === 'archived' ? ` · ${t('Inactive')}` : ''}
                                 </p>

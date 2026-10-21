@@ -16,6 +16,7 @@ import {
     parseKnowledgeExtraction,
     splitKnowledgeContent,
 } from './knowledge-extraction-core';
+import { validateMetricMappingWithService } from './knowledge-metric-validation';
 import { ORGANIZATION_INSTRUCTIONS, parseKnowledgeOrganization, reconcileOrganizedItems } from './knowledge-organization-core';
 
 const runners = new WeakMap<DBService, KnowledgeExtractionRunner>();
@@ -50,6 +51,8 @@ export class KnowledgeExtractionRunner {
                 const process = async (items: OrganizationItem[]): Promise<void> => {
                     if (!items.length || !resolved) return;
                     await store.heartbeat(job.id, token);
+                    const numbered = items.map((item, index) => ({ ...item, id: `I${index + 1}` }));
+                    const originalIds = new Map(numbered.map((item, index) => [item.id, items[index].id]));
                     try {
                         let feedback: string | undefined;
                         for (let repair = 0; repair < 2; repair++) {
@@ -60,7 +63,7 @@ export class KnowledgeExtractionRunner {
                                 timeout: 90_000,
                                 prompt: JSON.stringify({
                                     validationFeedback: feedback,
-                                    inputs: items,
+                                    inputs: numbered,
                                     officialMetrics: snapshot.definitions.filter(d => d.kind === 'metric'),
                                     officialRules: snapshot.rules.map(r => ({ id: r.id, revision: r.revision, payload: r.payload })),
                                 }),
@@ -72,12 +75,14 @@ export class KnowledgeExtractionRunner {
                                     model: resolved.modelName,
                                     provider: resolved.providerKey,
                                     gateway: resolved.gateway,
-                                    promptVersion: 4,
+                                    promptVersion: 5,
                                 },
                             });
                             if (result.finishReason === 'length') throw new Error('Organization output exceeded context budget.');
                             try {
-                                output.push(...parseKnowledgeOrganization(result.text, items));
+                                output.push(
+                                    ...parseKnowledgeOrganization(result.text, numbered).map(item => ({ ...item, inputIds: item.inputIds.map(id => originalIds.get(id)!) })),
+                                );
                                 break;
                             } catch (error) {
                                 if (!(error instanceof KnowledgeExtractionValidationError) || repair === 1) throw error;
@@ -102,11 +107,38 @@ export class KnowledgeExtractionRunner {
             }
         }
     }
+    private async publish() {
+        const store = this.db.knowledge.extraction.publication;
+        for (;;) {
+            const job = await store.claim();
+            if (!job) return;
+            const token = job.leaseToken!;
+            const heartbeat = setInterval(() => {
+                void store.heartbeat(job.id, token).catch(() => undefined);
+            }, 30_000);
+            heartbeat.unref?.();
+            try {
+                const state = await store.prepare(job);
+                if (state.reason || !state.draft) {
+                    await store.fail(job.id, token, state.reason ?? 'manual_review_required', false, true);
+                    continue;
+                }
+                await validateMetricMappingWithService(this.db, job.organizationId, job.knowledgeModelId, state.draft.payload);
+                await store.complete(job.id, token, state.fingerprint);
+            } catch (error) {
+                const failure = knowledgeExtractionFailure(error);
+                await store.fail(job.id, token, failure.retry ? 'temporary_publication_failure' : 'mapping_validation_failed', failure.retry, !failure.retry);
+            } finally {
+                clearInterval(heartbeat);
+            }
+        }
+    }
     private async drain() {
         for (;;) {
             const job = await this.db.knowledge.extraction.claim();
             if (!job) {
                 await this.organize();
+                await this.publish();
                 break;
             }
             const token = job.leaseToken!;

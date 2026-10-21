@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { PostgresDBClient } from '@dory/shared';
+import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
 import { and, asc, eq, gt, inArray, lt, lte, sql } from 'drizzle-orm';
 
 import { knowledgeConnectorItems, knowledgeConnectors, knowledgeModels, knowledgeSources } from '../../schemas/knowledge';
 import {
     knowledgeCandidates as candidates,
     knowledgeEvidence as evidence,
+    knowledgeProcessingHistory as historyEvents,
     knowledgeExtractionJobs as jobs,
+    knowledgePublicationJobs as publicationJobs,
     knowledgeOrganizationJobs as queue,
     knowledgeBusinessRules as rules,
     type ExtractedCandidate,
@@ -16,8 +19,18 @@ import {
 import { copyDraftEvidence, knowledgeHash, knowledgeItemKey, type ModelScope } from './extraction';
 import { projectOssieDocument } from './ossie';
 
-export type OrganizationItem = { id: string; payload: ExtractedKnowledge; evidence: ExtractionEvidenceInput[]; candidateId?: string };
-export type OrganizedItem = { payload: ExtractedKnowledge; inputIds: string[]; sharedRuleKeys?: string[] };
+export type OrganizationItem = {
+    id: string;
+    payload: ExtractedKnowledge;
+    evidence: ExtractionEvidenceInput[];
+    candidateId?: string;
+    publicationEpoch?: number | null;
+    manualOnly?: boolean;
+    targetAssetId?: string | null;
+    disposition?: 'knowledge' | 'background';
+    reason?: string;
+};
+export type OrganizedItem = { payload: ExtractedKnowledge; inputIds: string[]; sharedRuleKeys?: string[]; disposition?: 'knowledge' | 'background'; reason?: string };
 type Executor = Pick<PostgresDBClient, 'select' | 'insert' | 'update' | 'delete'>;
 export async function enqueueOrganization(db: Executor, input: ModelScope) {
     await db
@@ -127,7 +140,7 @@ export class KnowledgeOrganizationStore {
         const history = await db
             .select()
             .from(candidates)
-            .where(and(eq(candidates.knowledgeModelId, model.id), inArray(candidates.status, ['rejected', 'approved'])))
+            .where(and(eq(candidates.knowledgeModelId, model.id), inArray(candidates.status, ['rejected', 'approved', 'background'])))
             .orderBy(asc(candidates.id));
         const allEvidence = await db.select().from(evidence).where(eq(evidence.knowledgeModelId, model.id)).orderBy(asc(evidence.id));
         const staged = await db
@@ -146,8 +159,17 @@ export class KnowledgeOrganizationStore {
                 items.push({
                     id: c.id,
                     candidateId: c.id,
+                    publicationEpoch: c.publicationEpoch,
+                    manualOnly: Boolean(c.manualOnly),
+                    targetAssetId: c.targetAssetId,
                     payload: c.payload,
-                    evidence: links.map(e => ({ quote: e.quote, sourceId: e.originalSourceId, sourceHash: e.sourceHash, sourceTitle: e.sourceTitle, sourceUrl: e.sourceUrl })),
+                    evidence: links.map(e => ({
+                        quote: e.quote,
+                        sourceId: e.originalSourceId,
+                        sourceHash: e.sourceHash,
+                        sourceTitle: knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl }),
+                        sourceUrl: e.sourceUrl,
+                    })),
                 });
         }
         for (const row of staged) {
@@ -155,18 +177,21 @@ export class KnowledgeOrganizationStore {
             for (const [index, item] of (row.job.stagedOutput ?? []).entries()) {
                 const reviewed = history.some(
                     c =>
-                        (c.status === 'rejected' ? c.itemKey === knowledgeItemKey(item.payload) : c.payloadHash === knowledgeHash(item.payload)) &&
+                        (c.status === 'rejected' || c.status === 'background' ? c.itemKey === knowledgeItemKey(item.payload) : c.payloadHash === knowledgeHash(item.payload)) &&
                         allEvidence.some(e => e.candidateId === c.id && e.originalSourceId === row.source.id && e.sourceHash === row.job.sourceHash),
                 );
                 if (!reviewed)
                     items.push({
                         id: `${row.job.id}:${index}`,
+                        publicationEpoch: row.job.publicationEpoch,
+                        disposition: item.disposition,
+                        reason: item.reason,
                         payload: item.payload,
                         evidence: item.quotes.map(quote => ({
                             quote,
                             sourceId: row.source.id,
                             sourceHash: row.job.sourceHash,
-                            sourceTitle: row.source.fileName,
+                            sourceTitle: knowledgeSourceDisplayName({ fileName: row.source.fileName, sourceUrl: row.sourceUrl }),
                             sourceUrl: row.sourceUrl,
                         })),
                     });
@@ -192,6 +217,21 @@ export class KnowledgeOrganizationStore {
                 return false;
             }
             const inputMap = new Map(snapshot.items.map(item => [item.id, item]));
+            // Background decisions preserve the exact input payload, never a model-written
+            // replacement. One record per input; inputs retained as knowledge take precedence.
+            const knowledgeRefs = new Set(output.filter(item => item.disposition !== 'background').flatMap(item => item.inputIds));
+            const backgroundRefs = new Set<string>();
+            output = output.flatMap(item =>
+                item.disposition !== 'background'
+                    ? [item]
+                    : item.inputIds.flatMap(ref => {
+                          const original = inputMap.get(ref);
+                          if (!original) throw new Error('Organization evidence references are invalid.');
+                          if (knowledgeRefs.has(ref) || backgroundRefs.has(ref)) return [];
+                          backgroundRefs.add(ref);
+                          return [{ ...item, payload: original.payload, inputIds: [ref] }];
+                      }),
+            );
             if (output.some(o => !o.inputIds.length || o.inputIds.some(ref => !inputMap.has(ref)))) throw new Error('Organization evidence references are invalid.');
             // Omission is forbidden: every input must survive either as a metric
             // condition or shared rule. Ambiguous facts stay in their original item.
@@ -202,8 +242,14 @@ export class KnowledgeOrganizationStore {
                     .update(candidates)
                     .set({ status: 'superseded', updatedAt: new Date() })
                     .where(and(inArray(candidates.id, oldIds), eq(candidates.status, 'pending')));
+            const model = (await tx.select().from(knowledgeModels).where(eq(knowledgeModels.id, job.knowledgeModelId)))[0];
             const created: Array<{ id: string; item: OrganizedItem }> = [];
             for (const item of output) {
+                const inputs = item.inputIds.map(ref => inputMap.get(ref)!);
+                const background = item.disposition === 'background';
+                if (background && (!item.reason || inputs.some(i => i.manualOnly || i.targetAssetId))) throw new Error('Invalid background classification.');
+                const epoch =
+                    inputs.every(i => i.publicationEpoch === model.publicationEpoch && !i.manualOnly) && model.publicationMode === 'automatic' ? model.publicationEpoch : null;
                 const key = knowledgeItemKey(item.payload);
                 const matches =
                     item.payload.kind === 'metric'
@@ -226,6 +272,10 @@ export class KnowledgeOrganizationStore {
                         payloadHash: knowledgeHash(item.payload),
                         payload: item.payload,
                         action: conflicting || matches.length ? 'conflict' : 'add',
+                        status: background ? 'background' : 'pending',
+                        publicationEpoch: epoch,
+                        manualOnly: inputs.some(i => i.manualOnly) ? 1 : 0,
+                        classificationReason: item.reason ?? null,
                         targetAssetId: matches.length === 1 ? matches[0].id : null,
                         targetRevision: matches.length === 1 ? matches[0].revision : null,
                     })
@@ -254,7 +304,27 @@ export class KnowledgeOrganizationStore {
                     })),
                 );
             }
-            for (const c of created.filter(c => c.item.payload.kind === 'metric')) {
+            for (const { id: candidateId, item } of created) {
+                if (item.disposition === 'background') {
+                    await tx.insert(historyEvents).values({
+                        organizationId: job.organizationId,
+                        knowledgeModelId: job.knowledgeModelId,
+                        candidateId,
+                        kind: 'background',
+                        payload: { ...item.payload, classificationVersion: 5, inputIds: item.inputIds },
+                        reason: item.reason,
+                        evidence: item.inputIds.flatMap(ref => inputMap.get(ref)!.evidence),
+                    });
+                } else {
+                    const [candidate] = await tx.select().from(candidates).where(eq(candidates.id, candidateId));
+                    if (candidate.publicationEpoch !== null)
+                        await tx
+                            .insert(publicationJobs)
+                            .values({ organizationId: job.organizationId, knowledgeModelId: job.knowledgeModelId, candidateId, publicationEpoch: candidate.publicationEpoch })
+                            .onConflictDoNothing();
+                }
+            }
+            for (const c of created.filter(c => c.item.payload.kind === 'metric' && c.item.disposition !== 'background')) {
                 const ruleCandidateIds = (c.item.sharedRuleKeys ?? []).map(key => {
                     const rule = created.find(r => r.item.payload.kind === 'business_rule' && knowledgeHash(r.item.payload) === key);
                     if (!rule) throw new Error('Shared rule dependency is missing.');
@@ -270,7 +340,10 @@ export class KnowledgeOrganizationStore {
             }
             // Clear consumed outputs only after a complete successful model pass.
             await tx.update(jobs).set({ stagedOutput: null }).where(eq(jobs.knowledgeModelId, job.knowledgeModelId));
-            await tx.update(queue).set({ status: 'completed', leaseToken: null, error: null, updatedAt: new Date() }).where(eq(queue.id, job.id));
+            await tx
+                .update(queue)
+                .set({ status: 'completed', leaseToken: null, error: null, lastCompletedAt: sql`clock_timestamp()`, updatedAt: new Date() })
+                .where(eq(queue.id, job.id));
             return true;
         });
     }

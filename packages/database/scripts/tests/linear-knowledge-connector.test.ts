@@ -2,17 +2,17 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import type { PostgresDBClient } from '@dory/shared';
 import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
 import { eq } from 'drizzle-orm';
-import { Pool } from 'pg';
 import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
+import { drizzle } from 'drizzle-orm/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
+import { Pool } from 'pg';
 
-import type { PostgresDBClient } from '@dory/shared';
-import { createOssieDocument } from '../../src/postgres/impl/knowledge/ossie';
 import { PostgresKnowledgeRepository } from '../../src/postgres/impl/knowledge';
+import { createOssieDocument } from '../../src/postgres/impl/knowledge/ossie';
 import { knowledgeConnectors, knowledgeConnectorSyncJobs, knowledgeModels, knowledgeSources } from '../../src/postgres/schemas/knowledge';
 
 async function storage(legacy = false) {
@@ -107,12 +107,16 @@ test('complete snapshots preserve source identity, update renamed titles, retain
         const first = (await repository.listKnowledgeSources({ organizationId: 'org', knowledgeModelId: 'model' })).find(source => source.connectorId)!;
         assert.equal(first.sourceUrl, file.sourceUrl);
         assert.equal(first.connectorProvider, 'linear');
+        assert.equal(first.fileName, 'Revenue definition');
+        assert.equal((await repository.getKnowledgeSource({ organizationId: 'org', knowledgeModelId: 'model', id: first.id })).fileName, 'Revenue definition');
+        assert.equal((await repository.searchKnowledgeSources({ organizationId: 'org', knowledgeModelId: 'model', query: 'revenue' }))[0].fileName, 'Revenue definition');
+        assert.match((await db.select().from(knowledgeSources).where(eq(knowledgeSources.id, first.id)))[0].fileName, / · .* · stable-id\.md$/);
         await repository.applyConnectorSnapshot({ connectorId: connector.id, files: [file] });
         const unchanged = await repository.getKnowledgeSource({ organizationId: 'org', knowledgeModelId: 'model', id: first.id });
         assert.equal(unchanged.updatedAt.getTime(), first.updatedAt.getTime());
         await repository.applyConnectorSnapshot({ connectorId: connector.id, files: [{ ...file, title: 'Renamed', sha: 'v2', contentText: '# Renamed revenue' }] });
         const renamed = await repository.getKnowledgeSource({ organizationId: 'org', knowledgeModelId: 'model', id: first.id });
-        assert.match(renamed.fileName, /Renamed/);
+        assert.equal(renamed.fileName, 'Renamed');
         assert.equal(renamed.contentText, '# Renamed revenue');
         assert.equal((await repository.searchKnowledgeSources({ organizationId: 'org', knowledgeModelId: 'model', query: 'revenue' }))[0].sourceUrl, file.sourceUrl);
         await assert.rejects(repository.applyConnectorSnapshot({ connectorId: connector.id, files: [{ ...file, contentText: 'x'.repeat(10_000_001) }] }), /10 MB|large|exceed/i);
@@ -328,8 +332,11 @@ test('0033 preserves OAuth connector content, scope and sync history, pauses old
             INSERT INTO knowledge_connector_sync_jobs (id, connector_id, status, lease_token) VALUES ('running', 'linear', 'running', 'old-lease'), ('queued', 'linear', 'queued', NULL), ('github-job', 'github', 'queued', NULL);`);
         for (const statement of pg.split('--> statement-breakpoint')) if (statement.trim()) await execute(statement);
         // The repository reads the current schema; advance past the additive extraction migration too.
-        const extractionMigration = await readFile(new URL('../../src/postgres/migrations/0034_knowledge_extraction.sql', import.meta.url), 'utf8');
-        for (const statement of extractionMigration.split('--> statement-breakpoint')) if (statement.trim()) await execute(statement);
+        const journal = JSON.parse(await readFile(new URL('../../src/postgres/migrations/meta/_journal.json', import.meta.url), 'utf8'));
+        for (const entry of journal.entries.filter((entry: { idx: number }) => entry.idx >= 33)) {
+            const migration = await readFile(new URL(`../../src/postgres/migrations/${entry.tag}.sql`, import.meta.url), 'utf8');
+            for (const statement of migration.split('--> statement-breakpoint')) if (statement.trim()) await execute(statement);
+        }
         const [linear] = await db.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, 'linear'));
         assert.equal(linear.status, 'disabled');
         assert.match(linear.lastError!, /API Key/);

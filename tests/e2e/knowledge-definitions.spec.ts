@@ -460,6 +460,7 @@ test('knowledge sources present upload and GitHub connection entry points', asyn
     await page.getByRole('button', { name: 'Cancel' }).click();
 
     await page.getByRole('button', { name: 'Connect knowledge base' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'GitHub', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Connect GitHub' })).toBeVisible();
     await expect(page.getByText('GitHub connections are not configured for this Dory deployment.')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
@@ -473,6 +474,7 @@ test('knowledge sources present upload and GitHub connection entry points', asyn
 
     await page.getByRole('button', { name: 'Add source' }).click();
     await page.getByRole('menuitem', { name: 'Connect knowledge base' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'GitHub', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Connect GitHub' })).toBeVisible();
     expect(actionIds).toEqual(expect.arrayContaining(['knowledge.get', 'knowledge.listKnowledgeSources', 'knowledge.listConnectors', 'knowledge.getGitHubConnectorSetup']));
     expect(actionIds).not.toContain('knowledge.createKnowledgeSource');

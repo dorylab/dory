@@ -273,11 +273,58 @@ test('approved business rules expose evidence and staleness while respecting mod
 test('metric reads include only effective rules and revisions change when a referenced rule is reviewed', async () => {
     const db = dbMock() as any;
     let ruleRevision = 1;
-    db.knowledge.extraction.listRules = async () => [{ id: 'revenue-rule', revision: ruleRevision, status: 'active', applicationScope: 'metrics', metricIds: ['metric:mrr'], metrics: [{ id: 'metric:mrr', name: 'Monthly recurring revenue', sourceConnectionId: 'conn-1' }], payload: { kind: 'business_rule', name: 'Revenue exclusion', description: 'Exclude failed orders from revenue.', aliases: [], sourceConnectionId: null }, sourceState: 'current', evidence: [] }, { id: 'other-rule', revision: 1, status: 'active', applicationScope: 'metrics', metricIds: ['metric:payments'], metrics: [{ id: 'metric:payments', sourceConnectionId: 'conn-1' }], payload: { kind: 'business_rule', name: 'Payment denominator', description: 'Count every attempt.', aliases: [], sourceConnectionId: null }, sourceState: 'current', evidence: [] }];
+    db.knowledge.extraction.listRules = async () => [
+        {
+            id: 'revenue-rule',
+            revision: ruleRevision,
+            status: 'active',
+            applicationScope: 'metrics',
+            metricIds: ['metric:mrr'],
+            metrics: [{ id: 'metric:mrr', name: 'Monthly recurring revenue', sourceConnectionId: 'conn-1' }],
+            payload: { kind: 'business_rule', name: 'Revenue exclusion', description: 'Exclude failed orders from revenue.', aliases: [], sourceConnectionId: null },
+            sourceState: 'current',
+            evidence: [],
+        },
+        {
+            id: 'other-rule',
+            revision: 1,
+            status: 'active',
+            applicationScope: 'metrics',
+            metricIds: ['metric:payments'],
+            metrics: [{ id: 'metric:payments', sourceConnectionId: 'conn-1' }],
+            payload: { kind: 'business_rule', name: 'Payment denominator', description: 'Count every attempt.', aliases: [], sourceConnectionId: null },
+            sourceState: 'current',
+            evidence: [],
+        },
+    ];
     const read = () => readAgentAsset(db, { organizationId: 'org-1', ref: 'dory://knowledge/kn-1/definitions/metric%3Amrr', allowedConnectionIds: ['conn-1'] });
-    const first = await read(); assert.equal((first.content as any).effectiveRules.length, 1); assert.equal((first.content as any).effectiveRules[0].id, 'revenue-rule');
+    const first = await read();
+    assert.equal((first.content as any).effectiveRules.length, 1);
+    assert.equal((first.content as any).effectiveRules[0].id, 'revenue-rule');
     const search = await searchAgentAssets(db, { organizationId: 'org-1', query: 'Monthly recurring revenue', kinds: ['knowledge_definition'], allowedConnectionIds: ['conn-1'] });
     assert.equal(search.assets[0].revision, first.asset.revision);
     ruleRevision++;
-    const second = await read(); assert.notEqual(first.asset.revision, second.asset.revision); assert.equal((second.content as any).effectiveRules[0].revision, 2);
+    const second = await read();
+    assert.notEqual(first.asset.revision, second.asset.revision);
+    assert.equal((second.content as any).effectiveRules[0].revision, 2);
+});
+
+test('automatic metrics are available with explicit trust while ordinary drafts stay private', async () => {
+    const db = dbMock();
+    const originalList = db.knowledge.listModels;
+    const originalGet = db.knowledge.getModel;
+    const automaticModel = { ...model, model: { definitions: model.model.definitions.map(d => (d.id === 'metric:mrr' ? { ...d, status: 'auto_published' } : d)) } };
+    db.knowledge.listModels = async () => [automaticModel];
+    db.knowledge.getModel = async () => automaticModel;
+    try {
+        const result = await searchAgentAssets(db, { organizationId: 'org-1', query: 'revenue', kinds: ['knowledge_definition'] });
+        assert.equal(result.assets.length, 1);
+        assert.equal(result.assets[0].trustLevel, 'automatic');
+        const read = await readAgentAsset(db, { organizationId: 'org-1', ref: result.assets[0].ref });
+        assert.equal(read.asset.trustLevel, 'automatic');
+        await assert.rejects(readAgentAsset(db, { organizationId: 'org-1', ref: 'dory://knowledge/kn-1/definitions/metric%3Adraft' }));
+    } finally {
+        db.knowledge.listModels = originalList;
+        db.knowledge.getModel = originalGet;
+    }
 });
