@@ -56,9 +56,11 @@ import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 
 import { BusinessRulesPanel, KnowledgeEvidenceWarning, KnowledgeReviewPanel, MetricRulesPanel, useExtractionStatus } from './knowledge-extraction-panel';
 import { KnowledgePublicationControls } from './knowledge-publication-controls';
+import { useKnowledgeListPagination } from './knowledge-list-pagination';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
 import { KnowledgeSourcesPanel } from './knowledge-sources-panel';
 
@@ -1159,6 +1161,10 @@ function DefinitionPanel({
     const t = useTranslations('Knowledge');
     const [selectedDefinitionId, setSelectedDefinitionId] = useQueryState('definition', parseAsString);
     const selected = model.model.definitions.find(definition => definition.id === selectedDefinitionId) ?? null;
+    const pagination = useKnowledgeListPagination('definitions', model.model.definitions.length, {
+        id: selectedDefinitionId,
+        index: model.model.definitions.findIndex(definition => definition.id === selectedDefinitionId),
+    });
     const [editingDefinition, setEditingDefinition] = useState<Definition | null>(null);
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
@@ -1288,7 +1294,7 @@ function DefinitionPanel({
                         </tr>
                     </thead>
                     <tbody>
-                        {model.model.definitions.map(definition => {
+                        {model.model.definitions.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).map(definition => {
                             const expanded = selected?.id === definition.id;
                             const panelId = `definition-details-${definition.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
@@ -1354,6 +1360,20 @@ function DefinitionPanel({
                         })}
                     </tbody>
                 </table>
+                {model.model.definitions.length ? (
+                    <DataTablePagination
+                        total={model.model.definitions.length}
+                        {...pagination}
+                        onPageChange={index => {
+                            void setSelectedDefinitionId(null);
+                            pagination.onPageChange(index);
+                        }}
+                        onPageSizeChange={size => {
+                            void setSelectedDefinitionId(null);
+                            pagination.onPageSizeChange(size);
+                        }}
+                    />
+                ) : null}
             </div>
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
@@ -1804,6 +1824,10 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
         queryKey: [...modelKey(knowledgeModelId), 'verified-queries'],
         queryFn: () => executeActionClient<{ queries: VerifiedQuery[] }>('knowledge.listVerifiedQueries', { knowledgeModelId }, { organizationId: organization }),
     });
+    const queryPagination = useKnowledgeListPagination('queries', queries.data?.queries.length, {
+        id: selectedQueryId,
+        index: queries.data?.queries.findIndex(query => query.id === selectedQueryId) ?? -1,
+    });
     const graph = useQuery({
         queryKey: [...modelKey(knowledgeModelId), 'graph'],
         queryFn: () => executeActionClient<KnowledgeGraph>('knowledge.getGraph', { knowledgeModelId }, { organizationId: organization }),
@@ -2129,85 +2153,99 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {queries.data.queries.map(item => {
-                                            const expanded = selectedQueryId === item.id;
-                                            const panelId = `verified-query-details-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+                                        {queries.data.queries
+                                            .slice(queryPagination.pageIndex * queryPagination.pageSize, (queryPagination.pageIndex + 1) * queryPagination.pageSize)
+                                            .map(item => {
+                                                const expanded = selectedQueryId === item.id;
+                                                const panelId = `verified-query-details-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
-                                            return (
-                                                <Fragment key={item.id}>
-                                                    <tr className={expanded ? 'border-t bg-muted/20' : 'border-t hover:bg-muted/30'}>
-                                                        <td className="p-0 font-medium">
-                                                            <button
-                                                                type="button"
-                                                                className="flex w-full items-center gap-2 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                                                                aria-expanded={expanded}
-                                                                aria-controls={panelId}
-                                                                aria-label={item.title}
-                                                                onClick={() => void setSelectedQueryId(expanded ? null : item.id)}
-                                                            >
-                                                                <ChevronRight
-                                                                    className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
-                                                                    aria-hidden="true"
-                                                                />
-                                                                <span className="truncate">{item.title}</span>
-                                                            </button>
-                                                        </td>
-                                                        <td className="max-w-sm p-3 text-muted-foreground">
-                                                            <span className="block truncate">{item.question}</span>
-                                                        </td>
-                                                        <td className="whitespace-nowrap p-3 text-xs text-muted-foreground">
-                                                            <span className="flex items-center gap-1.5">
-                                                                <UserRound className="size-3.5" />
-                                                                {t('VerifiedQueryDetails.UpdatedByTime', {
-                                                                    user: item.updatedByName ?? t('VerifiedQueryDetails.UnknownUser'),
-                                                                    time: relativeTime(item.updatedAt),
-                                                                })}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon-sm"
-                                                                aria-label={t('DeleteNamedQuery', { name: item.title })}
-                                                                onClick={() => deleteQuery.mutate(item.id)}
-                                                            >
-                                                                <Trash2 />
-                                                            </Button>
-                                                        </td>
-                                                    </tr>
-                                                    {expanded ? (
-                                                        <tr className="border-t bg-muted/10">
-                                                            <td colSpan={4} className="p-0">
-                                                                <div id={panelId} className="p-5">
-                                                                    <pre className="max-h-48 w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
-                                                                        {item.sql}
-                                                                    </pre>
-                                                                    <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
-                                                                        <DefinitionReferenceEditor
-                                                                            organization={organization}
-                                                                            knowledgeModelId={knowledgeModelId}
-                                                                            query={item}
-                                                                            definitions={model.model.definitions}
-                                                                            graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                                        />
-                                                                        <AssetSourceEditor
-                                                                            organization={organization}
-                                                                            knowledgeModelId={knowledgeModelId}
-                                                                            assetType="verified_query"
-                                                                            assetId={item.id}
-                                                                            sources={sources.data?.sources ?? []}
-                                                                            graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                                        />
-                                                                    </div>
-                                                                </div>
+                                                return (
+                                                    <Fragment key={item.id}>
+                                                        <tr className={expanded ? 'border-t bg-muted/20' : 'border-t hover:bg-muted/30'}>
+                                                            <td className="p-0 font-medium">
+                                                                <button
+                                                                    type="button"
+                                                                    className="flex w-full items-center gap-2 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                                                                    aria-expanded={expanded}
+                                                                    aria-controls={panelId}
+                                                                    aria-label={item.title}
+                                                                    onClick={() => void setSelectedQueryId(expanded ? null : item.id)}
+                                                                >
+                                                                    <ChevronRight
+                                                                        className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                    <span className="truncate">{item.title}</span>
+                                                                </button>
+                                                            </td>
+                                                            <td className="max-w-sm p-3 text-muted-foreground">
+                                                                <span className="block truncate">{item.question}</span>
+                                                            </td>
+                                                            <td className="whitespace-nowrap p-3 text-xs text-muted-foreground">
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <UserRound className="size-3.5" />
+                                                                    {t('VerifiedQueryDetails.UpdatedByTime', {
+                                                                        user: item.updatedByName ?? t('VerifiedQueryDetails.UnknownUser'),
+                                                                        time: relativeTime(item.updatedAt),
+                                                                    })}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon-sm"
+                                                                    aria-label={t('DeleteNamedQuery', { name: item.title })}
+                                                                    onClick={() => deleteQuery.mutate(item.id)}
+                                                                >
+                                                                    <Trash2 />
+                                                                </Button>
                                                             </td>
                                                         </tr>
-                                                    ) : null}
-                                                </Fragment>
-                                            );
-                                        })}
+                                                        {expanded ? (
+                                                            <tr className="border-t bg-muted/10">
+                                                                <td colSpan={4} className="p-0">
+                                                                    <div id={panelId} className="p-5">
+                                                                        <pre className="max-h-48 w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
+                                                                            {item.sql}
+                                                                        </pre>
+                                                                        <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
+                                                                            <DefinitionReferenceEditor
+                                                                                organization={organization}
+                                                                                knowledgeModelId={knowledgeModelId}
+                                                                                query={item}
+                                                                                definitions={model.model.definitions}
+                                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                                            />
+                                                                            <AssetSourceEditor
+                                                                                organization={organization}
+                                                                                knowledgeModelId={knowledgeModelId}
+                                                                                assetType="verified_query"
+                                                                                assetId={item.id}
+                                                                                sources={sources.data?.sources ?? []}
+                                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ) : null}
+                                                    </Fragment>
+                                                );
+                                            })}
                                     </tbody>
                                 </table>
+                                <DataTablePagination
+                                    total={queries.data.queries.length}
+                                    {...queryPagination}
+                                    onPageChange={index => {
+                                        void setSelectedQueryId(null);
+                                        queryPagination.onPageChange(index);
+                                    }}
+                                    onPageSizeChange={size => {
+                                        void setSelectedQueryId(null);
+                                        queryPagination.onPageSizeChange(size);
+                                    }}
+                                />
                             </div>
                         ) : (
                             <Card className="border-dashed">

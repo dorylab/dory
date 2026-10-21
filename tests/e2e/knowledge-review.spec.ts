@@ -191,6 +191,29 @@ test('polling drops removed and newly ineligible selected drafts', async ({ page
     }
 });
 
+test('review pagination selects eligible drafts across pages and clamps after polling', async ({ page, request }) => {
+    const f = await fixture(page, request);
+    try {
+        f.state.candidates = [...Array.from({ length: 11 }, (_, index) => draft(String(index))), draft('conflict', { action: 'conflict' })];
+        await f.open();
+        await expect(f.list.getByRole('listitem')).toHaveCount(10);
+        await f.selectAll.check();
+        await expect(f.approve).toHaveText('Approve selected (11)');
+        await page.getByRole('button', { name: 'Next page' }).click();
+        await expect(page).toHaveURL(/reviewPage=2/);
+        await expect(f.list.getByRole('listitem')).toHaveCount(2);
+        await expect(f.list.getByRole('checkbox', { name: 'Select Rule 10' })).toBeChecked();
+        await expect(f.list.getByRole('checkbox', { name: 'Select Rule conflict' })).toBeDisabled();
+        f.state.candidates = [draft('0'), draft('conflict', { action: 'conflict' })];
+        await f.refresh(2);
+        await expect(page).not.toHaveURL(/reviewPage=2/);
+        await expect(f.approve).toHaveText('Approve selected (1)');
+        await expect(f.selectAll).toBeChecked();
+    } finally {
+        await f.close();
+    }
+});
+
 test('batch approval preserves failures and stops after a network failure without sending the last batch', async ({ page, request }) => {
     const f = await fixture(page, request);
     try {
@@ -206,6 +229,7 @@ test('batch approval preserves failures and stops after a network failure withou
         expect(f.state.approveCalls[0].expectedRuleRevisions).toEqual({ 'rule:r': 3 });
         expect(f.state.approveCalls[0].expectedMetricRevisions).toEqual({ 'metric:m': 'metric-v1' });
         await expect(f.list.getByRole('checkbox', { name: 'Select Rule 0', exact: true })).toBeChecked();
+        await page.getByRole('button', { name: 'Last page' }).click();
         await expect(f.list.getByRole('checkbox', { name: 'Select Rule 100', exact: true })).toBeChecked();
         await expect(page.getByText('Rule 0: Source changed; review again', { exact: true })).toBeVisible();
     } finally {

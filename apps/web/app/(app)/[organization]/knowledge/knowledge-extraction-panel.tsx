@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -15,10 +15,13 @@ import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 
+import { useKnowledgeListPagination } from './knowledge-list-pagination';
 import { KnowledgePublicationControls } from './knowledge-publication-controls';
 
 type Metric = { id: string; name: string; sourceConnectionId: string; revision?: string };
@@ -675,6 +678,7 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
         refetchInterval: 5000,
     });
     const candidates = query.data?.candidates ?? [];
+    const pagination = useKnowledgeListPagination('review', query.data?.candidates.length);
     const eligibleIds = candidates.filter(candidate => !bulkReviewRestriction(candidate, dataSources)).map(candidate => candidate.id);
     const selectedIds = eligibleIds.filter(id => selected.includes(id));
     const batch = useMutation({
@@ -736,135 +740,143 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
     return (
         <div className="min-w-0 space-y-4 text-foreground">
             <p className="text-sm text-muted-foreground">{t('ReviewNotice')}</p>
-            <div role="toolbar" aria-label={t('ReviewToolbar')} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4">
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                    <label className="flex items-center gap-2">
-                        <Checkbox
-                            aria-label={t('SelectAll')}
-                            checked={selectedIds.length > 0 && selectedIds.length === eligibleIds.length ? true : selectedIds.length ? 'indeterminate' : false}
-                            disabled={!eligibleIds.length || busy || query.isPending || query.isError}
-                            onCheckedChange={checked => setSelected(checked === true ? eligibleIds : [])}
-                        />
-                        {t('SelectAll')}
-                    </label>
-                    <span role="status" className="text-muted-foreground">
-                        {t('SelectedCount', { count: selectedIds.length })}
-                    </span>
-                </div>
-                <div className="ml-auto flex flex-wrap justify-end gap-2">
-                    <KnowledgePublicationControls organization={organization} modelId={knowledgeModelId} variant="toolbar" />
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span className="inline-flex" tabIndex={busy || query.isPending || query.isError ? 0 : undefined}>
-                                <Button
-                                    variant="outline"
-                                    className="border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
-                                    aria-description={t('OrganizeHelp')}
-                                    disabled={busy || query.isPending || query.isError}
-                                    onClick={() => action.mutate({ actionId: 'knowledge.organizeCandidates', input: {} })}
-                                >
-                                    {organizing || action.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                                    {t('Organize')}
-                                </Button>
-                            </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-[min(22rem,calc(100vw-2rem))] space-y-2 leading-relaxed">
-                            <p>{t('OrganizeHelp')}</p>
-                            <div className="space-y-1 border-t border-current/20 pt-2">
-                                {organizationJob ? (
-                                    <p>
-                                        {t('OrganizationStatus')}: {t(`OrganizationJob.${organizationJob.status}`)}
-                                    </p>
-                                ) : null}
-                                <p>
-                                    {t('LastCompleted')}{' '}
-                                    {organizationJob?.lastCompletedAt ? (
-                                        <time dateTime={organizationJob.lastCompletedAt}>{new Date(organizationJob.lastCompletedAt).toLocaleString(locale)}</time>
-                                    ) : (
-                                        <span>{t('NoOrganizationCompleted')}</span>
-                                    )}
-                                </p>
-                                {organizationJob?.error ? (
-                                    <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{organizationJob.error}</p>
-                                ) : null}
-                            </div>
-                        </TooltipContent>
-                    </Tooltip>
-                    <Button disabled={!selectedIds.length || busy || query.isError} onClick={() => batch.mutate(selectedIds)}>
-                        {batch.isPending ? <Loader2 className="animate-spin" /> : null}
-                        {batch.isPending ? t('Approving') : t('ApproveSelected', { count: selectedIds.length })}
-                    </Button>
-                </div>
-            </div>
-            {approvalErrors.length ? (
-                <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                    <p className="text-destructive">{t('BatchFailureNotice')}</p>
-                    <ul className="mt-1 list-inside list-disc space-y-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                        {approvalErrors.map((error, index) => (
-                            <li key={index}>{error}</li>
-                        ))}
-                    </ul>
-                </div>
-            ) : null}
-            {query.error ? (
-                <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
-                    <span className="min-w-0 break-words">{query.error.message}</span>
-                    <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
-                        {t('RetryLoading')}
-                    </Button>
-                </div>
-            ) : null}
-            {query.isPending ? (
-                <p role="status" className="text-sm text-muted-foreground">
-                    {t('Loading')}
-                </p>
-            ) : !candidates.length ? (
-                !query.error ? (
-                    <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">{t('NoCandidates')}</p>
-                ) : null
-            ) : (
-                <ul aria-label={t('PendingReview')} className="divide-y overflow-hidden rounded-md border">
-                    {candidates.map(candidate => {
-                        const restriction = bulkReviewRestriction(candidate, dataSources);
-                        const checked = selectedIds.includes(candidate.id);
-                        return (
-                            <li key={candidate.id} className={`flex items-center gap-3 px-4 py-3 transition-colors ${checked ? 'bg-primary/5' : 'hover:bg-muted/30'}`}>
-                                <Checkbox
-                                    aria-label={t('SelectNamed', { name: candidate.payload.name })}
-                                    aria-describedby={restriction ? `review-restriction-${candidate.id}` : undefined}
-                                    checked={checked}
-                                    disabled={Boolean(restriction) || busy || query.isError}
-                                    onCheckedChange={value => setSelected(ids => (value === true ? [...new Set([...ids, candidate.id])] : ids.filter(id => id !== candidate.id)))}
-                                />
-                                <div className="min-w-0 flex-1 space-y-1.5">
-                                    <div className="break-words font-medium [overflow-wrap:anywhere]">{candidate.payload.name}</div>
-                                    {candidate.classificationReason ? <p className="text-xs text-muted-foreground">{pub('NeedsAttention')}</p> : null}
-                                    {candidate.publicationReason ? (
-                                        <p className="text-xs text-muted-foreground">
-                                            {pub.has(`Reasons.${candidate.publicationReason}`) ? pub(`Reasons.${candidate.publicationReason}`) : pub('NeedsAttention')}
+            <div className="overflow-hidden rounded-md border">
+                <div role="toolbar" aria-label={t('ReviewToolbar')} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                        <label className="flex items-center gap-3">
+                            <Checkbox
+                                aria-label={t('SelectAll')}
+                                checked={selectedIds.length > 0 && selectedIds.length === eligibleIds.length ? true : selectedIds.length ? 'indeterminate' : false}
+                                disabled={!eligibleIds.length || busy || query.isPending || query.isError}
+                                onCheckedChange={checked => setSelected(checked === true ? eligibleIds : [])}
+                            />
+                            {t('SelectAll')}
+                        </label>
+                        <span role="status" className="text-muted-foreground">
+                            {t('SelectedCount', { count: selectedIds.length })}
+                        </span>
+                    </div>
+                    <div className="ml-auto flex flex-wrap justify-end gap-2">
+                        <KnowledgePublicationControls organization={organization} modelId={knowledgeModelId} variant="toolbar" />
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex" tabIndex={busy || query.isPending || query.isError ? 0 : undefined}>
+                                    <Button
+                                        variant="outline"
+                                        className="border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+                                        aria-description={t('OrganizeHelp')}
+                                        disabled={busy || query.isPending || query.isError}
+                                        onClick={() => action.mutate({ actionId: 'knowledge.organizeCandidates', input: {} })}
+                                    >
+                                        {organizing || action.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                                        {t('Organize')}
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[min(22rem,calc(100vw-2rem))] space-y-2 leading-relaxed">
+                                <p>{t('OrganizeHelp')}</p>
+                                <div className="space-y-1 border-t border-current/20 pt-2">
+                                    {organizationJob ? (
+                                        <p>
+                                            {t('OrganizationStatus')}: {t(`OrganizationJob.${organizationJob.status}`)}
                                         </p>
                                     ) : null}
-                                    {candidate.payload.description ? (
-                                        <p className="line-clamp-2 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{candidate.payload.description}</p>
+                                    <p>
+                                        {t('LastCompleted')}{' '}
+                                        {organizationJob?.lastCompletedAt ? (
+                                            <time dateTime={organizationJob.lastCompletedAt}>{new Date(organizationJob.lastCompletedAt).toLocaleString(locale)}</time>
+                                        ) : (
+                                            <span>{t('NoOrganizationCompleted')}</span>
+                                        )}
+                                    </p>
+                                    {organizationJob?.error ? (
+                                        <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{organizationJob.error}</p>
                                     ) : null}
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="outline">{t(candidate.payload.kind === 'metric' ? 'Metric' : 'BusinessRule')}</Badge>
-                                        <Badge variant="outline">{t(`Action.${candidate.action}`)}</Badge>
-                                        {restriction ? (
-                                            <span id={`review-restriction-${candidate.id}`} className="text-xs text-muted-foreground">
-                                                {t(restriction)}
-                                            </span>
-                                        ) : null}
-                                    </div>
                                 </div>
-                                <Button variant="outline" size="sm" onClick={() => setReviewing(candidate)}>
-                                    {t('Review')}
-                                </Button>
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
+                            </TooltipContent>
+                        </Tooltip>
+                        <Button disabled={!selectedIds.length || busy || query.isError} onClick={() => batch.mutate(selectedIds)}>
+                            {batch.isPending ? <Loader2 className="animate-spin" /> : null}
+                            {batch.isPending ? t('Approving') : t('ApproveSelected', { count: selectedIds.length })}
+                        </Button>
+                    </div>
+                </div>
+                {approvalErrors.length ? (
+                    <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                        <p className="text-destructive">{t('BatchFailureNotice')}</p>
+                        <ul className="mt-1 list-inside list-disc space-y-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                            {approvalErrors.map((error, index) => (
+                                <li key={index}>{error}</li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : null}
+                {query.error ? (
+                    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                        <span className="min-w-0 break-words">{query.error.message}</span>
+                        <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+                            {t('RetryLoading')}
+                        </Button>
+                    </div>
+                ) : null}
+                {query.isPending ? (
+                    <p role="status" className="text-sm text-muted-foreground">
+                        {t('Loading')}
+                    </p>
+                ) : !candidates.length ? (
+                    !query.error ? (
+                        <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">{t('NoCandidates')}</p>
+                    ) : null
+                ) : (
+                    <ul aria-label={t('PendingReview')} className="divide-y border-t">
+                        {candidates.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).map(candidate => {
+                            const restriction = bulkReviewRestriction(candidate, dataSources);
+                            const checked = selectedIds.includes(candidate.id);
+                            return (
+                                <li
+                                    key={candidate.id}
+                                    className={`grid grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-colors ${checked ? 'bg-primary/5' : 'hover:bg-muted/30'}`}
+                                >
+                                    <Checkbox
+                                        aria-label={t('SelectNamed', { name: candidate.payload.name })}
+                                        aria-describedby={restriction ? `review-restriction-${candidate.id}` : undefined}
+                                        checked={checked}
+                                        disabled={Boolean(restriction) || busy || query.isError}
+                                        onCheckedChange={value =>
+                                            setSelected(ids => (value === true ? [...new Set([...ids, candidate.id])] : ids.filter(id => id !== candidate.id)))
+                                        }
+                                    />
+                                    <div className="min-w-0 flex-1 space-y-1.5">
+                                        <div className="break-words font-medium [overflow-wrap:anywhere]">{candidate.payload.name}</div>
+                                        {candidate.classificationReason ? <p className="text-xs text-muted-foreground">{pub('NeedsAttention')}</p> : null}
+                                        {candidate.publicationReason ? (
+                                            <p className="text-xs text-muted-foreground">
+                                                {pub.has(`Reasons.${candidate.publicationReason}`) ? pub(`Reasons.${candidate.publicationReason}`) : pub('NeedsAttention')}
+                                            </p>
+                                        ) : null}
+                                        {candidate.payload.description ? (
+                                            <p className="line-clamp-2 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{candidate.payload.description}</p>
+                                        ) : null}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Badge variant="outline">{t(candidate.payload.kind === 'metric' ? 'Metric' : 'BusinessRule')}</Badge>
+                                            <Badge variant="outline">{t(`Action.${candidate.action}`)}</Badge>
+                                            {restriction ? (
+                                                <span id={`review-restriction-${candidate.id}`} className="text-xs text-muted-foreground">
+                                                    {t(restriction)}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => setReviewing(candidate)}>
+                                        {t('Review')}
+                                    </Button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+                {candidates.length ? <DataTablePagination total={candidates.length} {...pagination} className="border-t" /> : null}
+            </div>
             {reviewing ? (
                 <CandidateReview
                     key={reviewing.id}
@@ -894,6 +906,7 @@ export function KnowledgeEvidenceWarning({ organization, knowledgeModelId, asset
 }
 export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources }: { organization: string; knowledgeModelId: string; dataSources: DataSource[] }) {
     const t = useTranslations('Knowledge.Extraction');
+    const [focusedRuleId, setFocusedRuleId] = useQueryState('rule', parseAsString);
     const status = useExtractionStatus(organization, knowledgeModelId);
     const action = useExtractionAction(organization, knowledgeModelId);
     const query = useQuery({
@@ -902,6 +915,22 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
             executeActionClient<{ rules: Rule[]; metrics: Metric[] }>('knowledge.listBusinessRules', { knowledgeModelId, includeArchived: true }, { organizationId: organization }),
         refetchInterval: 10_000,
     });
+    const pagination = useKnowledgeListPagination('rules', query.data?.rules.length, {
+        id: focusedRuleId,
+        index: query.data?.rules.findIndex(rule => rule.id === focusedRuleId) ?? -1,
+    });
+    const scrolledRule = useRef<string | null>(null);
+    useEffect(() => {
+        if (!focusedRuleId) {
+            scrolledRule.current = null;
+            return;
+        }
+        if (!query.data?.rules.length || scrolledRule.current === focusedRuleId) return;
+        const index = query.data.rules.findIndex(rule => rule.id === focusedRuleId);
+        if (index < pagination.pageIndex * pagination.pageSize || index >= (pagination.pageIndex + 1) * pagination.pageSize) return;
+        scrolledRule.current = focusedRuleId;
+        requestAnimationFrame(() => document.getElementById(`rule-${focusedRuleId}`)?.scrollIntoView({ block: 'start' }));
+    }, [focusedRuleId, pagination.pageIndex, pagination.pageSize, query.data?.rules]);
     const [editing, setEditing] = useState<Rule | null>(null);
     const [metricRevisions, setMetricRevisions] = useState<Record<string, string>>({});
     const [payload, setPayload] = useState<ExtractedKnowledge | null>(null);
@@ -918,7 +947,7 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
             ) : !query.data?.rules.length ? (
                 <p className="text-sm text-muted-foreground">{t('NoRules')}</p>
             ) : (
-                query.data.rules.map(rule => (
+                query.data.rules.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).map(rule => (
                     <section key={rule.id} id={`rule-${rule.id}`} className="space-y-3 rounded-md border p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
@@ -974,6 +1003,20 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
                     </section>
                 ))
             )}
+            {query.data?.rules.length ? (
+                <DataTablePagination
+                    total={query.data.rules.length}
+                    {...pagination}
+                    onPageChange={index => {
+                        void setFocusedRuleId(null);
+                        pagination.onPageChange(index);
+                    }}
+                    onPageSizeChange={size => {
+                        void setFocusedRuleId(null);
+                        pagination.onPageSizeChange(size);
+                    }}
+                />
+            ) : null}
             <Dialog open={Boolean(editing)} onOpenChange={open => !open && setEditing(null)}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>

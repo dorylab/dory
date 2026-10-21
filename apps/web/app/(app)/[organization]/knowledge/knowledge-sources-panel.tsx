@@ -28,8 +28,10 @@ import { parseAsString, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 
 import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
+import { useKnowledgeListPagination } from './knowledge-list-pagination';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
 import { fetchLinearSetup, LinearConnectorDialog, linearSetupKey, type KnowledgeConnectorView } from './linear-connector-dialog';
 import { LinearLogo } from './linear-logo';
@@ -719,6 +721,10 @@ export function KnowledgeSourcesPanel({
         queryKey: knowledgeSourcesKey(knowledgeModelId),
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
     });
+    const pagination = useKnowledgeListPagination('sources', sources.data?.sources.length, {
+        id: selectedSourceId.source,
+        index: sources.data?.sources.findIndex(source => source.id === selectedSourceId.source) ?? -1,
+    });
     const connectors = useQuery({
         queryKey: knowledgeConnectorsKey(knowledgeModelId),
         queryFn: () => executeActionClient<{ connectors: KnowledgeConnector[] }>('knowledge.listConnectors', { knowledgeModelId }, { organizationId: organization }),
@@ -890,7 +896,7 @@ export function KnowledgeSourcesPanel({
                             </tr>
                         </thead>
                         <tbody>
-                            {sources.data.sources.flatMap(source => {
+                            {sources.data.sources.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).flatMap(source => {
                                 const assets = sourceAssets.get(source.id) ?? [];
                                 const definitionCount = assets.filter(asset => asset.assetType === 'definition').length;
                                 const queryCount = assets.filter(asset => asset.assetType === 'verified_query').length;
@@ -1019,6 +1025,18 @@ export function KnowledgeSourcesPanel({
                             })}
                         </tbody>
                     </table>
+                    <DataTablePagination
+                        total={sources.data.sources.length}
+                        {...pagination}
+                        onPageChange={index => {
+                            void setSelectedSourceId({ source: '' });
+                            pagination.onPageChange(index);
+                        }}
+                        onPageSizeChange={size => {
+                            void setSelectedSourceId({ source: '' });
+                            pagination.onPageSizeChange(size);
+                        }}
+                    />
                 </div>
             ) : sources.data ? (
                 <div className="flex min-h-64 flex-col items-center justify-center rounded-md border border-dashed px-6 text-center">
