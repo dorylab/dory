@@ -1,10 +1,66 @@
 import { randomUUID } from 'node:crypto';
-
+import type { OssieDocument } from '@dory/database/postgres/schemas';
+import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 import { expect, test } from '@playwright/test';
 import { stringify } from 'yaml';
 
-import type { OssieDocument } from '@dory/database/postgres/schemas';
-import { OSSIE_VERSION } from '@dory/shared/types/ossie';
+test('internal placeholder datasets stay hidden while metrics-only models can be edited and emptied', async ({ page, request }) => {
+    await page.goto('/');
+    await page.waitForURL(/\/[^/]+\/connections$/);
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    type Model = { id: string; model: { definitions: Array<{ id: string; name: string; expression?: string; description?: string }> } };
+    async function call<T>(actionId: string, input: Record<string, unknown>, confirmationToken?: string): Promise<T> {
+        const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });
+        const body = await response.json();
+        expect(body.ok, `${actionId}: ${body.message ?? response.status()}`).toBe(true);
+        return body.data;
+    }
+    const connections = await call<{ connections: Array<{ connection: { id: string } }> }>('connection.list', {});
+    const connectionId = connections.connections[0].connection.id;
+    const created = await call<Model>('knowledge.create', { name: `电商 ${randomUUID()}`, connectionIds: [connectionId] });
+    const scope = { knowledgeModelId: created.id };
+    try {
+        expect(created.model.definitions).toEqual([]);
+        await page.goto(`/${organization}/knowledge/${created.id}?tab=definitions`);
+        await expect(page.getByRole('tab', { name: /Semantic model|语义模型/ })).toHaveAttribute('data-state', 'active');
+        await expect(page.getByText('item_dataset', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('__unconfigured__', { exact: true })).toHaveCount(0);
+        const definition = {
+            id: 'metric:net-revenue',
+            name: 'Net revenue test',
+            kind: 'metric',
+            status: 'unverified',
+            sourceConnectionId: connectionId,
+            expression: 'SUM(net_amount)',
+        };
+        const added = await call<Model>('knowledge.createDefinition', { ...scope, definition });
+        expect(added.model.definitions).toHaveLength(1);
+        expect(added.model.definitions[0].id).toBe(definition.id);
+        await page.reload();
+        await expect(
+            page
+                .getByRole('button', { name: `Show details for ${definition.name}` })
+                .or(page.getByRole('button', { name: new RegExp(definition.name) }))
+                .first(),
+        ).toBeVisible();
+        await expect(page.getByText('__unconfigured__', { exact: true })).toHaveCount(0);
+        const edited = await call<Model>('knowledge.updateDefinition', {
+            ...scope,
+            definitionId: definition.id,
+            definition: { ...definition, description: 'Exclude failed orders.' },
+        });
+        expect(edited.model.definitions[0]).toMatchObject({ id: definition.id, expression: definition.expression, description: 'Exclude failed orders.' });
+        const listed = await call<{ definitions: Array<{ id: string }> }>('knowledge.listDefinitions', scope);
+        expect(listed.definitions.map(item => item.id)).toEqual([definition.id]);
+        const emptied = await call<Model>('knowledge.deleteDefinition', { ...scope, definitionId: definition.id });
+        expect(emptied.model.definitions).toEqual([]);
+        await page.reload();
+        await expect(page.getByText(definition.name, { exact: true })).toHaveCount(0);
+        await expect(page.getByText('__unconfigured__', { exact: true })).toHaveCount(0);
+    } finally {
+        await call('knowledge.delete', scope, 'placeholder-e2e-cleanup');
+    }
+});
 
 test('Knowledge imports and displays the new Ossie format and rejects legacy files without changing the model', async ({ page, request }) => {
     await page.goto('/');

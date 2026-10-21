@@ -3861,7 +3861,7 @@
         "LoadingModel": "Loading knowledge model…",
         "ModelNotFound": "Knowledge model not found.",
         "Model": "Model",
-        "Definitions": "Definitions",
+        "Definitions": "Semantic model",
         "VerifiedQueries": "Verified Queries",
         "Updated": "Updated",
         "UpdatedTime": "Updated {time}",
@@ -3968,7 +3968,11 @@
             "Description": "Business documents preserve this Definition's origin and context.",
             "EmptyTitle": "No linked items yet",
             "AddAction": "Add Knowledge Source",
-            "OpenNamed": "Open {name}"
+            "OpenNamed": "Open {name}",
+            "EditAction": "Edit linked documents",
+            "EditDescription": "Select existing documents to link. Changes apply when saved.",
+            "Search": "Search documents",
+            "NoMatches": "No matching documents"
         },
         "VerifiedQueryDetails": {
             "Columns": {
@@ -3979,12 +3983,17 @@
             "UpdatedByTime": "Updated by {user} · {time}",
             "UnknownUser": "Unknown user",
             "ReferencedDefinitions": "Referenced Definitions",
-            "DefinitionsDescription": "Select the business definitions this query should use.",
+            "DefinitionsDescription": "Business definitions linked to this query.",
             "RelatedSources": "Linked Knowledge Sources",
-            "SourcesDescription": "Select the business documents that provide context or rules for this query.",
+            "SourcesDescription": "Linked documents providing context or rules for this query.",
             "NoDefinitions": "No Definition is available to link",
             "NoKnowledgeSources": "No Knowledge Source has been added",
-            "AddKnowledgeSource": "Add Knowledge Source"
+            "AddKnowledgeSource": "Add Knowledge Source",
+            "EditDefinitions": "Edit linked definitions",
+            "EditDefinitionsDescription": "Select existing definitions to link. Changes apply when saved.",
+            "NoLinkedDefinitions": "No linked definitions yet",
+            "SearchDefinitions": "Search definitions",
+            "NoMatchingDefinitions": "No matching definitions"
         },
         "NoDefinitionDetails": "No additional details have been documented for this definition.",
         "DeleteNamedDefinition": "Delete {name}",
@@ -4265,7 +4274,28 @@
                 "source_changed": "Source changed",
                 "remove": "Source removed"
             },
-            "Backfill": "Extract existing sources"
+            "Backfill": "Extract existing sources",
+            "ApplicationScope": "Application scope",
+            "ApplicableMetrics": "Applicable metrics",
+            "SuggestedMetrics": "Suggested metrics",
+            "SharingEvidence": "Sharing evidence",
+            "SpecificConditions": "Metric calculation and specific conditions",
+            "ReferencedRules": "Referenced rules",
+            "ReviewTogether": "Review and publish required rules together",
+            "RuleSemantics": "Rule references are semantic constraints. Metrics use the latest reviewed rule; SQL, expressions and filters are not rewritten.",
+            "KeepConditionLocal": "Keep this condition inside the metric",
+            "Organize": "Organize pending drafts",
+            "OrganizationStatus": "Draft organization",
+            "LinkedMetricCount": "{count} linked metrics",
+            "Inactive": "Inactive",
+            "Restore": "Restore",
+            "NoReferencedRules": "No reviewed rules apply yet",
+            "RulesNotice": "Maintain shared conventions once. Model and data source rules apply within their scope; metric rules apply only to linked metrics.",
+            "Scope": {
+                "model": "Entire model",
+                "data_source": "Selected data source",
+                "metrics": "Selected metrics"
+            }
         }
     },
     "AppSidebar": {

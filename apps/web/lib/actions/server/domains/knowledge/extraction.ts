@@ -1,12 +1,15 @@
+import type { ActionContext } from '@dory/actions';
+import { knowledgeHash } from '@dory/database/postgres/impl/knowledge';
 import { z } from 'zod';
+
+import { extractedKnowledgeSchema } from '@/lib/server/knowledge-extraction-core';
+import { getKnowledgeExtractionRunner } from '@/lib/server/knowledge-extraction-worker';
+import { validateMetricMapping } from '@/lib/server/knowledge-metric-validation';
+
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
-import { getKnowledgeExtractionRunner } from '@/lib/server/knowledge-extraction-worker';
-import { extractedKnowledgeSchema } from '@/lib/server/knowledge-extraction-core';
-import { validateMetricMapping } from '@/lib/server/knowledge-metric-validation';
-import { knowledgeHash } from '@dory/database/postgres/impl/knowledge';
-import type { ActionContext } from '@dory/actions';
 import type { WebActionServices } from '../../types';
+
 const modelInput = z.object({ knowledgeModelId: z.string().min(1) });
 function admin(ctx: ActionContext<WebActionServices>) {
     if (ctx.access.role !== 'owner' && ctx.access.role !== 'admin')
@@ -19,6 +22,8 @@ const reviewInput = modelInput.extend({
     targetAssetId: z.string().optional(),
     createNew: z.boolean().optional(),
     expectedTargetRevision: z.string().optional(),
+    expectedRuleRevisions: z.record(z.string(), z.number().int()).optional(),
+    expectedMetricRevisions: z.record(z.string(), z.string()).optional(),
     note: z.string().max(2000).optional(),
 });
 async function review(ctx: ActionContext<WebActionServices>, input: z.infer<typeof reviewInput>) {
@@ -30,6 +35,78 @@ async function review(ctx: ActionContext<WebActionServices>, input: z.infer<type
     return ctx.services.db.knowledge.extraction.review({ ...input, organizationId: ctx.organizationId, userId: ctx.userId });
 }
 export const extractionKnowledgeActions = [
+    defineWebAction({
+        id: 'knowledge.organizeCandidates',
+        domain: 'knowledge',
+        kind: 'command',
+        risk: 'write',
+        requiresConfirmation: false,
+        inputSchema: modelInput,
+        outputSchema: z.unknown(),
+        permissions: writeWorkspace,
+        scopes: ['knowledge:write'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            await ctx.services.db.knowledge.extraction.organization.request({ ...input, organizationId: ctx.organizationId });
+            getKnowledgeExtractionRunner(ctx.services.db).wake();
+            return { ok: true };
+        },
+    }),
+    defineWebAction({
+        id: 'knowledge.updateMetricRules',
+        domain: 'knowledge',
+        kind: 'command',
+        risk: 'write',
+        requiresConfirmation: false,
+        inputSchema: modelInput.extend({
+            metricId: z.string(),
+            expectedRevision: z.string(),
+            ruleIds: z.array(z.string()).max(200),
+            expectedRuleRevisions: z.record(z.string(), z.number().int()),
+            expectedReferenceIds: z.array(z.string()).max(200),
+        }),
+        outputSchema: z.unknown(),
+        permissions: writeWorkspace,
+        scopes: ['knowledge:write'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            return ctx.services.db.knowledge.extraction.updateMetricRules({ ...input, organizationId: ctx.organizationId });
+        },
+    }),
+    defineWebAction({
+        id: 'knowledge.reviewCandidateBundle',
+        domain: 'knowledge',
+        kind: 'command',
+        risk: 'write',
+        requiresConfirmation: false,
+        inputSchema: modelInput.extend({
+            items: z
+                .array(
+                    z.object({
+                        candidateId: z.string(),
+                        payload: extractedKnowledgeSchema,
+                        targetAssetId: z.string().optional(),
+                        expectedTargetRevision: z.string().optional(),
+                        expectedRuleRevisions: z.record(z.string(), z.number().int()).optional(),
+                        expectedMetricRevisions: z.record(z.string(), z.string()).optional(),
+                        createNew: z.boolean().optional(),
+                    }),
+                )
+                .min(1)
+                .max(50),
+        }),
+        outputSchema: z.unknown(),
+        permissions: writeWorkspace,
+        scopes: ['knowledge:write'],
+        actors: ['user'],
+        handler: async (ctx, input) => {
+            admin(ctx);
+            for (const item of input.items) await validateMetricMapping(ctx, input.knowledgeModelId, item.payload);
+            return ctx.services.db.knowledge.extraction.reviewBundle({ ...input, organizationId: ctx.organizationId, userId: ctx.userId });
+        },
+    }),
     defineWebAction({
         id: 'knowledge.getExtractionStatus',
         domain: 'knowledge',
@@ -101,6 +178,10 @@ export const extractionKnowledgeActions = [
             ]);
             return {
                 candidates: drafts,
+                rules,
+                metrics: model.model.definitions
+                    .filter(d => d.kind === 'metric')
+                    .map(d => ({ id: d.id, name: d.name, sourceConnectionId: d.sourceConnectionId, revision: knowledgeHash(d) })),
                 targets: [
                     ...model.model.definitions.filter(d => d.kind === 'metric').map(d => ({ id: d.id, name: d.name, kind: 'metric', revision: knowledgeHash(d), content: d })),
                     ...rules.map(r => ({ id: r.id, name: r.payload.name, kind: 'business_rule', revision: String(r.revision), content: r.payload })),
@@ -144,7 +225,11 @@ export const extractionKnowledgeActions = [
         kind: 'command',
         risk: 'write',
         requiresConfirmation: false,
-        inputSchema: modelInput.extend({ candidateIds: z.array(z.string()).min(1).max(50) }),
+        inputSchema: modelInput.extend({
+            candidateIds: z.array(z.string()).min(1).max(50),
+            expectedRuleRevisions: z.record(z.string(), z.number().int()).optional(),
+            expectedMetricRevisions: z.record(z.string(), z.string()).optional(),
+        }),
         outputSchema: z.unknown(),
         permissions: writeWorkspace,
         scopes: ['knowledge:write'],
@@ -160,7 +245,13 @@ export const extractionKnowledgeActions = [
                     continue;
                 }
                 try {
-                    await review(ctx, { knowledgeModelId: input.knowledgeModelId, candidateId: id, decision: 'approve' });
+                    await review(ctx, {
+                        knowledgeModelId: input.knowledgeModelId,
+                        candidateId: id,
+                        decision: 'approve',
+                        expectedRuleRevisions: input.expectedRuleRevisions,
+                        expectedMetricRevisions: input.expectedMetricRevisions,
+                    });
                     results.push({ id, approved: true });
                 } catch (error) {
                     results.push({ id, approved: false, error: error instanceof Error ? error.message : 'Review failed.' });
@@ -179,7 +270,16 @@ export const extractionKnowledgeActions = [
         permissions: readWorkspace,
         scopes: ['knowledge:read'],
         actors: ['user'],
-        handler: async (ctx, input) => ({ rules: await ctx.services.db.knowledge.extraction.listRules({ ...input, organizationId: ctx.organizationId }) }),
+        handler: async (ctx, input) => {
+            const s = { ...input, organizationId: ctx.organizationId };
+            const [rules, model] = await Promise.all([ctx.services.db.knowledge.extraction.listRules(s), ctx.services.db.knowledge.getModel(s)]);
+            return {
+                rules,
+                metrics: model.model.definitions
+                    .filter(d => d.kind === 'metric')
+                    .map(d => ({ id: d.id, name: d.name, sourceConnectionId: d.sourceConnectionId, revision: knowledgeHash(d) })),
+            };
+        },
     }),
     defineWebAction({
         id: 'knowledge.getBusinessRule',
@@ -215,7 +315,13 @@ export const extractionKnowledgeActions = [
         kind: 'command',
         risk: 'write',
         requiresConfirmation: false,
-        inputSchema: modelInput.extend({ id: z.string(), expectedRevision: z.number().int(), payload: extractedKnowledgeSchema.optional(), archived: z.boolean().optional() }),
+        inputSchema: modelInput.extend({
+            id: z.string(),
+            expectedRevision: z.number().int(),
+            payload: extractedKnowledgeSchema.optional(),
+            archived: z.boolean().optional(),
+            expectedMetricRevisions: z.record(z.string(), z.string()).optional(),
+        }),
         outputSchema: z.unknown(),
         permissions: writeWorkspace,
         scopes: ['knowledge:write'],

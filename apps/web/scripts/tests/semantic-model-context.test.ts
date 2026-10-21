@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-
 import { ossieRevision, parseKnowledgeYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
 import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
@@ -241,4 +240,22 @@ test('semantic model usage keeps exact revisions as separate Agent Run assets', 
         calls.map(call => call[0].revision),
         ['aaa', 'bbb'],
     );
+});
+
+test('rules-only context records exactly the included reviewed rule versions', async () => {
+    const db = fakeDb([model({ id: 'rules-only', connectionId: 'connection-1', verified: false })]);
+    (db.knowledge.extraction.listRules as any) = async () => [
+        {
+            id: 'utc',
+            revision: 4,
+            status: 'active',
+            applicationScope: 'model',
+            payload: { name: 'Reporting timezone', description: 'Reports use UTC.', sourceConnectionId: null },
+            evidence: [],
+            sourceState: 'current',
+        },
+    ];
+    const context = await resolveSemanticModelContext(db, { organizationId: 'org-1', connectionId: 'connection-1', question: 'reporting timezone' });
+    assert.match(context.context ?? '', /UTC/);
+    assert.deepEqual(context.models[0].ruleVersions, [{ id: 'utc', revision: 4 }]);
 });

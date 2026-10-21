@@ -3859,7 +3859,7 @@
         "LoadingModel": "ナレッジモデルを読み込み中…",
         "ModelNotFound": "ナレッジモデルが見つかりません。",
         "Model": "モデル",
-        "Definitions": "定義",
+        "Definitions": "セマンティックモデル",
         "VerifiedQueries": "検証済みクエリ",
         "Updated": "更新日時",
         "UpdatedTime": "{time}に更新",
@@ -3966,7 +3966,11 @@
             "Description": "ビジネス文書はこの Definition の出典と背景を残します。",
             "EmptyTitle": "関連項目はまだありません",
             "AddAction": "Knowledge Source を追加",
-            "OpenNamed": "{name}を開く"
+            "OpenNamed": "{name}を開く",
+            "EditAction": "関連ドキュメントを編集",
+            "EditDescription": "関連付ける既存のドキュメントを選択します。保存後に反映されます。",
+            "Search": "ドキュメントを検索",
+            "NoMatches": "一致するドキュメントはありません"
         },
         "VerifiedQueryDetails": {
             "Columns": {
@@ -3977,12 +3981,17 @@
             "UpdatedByTime": "{user} が更新 · {time}",
             "UnknownUser": "不明なユーザー",
             "ReferencedDefinitions": "参照する Definitions",
-            "DefinitionsDescription": "このクエリで使用するビジネス定義を選択します。",
+            "DefinitionsDescription": "このクエリに関連付けられたビジネス定義。",
             "RelatedSources": "関連する Knowledge Sources",
-            "SourcesDescription": "このクエリの背景やルールを提供するビジネス文書を選択します。",
+            "SourcesDescription": "このクエリの背景やルールを提供する関連ドキュメント。",
             "NoDefinitions": "関連付け可能な Definition はありません",
             "NoKnowledgeSources": "Knowledge Source はまだ追加されていません",
-            "AddKnowledgeSource": "Knowledge Source を追加"
+            "AddKnowledgeSource": "Knowledge Source を追加",
+            "EditDefinitions": "関連定義を編集",
+            "EditDefinitionsDescription": "関連付ける既存の定義を選択します。保存後に反映されます。",
+            "NoLinkedDefinitions": "関連する定義はありません",
+            "SearchDefinitions": "定義を検索",
+            "NoMatchingDefinitions": "一致する定義はありません"
         },
         "NoDefinitionDetails": "この定義には追加の詳細がまだ記録されていません。",
         "DeleteNamedDefinition": "{name}を削除",
@@ -4263,7 +4272,28 @@
                 "source_changed": "原文変更",
                 "remove": "原文削除"
             },
-            "Backfill": "既存資料を抽出"
+            "Backfill": "既存資料を抽出",
+            "ApplicationScope": "適用範囲",
+            "ApplicableMetrics": "適用指標",
+            "SuggestedMetrics": "関連指標の提案",
+            "SharingEvidence": "共有の根拠",
+            "SpecificConditions": "指標の計算と固有条件",
+            "ReferencedRules": "参照ルール",
+            "ReviewTogether": "依存ルールを同時にレビューして公開",
+            "RuleSemantics": "ルール参照は業務上の制約です。承認済みの最新版を参照し、SQL・式・フィルターは自動変更しません。",
+            "KeepConditionLocal": "この条件を指標内に保持",
+            "Organize": "未審査ドラフトを整理",
+            "OrganizationStatus": "ドラフト整理",
+            "LinkedMetricCount": "関連指標 {count} 件",
+            "Inactive": "無効",
+            "Restore": "復元",
+            "NoReferencedRules": "適用できる承認済みルールはありません",
+            "RulesNotice": "共有規約は一箇所で管理します。モデル・データソースのルールはその範囲に適用し、指標ルールは関連指標のみに適用します。",
+            "Scope": {
+                "model": "モデル全体",
+                "data_source": "指定データソース",
+                "metrics": "指定指標"
+            }
         }
     },
     "AppSidebar": {

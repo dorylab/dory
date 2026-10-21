@@ -1,17 +1,22 @@
 import 'server-only';
-import { Output } from 'ai';
+
 import type { DBService } from '@dory/database';
-import { generateText } from '@/lib/ai/gateway';
-import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
-import {
-    splitKnowledgeContent,
-    knowledgeEvidenceExcerpts,
-    parseKnowledgeExtraction,
-    EXTRACTION_INSTRUCTIONS,
-    KnowledgeExtractionValidationError,
-    knowledgeExtractionFailure,
-} from './knowledge-extraction-core';
+import type { OrganizationItem, OrganizedItem } from '@dory/database/postgres/impl/knowledge/organization';
 import type { ExtractedCandidate } from '@dory/database/postgres/schemas/knowledge-extraction';
+import { Output } from 'ai';
+
+import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
+import { generateText } from '@/lib/ai/gateway';
+
+import {
+    EXTRACTION_INSTRUCTIONS,
+    knowledgeEvidenceExcerpts,
+    knowledgeExtractionFailure,
+    KnowledgeExtractionValidationError,
+    parseKnowledgeExtraction,
+    splitKnowledgeContent,
+} from './knowledge-extraction-core';
+import { ORGANIZATION_INSTRUCTIONS, parseKnowledgeOrganization, reconcileOrganizedItems } from './knowledge-organization-core';
 
 const runners = new WeakMap<DBService, KnowledgeExtractionRunner>();
 export class KnowledgeExtractionRunner {
@@ -26,10 +31,84 @@ export class KnowledgeExtractionRunner {
                 this.running = false;
             });
     }
+    private async organize() {
+        const store = this.db.knowledge.extraction.organization;
+        for (;;) {
+            const job = await store.claim();
+            if (!job) return;
+            const token = job.leaseToken!;
+            const heartbeat = setInterval(() => {
+                void store.heartbeat(job.id, token).catch(() => undefined);
+            }, 30_000);
+            heartbeat.unref?.();
+            try {
+                const snapshot = await store.snapshot(job);
+                const resolved = snapshot.items.length
+                    ? await resolveAiLanguageModel({ db: this.db, organizationId: job.organizationId, role: 'action', allowCloudProxy: false })
+                    : null;
+                const output: OrganizedItem[] = [];
+                const process = async (items: OrganizationItem[]): Promise<void> => {
+                    if (!items.length || !resolved) return;
+                    await store.heartbeat(job.id, token);
+                    try {
+                        let feedback: string | undefined;
+                        for (let repair = 0; repair < 2; repair++) {
+                            const result = await generateText({
+                                model: resolved.model,
+                                instructions: ORGANIZATION_INSTRUCTIONS,
+                                output: Output.json(),
+                                timeout: 90_000,
+                                prompt: JSON.stringify({
+                                    validationFeedback: feedback,
+                                    inputs: items,
+                                    officialMetrics: snapshot.definitions.filter(d => d.kind === 'metric'),
+                                    officialRules: snapshot.rules.map(r => ({ id: r.id, revision: r.revision, payload: r.payload })),
+                                }),
+                                maxOutputTokens: 12000,
+                                temperature: 0,
+                                context: {
+                                    organizationId: job.organizationId,
+                                    feature: 'knowledge_extraction',
+                                    model: resolved.modelName,
+                                    provider: resolved.providerKey,
+                                    gateway: resolved.gateway,
+                                    promptVersion: 4,
+                                },
+                            });
+                            if (result.finishReason === 'length') throw new Error('Organization output exceeded context budget.');
+                            try {
+                                output.push(...parseKnowledgeOrganization(result.text, items));
+                                break;
+                            } catch (error) {
+                                if (!(error instanceof KnowledgeExtractionValidationError) || repair === 1) throw error;
+                                feedback = error.message;
+                            }
+                        }
+                    } catch (error) {
+                        const budget = /context|maximum.{0,20}tokens|exceed.{0,30}(token|budget)|too many tokens/i.test(error instanceof Error ? error.message : '');
+                        if (!budget || items.length < 2) throw error;
+                        const middle = Math.ceil(items.length / 2);
+                        await process(items.slice(0, middle));
+                        await process(items.slice(middle));
+                    }
+                };
+                await process(snapshot.items);
+                await store.complete(job.id, token, snapshot.fingerprint, reconcileOrganizedItems(output, snapshot.definitions));
+            } catch (error) {
+                const failure = knowledgeExtractionFailure(error);
+                await store.fail(job.id, token, failure.message, failure.retry, failure.blocked);
+            } finally {
+                clearInterval(heartbeat);
+            }
+        }
+    }
     private async drain() {
         for (;;) {
             const job = await this.db.knowledge.extraction.claim();
-            if (!job) break;
+            if (!job) {
+                await this.organize();
+                break;
+            }
             const token = job.leaseToken!;
             let leaseLost = false;
             const heartbeat = setInterval(() => {
@@ -105,7 +184,7 @@ export class KnowledgeExtractionRunner {
                     }
                 }
                 await this.db.knowledge.extraction.heartbeat(job.id, token, chunks.length, chunks.length);
-                await this.db.knowledge.extraction.complete(job.id, token, output);
+                await this.db.knowledge.extraction.organization.stage(job.id, token, output);
             } catch (error) {
                 // Persist only categorized diagnostics, never provider response bodies or prompts.
                 const failure = knowledgeExtractionFailure(error);

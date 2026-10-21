@@ -3865,7 +3865,7 @@
         "LoadingModel": "正在加载知识模型…",
         "ModelNotFound": "找不到知识模型。",
         "Model": "模型",
-        "Definitions": "定义",
+        "Definitions": "语义模型",
         "VerifiedQueries": "已验证查询",
         "Updated": "更新时间",
         "UpdatedTime": "更新于 {time}",
@@ -3972,7 +3972,11 @@
             "Description": "业务文档可保留这个 Definition 的来源与背景。",
             "EmptyTitle": "尚无关联项",
             "AddAction": "添加 Knowledge Source",
-            "OpenNamed": "打开 {name}"
+            "OpenNamed": "打开 {name}",
+            "EditAction": "编辑关联文档",
+            "EditDescription": "选择要关联的已有文档，保存后生效。",
+            "Search": "搜索文档",
+            "NoMatches": "未找到匹配的文档"
         },
         "VerifiedQueryDetails": {
             "Columns": {
@@ -3983,12 +3987,17 @@
             "UpdatedByTime": "由 {user} 更新 · {time}",
             "UnknownUser": "未知用户",
             "ReferencedDefinitions": "引用的 Definitions",
-            "DefinitionsDescription": "勾选此查询应使用的业务定义。",
+            "DefinitionsDescription": "此查询关联的业务定义。",
             "RelatedSources": "关联的 Knowledge Sources",
-            "SourcesDescription": "勾选为此查询提供背景或规则的业务文档。",
+            "SourcesDescription": "为此查询提供背景或规则的已关联文档。",
             "NoDefinitions": "没有可关联的 Definition",
             "NoKnowledgeSources": "尚未添加 Knowledge Source",
-            "AddKnowledgeSource": "添加 Knowledge Source"
+            "AddKnowledgeSource": "添加 Knowledge Source",
+            "EditDefinitions": "编辑关联定义",
+            "EditDefinitionsDescription": "选择要关联的已有定义，保存后生效。",
+            "NoLinkedDefinitions": "暂无关联定义",
+            "SearchDefinitions": "搜索定义",
+            "NoMatchingDefinitions": "未找到匹配的定义"
         },
         "NoDefinitionDetails": "尚未记录该定义的更多详情。",
         "DeleteNamedDefinition": "删除 {name}",
@@ -4204,7 +4213,7 @@
             "Disable": "关闭",
             "EnableAndBackfill": "开启并提取已有资料",
             "Retry": "重试提取",
-            "BusinessRules": "业务口径",
+            "BusinessRules": "业务规则",
             "PendingReview": "待审核",
             "AdminOnly": "仅组织所有者和管理员可以审核提取草稿。",
             "Review": "审核",
@@ -4214,7 +4223,7 @@
             "ApproveSelected": "批准所选（{count}）",
             "SelectNamed": "选择 {name}",
             "Metric": "指标定义",
-            "BusinessRule": "业务口径",
+            "BusinessRule": "业务规则",
             "Evidence": "原文证据",
             "OpenOriginal": "打开原文",
             "SourceChanged": "来源已变化 · 需要复审",
@@ -4269,7 +4278,28 @@
                 "source_changed": "来源已变化",
                 "remove": "来源已移除"
             },
-            "Backfill": "补跑现有资料"
+            "Backfill": "补跑现有资料",
+            "ApplicationScope": "适用范围",
+            "ApplicableMetrics": "适用指标",
+            "SuggestedMetrics": "建议关联指标",
+            "SharingEvidence": "共享依据",
+            "SpecificConditions": "指标计算与专属条件",
+            "ReferencedRules": "引用规则",
+            "ReviewTogether": "共同审核并发布依赖规则",
+            "RuleSemantics": "规则引用是业务语义约束。统一使用已审核最新版，不自动改写 SQL、表达式或过滤条件。",
+            "KeepConditionLocal": "将此条件保留在指标内",
+            "Organize": "整理待审核草稿",
+            "OrganizationStatus": "草稿整理",
+            "LinkedMetricCount": "已关联 {count} 个指标",
+            "Inactive": "已停用",
+            "Restore": "恢复",
+            "NoReferencedRules": "暂无适用的已审核规则",
+            "RulesNotice": "共享约定在此维护一份。模型和数据源规则在其范围内生效；指定指标规则仅对关联指标生效。",
+            "Scope": {
+                "model": "整个模型",
+                "data_source": "指定数据源",
+                "metrics": "指定指标"
+            }
         }
     },
     "AppSidebar": {

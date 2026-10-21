@@ -3855,7 +3855,7 @@
         "LoadingModel": "Cargando modelo de conocimiento…",
         "ModelNotFound": "No se encontró el modelo de conocimiento.",
         "Model": "Modelo",
-        "Definitions": "Definiciones",
+        "Definitions": "Modelo semántico",
         "VerifiedQueries": "Consultas verificadas",
         "Updated": "Actualizado",
         "UpdatedTime": "Actualizado {time}",
@@ -3962,7 +3962,11 @@
             "Description": "Los documentos empresariales conservan el origen y el contexto de esta Definition.",
             "EmptyTitle": "Aún no hay elementos vinculados",
             "AddAction": "Añadir Knowledge Source",
-            "OpenNamed": "Abrir {name}"
+            "OpenNamed": "Abrir {name}",
+            "EditAction": "Editar documentos vinculados",
+            "EditDescription": "Seleccione los documentos existentes que desea vincular. Los cambios se aplican al guardar.",
+            "Search": "Buscar documentos",
+            "NoMatches": "No hay documentos coincidentes"
         },
         "VerifiedQueryDetails": {
             "Columns": {
@@ -3973,12 +3977,17 @@
             "UpdatedByTime": "Actualizado por {user} · {time}",
             "UnknownUser": "Usuario desconocido",
             "ReferencedDefinitions": "Definitions referenciadas",
-            "DefinitionsDescription": "Selecciona las definiciones de negocio que debe usar esta consulta.",
+            "DefinitionsDescription": "Definiciones de negocio vinculadas a esta consulta.",
             "RelatedSources": "Knowledge Sources vinculadas",
-            "SourcesDescription": "Selecciona los documentos empresariales que aportan contexto o reglas a esta consulta.",
+            "SourcesDescription": "Documentos vinculados que aportan contexto o reglas a esta consulta.",
             "NoDefinitions": "No hay ninguna Definition disponible para vincular",
             "NoKnowledgeSources": "No se ha añadido ninguna Knowledge Source",
-            "AddKnowledgeSource": "Añadir Knowledge Source"
+            "AddKnowledgeSource": "Añadir Knowledge Source",
+            "EditDefinitions": "Editar definiciones vinculadas",
+            "EditDefinitionsDescription": "Seleccione las definiciones existentes que desea vincular. Los cambios se aplican al guardar.",
+            "NoLinkedDefinitions": "Aún no hay definiciones vinculadas",
+            "SearchDefinitions": "Buscar definiciones",
+            "NoMatchingDefinitions": "No hay definiciones coincidentes"
         },
         "NoDefinitionDetails": "No se han documentado detalles adicionales para esta definición.",
         "DeleteNamedDefinition": "Eliminar {name}",
@@ -4259,7 +4268,28 @@
                 "source_changed": "Fuente modificada",
                 "remove": "Fuente eliminada"
             },
-            "Backfill": "Extraer fuentes existentes"
+            "Backfill": "Extraer fuentes existentes",
+            "ApplicationScope": "Ámbito de aplicación",
+            "ApplicableMetrics": "Métricas aplicables",
+            "SuggestedMetrics": "Métricas sugeridas",
+            "SharingEvidence": "Evidencia de uso compartido",
+            "SpecificConditions": "Cálculo y condiciones propias de la métrica",
+            "ReferencedRules": "Reglas referenciadas",
+            "ReviewTogether": "Revisar y publicar las reglas necesarias juntas",
+            "RuleSemantics": "Las referencias son restricciones semánticas. Se usa la última regla aprobada; no se modifican SQL, expresiones ni filtros.",
+            "KeepConditionLocal": "Mantener esta condición en la métrica",
+            "Organize": "Organizar borradores pendientes",
+            "OrganizationStatus": "Organización de borradores",
+            "LinkedMetricCount": "{count} métricas vinculadas",
+            "Inactive": "Inactiva",
+            "Restore": "Restaurar",
+            "NoReferencedRules": "Aún no hay reglas aprobadas aplicables",
+            "RulesNotice": "Mantenga los acuerdos compartidos en un solo lugar. Las reglas de modelo y fuente se aplican en su ámbito; las de métricas solo a las vinculadas.",
+            "Scope": {
+                "model": "Todo el modelo",
+                "data_source": "Fuente de datos seleccionada",
+                "metrics": "Métricas seleccionadas"
+            }
         }
     },
     "AppSidebar": {

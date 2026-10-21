@@ -1,29 +1,33 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+
 import {
     knowledgeAssetSources,
-    knowledgeConnectors,
     knowledgeConnectorItems,
+    knowledgeConnectors,
     knowledgeModels,
     knowledgeModelSources,
     knowledgeSources,
     type KnowledgeDefinition,
 } from '../../schemas/knowledge';
 import {
-    knowledgeExtractionJobs as jobs,
     knowledgeCandidates as candidates,
-    knowledgeBusinessRules as rules,
     knowledgeEvidence as evidence,
+    knowledgeExtractionJobs as jobs,
+    knowledgeMetricRules as metricRules,
+    knowledgeOrganizationJobs as organizationJobs,
+    knowledgeBusinessRules as rules,
     type ExtractedCandidate,
     type ExtractedKnowledge,
 } from '../../schemas/knowledge-extraction';
-import { applyKnowledgeDefinitions, projectOssieDocument, serializeOssieDocument, ossieRevision } from './ossie';
 import { validateKnowledgeModelDocument } from './index';
+import { enqueueOrganization, KnowledgeOrganizationStore } from './organization';
+import { applyKnowledgeDefinitions, ossieRevision, projectOssieDocument, serializeOssieDocument } from './ossie';
 
-export const EXTRACTION_VERSION = 3;
+export const EXTRACTION_VERSION = 4;
 type Executor = Pick<PostgresDBClient, 'select' | 'insert' | 'update' | 'delete'>;
-type ModelScope = { organizationId: string; knowledgeModelId: string };
+export type ModelScope = { organizationId: string; knowledgeModelId: string };
 export function knowledgeHash(value: unknown): string {
     const stable = (v: unknown): unknown =>
         Array.isArray(v)
@@ -65,7 +69,7 @@ export async function enqueueSourceExtraction(db: Executor, connector: typeof kn
         .onConflictDoNothing();
 }
 
-async function copyDraftEvidence(db: Executor, candidateId: string, links: Array<typeof evidence.$inferSelect>) {
+export async function copyDraftEvidence(db: Executor, candidateId: string, links: Array<typeof evidence.$inferSelect>) {
     for (const entry of links) {
         const [existing] = await db
             .select({ id: evidence.id })
@@ -196,6 +200,9 @@ export async function invalidateSourceEvidence(db: Executor, sourceId: string, s
 
 export class KnowledgeExtractionStore {
     constructor(private readonly db: PostgresDBClient) {}
+    get organization() {
+        return new KnowledgeOrganizationStore(this.db);
+    }
     async assertModel(input: ModelScope) {
         const [model] = await this.db
             .select()
@@ -249,6 +256,13 @@ export class KnowledgeExtractionStore {
                 error: job.error,
                 pendingCount: new Set(pendingEvidence.filter(e => e.sourceId === job.originalSourceId).map(e => e.candidateId)).size,
             })),
+            organizationJob:
+                (
+                    await this.db
+                        .select({ id: organizationJobs.id, status: organizationJobs.status, error: organizationJobs.error })
+                        .from(organizationJobs)
+                        .where(eq(organizationJobs.knowledgeModelId, input.knowledgeModelId))
+                )[0] ?? null,
             pendingCount: drafts.length,
         };
     }
@@ -268,12 +282,14 @@ export class KnowledgeExtractionStore {
                 .returning();
             if (!connector) throw new Error('Knowledge connector not found.');
             if (!input.enabled) {
+                await tx.update(organizationJobs).set({ status: 'completed', leaseToken: null, error: null }).where(eq(organizationJobs.knowledgeModelId, input.knowledgeModelId));
                 await tx
                     .update(jobs)
                     .set({ status: 'cancelled', leaseToken: null })
                     .where(and(eq(jobs.connectorId, connector.id), inArray(jobs.status, ['queued', 'running', 'blocked', 'failed'])));
                 return;
             }
+            await enqueueOrganization(tx, inputScope(input));
             const sources = await tx
                 .select({ source: knowledgeSources })
                 .from(knowledgeSources)
@@ -373,7 +389,7 @@ export class KnowledgeExtractionStore {
                 updatedAt: new Date(),
                 ...(completedChunks === undefined ? {} : { completedChunks, totalChunks }),
             })
-            .where(and(eq(jobs.id, id), eq(jobs.leaseToken, leaseToken), eq(jobs.status, 'running')))
+            .where(and(eq(jobs.id, id), eq(jobs.leaseToken, leaseToken), eq(jobs.status, 'running'), gt(jobs.leaseExpiresAt, sql`clock_timestamp()`)))
             .returning({ id: jobs.id });
         if (!row) throw new Error('Extraction job is no longer active.');
     }
@@ -557,7 +573,28 @@ export class KnowledgeExtractionStore {
                     rows.map(c => c.id),
                 ),
             );
-        return rows.map(row => ({ ...row, evidence: links.filter(e => e.candidateId === row.id) }));
+        const dependencyIds = [...new Set(rows.flatMap(row => row.payload.ruleCandidateIds ?? []))];
+        const dependencies = dependencyIds.length
+            ? await this.db
+                  .select()
+                  .from(candidates)
+                  .where(and(scope(candidates, input), inArray(candidates.id, dependencyIds), eq(candidates.status, 'approved')))
+            : [];
+        return rows.map(row => ({
+            ...row,
+            payload: dependencies.some(d => row.payload.ruleCandidateIds?.includes(d.id))
+                ? {
+                      ...row.payload,
+                      ruleIds: [
+                          ...new Set([
+                              ...(row.payload.ruleIds ?? []),
+                              ...dependencies.filter(d => row.payload.ruleCandidateIds?.includes(d.id)).flatMap(d => (d.targetAssetId ? [d.targetAssetId] : [])),
+                          ]),
+                      ],
+                  }
+                : row.payload,
+            evidence: links.filter(e => e.candidateId === row.id),
+        }));
     }
     async listRules(input: ModelScope & { includeArchived?: boolean }) {
         await this.assertModel(input);
@@ -570,8 +607,15 @@ export class KnowledgeExtractionStore {
             .select()
             .from(evidence)
             .where(and(scope(evidence, input), eq(evidence.assetType, 'business_rule'), isNotNull(evidence.assetId)));
+        const references = await this.db.select().from(metricRules).where(eq(metricRules.knowledgeModelId, input.knowledgeModelId));
+        const definitions = projectOssieDocument((await this.assertModel(input)).modelJson).definitions;
         return rows.map(row => ({
             ...row,
+            payload: { ...row.payload, applicationScope: row.applicationScope, metricIds: references.filter(ref => ref.ruleId === row.id).map(ref => ref.metricId) },
+            metricIds: references.filter(ref => ref.ruleId === row.id).map(ref => ref.metricId),
+            metrics: definitions
+                .filter(d => references.some(ref => ref.ruleId === row.id && ref.metricId === d.id))
+                .map(d => ({ id: d.id, name: d.name, sourceConnectionId: d.sourceConnectionId })),
             evidence: links.filter(e => e.assetId === row.id),
             sourceState: links.some(e => e.assetId === row.id && e.state !== 'current') ? ('outdated' as const) : ('current' as const),
         }));
@@ -592,10 +636,13 @@ export class KnowledgeExtractionStore {
             targetAssetId?: string;
             createNew?: boolean;
             expectedTargetRevision?: string;
+            expectedRuleRevisions?: Record<string, number>;
+            expectedMetricRevisions?: Record<string, string>;
             note?: string;
         },
+        executor?: PostgresDBClient,
     ) {
-        return this.db.transaction(async tx => {
+        const publish = async (tx: PostgresDBClient) => {
             const [model] = await tx
                 .select()
                 .from(knowledgeModels)
@@ -627,6 +674,11 @@ export class KnowledgeExtractionStore {
             if (payload.sourceConnectionId && !dataSources.some(s => s.connectionId === payload.sourceConnectionId))
                 throw new Error('Data source is not linked to this knowledge model.');
             const document = projectOssieDocument(model.modelJson);
+            if (input.decision === 'approve' && payload.kind === 'business_rule' && !executor)
+                for (const id of payload.metricIds ?? []) {
+                    const metric = document.definitions.find(d => d.id === id && d.kind === 'metric');
+                    if (!metric || knowledgeHash(metric) !== input.expectedMetricRevisions?.[id]) throw new Error('Applicable metric changed; reload before reviewing.');
+                }
             const targetId = input.createNew ? null : (input.targetAssetId ?? draft.targetAssetId);
             let revision: string | null = null,
                 assetId = targetId;
@@ -645,6 +697,19 @@ export class KnowledgeExtractionStore {
                     revision = String(current.revision);
                 }
                 if (revision !== (input.expectedTargetRevision ?? draft.targetRevision)) throw new Error('Published knowledge changed; reload and review the difference.');
+            }
+            if (input.decision === 'approve' && payload.kind === 'metric' && !executor) {
+                const required = await tx
+                    .select()
+                    .from(rules)
+                    .where(and(scope(rules, input), eq(rules.status, 'active')));
+                for (const rule of required.filter(
+                    r =>
+                        (payload.ruleIds ?? []).includes(r.id) ||
+                        (r.applicationScope !== 'metrics' && (!r.payload.sourceConnectionId || r.payload.sourceConnectionId === payload.sourceConnectionId)),
+                )) {
+                    if (input.expectedRuleRevisions?.[rule.id] !== rule.revision) throw new Error('Referenced business rule changed; reload before reviewing.');
+                }
             }
             if (input.decision === 'approve' || input.decision === 'archive') {
                 if ((draft.action === 'conflict' || draft.action === 'update') && !input.targetAssetId && !input.createNew)
@@ -665,6 +730,11 @@ export class KnowledgeExtractionStore {
                 if (payload.kind === 'metric') {
                     if (!payload.sourceConnectionId) throw new Error('Select a data source before approving a metric.');
                     assetId ??= `metric:${randomUUID()}`;
+                    const previous = document.definitions.find(d => d.id === assetId);
+                    const previousContext: Exclude<NonNullable<KnowledgeDefinition['aiContext']>, string> = typeof previous?.aiContext === 'string'
+                        ? { instructions: previous.aiContext }
+                        : (previous?.aiContext ?? {});
+                    const mapping = previous?.sourceConnectionId === payload.sourceConnectionId ? previous : undefined;
                     const next: KnowledgeDefinition = {
                         id: assetId,
                         kind: 'metric',
@@ -673,13 +743,19 @@ export class KnowledgeExtractionStore {
                         sourceConnectionId: payload.sourceConnectionId,
                         description: payload.description,
                         aliases: payload.aliases,
-                        source: payload.source,
-                        expression: payload.expression,
-                        filters: payload.filters,
-                        timeDimension: payload.timeDimension,
-                        aiContext: { synonyms: payload.aliases, unit: payload.unit, scope: payload.scope, descriptionOnly: !payload.expression },
+                        source: payload.source ?? mapping?.source,
+                        expression: payload.expression ?? mapping?.expression,
+                        filters: payload.filters ?? mapping?.filters,
+                        timeDimension: payload.timeDimension ?? mapping?.timeDimension,
+                        aiContext: {
+                            ...previousContext,
+                            synonyms: payload.aliases,
+                            unit: payload.unit ?? previousContext.unit,
+                            scope: payload.scope ?? previousContext.scope,
+                            specificConditions: payload.specificConditions ?? previousContext.specificConditions,
+                            descriptionOnly: !(payload.expression ?? mapping?.expression),
+                        },
                     };
-                    const previous = document.definitions.find(d => d.id === assetId);
                     const definitions = document.definitions
                         .filter(d => d.id !== assetId)
                         .concat(input.decision === 'archive' && previous ? { ...previous, status: 'unverified' } : next);
@@ -691,11 +767,13 @@ export class KnowledgeExtractionStore {
                         .where(eq(knowledgeModels.id, model.id));
                     revision = knowledgeHash(projectOssieDocument(ossie).definitions.find(d => d.id === assetId));
                 } else {
+                    const applicationScope = payload.applicationScope ?? (payload.sourceConnectionId ? 'data_source' : 'model');
+                    validateRuleScope(payload, applicationScope, document.definitions);
                     if (assetId) {
                         const [updated] = await tx
                             .update(rules)
                             .set({
-                                ...(input.decision === 'approve' ? { payload } : {}),
+                                ...(input.decision === 'approve' ? { payload, applicationScope } : {}),
                                 status: input.decision === 'archive' ? 'archived' : 'active',
                                 revision: sql`${rules.revision} + 1`,
                                 updatedBy: input.userId,
@@ -707,10 +785,42 @@ export class KnowledgeExtractionStore {
                     } else {
                         const [created] = await tx
                             .insert(rules)
-                            .values({ ...inputScope(input), payload, updatedBy: input.userId })
+                            .values({ ...inputScope(input), payload, applicationScope, updatedBy: input.userId })
                             .returning();
                         assetId = created.id;
                         revision = String(created.revision);
+                    }
+                }
+                if (input.decision === 'approve') {
+                    if (payload.kind === 'business_rule') {
+                        await tx.delete(metricRules).where(and(eq(metricRules.knowledgeModelId, model.id), eq(metricRules.ruleId, assetId!)));
+                        for (const metricId of [...new Set(payload.metricIds ?? [])]) await tx.insert(metricRules).values({ ...inputScope(input), metricId, ruleId: assetId! });
+                    } else {
+                        const ruleIds = new Set(payload.ruleIds ?? []);
+                        for (const candidateId of payload.ruleCandidateIds ?? []) {
+                            const [dependency] = await tx
+                                .select()
+                                .from(candidates)
+                                .where(and(scope(candidates, input), eq(candidates.id, candidateId)));
+                            if (dependency?.status !== 'approved' || dependency.payload.kind !== 'business_rule' || !dependency.targetAssetId)
+                                throw new Error('Review required shared rules together with this metric.');
+                            ruleIds.add(dependency.targetAssetId);
+                        }
+                        if (payload.ruleIds !== undefined || payload.ruleCandidateIds !== undefined) {
+                            await replaceMetricRules(
+                                tx,
+                                input,
+                                assetId!,
+                                [...ruleIds],
+                                document.definitions.concat({
+                                    id: assetId!,
+                                    kind: 'metric',
+                                    sourceConnectionId: payload.sourceConnectionId!,
+                                    name: payload.name,
+                                    status: 'verified',
+                                }),
+                            );
+                        }
                     }
                 }
                 const assetType = payload.kind === 'metric' ? 'definition' : 'business_rule';
@@ -759,33 +869,233 @@ export class KnowledgeExtractionStore {
                 })
                 .where(eq(candidates.id, draft.id));
             return { id: draft.id, assetId };
+        };
+        return executor ? publish(executor) : this.db.transaction(tx => publish(tx as unknown as PostgresDBClient));
+    }
+    async reviewBundle(
+        input: ModelScope & {
+            userId: string;
+            items: Array<{
+                candidateId: string;
+                payload: ExtractedKnowledge;
+                targetAssetId?: string;
+                expectedTargetRevision?: string;
+                createNew?: boolean;
+                expectedRuleRevisions?: Record<string, number>;
+                expectedMetricRevisions?: Record<string, string>;
+            }>;
+        },
+    ) {
+        return this.db.transaction(async transaction => {
+            const tx = transaction as unknown as PostgresDBClient;
+            const [model] = await tx
+                .select()
+                .from(knowledgeModels)
+                .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)))
+                .for('update');
+            if (!model) throw new Error('Knowledge model not found.');
+            const inputs = new Map(input.items.map(item => [item.candidateId, item]));
+            if (inputs.size !== input.items.length) throw new Error('Duplicate bundle item.');
+            const drafts = await tx
+                .select()
+                .from(candidates)
+                .where(and(scope(candidates, input), inArray(candidates.id, [...inputs.keys()])));
+            if (drafts.length !== inputs.size || drafts.some(d => d.status !== 'pending' || ['source_changed', 'remove'].includes(d.action)))
+                throw new Error('Review bundle changed.');
+            for (const item of input.items) {
+                const draft = drafts.find(d => d.id === item.candidateId)!;
+                if (draft.payload.kind !== item.payload.kind) throw new Error('Keep classification changes separate from bundled review.');
+                // Conditions may be retained locally only through an explicit edit
+                // that removes the dependency; the original proposal is shown in UI.
+                for (const dependencyId of item.payload.ruleCandidateIds ?? []) {
+                    if (inputs.has(dependencyId)) continue;
+                    const [dependency] = await tx
+                        .select()
+                        .from(candidates)
+                        .where(and(scope(candidates, input), eq(candidates.id, dependencyId)));
+                    if (dependency?.status !== 'approved' || !dependency.targetAssetId) throw new Error('Review required shared rules together.');
+                }
+            }
+            const definitionsBeforeReview = projectOssieDocument(model.modelJson).definitions;
+            for (const item of input.items.filter(i => i.payload.kind === 'business_rule'))
+                for (const id of item.payload.metricIds ?? []) {
+                    const metric = definitionsBeforeReview.find(d => d.id === id && d.kind === 'metric');
+                    if (!metric || knowledgeHash(metric) !== item.expectedMetricRevisions?.[id]) throw new Error('Applicable metric changed; reload before reviewing.');
+                }
+            const existingRules = await tx
+                .select()
+                .from(rules)
+                .where(and(scope(rules, input), eq(rules.status, 'active')));
+            for (const item of input.items.filter(i => i.payload.kind === 'metric'))
+                for (const rule of existingRules.filter(
+                    r =>
+                        (item.payload.ruleIds ?? []).includes(r.id) ||
+                        (r.applicationScope !== 'metrics' && (!r.payload.sourceConnectionId || r.payload.sourceConnectionId === item.payload.sourceConnectionId)),
+                )) {
+                    if (item.expectedRuleRevisions?.[rule.id] !== rule.revision) throw new Error('Referenced business rule changed; reload before reviewing.');
+                }
+            const published = new Map<string, string>();
+            // All these writes share the outer model lock and transaction. No
+            // intermediate metric lacking its constraints can become visible.
+            for (const item of input.items.filter(i => i.payload.kind === 'metric')) {
+                const result = await this.review(
+                    { ...inputScope(input), userId: input.userId, ...item, payload: { ...item.payload, ruleCandidateIds: [] }, decision: 'approve' },
+                    tx,
+                );
+                published.set(item.candidateId, result.assetId!);
+            }
+            for (const item of input.items.filter(i => i.payload.kind === 'business_rule')) {
+                const names = new Set(item.payload.applicableMetricNames ?? []);
+                const metricIds = [
+                    ...new Set([
+                        ...(item.payload.metricIds ?? []),
+                        ...input.items.filter(m => m.payload.kind === 'metric' && names.has(m.payload.name)).map(m => published.get(m.candidateId)!),
+                    ]),
+                ];
+                const result = await this.review({ ...inputScope(input), userId: input.userId, ...item, payload: { ...item.payload, metricIds }, decision: 'approve' }, tx);
+                published.set(item.candidateId, result.assetId!);
+            }
+            for (const item of input.items.filter(i => i.payload.kind === 'metric')) {
+                const [updatedModel] = await tx.select().from(knowledgeModels).where(eq(knowledgeModels.id, model.id));
+                const ruleIds = new Set(item.payload.ruleIds ?? []);
+                for (const id of item.payload.ruleCandidateIds ?? []) {
+                    const [draft] = await tx
+                        .select()
+                        .from(candidates)
+                        .where(and(scope(candidates, input), eq(candidates.id, id)));
+                    if (draft?.status !== 'approved' || !draft.targetAssetId) throw new Error('Rule dependency was not published.');
+                    ruleIds.add(draft.targetAssetId);
+                }
+                await replaceMetricRules(tx, input, published.get(item.candidateId)!, [...ruleIds], projectOssieDocument(updatedModel.modelJson).definitions);
+                const payload = { ...item.payload, ruleIds: [...ruleIds], ruleCandidateIds: [] };
+                await tx
+                    .update(candidates)
+                    .set({ payload, payloadHash: knowledgeHash(payload) })
+                    .where(eq(candidates.id, item.candidateId));
+            }
+            return { published: [...published].map(([candidateId, assetId]) => ({ candidateId, assetId })) };
         });
     }
-    async updateRule(input: ModelScope & { id: string; expectedRevision: number; userId: string; payload?: ExtractedKnowledge; archived?: boolean }) {
-        await this.assertModel(input);
-        if (input.payload?.kind !== undefined && input.payload.kind !== 'business_rule') throw new Error('Invalid business rule.');
-        if (input.payload?.sourceConnectionId) {
-            const links = await this.db
+    async updateMetricRules(
+        input: ModelScope & { metricId: string; expectedRevision: string; ruleIds: string[]; expectedRuleRevisions: Record<string, number>; expectedReferenceIds: string[] },
+    ) {
+        return this.db.transaction(async tx => {
+            const [model] = await tx
                 .select()
-                .from(knowledgeModelSources)
-                .where(and(eq(knowledgeModelSources.knowledgeModelId, input.knowledgeModelId), eq(knowledgeModelSources.connectionId, input.payload.sourceConnectionId)));
-            if (!links.length) throw new Error('Data source is not linked to this model.');
-        }
-        const [updated] = await this.db
-            .update(rules)
-            .set({
-                ...(input.payload ? { payload: input.payload } : {}),
-                ...(input.archived === undefined ? {} : { status: input.archived ? ('archived' as const) : ('active' as const) }),
-                revision: sql`${rules.revision} + 1`,
-                updatedBy: input.userId,
-                updatedAt: new Date(),
-            })
-            .where(and(scope(rules, input), eq(rules.id, input.id), eq(rules.revision, input.expectedRevision)))
-            .returning();
-        if (!updated) throw new Error('Business rule changed; reload before editing.');
-        return updated;
+                .from(knowledgeModels)
+                .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)))
+                .for('update');
+            if (!model) throw new Error('Knowledge model not found.');
+            const definitions = projectOssieDocument(model.modelJson).definitions;
+            const metric = definitions.find(d => d.id === input.metricId && d.kind === 'metric');
+            if (!metric || knowledgeHash(metric) !== input.expectedRevision) throw new Error('Metric changed; reload before editing references.');
+            const refs = await tx
+                .select()
+                .from(metricRules)
+                .where(and(eq(metricRules.knowledgeModelId, model.id), eq(metricRules.metricId, metric.id)));
+            if (knowledgeHash(refs.map(r => r.ruleId).sort()) !== knowledgeHash([...input.expectedReferenceIds].sort()))
+                throw new Error('Metric references changed; reload before editing.');
+            const current = await tx.select().from(rules).where(scope(rules, input));
+            for (const id of new Set([...input.ruleIds, ...refs.map(r => r.ruleId)]))
+                if (current.find(r => r.id === id)?.revision !== input.expectedRuleRevisions[id]) throw new Error('Business rule changed; reload before editing references.');
+            await replaceMetricRules(tx, input, metric.id, input.ruleIds, definitions);
+            const changed = [...new Set([...refs.map(r => r.ruleId), ...input.ruleIds])].filter(id => refs.some(r => r.ruleId === id) !== input.ruleIds.includes(id));
+            if (changed.length)
+                await tx
+                    .update(rules)
+                    .set({ revision: sql`${rules.revision} + 1`, updatedAt: new Date() })
+                    .where(and(scope(rules, input), inArray(rules.id, changed)));
+            return { ok: true };
+        });
+    }
+    async updateRule(
+        input: ModelScope & {
+            id: string;
+            expectedRevision: number;
+            userId: string;
+            payload?: ExtractedKnowledge;
+            archived?: boolean;
+            expectedMetricRevisions?: Record<string, string>;
+        },
+    ) {
+        return this.db.transaction(async tx => {
+            const [model] = await tx
+                .select()
+                .from(knowledgeModels)
+                .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)))
+                .for('update');
+            if (!model) throw new Error('Knowledge model not found.');
+            const [current] = await tx
+                .select()
+                .from(rules)
+                .where(and(scope(rules, input), eq(rules.id, input.id)))
+                .for('update');
+            if (!current || current.revision !== input.expectedRevision) throw new Error('Business rule changed; reload before editing.');
+            const payload = input.payload ?? current.payload;
+            if (payload.kind !== 'business_rule') throw new Error('Invalid business rule.');
+            const dataSources = await tx.select().from(knowledgeModelSources).where(eq(knowledgeModelSources.knowledgeModelId, model.id));
+            if (payload.sourceConnectionId && !dataSources.some(s => s.connectionId === payload.sourceConnectionId)) throw new Error('Data source is not linked to this model.');
+            if (input.payload)
+                for (const id of payload.metricIds ?? []) {
+                    const metric = projectOssieDocument(model.modelJson).definitions.find(d => d.id === id && d.kind === 'metric');
+                    if (!metric || knowledgeHash(metric) !== input.expectedMetricRevisions?.[id]) throw new Error('Applicable metric changed; reload before editing.');
+                }
+            const applicationScope = payload.applicationScope ?? current.applicationScope;
+            validateRuleScope(payload, applicationScope, projectOssieDocument(model.modelJson).definitions);
+            const [updated] = await tx
+                .update(rules)
+                .set({
+                    ...(input.payload ? { payload, applicationScope } : {}),
+                    ...(input.archived === undefined ? {} : { status: input.archived ? ('archived' as const) : ('active' as const) }),
+                    revision: current.revision + 1,
+                    updatedBy: input.userId,
+                    updatedAt: new Date(),
+                })
+                .where(eq(rules.id, current.id))
+                .returning();
+            if (input.payload) {
+                await tx.delete(metricRules).where(and(eq(metricRules.knowledgeModelId, model.id), eq(metricRules.ruleId, current.id)));
+                for (const metricId of [...new Set(payload.metricIds ?? [])]) await tx.insert(metricRules).values({ ...inputScope(input), metricId, ruleId: current.id });
+            }
+            return updated;
+        });
     }
 }
 function inputScope(input: ModelScope) {
     return { organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId };
+}
+
+function validateRuleScope(payload: ExtractedKnowledge, applicationScope: 'model' | 'data_source' | 'metrics', definitions: KnowledgeDefinition[]) {
+    if (applicationScope === 'model' && payload.sourceConnectionId) throw new Error('A model-wide rule cannot be restricted to one data source.');
+    if (applicationScope === 'data_source' && !payload.sourceConnectionId) throw new Error('Select a data source for this rule.');
+    if (applicationScope === 'metrics' && !payload.metricIds?.length) throw new Error('Select at least one applicable metric.');
+    for (const id of payload.metricIds ?? []) {
+        const metric = definitions.find(d => d.id === id && d.kind === 'metric');
+        if (!metric || (payload.sourceConnectionId && metric.sourceConnectionId !== payload.sourceConnectionId)) throw new Error('Metric is outside this rule scope.');
+    }
+}
+async function replaceMetricRules(db: Executor, input: ModelScope, metricId: string, ruleIds: string[], definitions: KnowledgeDefinition[]) {
+    const metric = definitions.find(d => d.id === metricId && d.kind === 'metric');
+    if (!metric) throw new Error('Metric not found.');
+    const selected = ruleIds.length
+        ? await db
+              .select()
+              .from(rules)
+              .where(and(scope(rules, input), inArray(rules.id, ruleIds)))
+        : [];
+    const existing = await db
+        .select()
+        .from(metricRules)
+        .where(and(eq(metricRules.knowledgeModelId, input.knowledgeModelId), eq(metricRules.metricId, metricId)));
+    if (
+        selected.length !== new Set(ruleIds).size ||
+        selected.some(
+            r =>
+                (r.status !== 'active' && !existing.some(ref => ref.ruleId === r.id)) ||
+                (r.payload.sourceConnectionId && r.payload.sourceConnectionId !== metric.sourceConnectionId),
+        )
+    )
+        throw new Error('Business rule is unavailable for this metric.');
+    await db.delete(metricRules).where(and(eq(metricRules.knowledgeModelId, input.knowledgeModelId), eq(metricRules.metricId, metricId)));
+    for (const ruleId of new Set(ruleIds)) await db.insert(metricRules).values({ ...inputScope(input), metricId, ruleId });
 }

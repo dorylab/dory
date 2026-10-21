@@ -1,20 +1,8 @@
 'use client';
 
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import NextLink from 'next/link';
-import { useTranslations } from 'next-intl';
-import { parseAsString, useQueryStates } from 'nuqs';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { IconBrandGithub } from '@tabler/icons-react';
-import { ExternalLink, FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
-import { toast } from 'sonner';
-
-import { LinearConnectorDialog, fetchLinearSetup, linearSetupKey, type KnowledgeConnectorView } from './linear-connector-dialog';
-import { LinearLogo } from './linear-logo';
-import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
-
-import { executeActionClient } from '@/lib/actions/client';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -32,6 +20,19 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
+import { IconBrandGithub } from '@tabler/icons-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ExternalLink, FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { parseAsString, useQueryStates } from 'nuqs';
+import { toast } from 'sonner';
+
+import { executeActionClient } from '@/lib/actions/client';
+
+import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
+import { knowledgeSourceDisplayName } from './knowledge-source-display';
+import { fetchLinearSetup, LinearConnectorDialog, linearSetupKey, type KnowledgeConnectorView } from './linear-connector-dialog';
+import { LinearLogo } from './linear-logo';
 
 type DataSource = { connectionId: string; name: string; type: string; engine: string };
 type Definition = {
@@ -101,12 +102,6 @@ const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-edit
 
 const knowledgeSourcesKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-sources'] as const;
 const knowledgeConnectorsKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-connectors'] as const;
-
-function sourceDisplayName(source: KnowledgeSourceSummary) {
-    if (source.connectorProvider !== 'linear' || !source.connectorId || !source.remotePath) return source.fileName;
-    const suffix = ` · ${source.connectorId.slice(-8)} · ${source.remotePath.split('/').pop()}`;
-    return source.fileName.endsWith(suffix) ? source.fileName.slice(0, -suffix.length) : source.fileName;
-}
 
 function formatBytes(bytes: number) {
     if (bytes < 1_000) return `${bytes} B`;
@@ -343,7 +338,7 @@ function SourceEditorDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>{source ? sourceDisplayName(source) : t('Title')}</DialogTitle>
+                    <DialogTitle>{source ? knowledgeSourceDisplayName(source) : t('Title')}</DialogTitle>
                     <DialogDescription>{t('EditorDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="flex shrink-0 items-center gap-3">
@@ -914,7 +909,7 @@ export function KnowledgeSourcesPanel({
                                                 ) : (
                                                     <FileText className="size-4 shrink-0 text-muted-foreground" />
                                                 )}
-                                                <span className="min-w-0 break-words">{sourceDisplayName(source)}</span>
+                                                <span className="min-w-0 break-words">{knowledgeSourceDisplayName(source)}</span>
                                                 <SourceExtractionStatus organization={organization} knowledgeModelId={knowledgeModelId} sourceId={source.id} />
                                                 {source.connectorProvider ? (
                                                     <Badge variant="outline">
@@ -955,7 +950,7 @@ export function KnowledgeSourcesPanel({
                                                     <Button
                                                         variant="ghost"
                                                         size="icon-sm"
-                                                        aria-label={t('ActionsFor', { name: sourceDisplayName(source) })}
+                                                        aria-label={t('ActionsFor', { name: knowledgeSourceDisplayName(source) })}
                                                         onClick={event => event.stopPropagation()}
                                                     >
                                                         <MoreHorizontal />

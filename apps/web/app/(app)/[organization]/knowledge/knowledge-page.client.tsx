@@ -1,10 +1,31 @@
 'use client';
 
-import Link from 'next/link';
-import dynamic from 'next/dynamic';
-import { useTranslations } from 'next-intl';
-import { useParams, useRouter } from 'next/navigation';
 import { Fragment, useDeferredValue, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
+import { Badge } from '@/registry/new-york-v4/ui/badge';
+import { Button } from '@/registry/new-york-v4/ui/button';
+import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
+import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/registry/new-york-v4/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
+import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import type { ConnectionListItem } from '@dory/shared/types/connections';
+import { OSSIE_DIALECTS, OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     ArrowDown,
@@ -29,33 +50,15 @@ import {
     UserRound,
     X,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
-import type { ConnectionListItem } from '@dory/shared/types/connections';
-import { OSSIE_DIALECTS, OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { executeActionClient } from '@/lib/actions/client';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/registry/new-york-v4/ui/alert-dialog';
-import { Badge } from '@/registry/new-york-v4/ui/badge';
-import { Button } from '@/registry/new-york-v4/ui/button';
-import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/registry/new-york-v4/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { Input } from '@/registry/new-york-v4/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
-import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+
+import { BusinessRulesPanel, KnowledgeEvidenceWarning, KnowledgeReviewPanel, MetricRulesPanel, useExtractionStatus } from './knowledge-extraction-panel';
+import { knowledgeSourceDisplayName } from './knowledge-source-display';
 import { KnowledgeSourcesPanel } from './knowledge-sources-panel';
-import { BusinessRulesPanel, KnowledgeReviewPanel, KnowledgeEvidenceWarning, useExtractionStatus } from './knowledge-extraction-panel';
 
 type Definition = {
     id: string;
@@ -76,7 +79,7 @@ type Definition = {
     toColumns?: string[];
     dialect?: OssieDialect;
     datatype?: OssieDataType;
-    aiContext?: string | { instructions?: string; synonyms?: string[]; examples?: string[] };
+    aiContext?: string | { instructions?: string; synonyms?: string[]; examples?: string[]; specificConditions?: string[] };
 };
 type ModelDataSource = { connectionId: string; name: string; type: string; engine: string };
 export type KnowledgeModelView = {
@@ -118,7 +121,15 @@ type VerifiedQuery = {
     createdAt: string;
     updatedAt: string;
 };
-type KnowledgeSourceSummary = { id: string; fileName: string; format: 'markdown' | 'yaml' | 'text'; connectionId: string | null };
+type KnowledgeSourceSummary = {
+    id: string;
+    fileName: string;
+    format: 'markdown' | 'yaml' | 'text';
+    connectionId: string | null;
+    connectorId?: string | null;
+    connectorProvider?: 'github' | 'linear' | null;
+    remotePath?: string | null;
+};
 type KnowledgeGraph = {
     queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
     sourceAssetEdges: Array<{
@@ -146,126 +157,125 @@ function AssetSourceEditor({
 }) {
     const t = useTranslations('Knowledge');
     const queryClient = useQueryClient();
+    const [editing, setEditing] = useState(false);
+    const [draftSourceIds, setDraftSourceIds] = useState<string[]>([]);
+    const [search, setSearch] = useState('');
     const relationBySourceId = new Map(
         graph.sourceAssetEdges.filter(edge => edge.assetType === assetType && edge.assetId === assetId).map(edge => [edge.sourceId, edge.relationType] as const),
     );
     const selectedSourceIds = [...relationBySourceId.keys()];
+    const linkedSources = sources.filter(source => relationBySourceId.has(source.id));
+    const matchingSources = sources.filter(source => knowledgeSourceDisplayName(source).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    const changed = draftSourceIds.length !== selectedSourceIds.length || draftSourceIds.some(id => !relationBySourceId.has(id));
     const update = useMutation({
         mutationFn: (sourceIds: string[]) =>
             executeActionClient('knowledge.replaceAssetSources', { knowledgeModelId, assetType, assetId, sourceIds, relationType: 'provided' }, { organizationId: organization }),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] });
+            setEditing(false);
+        },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
     });
-    const displayedSourceIds = update.isPending && update.variables ? update.variables : selectedSourceIds;
-
-    if (!sources.length) {
-        return (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2.5">
-                <p className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoKnowledgeSources')}</p>
-                <Button variant="outline" size="sm" asChild>
-                    <Link href="?tab=sources">{t('VerifiedQueryDetails.AddKnowledgeSource')}</Link>
+    const openEditor = () => {
+        setDraftSourceIds(selectedSourceIds);
+        setSearch('');
+        setEditing(true);
+    };
+    return (
+        <section className="min-w-0 rounded-lg border bg-background/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                    <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <div>
+                        <h3 className="text-sm font-semibold">{t(assetType === 'definition' ? 'DefinitionSources.Title' : 'VerifiedQueryDetails.RelatedSources')}</h3>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {t(assetType === 'definition' ? 'DefinitionSources.Description' : 'VerifiedQueryDetails.SourcesDescription')}
+                        </p>
+                    </div>
+                </div>
+                <Button size="sm" variant="outline" aria-label={t('DefinitionSources.EditAction')} onClick={openEditor}>
+                    {t('EditDefinitionAction')}
                 </Button>
             </div>
-        );
-    }
-
-    return (
-        <div className="max-h-48 divide-y overflow-y-auto rounded-md border">
-            {sources.map(source => {
-                const relationType = relationBySourceId.get(source.id);
-                const checked = displayedSourceIds.includes(source.id);
-                return (
-                    <div key={source.id} className="flex min-h-10 items-center gap-3 px-3 py-2">
-                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={update.isPending}
-                                onChange={() => update.mutate(checked ? displayedSourceIds.filter(id => id !== source.id) : [...displayedSourceIds, source.id])}
+            {linkedSources.length ? (
+                <div className="mt-3 max-h-48 divide-y overflow-y-auto rounded-md border">
+                    {linkedSources.map(source => {
+                        const name = knowledgeSourceDisplayName(source);
+                        return (
+                            <div key={source.id} className="flex min-h-10 items-center gap-3 px-3 py-2">
+                                <Link className="min-w-0 flex-1 truncate text-sm hover:underline" href={`?tab=sources&source=${encodeURIComponent(source.id)}`}>
+                                    {name}
+                                </Link>
+                                <Badge variant="outline">{t(`RelationTypes.${relationBySourceId.get(source.id)}`)}</Badge>
+                                <Button variant="ghost" size="icon-sm" asChild>
+                                    <Link
+                                        href={`?tab=sources&source=${encodeURIComponent(source.id)}`}
+                                        aria-label={t('DefinitionSources.OpenNamed', { name })}
+                                        title={t('DefinitionSources.OpenNamed', { name })}
+                                    >
+                                        <ExternalLink />
+                                    </Link>
+                                </Button>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <p className="mt-3 rounded-md border border-dashed px-3 py-2.5 text-sm text-muted-foreground">{t('DefinitionSources.EmptyTitle')}</p>
+            )}
+            <Dialog
+                open={editing}
+                onOpenChange={open => {
+                    if (!update.isPending) setEditing(open);
+                }}
+            >
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>{t('DefinitionSources.EditAction')}</DialogTitle>
+                        <DialogDescription>{t('DefinitionSources.EditDescription')}</DialogDescription>
+                    </DialogHeader>
+                    {sources.length ? (
+                        <>
+                            <Input
+                                aria-label={t('DefinitionSources.Search')}
+                                placeholder={t('DefinitionSources.Search')}
+                                value={search}
+                                onChange={event => setSearch(event.target.value)}
                             />
-                            <span className="truncate">{source.fileName}</span>
-                        </label>
-                        {checked && relationType ? <Badge variant="outline">{t(`RelationTypes.${relationType}`)}</Badge> : null}
-                        <Button variant="ghost" size="icon-sm" asChild>
-                            <Link href={`?tab=sources&source=${encodeURIComponent(source.id)}`} aria-label={t('DefinitionSources.OpenNamed', { name: source.fileName })}>
-                                <ExternalLink />
-                            </Link>
+                            <div className="max-h-72 divide-y overflow-y-auto rounded-md border">
+                                {matchingSources.length ? (
+                                    matchingSources.map(source => {
+                                        const name = knowledgeSourceDisplayName(source);
+                                        return (
+                                            <label key={source.id} className="flex min-h-10 cursor-pointer items-center gap-3 px-3 py-2 text-sm">
+                                                <Checkbox
+                                                    checked={draftSourceIds.includes(source.id)}
+                                                    disabled={update.isPending}
+                                                    onCheckedChange={checked => setDraftSourceIds(ids => (checked ? [...ids, source.id] : ids.filter(id => id !== source.id)))}
+                                                />
+                                                <span className="min-w-0 flex-1 break-words">{name}</span>
+                                            </label>
+                                        );
+                                    })
+                                ) : (
+                                    <p className="p-3 text-sm text-muted-foreground">{t('DefinitionSources.NoMatches')}</p>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoKnowledgeSources')}</p>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" disabled={update.isPending} onClick={() => setEditing(false)}>
+                            {t('Cancel')}
                         </Button>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-function DefinitionSourceEditor({
-    organization,
-    knowledgeModelId,
-    definitionId,
-    sources,
-    graph,
-}: {
-    organization: string;
-    knowledgeModelId: string;
-    definitionId: string;
-    sources: KnowledgeSourceSummary[];
-    graph: KnowledgeGraph;
-}) {
-    const t = useTranslations('Knowledge');
-    const queryClient = useQueryClient();
-    const relationBySourceId = new Map(
-        graph.sourceAssetEdges.filter(edge => edge.assetType === 'definition' && edge.assetId === definitionId).map(edge => [edge.sourceId, edge.relationType] as const),
-    );
-    const selectedSourceIds = [...relationBySourceId.keys()];
-    const update = useMutation({
-        mutationFn: (sourceIds: string[]) =>
-            executeActionClient(
-                'knowledge.replaceAssetSources',
-                { knowledgeModelId, assetType: 'definition', assetId: definitionId, sourceIds, relationType: 'provided' },
-                { organizationId: organization },
-            ),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
-        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
-    });
-    const displayedSourceIds = update.isPending && update.variables ? update.variables : selectedSourceIds;
-
-    if (!sources.length) {
-        return (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2.5">
-                <p className="text-sm text-muted-foreground">{t('DefinitionSources.EmptyTitle')}</p>
-                <Button variant="outline" size="sm" asChild>
-                    <Link href="?tab=sources">{t('DefinitionSources.AddAction')}</Link>
-                </Button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="max-h-48 divide-y overflow-y-auto rounded-md border">
-            {sources.map(source => {
-                const relationType = relationBySourceId.get(source.id);
-                const checked = displayedSourceIds.includes(source.id);
-                return (
-                    <div key={source.id} className="flex min-h-10 items-center gap-3 px-3 py-2">
-                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={update.isPending}
-                                onChange={() => update.mutate(checked ? displayedSourceIds.filter(id => id !== source.id) : [...displayedSourceIds, source.id])}
-                            />
-                            <span className="truncate">{source.fileName}</span>
-                        </label>
-                        {checked && relationType ? <Badge variant="outline">{t(`RelationTypes.${relationType}`)}</Badge> : null}
-                        <Button variant="ghost" size="icon-sm" asChild>
-                            <Link href={`?tab=sources&source=${encodeURIComponent(source.id)}`} aria-label={t('DefinitionSources.OpenNamed', { name: source.fileName })}>
-                                <ExternalLink />
-                            </Link>
+                        <Button disabled={!changed || update.isPending} onClick={() => update.mutate(draftSourceIds)}>
+                            {t('SaveChanges')}
                         </Button>
-                    </div>
-                );
-            })}
-        </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </section>
     );
 }
 
@@ -284,7 +294,13 @@ function DefinitionReferenceEditor({
 }) {
     const t = useTranslations('Knowledge');
     const queryClient = useQueryClient();
+    const [editing, setEditing] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [search, setSearch] = useState('');
     const sourceIds = graph.sourceAssetEdges.filter(edge => edge.assetType === 'verified_query' && edge.assetId === query.id).map(edge => edge.sourceId);
+    const linkedDefinitions = definitions.filter(definition => query.definitionIds.includes(definition.id));
+    const matchingDefinitions = definitions.filter(definition => definition.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    const changed = selectedIds.length !== query.definitionIds.length || selectedIds.some(id => !query.definitionIds.includes(id));
     const update = useMutation({
         mutationFn: (definitionIds: string[]) =>
             executeActionClient(
@@ -301,34 +317,98 @@ function DefinitionReferenceEditor({
                 },
                 { organizationId: organization },
             ),
-        onSuccess: () =>
-            Promise.all([
+        onSuccess: async () => {
+            await Promise.all([
                 queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'verified-queries'] }),
                 queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
-            ]),
+            ]);
+            setEditing(false);
+        },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
     });
-    const displayedDefinitionIds = update.isPending && update.variables ? update.variables : query.definitionIds;
-
-    if (!definitions.length) return <p className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoDefinitions')}</p>;
-
     return (
-        <div className="max-h-48 divide-y overflow-y-auto rounded-md border">
-            {definitions.map(definition => {
-                const checked = displayedDefinitionIds.includes(definition.id);
-                return (
-                    <label key={definition.id} className="flex min-h-10 cursor-pointer items-center gap-2 px-3 py-2 text-sm">
-                        <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={update.isPending}
-                            onChange={() => update.mutate(checked ? displayedDefinitionIds.filter(id => id !== definition.id) : [...displayedDefinitionIds, definition.id])}
-                        />
-                        {definition.name}
-                    </label>
-                );
-            })}
-        </div>
+        <section className="min-w-0 rounded-lg border bg-background/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.ReferencedDefinitions')}</h3>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('VerifiedQueryDetails.DefinitionsDescription')}</p>
+                </div>
+                <Button
+                    size="sm"
+                    variant="outline"
+                    aria-label={t('VerifiedQueryDetails.EditDefinitions')}
+                    onClick={() => {
+                        setSelectedIds(query.definitionIds);
+                        setSearch('');
+                        setEditing(true);
+                    }}
+                >
+                    {t('EditDefinitionAction')}
+                </Button>
+            </div>
+            {linkedDefinitions.length ? (
+                <div className="mt-3 max-h-48 divide-y overflow-y-auto rounded-md border">
+                    {linkedDefinitions.map(definition => (
+                        <div key={definition.id} className="flex min-h-10 items-center px-3 py-2 text-sm">
+                            <Link className="min-w-0 truncate hover:underline" href={`?tab=definitions&definition=${encodeURIComponent(definition.id)}`}>
+                                {definition.name}
+                            </Link>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="mt-3 rounded-md border border-dashed px-3 py-2.5 text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoLinkedDefinitions')}</p>
+            )}
+            <Dialog
+                open={editing}
+                onOpenChange={open => {
+                    if (!update.isPending) setEditing(open);
+                }}
+            >
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>{t('VerifiedQueryDetails.EditDefinitions')}</DialogTitle>
+                        <DialogDescription>{t('VerifiedQueryDetails.EditDefinitionsDescription')}</DialogDescription>
+                    </DialogHeader>
+                    {definitions.length ? (
+                        <>
+                            <Input
+                                aria-label={t('VerifiedQueryDetails.SearchDefinitions')}
+                                placeholder={t('VerifiedQueryDetails.SearchDefinitions')}
+                                value={search}
+                                onChange={event => setSearch(event.target.value)}
+                            />
+                            <div className="max-h-72 divide-y overflow-y-auto rounded-md border">
+                                {matchingDefinitions.length ? (
+                                    matchingDefinitions.map(definition => (
+                                        <label key={definition.id} className="flex min-h-10 cursor-pointer items-center gap-3 px-3 py-2 text-sm">
+                                            <Checkbox
+                                                checked={selectedIds.includes(definition.id)}
+                                                disabled={update.isPending}
+                                                onCheckedChange={checked => setSelectedIds(ids => (checked ? [...ids, definition.id] : ids.filter(id => id !== definition.id)))}
+                                            />
+                                            <span className="min-w-0 break-words">{definition.name}</span>
+                                        </label>
+                                    ))
+                                ) : (
+                                    <p className="p-3 text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoMatchingDefinitions')}</p>
+                                )}
+                            </div>
+                        </>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoDefinitions')}</p>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" disabled={update.isPending} onClick={() => setEditing(false)}>
+                            {t('Cancel')}
+                        </Button>
+                        <Button disabled={!changed || update.isPending} onClick={() => update.mutate(selectedIds)}>
+                            {t('SaveChanges')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </section>
     );
 }
 
@@ -720,6 +800,7 @@ function DefinitionExpandedRow({
         [t('DefinitionFields.Aliases'), definition.aliases?.join(', ')],
         [t('DefinitionFields.SourceTable'), definition.source],
         [t('DefinitionFields.Filters'), definition.filters?.join('\n')],
+        [t('Extraction.SpecificConditions'), typeof definition.aiContext === 'object' ? definition.aiContext?.specificConditions?.join('\n') : undefined],
         [t('DefinitionFields.TimeDimension'), definition.timeDimension],
         [t('DefinitionFields.AvailableDimensions'), definition.dimensions?.join(', ')],
         [t('FromDefinition'), definition.from],
@@ -765,7 +846,9 @@ function DefinitionExpandedRow({
                         <dl className="mt-5 grid gap-4 md:grid-cols-2">
                             {definition.description ? (
                                 <div className="md:col-span-2">
-                                    <dt className="text-sm font-medium text-muted-foreground">{t('DefinitionFields.Description')}</dt>
+                                    <dt className="text-sm font-medium text-muted-foreground">
+                                        {t(definition.kind === 'metric' ? 'Extraction.SpecificConditions' : 'DefinitionFields.Description')}
+                                    </dt>
                                     <dd className="mt-1 whitespace-pre-wrap text-sm leading-6">{definition.description}</dd>
                                 </div>
                             ) : null}
@@ -786,6 +869,7 @@ function DefinitionExpandedRow({
                         <p className="mt-5 text-sm text-muted-foreground">{t('NoDefinitionDetails')}</p>
                     )}
 
+                    {definition.kind === 'metric' ? <MetricRulesPanel organization={organization} knowledgeModelId={knowledgeModelId} metricId={definition.id} /> : null}
                     <div className="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2">
                         <section className="rounded-lg border bg-background/60 p-4">
                             <div className="flex items-start gap-3">
@@ -813,24 +897,14 @@ function DefinitionExpandedRow({
                             )}
                         </section>
 
-                        <section className="rounded-lg border bg-background/60 p-4">
-                            <div className="flex items-start gap-3">
-                                <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                                <div>
-                                    <h3 className="text-sm font-semibold">{t('DefinitionSources.Title')}</h3>
-                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('DefinitionSources.Description')}</p>
-                                </div>
-                            </div>
-                            <div className="mt-3">
-                                <DefinitionSourceEditor
-                                    organization={organization}
-                                    knowledgeModelId={knowledgeModelId}
-                                    definitionId={definition.id}
-                                    sources={sources}
-                                    graph={graph}
-                                />
-                            </div>
-                        </section>
+                        <AssetSourceEditor
+                            organization={organization}
+                            knowledgeModelId={knowledgeModelId}
+                            assetType="definition"
+                            assetId={definition.id}
+                            sources={sources}
+                            graph={graph}
+                        />
                     </div>
                 </div>
             </td>
@@ -2102,37 +2176,21 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                                                                         {item.sql}
                                                                     </pre>
                                                                     <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
-                                                                        <section className="min-w-0 rounded-lg border bg-background/60 p-4">
-                                                                            <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.ReferencedDefinitions')}</h3>
-                                                                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                                                                {t('VerifiedQueryDetails.DefinitionsDescription')}
-                                                                            </p>
-                                                                            <div className="mt-3">
-                                                                                <DefinitionReferenceEditor
-                                                                                    organization={organization}
-                                                                                    knowledgeModelId={knowledgeModelId}
-                                                                                    query={item}
-                                                                                    definitions={model.model.definitions}
-                                                                                    graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                                                />
-                                                                            </div>
-                                                                        </section>
-                                                                        <section className="min-w-0 rounded-lg border bg-background/60 p-4">
-                                                                            <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.RelatedSources')}</h3>
-                                                                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                                                                                {t('VerifiedQueryDetails.SourcesDescription')}
-                                                                            </p>
-                                                                            <div className="mt-3">
-                                                                                <AssetSourceEditor
-                                                                                    organization={organization}
-                                                                                    knowledgeModelId={knowledgeModelId}
-                                                                                    assetType="verified_query"
-                                                                                    assetId={item.id}
-                                                                                    sources={sources.data?.sources ?? []}
-                                                                                    graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                                                />
-                                                                            </div>
-                                                                        </section>
+                                                                        <DefinitionReferenceEditor
+                                                                            organization={organization}
+                                                                            knowledgeModelId={knowledgeModelId}
+                                                                            query={item}
+                                                                            definitions={model.model.definitions}
+                                                                            graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                                        />
+                                                                        <AssetSourceEditor
+                                                                            organization={organization}
+                                                                            knowledgeModelId={knowledgeModelId}
+                                                                            assetType="verified_query"
+                                                                            assetId={item.id}
+                                                                            sources={sources.data?.sources ?? []}
+                                                                            graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                                                        />
                                                                     </div>
                                                                 </div>
                                                             </td>

@@ -1,30 +1,35 @@
-import { and, asc, desc, eq, lte, getTableColumns, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
-import { parseDocument } from 'yaml';
-
 import { getClient } from '@dory/database/postgres/client';
 import {
     connections,
     knowledgeAssetSources,
-    knowledgeLinearCredentials,
     knowledgeConnectorItems,
-    knowledgeConnectorSyncJobs,
     knowledgeConnectors,
-    knowledgeSources,
+    knowledgeConnectorSyncJobs,
+    knowledgeLinearCredentials,
+    knowledgeMetricRules,
     knowledgeModels,
     knowledgeModelSources,
+    knowledgeSources,
     knowledgeVerifiedQueries,
-    user,
-    type KnowledgeDefinition,
-    type KnowledgeAssetType,
-    type KnowledgeSourceRelationType,
-    type KnowledgeSourceFormat,
-    type KnowledgeModelDocument,
     OSSIE_VERSION,
+    user,
+    type KnowledgeAssetType,
+    type KnowledgeDefinition,
+    type KnowledgeModelDocument,
+    type KnowledgeSourceFormat,
+    type KnowledgeSourceRelationType,
     type OssieDocument,
 } from '@dory/database/postgres/schemas';
-import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
+import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { newEntityId } from '@dory/shared/id';
 import { OSSIE_DATA_TYPES, OSSIE_DIALECTS } from '@dory/shared/types/ossie';
+import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { parseDocument } from 'yaml';
+
+import { enqueueSourceExtraction, invalidateSourceEvidence, KnowledgeExtractionStore } from './extraction';
+import { LinearKnowledgeStore } from './linear';
+import { migrateLegacyOssieModels } from './migrate-ossie';
 import {
     applyKnowledgeDefinitions,
     createOssieDocument,
@@ -37,10 +42,6 @@ import {
     updateOssieMetadata,
     validateOssieDocument,
 } from './ossie';
-import { migrateLegacyOssieModels } from './migrate-ossie';
-import { LinearKnowledgeStore } from './linear';
-import { KnowledgeExtractionStore, enqueueSourceExtraction, invalidateSourceEvidence } from './extraction';
-import { newEntityId } from '@dory/shared/id';
 
 export { ossieRevision, parseOssieYaml, serializeOssieDocument, validateOssieDocument } from './ossie';
 export { knowledgeHash } from './extraction';
@@ -81,6 +82,7 @@ export type KnowledgeReadiness = {
 };
 
 export type KnowledgeGraph = {
+    metricRuleEdges: Array<{ metricId: string; ruleId: string }>;
     queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
     sourceAssetEdges: Array<{
         sourceId: string;
@@ -383,6 +385,18 @@ export class PostgresKnowledgeRepository {
             .update(knowledgeModels)
             .set({ modelJson: ossieDocument, modelYaml: serializeOssieDocument(ossieDocument), businessContextMd: ossieBusinessContext(ossieDocument) })
             .where(eq(knowledgeModels.id, model.id));
+        const remainingMetricIds = document.definitions.filter(d => d.kind === 'metric').map(d => d.id);
+        await this.db.delete(knowledgeMetricRules).where(
+            and(
+                eq(knowledgeMetricRules.knowledgeModelId, model.id),
+                remainingMetricIds.length
+                    ? sql`${knowledgeMetricRules.metricId} NOT IN (${sql.join(
+                          remainingMetricIds.map(id => sql`${id}`),
+                          sql`, `,
+                      )})`
+                    : undefined,
+            ),
+        );
         const definitionIds = document.definitions.map(definition => definition.id);
         const linkedDefinitions = await this.db
             .select({ sourceId: knowledgeAssetSources.knowledgeSourceId, assetId: knowledgeAssetSources.assetId })
@@ -405,7 +419,7 @@ export class PostgresKnowledgeRepository {
 
     async getGraph(input: { organizationId: string; knowledgeModelId: string }): Promise<KnowledgeGraph> {
         await this.getModel(input);
-        const [queries, sourceAssetEdges] = await Promise.all([
+        const [queries, sourceAssetEdges, metricRuleEdges] = await Promise.all([
             this.listVerifiedQueries(input),
             this.db
                 .select({
@@ -416,8 +430,13 @@ export class PostgresKnowledgeRepository {
                 })
                 .from(knowledgeAssetSources)
                 .where(eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId)),
+            this.db
+                .select({ metricId: knowledgeMetricRules.metricId, ruleId: knowledgeMetricRules.ruleId })
+                .from(knowledgeMetricRules)
+                .where(eq(knowledgeMetricRules.knowledgeModelId, input.knowledgeModelId)),
         ]);
         return {
+            metricRuleEdges,
             queryDefinitionEdges: queries.flatMap(query => query.definitionIds.map(definitionId => ({ queryId: query.id, definitionId }))),
             sourceAssetEdges,
         };
@@ -484,6 +503,18 @@ export class PostgresKnowledgeRepository {
                 modelYaml: serializeOssieDocument(normalized),
             })
             .where(eq(knowledgeModels.id, model.id));
+        const metricIds = projected.definitions.filter(d => d.kind === 'metric').map(d => d.id);
+        await this.db.delete(knowledgeMetricRules).where(
+            and(
+                eq(knowledgeMetricRules.knowledgeModelId, model.id),
+                metricIds.length
+                    ? sql`${knowledgeMetricRules.metricId} NOT IN (${sql.join(
+                          metricIds.map(id => sql`${id}`),
+                          sql`, `,
+                      )})`
+                    : undefined,
+            ),
+        );
         return this.getModel(input);
     }
 

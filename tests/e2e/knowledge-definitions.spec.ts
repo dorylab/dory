@@ -148,7 +148,7 @@ test('knowledge definitions open an editor and save an update', async ({ page })
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Definitions' }).click();
+    await page.getByRole('tab', { name: 'Semantic model' }).click();
     const detailsToggle = page.getByRole('button', { name: 'Show details for Trip Distance' });
     await detailsToggle.click();
 
@@ -194,6 +194,15 @@ test('knowledge definitions open an editor and save an update', async ({ page })
 
 test('definition details show query links and edit knowledge source relationships', async ({ page }) => {
     const source = { id: 'source-1', fileName: 'metrics.md', format: 'markdown' as const, connectionId: null };
+    const otherSource = {
+        id: 'source-2',
+        fileName: 'Operations.md · 32ad9c37 · be635b76-4b00-4efc-8129-832bc72d15f8.md',
+        format: 'markdown' as const,
+        connectionId: null,
+        connectorProvider: 'linear',
+        connectorId: 'kc_32ad9c37',
+        remotePath: 'document/be635b76-4b00-4efc-8129-832bc72d15f8.md',
+    };
     const query = {
         id: 'query-1',
         knowledgeModelId: modelId,
@@ -219,7 +228,7 @@ test('definition details show query links and edit knowledge source relationship
         const body = route.request().postDataJSON() as { actionId: string; input?: { sourceIds?: string[] } };
         if (body.actionId === 'knowledge.get') return actionResponse(route, model);
         if (body.actionId === 'knowledge.listVerifiedQueries') return actionResponse(route, { queries: [query] });
-        if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [source] });
+        if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [source, otherSource] });
         if (body.actionId === 'knowledge.getGraph') {
             return actionResponse(route, {
                 queryDefinitionEdges: [{ queryId: query.id, definitionId: definition.id }],
@@ -241,18 +250,49 @@ test('definition details show query links and edit knowledge source relationship
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Definitions' }).click();
+    await page.getByRole('tab', { name: 'Semantic model' }).click();
     await page.getByRole('button', { name: 'Show details for Trip Distance' }).click();
 
     const queryLink = page.getByRole('link', { name: query.title });
     await expect(queryLink).toHaveAttribute('href', /tab=queries&query=query-1/);
-    await expect(page.getByRole('checkbox', { name: source.fileName })).toBeChecked();
-    await expect(page.getByText('Provided', { exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: `Open ${source.fileName}` })).toHaveAttribute('href', /tab=sources&source=source-1/);
+    const sourcesCard = page.getByRole('heading', { name: 'Linked Knowledge Sources', exact: true }).locator('xpath=ancestor::section[1]');
+    await expect(sourcesCard.getByRole('link', { name: source.fileName, exact: true })).toBeVisible();
+    await expect(sourcesCard.getByRole('checkbox')).toHaveCount(0);
+    await expect(sourcesCard.getByText('Operations.md', { exact: true })).toHaveCount(0);
+    await expect(sourcesCard.getByText('Provided', { exact: true })).toBeVisible();
+    await expect(sourcesCard.getByRole('link', { name: `Open ${source.fileName}` })).toHaveAttribute('href', /tab=sources&source=source-1/);
 
-    await page.getByRole('checkbox', { name: source.fileName }).click();
+    await sourcesCard.getByRole('button', { name: 'Edit linked documents' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit linked documents' });
+    await expect(dialog.getByRole('checkbox', { name: source.fileName })).toBeChecked();
+    await expect(dialog.getByRole('checkbox', { name: 'Operations.md', exact: true })).not.toBeChecked();
+    await expect(dialog.getByRole('link', { name: 'Add Knowledge Source' })).toHaveCount(0);
+    await expect(dialog.getByText('Select existing documents to link. Changes apply when saved.', { exact: true })).toBeVisible();
+    await dialog.getByRole('checkbox', { name: 'Operations.md', exact: true }).click();
+    expect(updatedSourceIds).toBeNull();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(sourcesCard.getByText('Operations.md', { exact: true })).toHaveCount(0);
+    expect(updatedSourceIds).toBeNull();
+
+    await sourcesCard.getByRole('button', { name: 'Edit linked documents' }).click();
+    await expect(dialog.getByRole('checkbox', { name: 'Operations.md', exact: true })).not.toBeChecked();
+    await dialog.getByRole('textbox', { name: 'Search documents' }).fill('Operations');
+    await dialog.getByRole('checkbox', { name: 'Operations.md', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => updatedSourceIds).toEqual([source.id, otherSource.id]);
+    await expect(sourcesCard.getByRole('link', { name: 'Operations.md', exact: true })).toBeVisible();
+    await expect(sourcesCard).not.toContainText('32ad9c37');
+    await expect(sourcesCard.getByRole('checkbox')).toHaveCount(0);
+
+    await sourcesCard.getByRole('button', { name: 'Edit linked documents' }).click();
+    await dialog.getByRole('checkbox', { name: source.fileName }).click();
+    await dialog.getByRole('checkbox', { name: 'Operations.md', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog).toBeHidden();
     await expect.poll(() => updatedSourceIds).toEqual([]);
-    await expect(page.getByRole('checkbox', { name: source.fileName })).not.toBeChecked();
+    await expect(sourcesCard.getByText('No linked items yet', { exact: true })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
@@ -263,6 +303,13 @@ test('definition details show query links and edit knowledge source relationship
 
 test('verified query details identify the updater and organize relationships', async ({ page }) => {
     const source = { id: 'source-1', fileName: 'query-rules.md', format: 'markdown' as const, connectionId: null };
+    const otherSource = { ...source, id: 'source-2', fileName: 'operations.md' };
+    const otherDefinition = { ...definition, id: 'measure:other', name: 'Other trip measure' };
+    const queryModel = { ...model, model: { definitions: [definition, otherDefinition] } };
+    let selectedSourceIds = [source.id];
+    let selectedDefinitionIds = [definition.id];
+    const sourceWrites: string[][] = [];
+    const definitionWrites: string[][] = [];
     const query = {
         id: 'query-1',
         knowledgeModelId: modelId,
@@ -283,15 +330,32 @@ test('verified query details identify the updater and organize relationships', a
 
     await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
     await page.route('**/api/actions/execute', async route => {
-        const body = route.request().postDataJSON() as { actionId: string };
-        if (body.actionId === 'knowledge.get') return actionResponse(route, model);
-        if (body.actionId === 'knowledge.listVerifiedQueries') return actionResponse(route, { queries: [query] });
-        if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [source] });
+        const body = route.request().postDataJSON() as {
+            actionId: string;
+            input: { assetType?: string; assetId?: string; sourceIds?: string[]; definitionIds?: string[]; knowledgeSourceIds?: string[]; sql?: string };
+        };
+        if (body.actionId === 'knowledge.get') return actionResponse(route, queryModel);
+        if (body.actionId === 'knowledge.listVerifiedQueries') return actionResponse(route, { queries: [{ ...query, definitionIds: selectedDefinitionIds }] });
+        if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [source, otherSource] });
         if (body.actionId === 'knowledge.getGraph') {
             return actionResponse(route, {
-                queryDefinitionEdges: [{ queryId: query.id, definitionId: definition.id }],
-                sourceAssetEdges: [{ sourceId: source.id, assetType: 'verified_query', assetId: query.id, relationType: 'provided' }],
+                queryDefinitionEdges: selectedDefinitionIds.map(definitionId => ({ queryId: query.id, definitionId })),
+                sourceAssetEdges: selectedSourceIds.map(sourceId => ({ sourceId, assetType: 'verified_query', assetId: query.id, relationType: 'provided' })),
             });
+        }
+        if (body.actionId === 'knowledge.replaceAssetSources') {
+            expect(body.input.assetType).toBe('verified_query');
+            expect(body.input.assetId).toBe(query.id);
+            selectedSourceIds = body.input.sourceIds ?? [];
+            sourceWrites.push(selectedSourceIds);
+            return actionResponse(route, { ok: true });
+        }
+        if (body.actionId === 'knowledge.updateVerifiedQuery') {
+            expect(body.input.sql).toBe(query.sql);
+            expect(body.input.knowledgeSourceIds).toEqual(selectedSourceIds);
+            selectedDefinitionIds = body.input.definitionIds ?? [];
+            definitionWrites.push(selectedDefinitionIds);
+            return actionResponse(route, { ...query, definitionIds: selectedDefinitionIds });
         }
         if (body.actionId === 'connection.list') return actionResponse(route, { connections: [] });
         await route.fallback();
@@ -306,10 +370,51 @@ test('verified query details identify the updater and organize relationships', a
 
     await expect(page.getByRole('heading', { name: 'Referenced Definitions' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Linked Knowledge Sources' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: definition.name })).toBeChecked();
-    await expect(page.getByRole('checkbox', { name: source.fileName })).toBeChecked();
+    const definitionsCard = page.getByRole('heading', { name: 'Referenced Definitions', exact: true }).locator('xpath=ancestor::section[1]');
+    const sourcesCard = page.getByRole('heading', { name: 'Linked Knowledge Sources', exact: true }).locator('xpath=ancestor::section[1]');
+    await expect(definitionsCard.getByRole('link', { name: definition.name, exact: true })).toBeVisible();
+    await expect(sourcesCard.getByRole('link', { name: source.fileName, exact: true })).toBeVisible();
+    await expect(definitionsCard.getByRole('checkbox')).toHaveCount(0);
+    await expect(sourcesCard.getByRole('checkbox')).toHaveCount(0);
+    await expect(definitionsCard.getByText(otherDefinition.name, { exact: true })).toHaveCount(0);
+    await expect(sourcesCard.getByText(otherSource.fileName, { exact: true })).toHaveCount(0);
     await expect(page.getByText('Provided', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: `Open ${source.fileName}` })).toHaveAttribute('href', /tab=sources&source=source-1/);
+
+    await sourcesCard.getByRole('button', { name: 'Edit linked documents' }).click();
+    const sourceDialog = page.getByRole('dialog', { name: 'Edit linked documents' });
+    await expect(sourceDialog.getByRole('link')).toHaveCount(0);
+    await expect(sourceDialog.getByRole('checkbox', { name: source.fileName })).toBeChecked();
+    await sourceDialog.getByRole('checkbox', { name: otherSource.fileName }).click();
+    expect(sourceWrites).toEqual([]);
+    await sourceDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(sourcesCard.getByText(otherSource.fileName, { exact: true })).toHaveCount(0);
+    await sourcesCard.getByRole('button', { name: 'Edit linked documents' }).click();
+    await expect(sourceDialog.getByRole('checkbox', { name: otherSource.fileName })).not.toBeChecked();
+    await sourceDialog.getByRole('checkbox', { name: otherSource.fileName }).click();
+    await sourceDialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(sourceDialog).toBeHidden();
+    await expect(sourcesCard.getByRole('link', { name: otherSource.fileName, exact: true })).toBeVisible();
+    expect(sourceWrites).toEqual([[source.id, otherSource.id]]);
+
+    await definitionsCard.getByRole('button', { name: 'Edit linked definitions' }).click();
+    const definitionDialog = page.getByRole('dialog', { name: 'Edit linked definitions' });
+    await expect(definitionDialog.getByRole('link')).toHaveCount(0);
+    await expect(definitionDialog.getByRole('checkbox', { name: definition.name })).toBeChecked();
+    await definitionDialog.getByRole('checkbox', { name: otherDefinition.name }).click();
+    expect(definitionWrites).toEqual([]);
+    await definitionDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(definitionsCard.getByText(otherDefinition.name, { exact: true })).toHaveCount(0);
+    await definitionsCard.getByRole('button', { name: 'Edit linked definitions' }).click();
+    await expect(definitionDialog.getByRole('checkbox', { name: otherDefinition.name })).not.toBeChecked();
+    await definitionDialog.getByRole('textbox', { name: 'Search definitions' }).fill('Other trip');
+    await definitionDialog.getByRole('checkbox', { name: otherDefinition.name }).click();
+    await definitionDialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(definitionDialog).toBeHidden();
+    await expect(definitionsCard.getByRole('link', { name: otherDefinition.name, exact: true })).toBeVisible();
+    expect(definitionWrites).toEqual([[definition.id, otherDefinition.id]]);
+    await expect(definitionsCard.getByRole('checkbox')).toHaveCount(0);
+    await expect(sourcesCard.getByRole('checkbox')).toHaveCount(0);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));

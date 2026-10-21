@@ -1,9 +1,4 @@
 import { createHash } from 'node:crypto';
-
-import Ajv2020 from 'ajv/dist/2020.js';
-import { parseDocument, stringify } from 'yaml';
-import { isOssieTimeField } from '@dory/shared/types/ossie';
-
 import {
     OSSIE_VERSION,
     type KnowledgeDefinition,
@@ -18,6 +13,10 @@ import {
     type OssieMetric,
     type OssieRelationship,
 } from '@dory/database/postgres/schemas';
+import { isOssieTimeField } from '@dory/shared/types/ossie';
+import Ajv2020 from 'ajv/dist/2020.js';
+import { parseDocument, stringify } from 'yaml';
+
 // Vendored unchanged from apache/ossie commit 32c293c79a80b0c11e01bd76357950284aeaf3f8.
 import ossieSchema from './ossie-0.2.0.dev0.schema.json' with { type: 'json' };
 
@@ -32,6 +31,7 @@ type DoryExtension = {
         source?: string;
         timeDimension?: string;
         descriptionOnly?: boolean;
+        placeholder?: boolean;
     };
 };
 
@@ -195,14 +195,47 @@ function referencedDataset(expressionValue: string, datasets: OssieDataset[]) {
     return datasets.find(dataset => expressionValue.includes(`${dataset.name}.`)) ?? datasets[0];
 }
 
+function isPlaceholderDataset(document: OssieDocument, dataset: OssieDataset) {
+    const dory = extensionData(dataset.custom_extensions);
+    // Older models have no explicit marker. Recognize only the untouched Dory skeleton.
+    return (
+        dataset.source === '__unconfigured__' &&
+        dory?.id === `entity:${dataset.name}` &&
+        dory.kind === 'entity' &&
+        dory.status === 'unverified' &&
+        (dory.placeholder === true || (dory.placeholder === undefined && /^[a-z0-9_]+_dataset$/.test(dataset.name))) &&
+        !dataset.fields?.length &&
+        !dataset.description &&
+        !Object.keys(aiContext(dataset.ai_context)).length &&
+        !(document.relationships ?? []).some(item => item.from === dataset.name || item.to === dataset.name) &&
+        !(document.metrics ?? []).some(item => item.expression.dialects.some(value => value.expression.includes(`${dataset.name}.`)))
+    );
+}
+
+function placeholderDataset(name: string, connectionId: string): OssieDataset {
+    const datasetName = `${slug(name)}_dataset`;
+    return {
+        name: datasetName,
+        source: '__unconfigured__',
+        custom_extensions: withDoryExtension(undefined, {
+            id: `entity:${datasetName}`,
+            kind: 'entity',
+            status: 'unverified',
+            sourceConnectionId: connectionId,
+            placeholder: true,
+        }),
+    };
+}
+
 export function projectOssieDocument(document: OssieDocument, fallbackSourceConnectionId?: string): KnowledgeModelDocument {
     const model = document;
-    const entities = model.datasets.map(dataset => definitionFromDataset(dataset, fallbackSourceConnectionId));
-    const fields = model.datasets.flatMap(dataset => (dataset.fields ?? []).map(field => definitionFromField(dataset, field, fallbackSourceConnectionId)));
+    const datasets = model.datasets.filter(dataset => !isPlaceholderDataset(model, dataset));
+    const entities = datasets.map(dataset => definitionFromDataset(dataset, fallbackSourceConnectionId));
+    const fields = datasets.flatMap(dataset => (dataset.fields ?? []).map(field => definitionFromField(dataset, field, fallbackSourceConnectionId)));
     const metrics = (model.metrics ?? []).map(metric => {
         const selectedExpression = expressionFor(metric.expression);
         const expressionValue = selectedExpression?.expression ?? '';
-        const dataset = referencedDataset(expressionValue, model.datasets);
+        const dataset = referencedDataset(expressionValue, datasets);
         const dory = extensionData(metric.custom_extensions);
         const datasetDory = extensionData(dataset?.custom_extensions);
         const context = aiContext(metric.ai_context);
@@ -248,23 +281,11 @@ export function projectOssieDocument(document: OssieDocument, fallbackSourceConn
 
 function createModel(name: string, description: string | null | undefined, connectionId: string): OssieDocument {
     const modelName = slug(name);
-    const datasetName = `${modelName}_dataset`;
     return {
         version: OSSIE_VERSION,
         name: modelName,
         ...(description ? { description } : {}),
-        datasets: [
-            {
-                name: datasetName,
-                source: '__unconfigured__',
-                custom_extensions: withDoryExtension(undefined, {
-                    id: `entity:${datasetName}`,
-                    kind: 'entity',
-                    status: 'unverified',
-                    sourceConnectionId: connectionId,
-                }),
-            },
-        ],
+        datasets: [placeholderDataset(modelName, connectionId)],
         relationships: [],
         metrics: [],
     };
@@ -311,7 +332,7 @@ function mergeExpression(current: OssieExpression | undefined, definition: Knowl
 export function applyKnowledgeDefinitions(document: OssieDocument, definitions: KnowledgeDefinition[]) {
     const current = document;
     const entities = definitions.filter(item => item.kind === 'entity');
-    const datasets = entities.map(entity => {
+    const datasets: OssieDataset[] = entities.map(entity => {
         const existing = current.datasets.find(dataset => extensionData(dataset.custom_extensions)?.id === entity.id || dataset.name === entity.name);
         const context = aiContext(existing?.ai_context);
         const fields = definitions
@@ -346,6 +367,7 @@ export function applyKnowledgeDefinitions(document: OssieDocument, definitions: 
                 kind: entity.kind,
                 status: entity.status,
                 sourceConnectionId: entity.sourceConnectionId,
+                placeholder: false,
             }),
         } satisfies OssieDataset;
     });
@@ -393,6 +415,14 @@ export function applyKnowledgeDefinitions(document: OssieDocument, definitions: 
                 }),
             } satisfies OssieRelationship;
         });
+    // Ossie requires a dataset even for an empty or metrics-only model. Keep that
+    // implementation detail out of the public definition projection.
+    if (!datasets.length) {
+        datasets.push(
+            current.datasets.find(dataset => isPlaceholderDataset(current, dataset)) ??
+                placeholderDataset(current.name, definitions[0]?.sourceConnectionId ?? extensionData(current.datasets[0]?.custom_extensions)?.sourceConnectionId ?? ''),
+        );
+    }
     const next = { ...document, datasets, metrics, relationships };
     return validateOssieDocument(next);
 }

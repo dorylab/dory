@@ -239,6 +239,13 @@
             "when": 1792483200001,
             "tag": "0034_knowledge_extraction",
             "breakpoints": true
+        },
+        {
+            "idx": 34,
+            "version": "7",
+            "when": 1792483200002,
+            "tag": "0035_knowledge_rule_scopes",
+            "breakpoints": true
         }
     ]
 }

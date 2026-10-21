@@ -1,30 +1,31 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import test from 'node:test';
-import { readFile, mkdtemp, mkdir, writeFile, copyFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import test from 'node:test';
+import type { PostgresDBClient } from '@dory/shared';
 import { PGlite } from '@electric-sql/pglite';
+import { eq, sql } from 'drizzle-orm';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
+import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Pool } from 'pg';
-import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
-import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
-import { eq, sql } from 'drizzle-orm';
-import type { PostgresDBClient } from '@dory/shared';
+
 import { PostgresKnowledgeRepository } from '../../src/postgres/impl/knowledge';
 import { createOssieDocument } from '../../src/postgres/impl/knowledge/ossie';
-import { connections, knowledgeSources, knowledgeConnectors } from '../../src/postgres/schemas';
+import { connections, knowledgeConnectors, knowledgeSources } from '../../src/postgres/schemas';
 import { knowledgeExtractionJobs } from '../../src/postgres/schemas/knowledge-extraction';
 import type { ExtractedKnowledge } from '../../src/postgres/schemas/knowledge-extraction';
 
 const payload: ExtractedKnowledge = { kind: 'business_rule', name: 'Reporting timezone', description: 'Reports use UTC.', aliases: [], sourceConnectionId: null };
-async function migrateFixture(db: PostgresDBClient, folder: string, run: (folder: string) => Promise<void>, legacy: boolean) {
+async function migrateFixture(db: PostgresDBClient, folder: string, run: (folder: string) => Promise<void>, legacy: boolean | '0034') {
     if (!legacy) return run(folder);
     const partial = await mkdtemp(path.join(tmpdir(), 'dory-extraction-upgrade-'));
     try {
         const journal = JSON.parse(await readFile(path.join(folder, 'meta/_journal.json'), 'utf8'));
-        journal.entries = journal.entries.filter((entry: { tag: string }) => !entry.tag.startsWith('0034_'));
+        journal.entries = journal.entries.filter((entry: { tag: string }) => entry.tag < (legacy === '0034' ? '0035_' : '0034_'));
         await mkdir(path.join(partial, 'meta'));
         await writeFile(path.join(partial, 'meta/_journal.json'), JSON.stringify(journal));
         for (const entry of journal.entries) await copyFile(path.join(folder, `${entry.tag}.sql`), path.join(partial, `${entry.tag}.sql`));
@@ -41,12 +42,23 @@ async function migrateFixture(db: PostgresDBClient, folder: string, run: (folder
         await db.execute(
             sql`INSERT INTO knowledge_sources (id, organization_id, knowledge_model_id, file_name, format, content_text, byte_size) VALUES ('legacy-source', 'org', 'legacy-model', 'legacy.md', 'markdown', 'Preserved content', 17)`,
         );
+        if (legacy === '0034') {
+            await db.execute(
+                sql`INSERT INTO knowledge_business_rules (id, organization_id, knowledge_model_id, payload, revision) VALUES ('existing-rule', 'org', 'legacy-model', ${JSON.stringify(payload)}::jsonb, 7)`,
+            );
+            await db.execute(
+                sql`INSERT INTO knowledge_business_rules (id, organization_id, knowledge_model_id, payload) VALUES ('scoped-rule', 'org', 'legacy-model', ${JSON.stringify({ ...payload, sourceConnectionId: 'conn' })}::jsonb)`,
+            );
+            await db.execute(
+                sql`INSERT INTO knowledge_candidates (id, organization_id, knowledge_model_id, item_key, payload_hash, payload) VALUES ('old-draft', 'org', 'legacy-model', 'old', 'old', ${JSON.stringify(payload)}::jsonb)`,
+            );
+        }
         await run(folder);
     } finally {
         await rm(partial, { recursive: true, force: true });
     }
 }
-async function fixture(legacy = false) {
+async function fixture(legacy: boolean | '0034' = false) {
     let db: PostgresDBClient, close: () => Promise<void>;
     const url = process.env.DORY_EXTRACTION_TEST_POSTGRES_URL;
     if (url) {
@@ -363,6 +375,229 @@ test('a changed document cannot discard a merged draft still supported by an unc
         const conflicts = await f.repo.extraction.listCandidates(f.scope);
         assert.equal(conflicts.length, 2);
         assert.ok(conflicts.every(c => c.action === 'conflict'));
+    } finally {
+        await f.close();
+    }
+});
+
+test('0035 matches both engines and upgrades reviewed rules without changing IDs or published content', async () => {
+    const pg = await readFile(new URL('../../src/postgres/migrations/0035_knowledge_rule_scopes.sql', import.meta.url), 'utf8');
+    assert.equal(pg, await readFile(new URL('../../src/pglite/migrations/0035_knowledge_rule_scopes.sql', import.meta.url), 'utf8'));
+    const bundle = JSON.parse(await readFile(new URL('../../src/pglite/migrations.json', import.meta.url), 'utf8'));
+    assert.ok(JSON.stringify(bundle).includes('knowledge_metric_rules'));
+    const f = await fixture();
+    try {
+        const columns = await f.db.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'knowledge_business_rules'`);
+        assert.ok(columns.rows.some(c => c.column_name === 'application_scope'));
+    } finally {
+        await f.close();
+    }
+});
+
+test('staging preserves old drafts until a complete model organization commits; failures and stale snapshots cannot discard them', async () => {
+    const f = await fixture();
+    try {
+        await f.sync();
+        const sourceJob = await f.repo.extraction.claim();
+        await f.repo.extraction.organization.stage(sourceJob!.id, sourceJob!.leaseToken!, [{ payload, quotes: ['Reports use UTC.'] }]);
+        assert.equal((await f.repo.extraction.listCandidates(f.scope)).length, 0);
+        let job = await f.repo.extraction.organization.claim();
+        assert.ok(job);
+        assert.equal(await f.repo.extraction.organization.claim(), null);
+        let snapshot = await f.repo.extraction.organization.snapshot(f.scope);
+        await assert.rejects(f.repo.extraction.organization.complete(job.id, job.leaseToken!, snapshot.fingerprint, []), /dropped/);
+        assert.equal((await f.repo.extraction.listCandidates(f.scope)).length, 0);
+        await f.repo.extraction.organization.complete(
+            job.id,
+            job.leaseToken!,
+            snapshot.fingerprint,
+            snapshot.items.map(i => ({ payload: i.payload, inputIds: [i.id] })),
+        );
+        const [old] = await f.repo.extraction.listCandidates(f.scope);
+        await f.repo.extraction.organization.request(f.scope);
+        job = await f.repo.extraction.organization.claim();
+        snapshot = await f.repo.extraction.organization.snapshot(f.scope);
+        await f.repo.extraction.review({ ...f.scope, candidateId: old.id, userId: 'admin', decision: 'reject' });
+        assert.equal(
+            await f.repo.extraction.organization.complete(
+                job!.id,
+                job!.leaseToken!,
+                snapshot.fingerprint,
+                snapshot.items.map(i => ({ payload: i.payload, inputIds: [i.id] })),
+            ),
+            false,
+        );
+        assert.equal((await f.repo.extraction.listCandidates(f.scope)).length, 0);
+        assert.equal((await f.repo.extraction.listCandidates({ ...f.scope, status: 'rejected' }))[0].id, old.id);
+        await assert.rejects(f.repo.extraction.organization.request({ ...f.scope, organizationId: 'other' }), /not found/);
+    } finally {
+        await f.close();
+    }
+});
+
+test('shared rule dependencies publish atomically and keep official metric IDs and SQL stable', async () => {
+    const f = await fixture();
+    try {
+        const metric: ExtractedKnowledge = {
+            ...payload,
+            kind: 'metric',
+            name: 'Revenue',
+            description: 'Revenue sums paid orders.',
+            sourceConnectionId: 'conn',
+            expression: 'SUM(net_amount)',
+        };
+        const shared: ExtractedKnowledge = {
+            ...payload,
+            name: 'Failed order exclusion',
+            description: 'Exclude failed orders from revenue.',
+            applicationScope: 'metrics',
+            applicableMetricNames: ['Revenue'],
+            sharingEvidence: 'Exclude failed orders from revenue.',
+        };
+        const body = `${metric.description}\n${shared.description}`;
+        await f.sync(body);
+        const sourceJob = await f.repo.extraction.claim();
+        await f.repo.extraction.organization.stage(sourceJob!.id, sourceJob!.leaseToken!, [
+            { payload: metric, quotes: [metric.description] },
+            { payload: shared, quotes: [shared.description] },
+        ]);
+        const job = await f.repo.extraction.organization.claim();
+        const snapshot = await f.repo.extraction.organization.snapshot(f.scope);
+        await f.repo.extraction.organization.complete(job!.id, job!.leaseToken!, snapshot.fingerprint, [
+            { payload: metric, inputIds: [snapshot.items[0].id], sharedRuleKeys: [(await import('../../src/postgres/impl/knowledge/extraction')).knowledgeHash(shared)] },
+            { payload: shared, inputIds: [snapshot.items[1].id] },
+        ]);
+        const drafts = await f.repo.extraction.listCandidates(f.scope);
+        const m = drafts.find(d => d.payload.kind === 'metric')!,
+            r = drafts.find(d => d.payload.kind === 'business_rule')!;
+        await assert.rejects(f.repo.extraction.review({ ...f.scope, candidateId: m.id, userId: 'admin', decision: 'approve' }), /together/);
+        assert.equal((await f.repo.getModel(f.scope)).model.definitions.filter(d => d.kind === 'metric').length, 0);
+        await assert.rejects(
+            f.repo.extraction.reviewBundle({
+                ...f.scope,
+                userId: 'admin',
+                items: [
+                    { candidateId: m.id, payload: m.payload, createNew: true },
+                    { candidateId: r.id, payload: { ...r.payload, metricIds: ['missing'] }, createNew: true },
+                ],
+            }),
+            /metric|scope/,
+        );
+        assert.equal((await f.repo.getModel(f.scope)).model.definitions.filter(d => d.kind === 'metric').length, 0);
+        await f.repo.extraction.reviewBundle({
+            ...f.scope,
+            userId: 'admin',
+            items: [
+                { candidateId: m.id, payload: m.payload, createNew: true },
+                { candidateId: r.id, payload: r.payload, createNew: true },
+            ],
+        });
+        const [official] = (await f.repo.getModel(f.scope)).model.definitions.filter(d => d.kind === 'metric');
+        const [rule] = await f.repo.extraction.listRules(f.scope);
+        assert.equal(rule.applicationScope, 'metrics');
+        assert.deepEqual(rule.metricIds, [official.id]);
+        assert.equal(official.expression, 'SUM(net_amount)');
+        const { knowledgeHash } = await import('../../src/postgres/impl/knowledge/extraction');
+        const before = knowledgeHash(official);
+        await f.repo.extraction.updateRule({
+            ...f.scope,
+            id: rule.id,
+            expectedRevision: rule.revision,
+            userId: 'admin',
+            payload: { ...rule.payload, description: 'Updated reviewed condition.' },
+            expectedMetricRevisions: { [official.id]: before },
+        });
+        assert.equal(knowledgeHash((await f.repo.getModel(f.scope)).model.definitions.find(d => d.id === official.id)), before);
+        await assert.rejects(f.repo.extraction.updateRule({ ...f.scope, id: rule.id, expectedRevision: rule.revision, userId: 'admin', payload: rule.payload }), /changed/);
+        await assert.rejects(
+            f.repo.extraction.updateMetricRules({ ...f.scope, metricId: official.id, expectedRevision: before, expectedReferenceIds: [], ruleIds: [], expectedRuleRevisions: {} }),
+            /references changed/,
+        );
+        const [latest] = await f.repo.extraction.listRules(f.scope);
+        await f.repo.extraction.updateMetricRules({
+            ...f.scope,
+            metricId: official.id,
+            expectedRevision: before,
+            expectedReferenceIds: [rule.id],
+            ruleIds: [],
+            expectedRuleRevisions: { [rule.id]: latest.revision },
+        });
+        assert.deepEqual((await f.repo.extraction.listRules(f.scope))[0].metricIds, []);
+        await f.repo.saveDefinitions({ ...f.scope, definitions: (await f.repo.getModel(f.scope)).model.definitions.filter(d => d.kind !== 'metric') });
+        assert.equal((await f.repo.extraction.listRules(f.scope))[0].id, rule.id);
+    } finally {
+        await f.close();
+    }
+});
+
+test('rule scopes reject missing or foreign metrics; archived rules retain references without applying', async () => {
+    const f = await fixture();
+    try {
+        await f.sync();
+        const job = await f.repo.extraction.claim();
+        await f.repo.extraction.complete(job!.id, job!.leaseToken!, [{ payload, quotes: ['Reports use UTC.'] }]);
+        const [draft] = await f.repo.extraction.listCandidates(f.scope);
+        await assert.rejects(
+            f.repo.extraction.review({
+                ...f.scope,
+                candidateId: draft.id,
+                userId: 'admin',
+                decision: 'approve',
+                payload: { ...payload, applicationScope: 'metrics', metricIds: ['foreign'] },
+            }),
+            /metric|scope/,
+        );
+        await assert.rejects(
+            f.repo.extraction.review({ ...f.scope, candidateId: draft.id, userId: 'admin', decision: 'approve', payload: { ...payload, applicationScope: 'data_source' } }),
+            /data source/,
+        );
+        await f.repo.extraction.review({ ...f.scope, candidateId: draft.id, userId: 'admin', decision: 'approve', payload: { ...payload, applicationScope: 'model' } });
+        const [rule] = await f.repo.extraction.listRules(f.scope);
+        await f.repo.extraction.updateRule({ ...f.scope, id: rule.id, expectedRevision: rule.revision, userId: 'admin', archived: true });
+        assert.equal((await f.repo.extraction.listRules(f.scope)).length, 0);
+        assert.equal((await f.repo.extraction.listRules({ ...f.scope, includeArchived: true }))[0].status, 'archived');
+    } finally {
+        await f.close();
+    }
+});
+
+test('0034 to 0035 backfills scope and schedules one-time pending organization without enabling connectors', async () => {
+    const f = await fixture('0034');
+    try {
+        const rows = await f.db.execute(sql`SELECT id, payload, revision, application_scope FROM knowledge_business_rules WHERE knowledge_model_id = 'legacy-model' ORDER BY id`);
+        assert.equal(rows.rows[0].id, 'existing-rule');
+        assert.equal(rows.rows[0].revision, 7);
+        assert.deepEqual(rows.rows[0].payload, payload);
+        assert.equal(rows.rows[0].application_scope, 'model');
+        assert.equal(rows.rows[1].application_scope, 'data_source');
+        const status = await f.repo.extraction.status({ organizationId: 'org', knowledgeModelId: 'legacy-model' });
+        assert.equal(status.organizationJob?.status, 'queued');
+        assert.ok(status.connectors.every(c => !c.autoExtract));
+        assert.equal((await f.repo.extraction.listCandidates({ organizationId: 'org', knowledgeModelId: 'legacy-model' }))[0].id, 'old-draft');
+        assert.equal((await f.db.execute(sql`SELECT * FROM knowledge_metric_rules`)).rows.length, 0);
+    } finally {
+        await f.close();
+    }
+});
+
+test('organization leases survive restart, fence old generations and allow blocked jobs to retry', async () => {
+    const f = await fixture();
+    try {
+        await f.repo.extraction.organization.request(f.scope);
+        const first = await f.repo.extraction.organization.claim();
+        assert.ok(first);
+        await f.db.execute(sql`UPDATE knowledge_organization_jobs SET lease_expires_at = now() - interval '1 minute'`);
+        const second = await f.repo.extraction.organization.claim();
+        assert.ok(second);
+        assert.notEqual(first.leaseToken, second.leaseToken);
+        await assert.rejects(f.repo.extraction.organization.heartbeat(first.id, first.leaseToken!), /lost/);
+        await f.repo.extraction.organization.fail(second.id, second.leaseToken!, 'AI_CONFIGURATION_REQUIRED', false, true);
+        assert.equal((await f.repo.extraction.status(f.scope)).organizationJob?.status, 'blocked');
+        await f.repo.extraction.organization.request(f.scope);
+        const third = await f.repo.extraction.organization.claim();
+        assert.equal(third!.attempts, 1);
+        await f.repo.extraction.configure({ ...f.scope, connectorId: f.connector.id, enabled: false });
+        await assert.rejects(f.repo.extraction.organization.heartbeat(third!.id, third!.leaseToken!), /lost/);
     } finally {
         await f.close();
     }
