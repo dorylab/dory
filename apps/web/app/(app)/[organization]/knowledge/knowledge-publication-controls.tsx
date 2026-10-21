@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { History, Settings } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -28,7 +30,15 @@ type History = {
     tasks: Array<{ id: string; status: string; error: string | null }>;
 };
 
-export function KnowledgePublicationControls({ organization, modelId, settingsOnly = false }: { organization: string; modelId: string; settingsOnly?: boolean }) {
+export function KnowledgePublicationControls({
+    organization,
+    modelId,
+    variant = 'settingsOnly',
+}: {
+    organization: string;
+    modelId: string;
+    variant?: 'settingsOnly' | 'toolbar';
+}) {
     const t = useTranslations('Knowledge.Publication');
     const locale = useLocale();
     const client = useQueryClient();
@@ -56,16 +66,46 @@ export function KnowledgePublicationControls({ organization, modelId, settingsOn
         onError: error => toast.error(error instanceof Error ? error.message : t('Failed')),
     });
     return (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-muted-foreground">
-                {t('Mode')}: {policy.data?.mode ? t(policy.data.mode) : t('Loading')}
-            </span>
+        <div className={variant === 'toolbar' ? 'inline-flex shrink-0 items-center gap-1' : 'flex flex-wrap items-center gap-2 text-sm'}>
+            {variant !== 'toolbar' ? (
+                <span className="text-muted-foreground">
+                    {t('Mode')}: {policy.data?.mode ? t(policy.data.mode) : t('Loading')}
+                </span>
+            ) : null}
+            {variant === 'toolbar' && policy.data?.canManage ? (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button size="icon-sm" variant="ghost" aria-label={t('History')} onClick={() => setHistoryOpen(true)}>
+                            <History aria-hidden="true" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('History')}</TooltipContent>
+                </Tooltip>
+            ) : null}
             {policy.data?.canManage ? (
-                <>
+                variant === 'toolbar' ? (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                size="icon-sm"
+                                variant="ghost"
+                                aria-label={t('Settings')}
+                                disabled={!policy.data.mode || action.isPending}
+                                onClick={() => {
+                                    setMode(policy.data!.mode);
+                                    setSettings(true);
+                                }}
+                            >
+                                <Settings aria-hidden="true" />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('Settings')}</TooltipContent>
+                    </Tooltip>
+                ) : (
                     <Button
                         size="sm"
                         variant="ghost"
-                        disabled={!policy.data?.mode || action.isPending}
+                        disabled={!policy.data.mode || action.isPending}
                         onClick={() => {
                             setMode(policy.data!.mode);
                             setSettings(true);
@@ -73,12 +113,7 @@ export function KnowledgePublicationControls({ organization, modelId, settingsOn
                     >
                         {t('Settings')}
                     </Button>
-                </>
-            ) : null}
-            {!settingsOnly && policy.data?.canManage ? (
-                <Button size="sm" variant="ghost" onClick={() => setHistoryOpen(true)}>
-                    {t('History')}
-                </Button>
+                )
             ) : null}
             {policy.isError ? (
                 <Button variant="ghost" size="sm" onClick={() => void policy.refetch()}>

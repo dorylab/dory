@@ -19,9 +19,17 @@ test('model publication defaults to review, persists automatic mode and keeps dr
     const model = await action(request, 'knowledge.create', { name: `publication-${randomUUID()}`, connectionIds: [connections[0].connection.id] });
     try {
         await page.goto(`/${org}/knowledge/${model.id}?tab=review`);
-        await expect(page.getByText('Publication mode: Review before publishing', { exact: true })).toBeVisible();
+        await expect(page.getByText('Publication mode: Review before publishing', { exact: true })).toHaveCount(0);
+        const toolbar = page.getByRole('toolbar', { name: 'Pending review actions' });
+        await expect(toolbar.getByRole('button')).toHaveCount(4);
+        expect(await toolbar.getByRole('button').allTextContents()).toEqual(['', '', 'AI organize drafts', 'Approve selected (0)']);
+        await toolbar.getByRole('button', { name: 'Processing history' }).hover();
+        await expect(page.getByRole('tooltip', { name: 'Processing history' })).toBeVisible();
+        await toolbar.getByRole('button', { name: 'Publication settings' }).hover();
+        await expect(page.getByRole('tooltip', { name: 'Publication settings' })).toBeVisible();
         await page.getByRole('button', { name: 'Publication settings', exact: true }).click();
         const dialog = page.getByRole('dialog');
+        await expect(dialog.getByRole('combobox', { name: 'Publication mode' })).toContainText('Review before publishing');
         await dialog.getByRole('combobox', { name: 'Publication mode' }).click();
         await page.getByRole('option', { name: 'Automatically publish eligible new knowledge' }).click();
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
@@ -29,8 +37,9 @@ test('model publication defaults to review, persists automatic mode and keeps dr
         expect(await action(request, 'knowledge.getPublicationPolicy', { knowledgeModelId: model.id })).toMatchObject({ mode: 'automatic', version: 1 });
         expect((await action(request, 'knowledge.listCandidates', { knowledgeModelId: model.id })).candidates).toEqual([]);
         await page.reload();
-        await expect(page.getByText('Publication mode: Automatically publish eligible new knowledge', { exact: true })).toBeVisible();
+        await expect(page.getByText('Publication mode: Automatically publish eligible new knowledge', { exact: true })).toHaveCount(0);
         await page.getByRole('button', { name: 'Publication settings', exact: true }).click();
+        await expect(dialog.getByRole('combobox', { name: 'Publication mode' })).toContainText('Automatically publish eligible new knowledge');
         await dialog.getByRole('combobox').click();
         await page.getByRole('option', { name: 'Review before publishing', exact: true }).click();
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();

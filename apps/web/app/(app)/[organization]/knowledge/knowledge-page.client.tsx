@@ -562,7 +562,7 @@ function EditKnowledgeModelDialog({
                     <DialogDescription>{t('EditDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
-                    {model ? <KnowledgePublicationControls organization={organization} modelId={model.id} settingsOnly /> : null}
+                    {model ? <KnowledgePublicationControls organization={organization} modelId={model.id} variant="settingsOnly" /> : null}
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">{t('Name')}</label>
                         <Input value={name} onChange={event => setName(event.target.value)} />

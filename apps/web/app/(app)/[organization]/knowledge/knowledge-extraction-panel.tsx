@@ -736,7 +736,6 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
     return (
         <div className="min-w-0 space-y-4 text-foreground">
             <p className="text-sm text-muted-foreground">{t('ReviewNotice')}</p>
-            <KnowledgePublicationControls organization={organization} modelId={knowledgeModelId} />
             <div role="toolbar" aria-label={t('ReviewToolbar')} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4">
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                     <label className="flex items-center gap-2">
@@ -753,6 +752,7 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
                     </span>
                 </div>
                 <div className="ml-auto flex flex-wrap justify-end gap-2">
+                    <KnowledgePublicationControls organization={organization} modelId={knowledgeModelId} variant="toolbar" />
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <span className="inline-flex" tabIndex={busy || query.isPending || query.isError ? 0 : undefined}>
