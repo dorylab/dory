@@ -1,158 +1,61 @@
+import { Locale } from '@dory/i18n/routing';
 import { tool } from 'ai';
 import { z } from 'zod';
-import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
-import { Locale } from '@dory/i18n/routing';
+
 import { translateApi } from '@/app/api/utils/i18n';
-import { getReadonlySqlStatements } from '@/lib/server/mcp/sql-safety';
-import { logDeniedSqlAudit, runWithSqlAudit } from '@/lib/server/sql-audit';
+
+type RecordedSqlResult = {
+    result: Array<Record<string, unknown>>;
+    columns: Array<{ name: string; type?: string | null }>;
+    rowCount: number;
+    truncated: boolean;
+    executionTimeMs: number;
+    sessionId: string;
+    artifacts: Array<{ artifactId: string }>;
+    work: { workId: string };
+    workspaceUrl: string;
+};
 
 type CreateSqlRunnerOptions = {
-    userId: string;
-    organizationId: string;
-    chatId: string;
-    messageId?: string;
-    datasourceId: string;
     defaultDatabase?: string | null;
     locale?: Locale;
+    executeSql: (input: { sql: string; database?: string | null; maxRows: number }, toolCallId: string) => Promise<RecordedSqlResult>;
 };
 
 const MAX_SQL_RESULT_ROWS = 100;
-const ROW_LIMIT = Math.min(parsePositiveInt(process.env.CHATBOT_SQL_ROW_LIMIT, MAX_SQL_RESULT_ROWS), MAX_SQL_RESULT_ROWS);
 
-export function createSqlRunnerTool({ userId, organizationId, datasourceId, messageId, chatId, defaultDatabase, locale }: CreateSqlRunnerOptions) {
+export function createSqlRunnerTool({ defaultDatabase, locale, executeSql }: CreateSqlRunnerOptions) {
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
-    const description = t('Api.Chat.SqlRunner.Description');
     return tool({
-        description,
-        inputSchema: z.object({
-            sql: z.string().min(1, t('Api.Chat.SqlRunner.SqlRequired')),
-            database: z.string().optional(),
-        }),
-        execute: async ({ sql, database }) => {
-            const requestedDatabase = sanitizeDatabase(database);
-
-            if (!userId || !datasourceId) {
-                return buildErrorResult(sql, requestedDatabase, t('Api.Chat.SqlRunner.MissingConnection'));
-            }
-
-            const trimmed = sql.trim();
-            if (!trimmed) {
-                return buildErrorResult(sql, requestedDatabase, t('Api.Chat.SqlRunner.SqlRequired'));
-            }
-            let limitedSql = trimmed;
-
+        description: t('Api.Chat.SqlRunner.Description'),
+        inputSchema: z.object({ sql: z.string().min(1), database: z.string().optional() }),
+        execute: async ({ sql, database }, { toolCallId }) => {
+            const targetDatabase = sanitizeDatabase(database) ?? sanitizeDatabase(defaultDatabase);
+            const performanceError = await validateSqlPerformance({ sql, database: targetDatabase, t });
+            if (performanceError) return performanceError;
             try {
-                const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
-                const instance = entry.instance;
-                let statements: string[] = [];
-                try {
-                    statements = await getReadonlySqlStatements(trimmed, instance.config.type);
-                } catch {
-                    // The translated response remains intentionally generic; the denied SQL is recorded below.
-                }
-
-                if (statements.length !== 1) {
-                    await logDeniedSqlAudit(
-                        {
-                            organizationId,
-                            userId,
-                            source: 'ai_sql_runner',
-                            connectionId: datasourceId,
-                            databaseName: requestedDatabase,
-                            tabId: 'chatbot',
-                            extraJson: {
-                                chatId,
-                                messageId,
-                            },
-                        },
-                        {
-                            sqlText: trimmed,
-                            databaseName: requestedDatabase,
-                            errorMessage: t('Api.Chat.SqlRunner.ReadOnlyOnly'),
-                        },
-                    );
-                    return buildErrorResult(trimmed, requestedDatabase, t('Api.Chat.SqlRunner.ReadOnlyOnly'), undefined, {
-                        required: true,
-                        reason: 'non-readonly-query',
-                    });
-                }
-
-                limitedSql = enforceSqlResultRowLimit(statements[0]!, MAX_SQL_RESULT_ROWS);
-
-                const targetDatabase = requestedDatabase ?? sanitizeDatabase(defaultDatabase) ?? sanitizeDatabase(config.database);
-                const performanceGuardResult = await validateSqlPerformance({
-                    sql: limitedSql,
+                const result = await executeSql({ sql, database: targetDatabase, maxRows: MAX_SQL_RESULT_ROWS }, toolCallId);
+                return {
+                    type: 'sql-result' as const,
+                    ok: true as const,
+                    sql,
                     database: targetDatabase,
-                    t,
-                });
-
-                if (performanceGuardResult) {
-                    return performanceGuardResult;
-                }
-
-                const started = Date.now();
-                const result = await runWithSqlAudit(
-                    {
-                        organizationId,
-                        userId,
-                        source: 'ai_sql_runner',
-                        connectionId: datasourceId,
-                        databaseName: targetDatabase,
-                        tabId: 'chatbot',
-                        extraJson: {
-                            chatId,
-                            messageId,
-                        },
-                    },
-                    () =>
-                        instance.queryWithContext(limitedSql, {
-                            database: targetDatabase ?? undefined,
-                        }),
-                );
-                const durationMs = Date.now() - started;
-                console.info('[chat][sqlRunner] executed', {
-                    datasourceId,
-                    durationMs,
-                });
-
-                const rows = Array.isArray(result.rows) ? result.rows : [];
-                const previewRows = rows.slice(0, ROW_LIMIT).map(row => serializeRow(row));
-                const truncated = rows.length > ROW_LIMIT;
-                const columns =
-                    result.columns && result.columns.length > 0
-                        ? result.columns.map(col => ({
-                              name: col.name,
-                              type: col.type ?? null,
-                          }))
-                        : inferColumnsFromRows(previewRows);
-
-                const base: SqlResultBase = {
-                    type: 'sql-result',
-                    sql: limitedSql,
-                    database: targetDatabase ?? null,
                     timestamp: new Date().toISOString(),
-                };
-
-                const success: SqlResultOk = {
-                    ...base,
-                    ok: true,
-                    rowCount: result.rowCount ?? rows.length,
-                    sampleRowCount: previewRows.length,
-                    hasMore: truncated,
-                    previewRows,
-                    columns,
-                    durationMs,
-                };
-
-                return success;
-            } catch (error: any) {
-                console.error('[chat] sqlRunner failed', error);
-
-                const rawMessage = String(error?.message ?? error ?? t('Api.Chat.SqlRunner.ExecuteFailed'));
-                const code = extractErrorCode(rawMessage);
-                const targetDatabase = requestedDatabase ?? sanitizeDatabase(defaultDatabase);
-
-                return buildErrorResult(limitedSql, targetDatabase, rawMessage, code);
+                    rowCount: result.rowCount,
+                    sampleRowCount: result.result.length,
+                    hasMore: result.truncated,
+                    previewRows: result.result.map(serializeRow),
+                    columns: result.columns.map(column => ({ name: column.name, type: column.type ?? null })),
+                    durationMs: result.executionTimeMs,
+                    workId: result.work.workId,
+                    sessionId: result.sessionId,
+                    artifactIds: result.artifacts.map(artifact => artifact.artifactId),
+                    workspaceUrl: result.workspaceUrl,
+                } satisfies SqlResultOk;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : t('Api.Chat.SqlRunner.ExecuteFailed');
+                const readOnlyDenied = /only read.only SQL|read.only.*(reject|allow)|not read.only/i.test(message);
+                return buildErrorResult(sql, targetDatabase, message, undefined, readOnlyDenied ? { required: true, reason: 'non-readonly-query' } : undefined);
             }
         },
     });
@@ -173,6 +76,10 @@ export type SqlResultOk = SqlResultBase & {
     previewRows: Array<Record<string, unknown>>;
     columns: Array<{ name: string; type: string | null }>;
     durationMs: number;
+    workId: string;
+    sessionId: string;
+    artifactIds: string[];
+    workspaceUrl: string;
 };
 
 export type SqlResultError = SqlResultBase & {
@@ -211,14 +118,6 @@ export function isManualExecutionRequiredSqlResult(value: unknown): value is Sql
     if ((value as SqlResultError).type !== 'sql-result') return false;
     if ((value as SqlResultError).ok !== false) return false;
     return (value as SqlResultError).manualExecution?.required === true;
-}
-
-function parsePositiveInt(rawValue: string | undefined, fallback: number): number {
-    const parsed = Number(rawValue);
-    if (Number.isFinite(parsed) && parsed > 0) {
-        return Math.floor(parsed);
-    }
-    return fallback;
 }
 
 function sanitizeDatabase(value?: string | null): string | null {
@@ -281,13 +180,6 @@ function containsSelectWildcard(sql: string): boolean {
     return /(^|,)\s*(?:[a-zA-Z_][\w$]*\s*\.\s*)?\*(\s*(,|$))/i.test(selectList);
 }
 
-function extractErrorCode(message: string): number | null {
-    const match = message.match(/Code:\s*(\d+)/i);
-    if (!match) return null;
-    const num = Number(match[1]);
-    return Number.isFinite(num) ? num : null;
-}
-
 function serializeRow(row: unknown): Record<string, unknown> {
     if (!row || typeof row !== 'object') {
         return { value: stringify(row) };
@@ -307,15 +199,6 @@ function serializeRow(row: unknown): Record<string, unknown> {
         result[key] = stringify(value);
     }
     return result;
-}
-
-function inferColumnsFromRows(rows: Array<Record<string, unknown>>) {
-    if (!rows.length) return [];
-    const keys = new Set<string>();
-    rows.forEach(row => {
-        Object.keys(row).forEach(key => keys.add(key));
-    });
-    return Array.from(keys).map(key => ({ name: key, type: null as string | null }));
 }
 
 function stringify(value: unknown): string | number | boolean | null {

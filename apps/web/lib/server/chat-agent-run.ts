@@ -15,6 +15,7 @@ export function createChatAgentRunLifecycle(options: {
     connectionId?: string | null;
     title?: string | null;
     signal: AbortSignal;
+    requireSummary?: boolean;
 }) {
     let workPromise: ReturnType<typeof options.works.startChatTurn> | undefined;
     let finishPromise: Promise<void> | undefined;
@@ -40,6 +41,7 @@ export function createChatAgentRunLifecycle(options: {
                 workId: work.workId,
                 requestId: options.requestId,
                 outcome,
+                requireSummary: options.requireSummary,
             });
         });
         return finishPromise;

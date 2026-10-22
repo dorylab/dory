@@ -125,3 +125,20 @@ test('Codex MCP bearer config keeps token out of args', () => {
         [DORY_CODEX_MCP_TOKEN_ENV]: token,
     });
 });
+
+test('local Codex binds MCP execution to the existing chat turn', () => {
+    const instruction = buildInstruction({ prompt: [] }, { doryMcpAvailable: true, connectionId: 'conn-1', workId: 'run-1', requestId: 'turn-2' });
+    assert.match(instruction, /Reuse it; do not create another Run/);
+    assert.match(instruction, /finalAnswer/);
+    const args = buildCodexDoryMcpArgs({
+        endpoint: 'https://dory.test/api/mcp',
+        auth: { type: 'bearer-env', envVar: DORY_CODEX_MCP_TOKEN_ENV, token: 'secret' },
+        enabledTools: DORY_CODEX_MCP_ENABLED_TOOLS,
+        toolTimeoutSec: DORY_CODEX_MCP_TOOL_TIMEOUT_SEC,
+        agentTurn: { workId: 'run-1', requestId: 'turn-2' },
+    });
+    assert.match(args.join('\n'), /http_headers=.*x-dory-agent-work-id.*run-1/);
+    assert.match(args.join('\n'), /x-dory-agent-request-id.*turn-2/);
+    assert.ok(DORY_CODEX_MCP_ENABLED_TOOLS.includes('dory_search_assets'));
+    assert.ok(DORY_CODEX_MCP_ENABLED_TOOLS.includes('dory_read_asset'));
+});

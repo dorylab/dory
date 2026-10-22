@@ -1,5 +1,7 @@
-import { getToolName } from './message-tool-compat';
+import { useTranslations } from 'next-intl';
+
 import { formatToolValue, getObjectKeys } from './message-render-utils';
+import { getToolName } from './message-tool-compat';
 
 type DoryToolContentProps = {
     part: any;
@@ -95,6 +97,7 @@ function ColumnsSummary({ columns }: { columns: any[] }) {
 }
 
 export function DoryToolContent({ part, state, input, output, errorText }: DoryToolContentProps) {
+    const t = useTranslations('AgentRuns');
     const toolName = getToolName(part);
 
     if (state === 'input-streaming' || state === 'input-available') {
@@ -129,6 +132,42 @@ export function DoryToolContent({ part, state, input, output, errorText }: DoryT
         );
     }
 
+    if (toolName === 'finishAnalysis') {
+        return <p className="text-sm">{t('Chat.ConclusionsSaved')}</p>;
+    }
+    if (toolName === 'search_assets') {
+        const assets: Array<{ ref: string; title: string; summary?: string; deepLink: string }> = Array.isArray(toolOutput?.assets) ? toolOutput.assets : [];
+        return (
+            <div className="space-y-2">
+                {typeof input?.query === 'string' ? <p className="text-sm">{t('Chat.SearchQuery', { query: input.query })}</p> : null}
+                <p className="text-sm text-muted-foreground">{assets.length ? t('Chat.KnowledgeResults', { count: assets.length }) : t('Timeline.Titles.knowledgeNotFound')}</p>
+                {assets.map(asset => (
+                    <div key={asset.ref} className="rounded-md border border-border p-3 text-sm">
+                        <a className="font-medium underline underline-offset-4" href={asset.deepLink}>
+                            {asset.title}
+                        </a>
+                        {asset.summary ? <p className="mt-1 text-muted-foreground">{asset.summary}</p> : null}
+                    </div>
+                ))}
+            </div>
+        );
+    }
+    if (toolName === 'read_asset' && toolOutput?.asset) {
+        const asset = toolOutput.asset as { title: string; deepLink: string; revision: string; summary?: string };
+        const sourceContent = toolOutput.content;
+        const contentText = typeof sourceContent === 'string' ? sourceContent : (sourceContent?.definition ?? sourceContent?.expression ?? sourceContent?.text);
+        return (
+            <div className="space-y-2 text-sm">
+                <a className="font-medium underline underline-offset-4" href={asset.deepLink}>
+                    {asset.title}
+                </a>
+                <p className="text-muted-foreground">{t('Chat.SourceRevision', { revision: asset.revision.slice(0, 12) })}</p>
+                {asset.summary ? <p>{asset.summary}</p> : null}
+                {typeof contentText === 'string' ? <p className="whitespace-pre-wrap">{contentText}</p> : null}
+            </div>
+        );
+    }
+
     if (toolName === 'chartBuilder') {
         const chart = (toolOutput as any)?.type === 'chart' ? (toolOutput as any) : (result as any);
         const rows = Array.isArray(chart?.data) ? chart.data : [];
@@ -151,7 +190,7 @@ export function DoryToolContent({ part, state, input, output, errorText }: DoryT
         );
     }
 
-    if (toolName === 'describeTable') {
+    if (toolName === 'describeTable' || (toolName === 'exploreSchema' && input?.operation === 'describe_table')) {
         const columns = Array.isArray((toolOutput as any)?.columns) ? (toolOutput as any).columns : [];
         return (
             <div className="space-y-2.5">
@@ -167,7 +206,7 @@ export function DoryToolContent({ part, state, input, output, errorText }: DoryT
         );
     }
 
-    if (toolName === 'previewTable') {
+    if (toolName === 'previewTable' || (toolName === 'exploreSchema' && input?.operation === 'preview_table')) {
         const resultSets = Array.isArray((toolOutput as any)?.queryResultSets) ? (toolOutput as any).queryResultSets : [];
         const firstSet = resultSets[0] ?? {};
         const rows = Array.isArray((toolOutput as any)?.results?.[0]) ? (toolOutput as any).results[0] : [];
@@ -188,7 +227,7 @@ export function DoryToolContent({ part, state, input, output, errorText }: DoryT
         );
     }
 
-    if (toolName === 'listTables') {
+    if (toolName === 'listTables' || (toolName === 'exploreSchema' && input?.operation === 'list_tables')) {
         const tables = Array.isArray((toolOutput as any)?.tables) ? (toolOutput as any).tables : [];
         return (
             <div className="space-y-2.5">
@@ -227,7 +266,7 @@ export function DoryToolContent({ part, state, input, output, errorText }: DoryT
         );
     }
 
-    if (toolName === 'searchSchema') {
+    if (toolName === 'searchSchema' || (toolName === 'exploreSchema' && input?.operation === 'search')) {
         const results = Array.isArray((toolOutput as any)?.results) ? (toolOutput as any).results : [];
         return (
             <div className="space-y-2.5">

@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import test from 'node:test';
+import type { ActionContext } from '@dory/actions';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ActionContext } from '@dory/actions';
-import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
+
 import type { WebActionServices } from '@/lib/actions/server/types';
+import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
@@ -140,6 +141,7 @@ function createWorksMock() {
         knowledgeUsage,
         finishInputs,
         works,
+        getById: async (input: any) => findByWorkId(input),
         summarizeInput: (input: unknown) => input,
         create: async (input: any) => {
             if (input.externalSessionId) {
@@ -806,6 +808,7 @@ test('dory_create_work returns and records relevant semantic model context', asy
         db: {
             works,
             knowledge: {
+                extraction: { listRules: async () => [], evidenceFor: async () => [] },
                 listModels: async () => [
                     {
                         id: 'model-1',
@@ -850,10 +853,11 @@ test('dory_create_work returns and records relevant semantic model context', asy
     assert.match(output.semanticContext, /SUM\(orders\.amount\)/);
     assert.deepEqual(
         output.semanticModelsUsed.map((item: any) => item.modelRevision),
-        ['revision-1'],
+        [works.knowledgeUsage[0].revision],
     );
     assert.equal(works.knowledgeUsage[0].assetKind, 'semantic_model');
-    assert.match(works.knowledgeUsage[0].assetRef, /revision-1$/);
+    assert.match(works.knowledgeUsage[0].revision, /^[a-f0-9]{64}$/);
+    assert.ok(works.knowledgeUsage[0].assetRef.endsWith(works.knowledgeUsage[0].revision));
 });
 
 test('dory_create_work fails open when semantic context resolution fails', async () => {

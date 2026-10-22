@@ -9,6 +9,9 @@ export type AgentRunSummaryMetadata = {
 };
 
 export type AgentRunSummarySectionMetadata = {
+    requestId?: string;
+    responseMessageId?: string;
+    findingIds?: string[];
     summaryTitle?: string | null;
     findings: string[];
     steps: string[];
@@ -103,6 +106,11 @@ export type AgentRunTextFormatter = {
 };
 
 type AgentRunEventTitleKey =
+    | 'searchedKnowledge'
+    | 'knowledgeNotFound'
+    | 'readKnowledge'
+    | 'loadedSemanticContext'
+    | 'builtChart'
     | 'created'
     | 'finished'
     | 'listedDataSources'
@@ -139,6 +147,16 @@ export const defaultAgentRunTextFormatter: AgentRunTextFormatter = {
     activityStatusWithDuration: (status, duration) => `${status} in ${duration}`,
     eventTitle: (key, values) => {
         switch (key) {
+            case 'searchedKnowledge':
+                return 'Searched Knowledge';
+            case 'knowledgeNotFound':
+                return 'No matching Knowledge';
+            case 'readKnowledge':
+                return 'Read Knowledge source';
+            case 'loadedSemanticContext':
+                return 'Loaded business definitions';
+            case 'builtChart':
+                return 'Built chart';
             case 'created':
                 return 'Created Agent Run';
             case 'finished':
@@ -216,6 +234,9 @@ function getPersistedSummarySections(rawSections: unknown): AgentRunSummarySecti
                 findings,
                 steps,
                 finishedAt,
+                ...(typeof record.requestId === 'string' ? { requestId: record.requestId } : {}),
+                ...(typeof record.responseMessageId === 'string' ? { responseMessageId: record.responseMessageId } : {}),
+                ...(Array.isArray(record.findingIds) ? { findingIds: cleanSummaryItems(record.findingIds) } : {}),
             };
         })
         .filter((section): section is AgentRunSummarySectionMetadata => section !== null);
@@ -337,12 +358,40 @@ function sqlExecutionMeta(session: AgentRunSessionLike | undefined, event: Agent
     const firstSet = session?.queryResultSets?.[0];
     const rows = numberValue(event.outputSummary?.rowCount) ?? firstSet?.rowCount ?? null;
     const duration = event.durationMs ?? session?.session?.durationMs ?? firstSet?.durationMs ?? null;
-    return [formatRows(rows, formatter), formatDuration(duration), event.status ?? session?.session?.status ?? null, formatter.resultNotSaved()].filter((item): item is string => Boolean(item));
+    return [
+        formatRows(rows, formatter),
+        formatDuration(duration),
+        event.status ?? session?.session?.status ?? null,
+        ...(Array.isArray(event.outputSummary?.artifactIds) && event.outputSummary.artifactIds.length ? [] : [formatter.resultNotSaved()]),
+    ].filter((item): item is string => Boolean(item));
 }
 
 function userWorkspaceSaveMeta(event: AgentRunEventLike, formatter: AgentRunTextFormatter) {
     const changes = stringArrayValue(event.outputSummary?.changeSummary);
     return [...changes, formatTabs(numberValue(event.outputSummary?.tabCount), formatter), event.status ?? null].filter((item): item is string => Boolean(item));
+}
+
+export function getAgentActivityTitleKey(toolName: string | null | undefined): AgentRunEventTitleKey | null {
+    switch (toolName) {
+        case 'search_assets':
+        case 'dory_search_assets':
+        case 'search_knowledge':
+            return 'searchedKnowledge';
+        case 'read_asset':
+        case 'dory_read_asset':
+            return 'readKnowledge';
+        case 'semantic_model_context':
+            return 'loadedSemanticContext';
+        case 'chartBuilder':
+            return 'builtChart';
+        case 'finishAnalysis':
+            return 'finished';
+        case 'exploreSchema':
+        case 'getSchemaGraph':
+            return 'exploredSchema';
+        default:
+            return null;
+    }
 }
 
 function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike, formatter: AgentRunTextFormatter) {
@@ -354,6 +403,11 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike, fo
     const tabName = resolvedTabId ? tabs.get(resolvedTabId) : null;
     const actorName = stringValue(event.outputSummary?.actorName) ?? stringValue(event.inputSummary?.actorName);
 
+    const activityKey = getAgentActivityTitleKey(event.toolName);
+    if (activityKey)
+        return formatter.eventTitle(
+            activityKey === 'searchedKnowledge' && event.status === 'success' && event.outputSummary?.resultCount === 0 ? 'knowledgeNotFound' : activityKey,
+        );
     switch (event.toolName) {
         case 'dory_create_work':
             return formatter.eventTitle('created');
@@ -377,7 +431,11 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike, fo
     }
 }
 
-export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: AgentRunEventLike[] = [], formatter: AgentRunTextFormatter = defaultAgentRunTextFormatter): AgentRunTimelineItem[] {
+export function buildAgentRunTimeline(
+    snapshot: AgentRunSnapshotLike,
+    events: AgentRunEventLike[] = [],
+    formatter: AgentRunTextFormatter = defaultAgentRunTextFormatter,
+): AgentRunTimelineItem[] {
     const sessions = sessionById(snapshot);
     const eventItems = events.map((event, index): AgentRunTimelineItem => {
         const { sessionId, tabId } = firstOutputIdentity(event.outputSummary);

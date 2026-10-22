@@ -2749,7 +2749,8 @@
                 "OrderByIndexMissing": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, y no se confirmó que tengan índice. Reduce las columnas seleccionadas o revisa los índices primero.",
                 "OrderByIndexUnknown": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, pero no se pudo confirmar si tienen índice. Reduce las columnas seleccionadas o revisa los índices primero.",
                 "ExecuteFailed": "La ejecución SQL falló"
-            }
+            },
+            "ConnectionChanged": "Inicia un chat nuevo al cambiar de fuente de datos."
         },
         "Ai": {
             "SchemaExplanations": {
@@ -4742,14 +4743,20 @@
                 "ranSqlInTab": "SQL ejecutado en \"{tabName}\"",
                 "ranSql": "SQL ejecutado",
                 "ranTool": "{toolName} ejecutado",
-                "recordedActivity": "Actividad registrada"
+                "recordedActivity": "Actividad registrada",
+                "searchedKnowledge": "Conocimiento consultado",
+                "knowledgeNotFound": "Sin conocimiento coincidente",
+                "readKnowledge": "Fuente de conocimiento leída",
+                "loadedSemanticContext": "Definiciones de negocio cargadas",
+                "builtChart": "Gráfico creado"
             }
         },
         "EventStatus": {
             "success": "éxito",
             "error": "error",
             "failed": "fallida",
-            "completed": "completada"
+            "completed": "completada",
+            "running": "En curso"
         },
         "WorkspaceDrawer": {
             "Title": "Espacio de ejecución de agente",
@@ -4833,6 +4840,45 @@
             "UnknownReviewer": "Revisor desconocido",
             "UndoReview": "Deshacer revisión",
             "NotReviewed": "Sin revisión humana"
+        },
+        "Chat": {
+            "Loading": "Cargando actividad del análisis…",
+            "LoadFailed": "No se pudo cargar la actividad del análisis.",
+            "ViewRun": "Ver Agent Run",
+            "OpenWorkspace": "Continuar en el espacio SQL",
+            "Incomplete": "Las conclusiones no se han guardado por completo. Se conservaron las respuestas y evidencias disponibles.",
+            "Activity": "Actividad del análisis · {count} pasos",
+            "Responses": "Respuestas por turno",
+            "TurnAnswer": "Turno {count} · Respuesta final",
+            "KnowledgeResults": "Se encontraron {count} candidatos de conocimiento",
+            "SourceRevision": "Versión de la fuente · {revision}",
+            "Process": "Proceso de análisis",
+            "Analyzing": "Analizando…",
+            "ResultUnavailable": "El resultado guardado no está disponible. Consúltalo en Agent Run o en el espacio SQL.",
+            "SearchQuery": "Búsqueda: {query}",
+            "ConclusionsSaved": "Conclusiones y respuesta final guardadas.",
+            "RecordedStep": "Actividad de herramienta registrada.",
+            "StepInterrupted": "Este paso no terminó. Los resultados disponibles se conservan.",
+            "Tools": {
+                "SaveConclusions": "Guardar conclusiones",
+                "QueryData": "Consultar datos",
+                "RunTool": "Ejecutar {name}"
+            },
+            "ToolStatus": {
+                "Running": "En curso",
+                "Completed": "Completado",
+                "NoMatches": "Sin coincidencias",
+                "Failed": "Error",
+                "Interrupted": "Interrumpido"
+            },
+            "Fields": {
+                "Database": "Base de datos",
+                "Table": "Tabla",
+                "Operation": "Operación",
+                "Rows": "Filas",
+                "Results": "Resultados",
+                "Action": "Acción"
+            }
         }
     },
     "OrganizationSettings": {

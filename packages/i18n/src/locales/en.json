@@ -2751,7 +2751,8 @@
                 "OrderByIndexMissing": "This query may be expensive: ORDER BY uses column(s) {columns} on table {table}, and they are not confirmed to be indexed. Narrow the selected columns or inspect indexes first.",
                 "OrderByIndexUnknown": "This query may be expensive: ORDER BY uses column(s) {columns} on table {table}, but index support could not be confirmed. Narrow the selected columns or inspect indexes first.",
                 "ExecuteFailed": "SQL execution failed"
-            }
+            },
+            "ConnectionChanged": "Start a new chat when switching data sources."
         },
         "Ai": {
             "SchemaExplanations": {
@@ -4748,14 +4749,20 @@
                 "ranSqlInTab": "Ran SQL in \"{tabName}\"",
                 "ranSql": "Ran SQL",
                 "ranTool": "Ran {toolName}",
-                "recordedActivity": "Recorded activity"
+                "recordedActivity": "Recorded activity",
+                "searchedKnowledge": "Searched Knowledge",
+                "knowledgeNotFound": "No matching Knowledge",
+                "readKnowledge": "Read Knowledge source",
+                "loadedSemanticContext": "Loaded business definitions",
+                "builtChart": "Built chart"
             }
         },
         "EventStatus": {
             "success": "success",
             "error": "error",
             "failed": "failed",
-            "completed": "completed"
+            "completed": "completed",
+            "running": "In progress"
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run workspace",
@@ -4841,6 +4848,45 @@
             "UnknownReviewer": "Unknown reviewer",
             "UndoReview": "Undo review",
             "NotReviewed": "Not reviewed by a person"
+        },
+        "Chat": {
+            "Loading": "Loading analysis activity…",
+            "LoadFailed": "Could not load analysis activity.",
+            "ViewRun": "View Agent Run",
+            "OpenWorkspace": "Continue in SQL workspace",
+            "Incomplete": "Conclusions are not fully saved. Available answers and evidence have been retained.",
+            "Activity": "Analysis activity · {count} steps",
+            "Responses": "Answers by turn",
+            "TurnAnswer": "Turn {count} · Final answer",
+            "KnowledgeResults": "Found {count} Knowledge candidates",
+            "SourceRevision": "Source revision · {revision}",
+            "Process": "Analysis process",
+            "Analyzing": "Analyzing…",
+            "ResultUnavailable": "The saved result is unavailable. Open the Agent Run or SQL workspace to inspect it.",
+            "SearchQuery": "Search: {query}",
+            "ConclusionsSaved": "Conclusions and final answer saved.",
+            "RecordedStep": "Recorded tool activity.",
+            "StepInterrupted": "This step did not finish. Available results are retained.",
+            "Tools": {
+                "SaveConclusions": "Save conclusions",
+                "QueryData": "Query data",
+                "RunTool": "Run {name}"
+            },
+            "ToolStatus": {
+                "Running": "Running",
+                "Completed": "Completed",
+                "NoMatches": "No matches",
+                "Failed": "Failed",
+                "Interrupted": "Interrupted"
+            },
+            "Fields": {
+                "Database": "Database",
+                "Table": "Table",
+                "Operation": "Operation",
+                "Rows": "Rows",
+                "Results": "Results",
+                "Action": "Action"
+            }
         }
     },
     "OrganizationSettings": {

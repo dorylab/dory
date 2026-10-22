@@ -1,10 +1,9 @@
-import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm';
-
+import { translateDatabase } from '@dory/database/i18n';
 import { getClient } from '@dory/database/postgres/client';
 import { agentPrincipals, localAiBridges, localAiJobs, mcpAccessTokens, mcpAuthorizationRequests, organizations } from '@dory/database/schema';
-import { translateDatabase } from '@dory/database/i18n';
-import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
+import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm';
 
 export type McpAccessTokenRecord = typeof mcpAccessTokens.$inferSelect;
 export type AgentPrincipalRecord = typeof agentPrincipals.$inferSelect;
@@ -52,6 +51,7 @@ export type LocalAiBridgeRegisterInput = {
 };
 
 export type LocalAiJobCreateInput = {
+    id?: string;
     organizationId: string;
     bridgeId: string;
     provider: string;
@@ -597,6 +597,7 @@ export class PostgresMcpRepository {
         const [created] = await this.db
             .insert(localAiJobs)
             .values({
+                id: input.id,
                 organizationId: input.organizationId,
                 bridgeId: input.bridgeId,
                 provider: input.provider,

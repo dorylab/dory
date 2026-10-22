@@ -2755,7 +2755,8 @@
                 "OrderByIndexMissing": "这个查询可能较重：表 {table} 上用于 ORDER BY 的列 {columns} 未确认有索引。请先缩小查询列范围，或先检查索引。",
                 "OrderByIndexUnknown": "这个查询可能较重：表 {table} 上用于 ORDER BY 的列 {columns} 无法确认是否有索引。请先缩小查询列范围，或先检查索引。",
                 "ExecuteFailed": "执行 SQL 失败"
-            }
+            },
+            "ConnectionChanged": "切换数据源时，请开启新聊天。"
         },
         "Ai": {
             "SchemaExplanations": {
@@ -4752,14 +4753,20 @@
                 "ranSqlInTab": "在“{tabName}”中运行 SQL",
                 "ranSql": "已运行 SQL",
                 "ranTool": "已运行 {toolName}",
-                "recordedActivity": "已记录活动"
+                "recordedActivity": "已记录活动",
+                "searchedKnowledge": "检索知识",
+                "knowledgeNotFound": "未找到相关知识",
+                "readKnowledge": "阅读知识来源",
+                "loadedSemanticContext": "已加载业务口径",
+                "builtChart": "生成图表"
             }
         },
         "EventStatus": {
             "success": "成功",
             "error": "错误",
             "failed": "失败",
-            "completed": "完成"
+            "completed": "完成",
+            "running": "进行中"
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run 工作区",
@@ -4845,6 +4852,45 @@
             "UnknownReviewer": "未知复核人",
             "UndoReview": "撤销复核",
             "NotReviewed": "尚未人工复核"
+        },
+        "Chat": {
+            "Loading": "正在加载分析过程…",
+            "LoadFailed": "分析过程加载失败。",
+            "ViewRun": "查看 Agent Run",
+            "OpenWorkspace": "继续到 SQL 工作区",
+            "Incomplete": "结论未整理完成，已有回答和证据已保留。",
+            "Activity": "分析过程 · {count} 个步骤",
+            "Responses": "各轮回答",
+            "TurnAnswer": "第 {count} 轮 · 最终回答",
+            "KnowledgeResults": "找到 {count} 个候选知识来源",
+            "SourceRevision": "来源版本 · {revision}",
+            "Process": "分析过程",
+            "Analyzing": "正在分析…",
+            "ResultUnavailable": "已保存的结果暂不可用，可在 Agent Run 或 SQL 工作区中查看。",
+            "SearchQuery": "检索词：{query}",
+            "ConclusionsSaved": "结论与最终回答已保存。",
+            "RecordedStep": "已记录此次工具调用。",
+            "StepInterrupted": "此步骤未完成，已有结果已保留。",
+            "Tools": {
+                "SaveConclusions": "保存结论",
+                "QueryData": "查询数据",
+                "RunTool": "调用 {name}"
+            },
+            "ToolStatus": {
+                "Running": "进行中",
+                "Completed": "已完成",
+                "NoMatches": "无命中",
+                "Failed": "失败",
+                "Interrupted": "已中断"
+            },
+            "Fields": {
+                "Database": "数据库",
+                "Table": "数据表",
+                "Operation": "操作",
+                "Rows": "结果行数",
+                "Results": "结果数",
+                "Action": "操作"
+            }
         }
     },
     "OrganizationSettings": {

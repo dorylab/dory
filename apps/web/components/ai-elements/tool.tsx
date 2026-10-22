@@ -1,11 +1,12 @@
 'use client';
 
+import type { ComponentProps, ReactNode } from 'react';
+import { isValidElement } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { cn } from '@dory/web-utils';
 import type { DynamicToolUIPart, ToolUIPart } from 'ai';
 import { CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon, LoaderCircleIcon, XCircleIcon } from 'lucide-react';
-import type { ComponentProps, ReactNode } from 'react';
-import { isValidElement } from 'react';
+
 import { CodeBlock } from './code-block';
 import { Shimmer } from './shimmer';
 
@@ -18,6 +19,7 @@ export type ToolPart = ToolUIPart | DynamicToolUIPart;
 export type ToolHeaderProps = {
     title?: string;
     className?: string;
+    statusLabel?: string;
 } & (
     | { type: ToolUIPart['type']; state: ToolUIPart['state']; toolName?: never }
     | {
@@ -54,7 +56,7 @@ export const getStatusMeta = (status: ToolPart['state']) => {
     };
 };
 
-export const getStatusBadge = (status: ToolPart['state']) => {
+export const getStatusBadge = (status: ToolPart['state'], label?: string) => {
     const statusMeta = getStatusMeta(status);
     const isLoadingState = status === 'input-streaming' || status === 'input-available';
 
@@ -63,16 +65,16 @@ export const getStatusBadge = (status: ToolPart['state']) => {
             {statusMeta.icon}
             {isLoadingState ? (
                 <Shimmer as="span" className="text-[12px] leading-5" duration={1.25}>
-                    {statusMeta.label}
+                    {label ?? statusMeta.label}
                 </Shimmer>
             ) : (
-                <span>{statusMeta.label}</span>
+                <span>{label ?? statusMeta.label}</span>
             )}
         </span>
     );
 };
 
-export const ToolHeader = ({ className, title, type, state, toolName, ...props }: ToolHeaderProps) => {
+export const ToolHeader = ({ className, title, type, state, toolName, statusLabel, ...props }: ToolHeaderProps) => {
     const derivedName = type === 'dynamic-tool' ? toolName : type.split('-').slice(1).join('-');
     const isLoadingState = state === 'input-streaming' || state === 'input-available';
     const displayTitle = title ?? derivedName;
@@ -90,7 +92,7 @@ export const ToolHeader = ({ className, title, type, state, toolName, ...props }
                 ) : (
                     <span className="truncate text-[13px] leading-5 text-muted-foreground/85 transition-colors group-hover/tool-header:text-foreground/85">{displayTitle}</span>
                 )}
-                {getStatusBadge(state)}
+                {getStatusBadge(state, statusLabel)}
                 <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover/tool-header:text-muted-foreground/75 group-data-[state=open]/tool-header:hidden" />
                 <ChevronDownIcon className="hidden size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover/tool-header:text-muted-foreground/75 group-data-[state=open]/tool-header:block" />
             </div>

@@ -1,7 +1,8 @@
+import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { cn } from '@dory/web-utils';
 import { useTranslations } from 'next-intl';
+
 import type { AgentRunTimelineItem } from '@/lib/agent-runs/summary';
-import { Badge } from '@/registry/new-york-v4/ui/badge';
 
 function formatDate(value: string | Date | null | undefined, compact: boolean, unknownLabel: string) {
     if (!value) return unknownLabel;
@@ -33,6 +34,7 @@ function statusVariant(status: string | null | undefined): 'default' | 'secondar
 }
 
 function statusLabel(status: string, t: ReturnType<typeof useTranslations>) {
+    if (status === 'running') return t('EventStatus.running');
     if (status === 'success') return t('EventStatus.success');
     if (status === 'error') return t('EventStatus.error');
     if (status === 'failed') return t('EventStatus.failed');
@@ -76,7 +78,9 @@ export function AgentRunActivityTimeline({ items, compact = false }: { items: Ag
                                 {item.meta.length ? <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">{item.meta.join(' · ')}</div> : null}
                                 {details ? (
                                     <details className="mt-2 group">
-                                        <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground hover:text-foreground">{t('Timeline.ShowRawDetails')}</summary>
+                                        <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground hover:text-foreground">
+                                            {t('Timeline.ShowRawDetails')}
+                                        </summary>
                                         <div className="mt-2 grid gap-2 text-xs">
                                             {item.sessionId || item.tabId || item.sqlLength ? (
                                                 <div className="grid gap-1 rounded-md bg-muted/50 p-2 text-muted-foreground">

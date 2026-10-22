@@ -1,8 +1,7 @@
+import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
-
 import type {
     LanguageModelV4,
     LanguageModelV4CallOptions,
@@ -14,10 +13,11 @@ import type {
     LanguageModelV4Usage,
 } from '@ai-sdk/provider';
 import { getDBService } from '@dory/database';
-import { assertLocalAiAgentAvailable } from '@/lib/server/local-ai/detection';
-import { createAndWaitForLocalAiBridgeJob, localAiBridgeSupportsDoryMcpTools, parseLocalAiBridgeTarget } from '@/lib/server/local-ai/bridge';
-import { MCP_DESKTOP_GRANT_HEADER } from '@/lib/server/mcp/auth';
 import type { LocalAiAgentProvider } from '@dory/ee/ai/provider-options';
+
+import { createAndWaitForLocalAiBridgeJob, localAiBridgeSupportsDoryMcpTools, parseLocalAiBridgeTarget } from '@/lib/server/local-ai/bridge';
+import { assertLocalAiAgentAvailable } from '@/lib/server/local-ai/detection';
+import { MCP_DESKTOP_GRANT_HEADER } from '@/lib/server/mcp/auth';
 
 export type LocalAgentProviderOptions = {
     providerKey: LocalAiAgentProvider;
@@ -36,6 +36,7 @@ export type CodexDoryMcpConfig = {
     auth: { type: 'bearer-env'; envVar: string; token: string } | { type: 'desktop-grant-header'; envVar: string; grant: string };
     enabledTools: string[];
     toolTimeoutSec: number;
+    agentTurn?: { workId: string; requestId: string };
 };
 
 type LocalAgentDoryContext = {
@@ -45,6 +46,7 @@ type LocalAgentDoryContext = {
     connectionId?: string | null;
     requestId?: string | null;
     chatId?: string | null;
+    workId?: string | null;
 };
 
 const LOCAL_AGENT_TIMEOUT_MS = 120_000;
@@ -55,11 +57,14 @@ export const DORY_CODEX_MCP_ENDPOINT_HEADER = 'x-dory-local-agent-mcp-endpoint';
 export const DORY_CODEX_CONNECTION_ID_HEADER = 'x-dory-local-agent-connection-id';
 export const DORY_CODEX_REQUEST_ID_HEADER = 'x-dory-local-agent-request-id';
 export const DORY_CODEX_CHAT_ID_HEADER = 'x-dory-local-agent-chat-id';
+export const DORY_CODEX_WORK_ID_HEADER = 'x-dory-local-agent-work-id';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
     'dory_read',
     'dory_write',
+    'dory_search_assets',
+    'dory_read_asset',
     'dory_list_connections',
     'dory_explore_schema',
     'dory_get_schema_graph',
@@ -107,6 +112,11 @@ export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
         args.push('-c', `mcp_servers.dory.env_http_headers=${toTomlInlineStringMap({ [MCP_DESKTOP_GRANT_HEADER]: config.auth.envVar })}`);
     }
 
+    if (config.agentTurn)
+        args.push(
+            '-c',
+            `mcp_servers.dory.http_headers=${toTomlInlineStringMap({ 'x-dory-agent-work-id': config.agentTurn.workId, 'x-dory-agent-request-id': config.agentTurn.requestId })}`,
+        );
     return args;
 }
 
@@ -136,6 +146,7 @@ function resolveLocalAgentDoryContext(
     const connectionId = getHeader(headers, DORY_CODEX_CONNECTION_ID_HEADER);
     const requestId = getHeader(headers, DORY_CODEX_REQUEST_ID_HEADER);
     const chatId = getHeader(headers, DORY_CODEX_CHAT_ID_HEADER);
+    const workId = getHeader(headers, DORY_CODEX_WORK_ID_HEADER);
 
     if (providerKey !== 'codex-agent') {
         return {
@@ -143,6 +154,7 @@ function resolveLocalAgentDoryContext(
             connectionId,
             requestId,
             chatId,
+            workId,
         };
     }
 
@@ -153,6 +165,7 @@ function resolveLocalAgentDoryContext(
             connectionId,
             requestId,
             chatId,
+            workId,
         };
     }
 
@@ -164,6 +177,7 @@ function resolveLocalAgentDoryContext(
             connectionId,
             requestId,
             chatId,
+            workId,
         };
     }
 
@@ -178,10 +192,12 @@ function resolveLocalAgentDoryContext(
             },
             enabledTools: DORY_CODEX_MCP_ENABLED_TOOLS,
             toolTimeoutSec: DORY_CODEX_MCP_TOOL_TIMEOUT_SEC,
+            agentTurn: workId && requestId ? { workId, requestId } : undefined,
         },
         connectionId,
         requestId,
         chatId,
+        workId,
     };
 }
 
@@ -239,13 +255,16 @@ function toolInstructions(options: LanguageModelV4CallOptions, context: LocalAge
     if (context.doryMcpAvailable) {
         const contextLines = [
             context.connectionId ? `- Current Dory connectionId: ${context.connectionId}` : null,
+            context.workId ? `- Existing Dory Agent Run workId: ${context.workId}. Reuse it; do not create another Run. Pass workId and requestId on every tool call.` : null,
             context.chatId ? `- Current Dory chat/session id: ${context.chatId}` : null,
             context.requestId ? `- Current Dory request id: ${context.requestId}` : null,
         ].filter(Boolean);
 
         return [
             'Dory MCP tools are available to Codex for this request.',
-            'For database questions, call dory_create_work once first with the current connectionId and the original userQuestion. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tool calls.',
+            context.workId
+                ? 'The host already created the Run and searched Knowledge. Read relevant candidates with dory_read_asset, then use the existing Run for SQL and dory_finish_work. Always finish with findings, steps, and finalAnswer; repeat finalAnswer verbatim as your reply. Use the requestId above. Do not call the host-only finishAnalysis tool.'
+                : 'For database questions, call dory_create_work once first with the current connectionId and the original userQuestion. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tool calls.',
             'For non-query Dory read operations, use dory_read with the actionId. For create, update, or delete operations such as connection.create, use dory_write with the actionId instead of expecting a separate tool for every action.',
             'When the user asks for query results, write read-only SQL and call dory_run_readonly_sql. Answer from the tool result; do not claim a query was run without tool output.',
             'If the schema is unclear, call dory_explore_schema before writing SQL.',
@@ -471,7 +490,9 @@ async function runLocalAgentViaBridge(
     context.bridgeMissingDoryMcpTools = !bridgeSupportsDoryMcpTools;
 
     const prompt = buildInstruction(options, context);
+    const ownedRun = context.workId ? await db.works.getById({ organizationId, workId: context.workId, userId: bridge?.userId ?? '' }) : null;
     const result = await createAndWaitForLocalAiBridgeJob({
+        agentTurn: ownedRun && context.requestId ? { workId: ownedRun.workId, requestId: context.requestId, userId: ownedRun.userId } : undefined,
         db,
         organizationId,
         provider: providerKey,

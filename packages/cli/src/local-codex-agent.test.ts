@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -233,4 +233,10 @@ test('Codex Agent bridge reauthorizes when existing token lacks local AI scope',
 
 test('Codex Agent bridge reauthorizes when existing token is invalid or revoked', async () => {
     await assertCodexAgentReauthorizes(401);
+});
+
+test('Codex bridge carries the chat Run and turn in MCP headers', () => {
+    const args = buildCodexDoryMcpArgs({ ...createConfig(), agentTurn: { workId: 'run-1', requestId: 'turn-2' } }).join('\n');
+    assert.match(args, /http_headers=.*x-dory-agent-work-id.*run-1/);
+    assert.match(args, /x-dory-agent-request-id.*turn-2/);
 });

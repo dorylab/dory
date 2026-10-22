@@ -2749,7 +2749,8 @@
                 "OrderByIndexMissing": "このクエリは高コストの可能性があります: テーブル {table} の ORDER BY 列 {columns} にインデックスが確認できません。まず取得列を絞るか、インデックスを確認してください。",
                 "OrderByIndexUnknown": "このクエリは高コストの可能性があります: テーブル {table} の ORDER BY 列 {columns} のインデックス有無を確認できませんでした。まず取得列を絞るか、インデックスを確認してください。",
                 "ExecuteFailed": "SQL 実行に失敗しました"
-            }
+            },
+            "ConnectionChanged": "データソースを切り替える場合は新しいチャットを開始してください。"
         },
         "Ai": {
             "SchemaExplanations": {
@@ -4746,14 +4747,20 @@
                 "ranSqlInTab": "「{tabName}」で SQL を実行",
                 "ranSql": "SQL を実行",
                 "ranTool": "{toolName} を実行",
-                "recordedActivity": "アクティビティを記録"
+                "recordedActivity": "アクティビティを記録",
+                "searchedKnowledge": "ナレッジを検索",
+                "knowledgeNotFound": "関連するナレッジがありません",
+                "readKnowledge": "ナレッジソースを確認",
+                "loadedSemanticContext": "業務定義を読み込み",
+                "builtChart": "グラフを作成"
             }
         },
         "EventStatus": {
             "success": "成功",
             "error": "エラー",
             "failed": "失敗",
-            "completed": "完了"
+            "completed": "完了",
+            "running": "実行中"
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run ワークスペース",
@@ -4839,6 +4846,45 @@
             "UnknownReviewer": "不明な確認者",
             "UndoReview": "確認を取り消す",
             "NotReviewed": "人による確認は未実施"
+        },
+        "Chat": {
+            "Loading": "分析履歴を読み込み中…",
+            "LoadFailed": "分析履歴を読み込めませんでした。",
+            "ViewRun": "Agent Run を表示",
+            "OpenWorkspace": "SQL ワークスペースで続行",
+            "Incomplete": "結論の保存は未完了です。回答と根拠は保持されています。",
+            "Activity": "分析履歴 · {count} ステップ",
+            "Responses": "各ターンの回答",
+            "TurnAnswer": "ターン {count} · 最終回答",
+            "KnowledgeResults": "ナレッジ候補が {count} 件見つかりました",
+            "SourceRevision": "ソースの版 · {revision}",
+            "Process": "分析の過程",
+            "Analyzing": "分析中…",
+            "ResultUnavailable": "保存結果を読み込めません。Agent Run または SQL ワークスペースで確認してください。",
+            "SearchQuery": "検索語：{query}",
+            "ConclusionsSaved": "結論と最終回答を保存しました。",
+            "RecordedStep": "ツールの実行記録です。",
+            "StepInterrupted": "このステップは完了しませんでした。取得済みの結果は保持されています。",
+            "Tools": {
+                "SaveConclusions": "結論を保存",
+                "QueryData": "データを照会",
+                "RunTool": "{name} を実行"
+            },
+            "ToolStatus": {
+                "Running": "実行中",
+                "Completed": "完了",
+                "NoMatches": "一致なし",
+                "Failed": "失敗",
+                "Interrupted": "中断"
+            },
+            "Fields": {
+                "Database": "データベース",
+                "Table": "テーブル",
+                "Operation": "操作",
+                "Rows": "行数",
+                "Results": "結果数",
+                "Action": "操作"
+            }
         }
     },
     "OrganizationSettings": {

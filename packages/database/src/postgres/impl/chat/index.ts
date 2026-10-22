@@ -1,12 +1,6 @@
+import { translateDatabase } from '@dory/database/i18n';
 import { getClient } from '@dory/database/postgres/client';
 import { chatMessages, chatSessions } from '@dory/database/postgres/schemas';
-import { DatabaseError } from '@dory/shared/errors/DatabaseError';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
-import { translateDatabase } from '@dory/database/i18n';
-
-import { newEntityId } from '@dory/shared/id';
-
 import type {
     ChatMessageInsert,
     ChatMessageRecord,
@@ -18,6 +12,9 @@ import type {
     ChatSessionUpdate,
     PostgresDBClient,
 } from '@dory/shared';
+import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { newEntityId } from '@dory/shared/id';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 
 type DBLike = PostgresDBClient;
 
@@ -66,13 +63,7 @@ export class PostgresChatRepository implements ChatRepository {
                 title: chatSessions.title,
             })
             .from(chatSessions)
-            .where(
-                and(
-                    eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.organizationId, params.organizationId),
-                    eq(chatSessions.userId, params.userId),
-                ),
-            );
+            .where(and(eq(chatSessions.id, params.sessionId), eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)));
 
         if (!session) throw new DatabaseError(translateDatabase('Database.Errors.ChatSessionNotFound'), 404);
         if (!params.allowArchived && session.archivedAt) {
@@ -85,9 +76,7 @@ export class PostgresChatRepository implements ChatRepository {
     /**
      * ✅ createOrGet Copilot Session (concurrency-safe)
      */
-    async createOrGetCopilotSession(
-        input: ChatSessionCreateOrGetCopilot,
-    ): Promise<ChatSessionRecord> {
+    async createOrGetCopilotSession(input: ChatSessionCreateOrGetCopilot): Promise<ChatSessionRecord> {
         this.assertInited();
 
         const now = new Date();
@@ -176,13 +165,7 @@ export class PostgresChatRepository implements ChatRepository {
         return row as ChatSessionRecord;
     }
 
-    async listSessions(params: {
-        organizationId: string;
-        userId: string;
-        connectionId: string;
-        includeArchived?: boolean;
-        type?: ChatSessionType;
-    }) {
+    async listSessions(params: { organizationId: string; userId: string; connectionId: string; includeArchived?: boolean; type?: ChatSessionType }) {
         this.assertInited();
 
         const conds = [eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId), eq(chatSessions.connectionId, params.connectionId)];
@@ -198,32 +181,17 @@ export class PostgresChatRepository implements ChatRepository {
         return rows as ChatSessionRecord[];
     }
 
-    async readSession(params: {
-        organizationId: string;
-        sessionId: string;
-        userId: string;
-    }) {
+    async readSession(params: { organizationId: string; sessionId: string; userId: string }) {
         this.assertInited();
         const [record] = await this.db
             .select()
             .from(chatSessions)
-            .where(
-                and(
-                    eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.organizationId, params.organizationId),
-                    eq(chatSessions.userId, params.userId),
-                ),
-            );
+            .where(and(eq(chatSessions.id, params.sessionId), eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)));
 
         return (record as ChatSessionRecord | undefined) ?? null;
     }
 
-    async updateSession(params: {
-        organizationId: string;
-        sessionId: string;
-        userId: string;
-        patch: ChatSessionUpdate;
-    }) {
+    async updateSession(params: { organizationId: string; sessionId: string; userId: string; patch: ChatSessionUpdate }) {
         this.assertInited();
         await this.getScopedSessionOn(this.db, params);
 
@@ -248,48 +216,26 @@ export class PostgresChatRepository implements ChatRepository {
             await this.db
                 .update(chatSessions)
                 .set({ ...updatePayload, updatedAt: new Date() } as any)
-                .where(
-                    and(
-                        eq(chatSessions.id, params.sessionId),
-                        eq(chatSessions.organizationId, params.organizationId),
-                        eq(chatSessions.userId, params.userId),
-                    ),
-                );
+                .where(and(eq(chatSessions.id, params.sessionId), eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)));
         }
 
         const [updated] = await this.db
             .select()
             .from(chatSessions)
-            .where(
-                and(
-                    eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.organizationId, params.organizationId),
-                    eq(chatSessions.userId, params.userId),
-                ),
-            );
+            .where(and(eq(chatSessions.id, params.sessionId), eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)));
 
         if (!updated) throw new DatabaseError(translateDatabase('Database.Errors.ChatUpdateSessionNotFound'), 404);
         return updated as ChatSessionRecord;
     }
 
-    async archiveSession(params: {
-        organizationId: string;
-        sessionId: string;
-        userId: string;
-    }) {
+    async archiveSession(params: { organizationId: string; sessionId: string; userId: string }) {
         this.assertInited();
         await this.getScopedSessionOn(this.db, { ...params, allowArchived: true });
 
         await this.db
             .update(chatSessions)
             .set({ archivedAt: new Date(), updatedAt: new Date() } as any)
-            .where(
-                and(
-                    eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.organizationId, params.organizationId),
-                    eq(chatSessions.userId, params.userId),
-                ),
-            );
+            .where(and(eq(chatSessions.id, params.sessionId), eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)));
     }
 
     /**
@@ -303,6 +249,7 @@ export class PostgresChatRepository implements ChatRepository {
         sessionId: string;
         userId: string;
         message: ChatMessageInsert;
+        updateExistingAssistant?: boolean;
     }): Promise<ChatMessageRecord> {
         this.assertInited();
 
@@ -317,15 +264,34 @@ export class PostgresChatRepository implements ChatRepository {
                 allowArchived: false,
             });
 
-            const normalizedUserId =
-                params.message.role === 'user'
-                    ? params.userId
-                    : params.message.userId ?? null;
+            await tx.select({ id: chatSessions.id }).from(chatSessions).where(eq(chatSessions.id, params.sessionId)).for('update');
+            const [existing] = await tx
+                .select()
+                .from(chatMessages)
+                .where(and(eq(chatMessages.id, messageId), eq(chatMessages.sessionId, params.sessionId), eq(chatMessages.organizationId, params.organizationId)));
+            if (existing) {
+                if (
+                    params.updateExistingAssistant &&
+                    existing.role === 'assistant' &&
+                    params.message.role === 'assistant' &&
+                    existing.metadata?.requestId === params.message.metadata?.requestId
+                ) {
+                    const [updated] = await tx
+                        .update(chatMessages)
+                        .set({
+                            parts: params.message.parts,
+                            metadata: { ...params.message.metadata, summarySaved: existing.metadata?.summarySaved === true || params.message.metadata?.summarySaved === true },
+                        })
+                        .where(and(eq(chatMessages.id, messageId), eq(chatMessages.organizationId, params.organizationId)))
+                        .returning();
+                    return updated as ChatMessageRecord;
+                }
+                return existing as ChatMessageRecord;
+            }
 
-            const shouldAutoTitle =
-                session.type === 'global' &&
-                params.message.role === 'user' &&
-                (!session.title || !session.title.trim());
+            const normalizedUserId = params.message.role === 'user' ? params.userId : (params.message.userId ?? null);
+
+            const shouldAutoTitle = session.type === 'global' && params.message.role === 'user' && (!session.title || !session.title.trim());
             const autoTitle = shouldAutoTitle ? this.deriveTitleFromParts(params.message.parts) : null;
 
             const [inserted] = await (tx as any)
@@ -350,25 +316,14 @@ export class PostgresChatRepository implements ChatRepository {
                     updatedAt: now,
                     ...(autoTitle ? { title: autoTitle } : {}),
                 } as any)
-                .where(
-                    and(
-                        eq(chatSessions.id, params.sessionId),
-                        eq(chatSessions.organizationId, params.organizationId),
-                        eq(chatSessions.userId, params.userId),
-                    ),
-                );
+                .where(and(eq(chatSessions.id, params.sessionId), eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)));
 
             if (!inserted) throw new DatabaseError(translateDatabase('Database.Errors.ChatInsertMessageFailed'), 500);
             return inserted as ChatMessageRecord;
         });
     }
 
-    async listMessages(params: {
-        organizationId: string;
-        sessionId: string;
-        userId: string;
-        limit?: number;
-    }) {
+    async listMessages(params: { organizationId: string; sessionId: string; userId: string; limit?: number }) {
         this.assertInited();
         await this.getScopedSessionOn(this.db, { ...params, allowArchived: true });
 

@@ -322,7 +322,7 @@ export async function resolveSemanticModelContext(db: DBService, input: ResolveS
 
 export async function recordSemanticModelUsage(
     db: DBService,
-    input: { organizationId: string; userId: string; workId: string; connectionId?: string | null; tokenId?: string | null; models: SemanticModelUsage[] },
+    input: { organizationId: string; userId: string; workId: string; connectionId?: string | null; tokenId?: string | null; requestId?: string; models: SemanticModelUsage[] },
 ) {
     for (const model of input.models) {
         await db.works.recordAgentAssetUsageEvent(
@@ -351,8 +351,12 @@ export async function recordSemanticModelUsage(
                 toolName: 'semantic_model_context',
                 actionId: 'knowledge.semanticContext',
                 status: 'success',
-                inputSummary: { knowledgeModelId: model.id },
-                outputSummary: { ossieVersion: model.ossieVersion, modelRevision: model.modelRevision },
+                inputSummary: { knowledgeModelId: model.id, ...(input.requestId ? { requestId: input.requestId } : {}) },
+                outputSummary: {
+                    ossieVersion: model.ossieVersion,
+                    modelRevision: model.modelRevision,
+                    ...(input.requestId ? { title: model.name, deepLink: model.deepLink } : {}),
+                },
             },
         );
     }

@@ -1,9 +1,9 @@
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
-import { newEntityId } from '@dory/shared/id';
 import type { ResultSetArtifactRef } from '@dory/resultset';
+import { newEntityId } from '@dory/shared/id';
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
 export type WorkStatus = 'active' | 'completed' | 'error' | 'archived';
-export type WorkEventStatus = 'success' | 'error';
+export type WorkEventStatus = 'running' | 'success' | 'error';
 export type WorkAgentAssetKind = 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'business_rule' | 'semantic_model';
 export type WorkPrincipalType = 'user' | 'service';
 
