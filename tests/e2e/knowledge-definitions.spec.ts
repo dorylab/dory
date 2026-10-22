@@ -532,6 +532,24 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
                 ],
             });
         }
+        if (body.actionId === 'knowledge.getKnowledgeSource') {
+            return actionResponse(route, {
+                id: 'source-1',
+                organizationId: organization,
+                knowledgeModelId: modelId,
+                connectionId: null,
+                fileName: 'dorylab/docs · docs › readme.md · ector-1',
+                format: 'markdown',
+                byteSize: 7,
+                createdBy: 'user-1',
+                createdAt: now,
+                updatedAt: now,
+                connectorId: 'connector-1',
+                connectorProvider: 'github',
+                remotePath: 'docs/readme.md',
+                contentText: '# GitHub source snapshot',
+            });
+        }
         if (body.actionId === 'knowledge.syncConnector') return actionResponse(route, { queued: true });
         await route.fallback();
     });
@@ -543,6 +561,110 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
     await page.getByRole('button', { name: 'Sync now' }).click();
     await expect.poll(() => actionIds).toContain('knowledge.syncConnector');
     await page.getByRole('button', { name: /Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'dorylab/docs · docs › readme.md' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'GitHub source snapshot' })).toBeVisible();
+    await page.getByRole('dialog', { name: 'dorylab/docs · docs › readme.md' }).getByRole('button', { name: 'Close', exact: true }).first().click();
+    await expect(page).not.toHaveURL(/\bsource=/);
+    await page.getByRole('button', { name: /Actions for/ }).click();
     await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0);
     await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0);
+});
+
+test('knowledge source viewer reads Linear snapshots, local text and YAML, and handles empty content and retries', async ({ page }) => {
+    let linearLoads = 0;
+    const sourceBase = {
+        organizationId: organization,
+        knowledgeModelId: modelId,
+        connectionId: null,
+        byteSize: 100,
+        createdBy: 'user-1',
+        createdAt: now,
+        updatedAt: now,
+    };
+    const linearSource = {
+        ...sourceBase,
+        id: 'linear-source',
+        fileName: 'Linear guide.md',
+        format: 'markdown',
+        connectorId: 'linear-connector',
+        connectorProvider: 'linear',
+        sourceUrl: 'https://linear.app/example/document/guide',
+        remotePath: 'document/guide',
+    };
+    const localSource = {
+        ...sourceBase,
+        id: 'local-source',
+        fileName: 'Local notes.txt',
+        format: 'text',
+        connectorId: null,
+        connectorProvider: null,
+        sourceUrl: null,
+        remotePath: null,
+    };
+    const yamlSource = { ...localSource, id: 'yaml-source', fileName: 'Schema.yaml', format: 'yaml' };
+    const emptySource = { ...localSource, id: 'empty-source', fileName: 'Empty.txt' };
+    await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
+    await page.route('**/api/actions/execute', async route => {
+        const body = route.request().postDataJSON() as { actionId: string; input?: { id?: string } };
+        if (body.actionId === 'knowledge.get') return actionResponse(route, model);
+        if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [linearSource, localSource, yamlSource, emptySource] });
+        if (body.actionId === 'knowledge.listConnectors') return actionResponse(route, { connectors: [] });
+        if (body.actionId === 'knowledge.getLinearConnectorSetup') return actionResponse(route, { canManage: false, configured: true });
+        if (body.actionId === 'knowledge.getKnowledgeSource') {
+            if (body.input?.id === linearSource.id) {
+                linearLoads += 1;
+                if (linearLoads === 1) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, message: 'Temporary failure' }) });
+                return actionResponse(route, { ...linearSource, contentText: '# Linear snapshot\n\n| Metric | Value |\n| --- | --- |\n| GMV | USD |' });
+            }
+            if (body.input?.id === localSource.id) return actionResponse(route, { ...localSource, contentText: 'Line one\nLine two' });
+            if (body.input?.id === yamlSource.id) return actionResponse(route, { ...yamlSource, contentText: 'version: 1\nname: Example' });
+            return actionResponse(route, { ...emptySource, contentText: '' });
+        }
+        await route.fallback();
+    });
+
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+    const linearRow = page.getByRole('row').filter({ hasText: 'Linear guide.md' });
+    await linearRow.getByRole('button', { name: /Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    const linearViewer = page.getByRole('dialog', { name: 'Linear guide.md' });
+    await expect(linearViewer.getByText('Could not load the knowledge source.')).toBeVisible();
+    await linearViewer.getByRole('button', { name: 'Retry' }).click();
+    await expect(linearViewer.getByRole('heading', { name: 'Linear snapshot' })).toBeVisible();
+    await expect(linearViewer.getByRole('cell', { name: 'GMV' })).toBeVisible();
+    await expect(linearViewer.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', linearSource.sourceUrl);
+    await linearViewer.getByRole('button', { name: 'Close', exact: true }).first().click();
+    await expect(page).not.toHaveURL(/\bsource=/);
+
+    const localRow = page.getByRole('row').filter({ hasText: 'Local notes.txt' });
+    await localRow.getByRole('button', { name: /Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    const localViewer = page.getByRole('dialog', { name: 'Local notes.txt' });
+    await expect(localViewer.locator('pre')).toHaveText('Line one\nLine two');
+    await expect(localViewer.getByRole('link', { name: 'Open original' })).toHaveCount(0);
+    await localViewer.getByRole('button', { name: 'Close', exact: true }).first().click();
+
+    const yamlRow = page.getByRole('row').filter({ hasText: 'Schema.yaml' });
+    await yamlRow.getByRole('button', { name: /Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    const yamlViewer = page.getByRole('dialog', { name: 'Schema.yaml' });
+    await expect(yamlViewer.locator('pre')).toHaveText('version: 1\nname: Example');
+    await yamlViewer.getByRole('button', { name: 'Close', exact: true }).first().click();
+
+    const wasDark = await page.locator('html').evaluate(element => element.classList.contains('dark'));
+    await page.getByRole('button', { name: /toggle theme/i }).click();
+    await expect.poll(() => page.locator('html').evaluate(element => element.classList.contains('dark'))).toBe(!wasDark);
+    await page.setViewportSize({ width: 375, height: 812 });
+    const emptyRow = page.getByRole('row').filter({ hasText: 'Empty.txt' });
+    await emptyRow.getByRole('button', { name: /Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+    const emptyViewer = page.getByRole('dialog', { name: 'Empty.txt' });
+    await expect(emptyViewer.getByText('This source has no content.')).toBeVisible();
+    const bounds = await emptyViewer.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+    expect(await emptyViewer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 });

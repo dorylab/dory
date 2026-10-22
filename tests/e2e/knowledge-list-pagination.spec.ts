@@ -9,7 +9,6 @@ async function action(request: APIRequestContext, actionId: string, input: Recor
 }
 
 test('all five knowledge lists paginate independently and preserve asset deep links', async ({ page, request }) => {
-    page.on('console', message => { if (message.text().startsWith('PAGINATION_EFFECT')) console.log(message.text()); });
     await page.goto('/');
     await page.waitForURL(/\/[^/]+\/connections$/);
     const organization = new URL(page.url()).pathname.split('/')[1];
@@ -29,6 +28,7 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         title: `Query ${index}`,
         question: `Question ${index}`,
         sql: 'SELECT 1',
+        definitionIds: [],
         updatedAt: new Date().toISOString(),
         updatedByName: 'Tester',
     }));
@@ -63,8 +63,7 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         evidence: [],
     }));
     try {
-        const saved = await action(request, 'knowledge.saveDefinitions', { knowledgeModelId: model.id, definitions });
-        console.log('SAVED_IDS', saved.model.definitions.map((definition: { id: string }) => definition.id));
+        await action(request, 'knowledge.saveDefinitions', { knowledgeModelId: model.id, definitions });
         await page.route('**/api/actions/execute', async route => {
             const { actionId } = route.request().postDataJSON();
             const data: Record<string, unknown> = {
@@ -106,6 +105,9 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         await expect(list.getByRole('listitem')).toHaveCount(10);
         await page.getByRole('button', { name: 'Next page' }).click();
         await expect(list.getByRole('listitem')).toHaveCount(2);
+        await page.setViewportSize({ width: 390, height: 844 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.setViewportSize({ width: 1440, height: 900 });
         await page.getByRole('combobox').first().click();
         await page.getByRole('option', { name: '20', exact: true }).click();
         await expect(list.getByRole('listitem')).toHaveCount(12);
@@ -114,16 +116,20 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(12);
 
         for (const [tab, parameter, id, locator] of [
-            ['definitions', 'definition', 'metric-11', 'button[aria-label="Show details for Metric 11"]'],
+            ['definitions', 'definition', 'metric-11', 'button[aria-label="Hide details for Metric 11"]'],
             ['queries', 'query', 'query-11', 'button[aria-label="Query 11"]'],
             ['sources', 'source', 'source-11', 'tr:has-text("Source 11.md")'],
             ['rules', 'rule', 'rule-11', '#rule-rule-11'],
         ]) {
             await page.goto(`/${organization}/knowledge/${model.id}?tab=${tab}&${parameter}=${id}`);
-            console.log('DEEP_LINK', tab, page.url());
             await expect(page.locator(locator)).toBeVisible();
             await expect(page).toHaveURL(new RegExp(`${tab}Page=2`));
         }
+        await page.goto(`/${organization}/knowledge/${model.id}?tab=definitions&definition=metric-11`);
+        await expect(page.getByRole('button', { name: 'Hide details for Metric 11' })).toBeVisible();
+        await page.getByRole('button', { name: 'Previous page' }).click();
+        await expect(page.getByRole('button', { name: 'Show details for Metric 0' })).toBeVisible();
+        await expect(page).not.toHaveURL(/definition=metric-11/);
     } finally {
         await action(request, 'knowledge.delete', { knowledgeModelId: model.id }, 'pagination-test-cleanup');
     }

@@ -33,7 +33,7 @@ test('connector extraction produces reviewable drafts, requires metric mapping a
         await page.getByRole('button', { name: 'Enable and extract existing sources', exact: true }).click();
         await expect(page.getByText('Extraction completed 1', { exact: true })).toBeVisible();
         await page.getByRole('tab', { name: /Pending review/ }).click();
-        const metric = page.locator('div.rounded-md.border.p-4').filter({ hasText: 'Net revenue' });
+        const metric = page.getByRole('list', { name: 'Pending review' }).getByRole('listitem').filter({ hasText: 'Net revenue' });
         await metric.getByRole('button', { name: 'Review', exact: true }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog.getByRole('button', { name: 'Approve and publish', exact: true })).toBeDisabled();
@@ -42,7 +42,7 @@ test('connector extraction produces reviewable drafts, requires metric mapping a
         await page.getByRole('option', { name: connections[0].connection.name, exact: true }).click();
         await dialog.getByRole('button', { name: 'Approve and publish', exact: true }).click();
         await expect(dialog).toBeHidden();
-        const rule = page.locator('div.rounded-md.border.p-4').filter({ hasText: 'Reporting timezone' });
+        const rule = page.getByRole('list', { name: 'Pending review' }).getByRole('listitem').filter({ hasText: 'Reporting timezone' });
         await rule.getByRole('button', { name: 'Review', exact: true }).click();
         await dialog.getByRole('button', { name: 'Approve and publish', exact: true }).click();
         await page.getByRole('tab', { name: 'Business rules', exact: true }).click();

@@ -802,7 +802,7 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
                     </div>
                 </div>
                 {approvalErrors.length ? (
-                    <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                    <div role="alert" className="mx-4 mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
                         <p className="text-destructive">{t('BatchFailureNotice')}</p>
                         <ul className="mt-1 list-inside list-disc space-y-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
                             {approvalErrors.map((error, index) => (
@@ -812,7 +812,7 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
                     </div>
                 ) : null}
                 {query.error ? (
-                    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                    <div role="alert" className="flex flex-wrap items-center gap-2 border-t px-4 py-3 text-sm text-destructive">
                         <span className="min-w-0 break-words">{query.error.message}</span>
                         <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
                             {t('RetryLoading')}
@@ -820,12 +820,12 @@ export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSourc
                     </div>
                 ) : null}
                 {query.isPending ? (
-                    <p role="status" className="text-sm text-muted-foreground">
+                    <p role="status" className="border-t px-4 py-3 text-sm text-muted-foreground">
                         {t('Loading')}
                     </p>
                 ) : !candidates.length ? (
                     !query.error ? (
-                        <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">{t('NoCandidates')}</p>
+                        <p className="border-t p-6 text-center text-sm text-muted-foreground">{t('NoCandidates')}</p>
                     ) : null
                 ) : (
                     <ul aria-label={t('PendingReview')} className="divide-y border-t">
