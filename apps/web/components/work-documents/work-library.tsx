@@ -98,7 +98,7 @@ export function WorkLibrary() {
                                     </Button>
                                 </div>
                             ) : (
-                                <Link className="min-w-0 flex-1" href={`/${organization}/works/${document.id}`}>
+                                <Link className="min-w-0 flex-1" href={`/${organization}/reports/${document.id}`}>
                                     <p className="truncate font-medium hover:underline">{document.title}</p>
                                     <p className="mt-1 text-xs text-muted-foreground">
                                         {new Date(document.updatedAt).toLocaleString()} · v{document.revision} ·{' '}

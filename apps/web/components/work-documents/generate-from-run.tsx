@@ -16,7 +16,7 @@ export function GenerateWorkFromRun({ runId }: { runId: string }) {
             if (!response.ok) throw new Error(result.error ?? t('GenerateFailed'));
             return result as { document: { id: string } };
         },
-        onSuccess: result => router.push(`/${organization}/works/${result.document.id}`),
+        onSuccess: result => router.push(`/${organization}/reports/${result.document.id}`),
         onError: error => toast.error(error.message),
     });
     return (

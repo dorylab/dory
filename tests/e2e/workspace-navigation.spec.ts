@@ -13,7 +13,7 @@ for (const [locale, messages] of Object.entries({ en, zh, ja, es })) {
         await page.goto('/');
         await page.waitForURL(/\/[^/]+\/work$/);
         const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-        await page.goto(`/${organization}/works`);
+        await page.goto(`/${organization}/reports`);
         const navigation = page
             .locator('[data-sidebar="menu"]')
             .filter({ has: page.locator(`a[href="/${organization}/connections"]`) })
@@ -35,8 +35,8 @@ for (const [locale, messages] of Object.entries({ en, zh, ja, es })) {
         await page.waitForURL(`**/${organization}/work`);
         await expect(page.getByTestId('data-agent')).toBeVisible();
         await expect(navigation.getByRole('link', { name: messages.AppSidebar.Chatbot, exact: true })).toHaveAttribute('data-active', 'true');
-        await page.goto(`/sign-in?callbackURL=${encodeURIComponent(`/${organization}/works`)}`);
-        await page.waitForURL(`**/${organization}/works`);
+        await page.goto(`/sign-in?callbackURL=${encodeURIComponent(`/${organization}/reports`)}`);
+        await page.waitForURL(`**/${organization}/reports`);
         await expect(page.getByRole('heading', { name: messages.WorkDocuments.Reports, exact: true })).toBeVisible();
     });
 }
@@ -52,9 +52,9 @@ test.describe('new guest default', () => {
         expect(bootstrap.ok(), await bootstrap.text()).toBeTruthy();
         const { organizationSlug } = await bootstrap.json();
         await context.clearCookies({ name: /better-auth\.session/ });
-        await page.goto(`/sign-in?callbackURL=${encodeURIComponent(`/${organizationSlug}/works`)}`);
+        await page.goto(`/sign-in?callbackURL=${encodeURIComponent(`/${organizationSlug}/reports`)}`);
         await page.getByTestId('guest-sign-in').click();
-        await page.waitForURL(`**/${organizationSlug}/works`);
+        await page.waitForURL(`**/${organizationSlug}/reports`);
         for (const path of ['/', `/${organizationSlug}`]) {
             await page.goto(path);
             await page.waitForURL(`**/${organizationSlug}/work`);
@@ -73,4 +73,15 @@ test('legacy Work links preserve conversation, report and repeated query paramet
     const target = new URL(response.headers().location, page.url());
     expect(target.pathname).toBe(`/${organization}/work`);
     expect([...target.searchParams]).toEqual([...new URLSearchParams(query)]);
+});
+
+test('removed works URLs return 404 without a compatibility redirect', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForURL(/\/[^/]+\/work$/);
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    for (const path of ['works', 'works/old-report']) {
+        const response = await page.request.get(`/${organization}/${path}`, { maxRedirects: 0 });
+        expect(response.status()).toBe(404);
+        expect(response.headers().location).toBeUndefined();
+    }
 });

@@ -100,7 +100,7 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/works/doc-report`);
+    await page.goto(`/${organization}/reports/doc-report`);
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Monthly revenue' })).toBeVisible();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -360,7 +360,7 @@ test('unsupported Markdown stays intact in source mode and never executes HTML',
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/works/doc-report`);
+    await page.goto(`/${organization}/reports/doc-report`);
     await expect(page.getByTestId('work-markdown')).toContainText('<div onclick=');
     await expect(page.getByTestId('work-markdown').locator('[onclick]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -388,7 +388,7 @@ test('data cards stay read-only while moving and deleting their Markdown referen
     await page.setViewportSize({ width: 1600, height: 1100 });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/works/doc-report`);
+    await page.goto(`/${organization}/reports/doc-report`);
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     const card = page.getByTestId('visual-card');
     await expect(card).toHaveAttribute('contenteditable', 'false');
@@ -848,7 +848,7 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/works/doc-report`);
+    await page.goto(`/${organization}/reports/doc-report`);
     await expect(page.getByRole('heading', { name: 'Latest report' })).toBeVisible();
     await selectReportVersion(page, 1);
     await expect(page).toHaveURL(/revision=1/);
@@ -905,7 +905,7 @@ test('version switching protects dirty edits and remains on the draft after a fa
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/works/doc-report`);
+    await page.goto(`/${organization}/reports/doc-report`);
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Unsaved draft');
     await expect.poll(() => writes).toBe(1);
@@ -962,7 +962,7 @@ test('history requests cannot replace a newer selection and restore conflicts pr
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    const url = `/${organization}/works/doc-report`;
+    const url = `/${organization}/reports/doc-report`;
     await page.goto(url);
     await selectReportVersion(page, 1);
     await expect.poll(() => Boolean(releaseFirst)).toBe(true);
