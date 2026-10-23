@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { canReadWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
+import { parseWorkRevision } from '@/lib/work-documents/revision';
 import { workDraftSchema } from '@/lib/work-documents/schema';
 
 import { assertDocumentWrite, createWorkFromRun, saveWorkDraft } from './work-documents';
@@ -23,7 +24,11 @@ export async function documentHttp(req: NextRequest, documentId?: string) {
         if (req.method === 'GET') {
             if (documentId) {
                 const target = { ...owner, documentId };
-                const [document, versions] = await Promise.all([db.workDocuments.get(target), db.workDocuments.versions(target)]);
+                const revision = parseWorkRevision(search.get('revision'));
+                const [document, versions] = await Promise.all([
+                    revision === undefined ? db.workDocuments.get(target) : db.workDocuments.getVersion({ ...target, revision }),
+                    db.workDocuments.versions(target),
+                ]);
                 workDraftSchema.parse({ title: document.title, markdown: document.content.markdown, visuals: document.content.visuals, status: document.status });
                 return Response.json({ document, versions });
             }

@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/registry/new-york-v4/ui/alert-dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { parseAsInteger, useQueryState } from 'nuqs';
+import { ChevronDown } from 'lucide-react';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
 import type { WorkDocumentView, WorkEvidence } from '@dory/shared/types/work-document';
@@ -41,6 +44,31 @@ export function WorkReport({
     const client = useQueryClient();
     const key = ['work-document', organization, documentId];
     const query = useQuery({ queryKey: key, queryFn: () => workRequest<Detail>(`/api/work-documents/${encodeURIComponent(documentId)}`), refetchInterval: busy ? 2000 : false });
+    const [selectedRevision, setSelectedRevision] = useQueryState('revision', parseAsInteger);
+    const previousDocument = useRef(documentId);
+    const changingDocument = previousDocument.current !== documentId;
+    const historical = selectedRevision !== null && !changingDocument;
+    const historyQuery = useQuery({
+        queryKey: [...key, selectedRevision],
+        enabled: historical,
+        retry: false,
+        queryFn: () => workRequest<Detail>(`/api/work-documents/${encodeURIComponent(documentId)}?revision=${selectedRevision}`),
+    });
+    const [restoreOpen, setRestoreOpen] = useState(false);
+    const restore = useMutation({
+        mutationFn: ({ revision, expectedRevision }: { revision: number; expectedRevision: number }) =>
+            workRequest<{ document: WorkDocumentView }>(`/api/work-documents/${encodeURIComponent(documentId)}`, { action: 'restore', revision, expectedRevision }),
+        onSuccess: async data => {
+            client.setQueryData<Detail>(key, previous => (previous ? { ...previous, document: data.document } : undefined));
+            setRestoreOpen(false);
+            await setSelectedRevision(null);
+            await Promise.all([client.invalidateQueries({ queryKey: key }), client.invalidateQueries({ queryKey: ['work-documents', organization] })]);
+        },
+        onError: error => {
+            toast.error(error.message);
+            void query.refetch();
+        },
+    });
     const [editing, setEditing] = useState<WorkDocumentView | null>(null);
     const [dirty, setDirty] = useState(false);
     const [leaveDecision, setLeaveDecision] = useState<((leave: boolean) => void) | null>(null);
@@ -79,21 +107,36 @@ export function WorkReport({
             toast.error(error.message);
         },
     });
-    useImperativeHandle(
-        ref,
-        () => ({
-            requestLeave: () => {
-                if (!dirty && !mutation.isPending) return Promise.resolve(true);
-                return new Promise<boolean>(resolve => {
-                    setLeaveDecision((previous: ((leave: boolean) => void) | null) => {
-                        previous?.(false);
-                        return resolve;
-                    });
-                });
-            },
-        }),
-        [dirty, mutation.isPending],
-    );
+    const requestLeave = useCallback(() => {
+        if (!dirty && !mutation.isPending) return Promise.resolve(true);
+        return new Promise<boolean>(resolve => {
+            setLeaveDecision((previous: ((leave: boolean) => void) | null) => {
+                previous?.(false);
+                return resolve;
+            });
+        });
+    }, [dirty, mutation.isPending]);
+    useImperativeHandle(ref, () => ({ requestLeave }), [requestLeave]);
+    const switchVersion = async (revision: number | null) => {
+        if (!(await requestLeave())) return;
+        setEditing(null);
+        setDirty(false);
+        setSaveError(false);
+        setEvidenceId(null);
+        setKnowledge(null);
+        setDefinition(null);
+        await setSelectedRevision(revision);
+    };
+    useEffect(() => {
+        if (previousDocument.current === documentId) return;
+        previousDocument.current = documentId;
+        setEditing(null);
+        setDirty(false);
+        setSaveError(false);
+        setEvidenceId(null);
+        setRestoreOpen(false);
+        void setSelectedRevision(null);
+    }, [documentId, setSelectedRevision]);
     const savingRef = useRef<WorkDocumentView | null>(null);
     const { mutate, isPending } = mutation;
     const save = useCallback(() => {
@@ -130,9 +173,16 @@ export function WorkReport({
             window.document.removeEventListener('click', guard, true);
         };
     }, [dirty, t]);
-    const document = editing ?? query.data?.document;
+    const isEditing = !historical && !changingDocument && Boolean(editing);
+    const viewPending = historical && historyQuery.isPending;
+    const viewError = historical ? historyQuery.error : null;
+    const viewUnavailable = viewPending || Boolean(viewError);
+    const document = (!historical && !changingDocument ? editing : null) ?? (historical ? historyQuery.data?.document : undefined) ?? query.data?.document;
+    const latestRevision = query.data?.document.revision;
+    const versions = query.data?.versions ?? [];
+    const latestVersion = versions.find(version => version.revision === latestRevision);
     if (query.isPending) return <p className="p-6 text-muted-foreground">{t('Loading')}</p>;
-    if (query.error)
+    if (query.error && !query.data)
         return (
             <p role="alert" className="p-6 text-destructive">
                 {query.error.message}
@@ -145,6 +195,7 @@ export function WorkReport({
         setSaveError(false);
     };
     const exportReport = async (format: 'html' | 'pdf' | 'markdown') => {
+        if (viewUnavailable) return;
         const html = renderWorkHtml(document);
         if (format === 'pdf') {
             const frame = window.document.createElement('iframe');
@@ -208,8 +259,12 @@ export function WorkReport({
                 </AlertDialogContent>
             </AlertDialog>
             <div className="mb-6 flex flex-wrap items-center gap-2">
-                {onContinue ? (
-                    <Button variant="outline" disabled={busy || dirty || Boolean(editing) || Boolean(document.archivedAt)} onClick={() => onContinue(t('RefreshPrompt'))}>
+                {historical ? (
+                    <Button variant="outline" disabled={restore.isPending} onClick={() => void switchVersion(null)}>
+                        {t('VersionHistory.BackToLatest')}
+                    </Button>
+                ) : onContinue ? (
+                    <Button variant="outline" disabled={busy || dirty || isEditing || Boolean(document.archivedAt)} onClick={() => onContinue(t('RefreshPrompt'))}>
                         {t('Refresh')}
                     </Button>
                 ) : (
@@ -219,27 +274,114 @@ export function WorkReport({
                 )}
                 <Button
                     variant="outline"
-                    disabled={busy || Boolean(document.archivedAt)}
+                    disabled={historical || busy || Boolean(document.archivedAt)}
                     onClick={() => {
                         if (editing && dirty) save();
                         else setEditing(editing ? null : structuredClone(document));
                     }}
                 >
-                    {editing ? (dirty ? t('Save') : t('Done')) : t('Edit')}
+                    {isEditing ? (dirty ? t('Save') : t('Done')) : t('Edit')}
                 </Button>
-                <Button variant="outline" disabled={dirty || busy || Boolean(editing)} onClick={() => void exportReport('html')}>
+                <Button variant="outline" disabled={viewUnavailable || dirty || busy || isEditing || restore.isPending} onClick={() => void exportReport('html')}>
                     HTML
                 </Button>
-                <Button variant="outline" disabled={dirty || busy || Boolean(editing)} onClick={() => void exportReport('pdf')}>
+                <Button variant="outline" disabled={viewUnavailable || dirty || busy || isEditing || restore.isPending} onClick={() => void exportReport('pdf')}>
                     {t('ExportPdf')}
                 </Button>
-                <Button variant="outline" disabled={dirty || busy || Boolean(editing)} onClick={() => void exportReport('markdown')}>
+                <Button variant="outline" disabled={viewUnavailable || dirty || busy || isEditing || restore.isPending} onClick={() => void exportReport('markdown')}>
                     {t('ExportMarkdown')}
                 </Button>
-                <span className="text-xs text-muted-foreground">
-                    v{document.revision} · {dirty ? t('Unsaved') : t('Saved')} · {document.status === 'draft' ? t('Incomplete') : t('Ready')}
-                </span>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" aria-label={t('VersionHistory.Select')} disabled={restore.isPending}>
+                            v{historical ? selectedRevision : document.revision}
+                            <ChevronDown className="ml-1 size-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-80 max-w-[calc(100vw-2rem)] overflow-auto">
+                        <DropdownMenuRadioGroup
+                            value={String(historical ? selectedRevision : latestRevision)}
+                            onValueChange={value => void switchVersion(Number(value) === latestRevision ? null : Number(value))}
+                        >
+                            <DropdownMenuRadioItem value={String(latestRevision)}>
+                                v{latestRevision} · {t('VersionHistory.Latest')}
+                                {latestVersion ? (
+                                    <>
+                                        {' '}
+                                        · {new Date(latestVersion.createdAt).toLocaleString()} ·{' '}
+                                        {t(
+                                            latestVersion.source === 'user'
+                                                ? 'VersionHistory.User'
+                                                : latestVersion.source === 'restore'
+                                                  ? 'VersionHistory.Restored'
+                                                  : 'VersionHistory.Agent',
+                                        )}
+                                    </>
+                                ) : null}
+                            </DropdownMenuRadioItem>
+                            {versions
+                                .filter(version => version.revision !== latestRevision)
+                                .map(version => (
+                                    <DropdownMenuRadioItem key={version.revision} value={String(version.revision)}>
+                                        v{version.revision} · {new Date(version.createdAt).toLocaleString()} ·{' '}
+                                        {t(version.source === 'user' ? 'VersionHistory.User' : version.source === 'restore' ? 'VersionHistory.Restored' : 'VersionHistory.Agent')}
+                                    </DropdownMenuRadioItem>
+                                ))}
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                {!viewUnavailable ? (
+                    <span className="text-xs text-muted-foreground">
+                        {dirty ? t('Unsaved') : t('Saved')} · {document.status === 'draft' ? t('Incomplete') : t('Ready')}
+                    </span>
+                ) : null}
             </div>
+            {historical ? (
+                <div className="mb-4 flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3 text-sm">
+                    <span>{t('VersionHistory.ReadOnly', { revision: selectedRevision! })}</span>
+                    <Button
+                        variant="outline"
+                        disabled={viewUnavailable || busy || restore.isPending || Boolean(document.archivedAt)}
+                        onClick={() => {
+                            restore.reset();
+                            setRestoreOpen(true);
+                        }}
+                    >
+                        {t('VersionHistory.Restore')}
+                    </Button>
+                </div>
+            ) : null}
+            <AlertDialog
+                open={restoreOpen}
+                onOpenChange={open => {
+                    if (!restore.isPending) setRestoreOpen(open);
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('VersionHistory.Restore')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('VersionHistory.RestoreDescription', { revision: selectedRevision ?? document.revision })}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {restore.error ? (
+                        <p role="alert" className="text-sm text-destructive">
+                            {t('VersionHistory.RestoreFailed')} {restore.error.message}
+                        </p>
+                    ) : null}
+                    <AlertDialogFooter>
+                        <Button variant="ghost" disabled={restore.isPending} onClick={() => setRestoreOpen(false)}>
+                            {t('Resources.Cancel')}
+                        </Button>
+                        <Button
+                            disabled={restore.isPending || busy || !latestRevision}
+                            onClick={() => {
+                                if (selectedRevision !== null && latestRevision) restore.mutate({ revision: selectedRevision, expectedRevision: latestRevision });
+                            }}
+                        >
+                            {t('VersionHistory.Restore')}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             {saveError ? (
                 <div role="alert" className="mb-4 rounded border border-destructive p-3 text-sm">
                     {t('Conflict')}{' '}
@@ -256,54 +398,67 @@ export function WorkReport({
                     </Button>
                 </div>
             ) : null}
-            {editing ? (
-                <Input aria-label={t('Title')} value={document.title} onChange={event => change({ ...document, title: event.target.value })} />
-            ) : (
-                <h1 className="text-2xl font-semibold">{document.title}</h1>
-            )}
-            <p className="my-3 text-xs text-muted-foreground">
-                {t('Sources')}: {[...new Set(document.content.evidence.map(item => item.connectionName ?? item.connectionId))].join(', ')}
-            </p>
-            <div
-                className="work-prose"
-                onClick={event => {
-                    const target = event.target instanceof Element ? event.target.closest('[data-evidence], a[href^="dory://evidence/"]') : null;
-                    if (target) {
-                        event.preventDefault();
-                        setEvidenceId(target.getAttribute('data-evidence') ?? target.getAttribute('href')?.slice('dory://evidence/'.length) ?? null);
-                    }
-                }}
-            >
-                {editing ? (
-                    <MarkdownEditor
-                        content={document.content}
-                        onChange={markdown => change({ ...document, content: { ...document.content, markdown } })}
-                        onEvidence={setEvidenceId}
-                    />
-                ) : (
-                    <div data-testid="work-markdown" dangerouslySetInnerHTML={{ __html: renderWorkMarkdown(document.content) }} />
-                )}
-            </div>
-            {!editing ? (
-                <div className="mt-5 flex gap-2">
-                    <Button variant="outline" onClick={() => setEvidenceId(document.content.evidence[0]?.artifactId ?? 'all')}>
-                        {t('Evidence')}
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        onMouseDown={event => event.preventDefault()}
-                        onClick={() => {
-                            const text = window.getSelection()?.toString().trim();
-                            if (text) setDefinition({ title: document.title, text });
-                            else toast.info(t('SelectDefinition'));
-                        }}
-                    >
-                        {t('AddDefinition')}
+            {viewPending ? (
+                <p role="status">{t('Loading')}</p>
+            ) : viewError ? (
+                <div role="alert" className="text-destructive">
+                    {viewError.message}{' '}
+                    <Button variant="outline" onClick={() => void historyQuery.refetch()}>
+                        {t('Reload')}
                     </Button>
                 </div>
-            ) : null}
+            ) : (
+                <>
+                    {isEditing ? (
+                        <Input aria-label={t('Title')} value={document.title} onChange={event => change({ ...document, title: event.target.value })} />
+                    ) : (
+                        <h1 className="text-2xl font-semibold">{document.title}</h1>
+                    )}
+                    <p className="my-3 text-xs text-muted-foreground">
+                        {t('Sources')}: {[...new Set(document.content.evidence.map(item => item.connectionName ?? item.connectionId))].join(', ')}
+                    </p>
+                    <div
+                        className="work-prose"
+                        onClick={event => {
+                            const target = event.target instanceof Element ? event.target.closest('[data-evidence], a[href^="dory://evidence/"]') : null;
+                            if (target) {
+                                event.preventDefault();
+                                setEvidenceId(target.getAttribute('data-evidence') ?? target.getAttribute('href')?.slice('dory://evidence/'.length) ?? null);
+                            }
+                        }}
+                    >
+                        {isEditing ? (
+                            <MarkdownEditor
+                                content={document.content}
+                                onChange={markdown => change({ ...document, content: { ...document.content, markdown } })}
+                                onEvidence={setEvidenceId}
+                            />
+                        ) : (
+                            <div data-testid="work-markdown" dangerouslySetInnerHTML={{ __html: renderWorkMarkdown(document.content) }} />
+                        )}
+                    </div>
+                    {!isEditing ? (
+                        <div className="mt-5 flex gap-2">
+                            <Button variant="outline" onClick={() => setEvidenceId(document.content.evidence[0]?.artifactId ?? 'all')}>
+                                {t('Evidence')}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                onMouseDown={event => event.preventDefault()}
+                                onClick={() => {
+                                    const text = window.getSelection()?.toString().trim();
+                                    if (text) setDefinition({ title: document.title, text });
+                                    else toast.info(t('SelectDefinition'));
+                                }}
+                            >
+                                {t('AddDefinition')}
+                            </Button>
+                        </div>
+                    ) : null}
+                </>
+            )}
             <Sheet
-                open={Boolean(evidenceId)}
+                open={!viewUnavailable && Boolean(evidenceId)}
                 onOpenChange={open => {
                     if (!open) setEvidenceId(null);
                 }}
@@ -353,27 +508,6 @@ export function WorkReport({
                     </div>
                 </SheetContent>
             </Sheet>
-            <details className="mt-8 border-t pt-4">
-                <summary>{t('Versions')}</summary>
-                {query.data?.versions.map(version => (
-                    <div className="my-2 flex items-center justify-between gap-3 text-sm" key={version.revision}>
-                        <span>
-                            v{version.revision} · {new Date(version.createdAt).toLocaleString()}
-                        </span>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busy || dirty || mutation.isPending || version.revision === document.revision || Boolean(document.archivedAt)}
-                            onClick={() => {
-                                setEditing(null);
-                                mutation.mutate({ action: 'restore', revision: version.revision, expectedRevision: document.revision });
-                            }}
-                        >
-                            {t('Restore')}
-                        </Button>
-                    </div>
-                ))}
-            </details>
             {definition ? <AddDefinitionDialog {...definition} connectionIds={document.scope.connectionIds} onClose={() => setDefinition(null)} /> : null}
             {knowledge ? (
                 <AddVerifiedQueryDialog

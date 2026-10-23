@@ -86,6 +86,7 @@ test('Work edits, saves, restores and exports the same snapshot', async ({ page,
         }
         await route.fallback();
     });
+    await page.route('**/api/work-documents/doc-report?*', route => route.fulfill({ json: { document: original, versions } }));
     await page.route('**/api/work-documents/doc-report', async route => {
         if (route.request().method() === 'PATCH') {
             const body = route.request().postDataJSON();
@@ -143,8 +144,9 @@ test('Work edits, saves, restores and exports the same snapshot', async ({ page,
     expect(html).toContain('Human-reviewed analysis');
     expect(html).not.toContain('SELECT month');
     expect(html).toContain('<strong>Revenue</strong>');
-    await page.getByText('Version history', { exact: true }).click();
-    await page.getByRole('button', { name: 'Restore as new version' }).last().click();
+    await selectReportVersion(page, 1);
+    await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     await page.getByTestId('work-markdown').evaluate(element => {
         const range = document.createRange();
@@ -205,7 +207,9 @@ test('Data Agent has explicit multi-source scope without creating an unsolicited
 });
 
 test('opening a generated draft preserves the active chat stream', async ({ page, appErrors }, testInfo) => {
-    const document = { ...makeDocument(), status: 'draft', chatId: '' };
+    const document = { ...makeDocument(), status: 'draft', chatId: '', revision: 2 };
+    const historical = { ...structuredClone(document), revision: 1, content: { ...structuredClone(document.content), markdown: 'Historical snapshot content' } };
+    let latestRead = 0;
     let created = false;
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.route('**/api/data-agent', route =>
@@ -216,10 +220,16 @@ test('opening a generated draft preserves the active chat stream', async ({ page
         return route.fulfill({ json: { documents: created ? [document] : [] } });
     });
     await page.route('**/api/work-documents', route => route.fulfill({ json: { documents: [] } }));
-    await page.route('**/api/work-documents/doc-report', async route => {
+    await page.route('**/api/work-documents/doc-report*', async route => {
         // Make loading visible long enough to catch a conversation unmount.
         await new Promise(resolve => setTimeout(resolve, 500));
-        await route.fulfill({ json: { document, versions: [] } });
+        latestRead = document.revision;
+        await route.fulfill({
+            json: {
+                document: new URL(route.request().url()).searchParams.has('revision') ? historical : document,
+                versions: [document.revision, 1].map(revision => ({ revision, source: 'agent', createdAt: now })),
+            },
+        });
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
@@ -273,6 +283,15 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'HTML', exact: true })).toBeDisabled();
+    await selectReportVersion(page, 1);
+    await expect(page.getByTestId('work-markdown')).toHaveText('Historical snapshot content');
+    document.revision = 3;
+    document.content.markdown = 'Latest generated content';
+    await expect.poll(() => latestRead).toBe(3);
+    await expect(page.getByTestId('work-markdown')).toHaveText('Historical snapshot content');
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v1');
+    await page.getByRole('button', { name: 'Back to latest', exact: true }).click();
+    await expect(page.getByTestId('work-markdown')).toHaveText('Latest generated content');
     await page.evaluate(() => (window as unknown as { finishReportStream: () => void }).finishReportStream());
     await expect(page.getByText('Preparing both sources. Report completed.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
@@ -573,4 +592,268 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await expect(page.getByRole('dialog', { name: 'Session resources' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Session resources', exact: true })).toBeFocused();
     await expectAppHealthy(appErrors);
+});
+
+async function selectReportVersion(page: Page, revision: number | 'latest') {
+    await page.getByRole('button', { name: 'Report version', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: revision === 'latest' ? /Latest/ : new RegExp(`^v${revision} ·`) }).click();
+}
+
+test('report versions keep exact snapshots for viewing, export, restore and reload', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const old = makeDocument();
+    let latest = { ...structuredClone(old), title: 'Latest report', revision: 2, content: { ...structuredClone(old.content), markdown: 'Latest content' } };
+    const versions = [
+        { revision: 2, source: 'user', createdAt: now },
+        { revision: 1, source: 'agent', createdAt: now },
+    ];
+    let writes = 0;
+    await page.route('**/api/work-documents/doc-report*', async route => {
+        const revision = new URL(route.request().url()).searchParams.get('revision');
+        if (route.request().method() === 'PATCH') {
+            const body = route.request().postDataJSON();
+            expect(body).toEqual({ action: 'restore', revision: 1, expectedRevision: latest.revision });
+            latest = { ...structuredClone(old), revision: latest.revision + 1 };
+            versions.unshift({ revision: latest.revision, source: 'restore', createdAt: now });
+            writes++;
+        }
+        return route.fulfill({ json: { document: revision ? old : latest, versions } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/works/doc-report`);
+    await expect(page.getByRole('heading', { name: 'Latest report' })).toBeVisible();
+    await selectReportVersion(page, 1);
+    await expect(page).toHaveURL(/revision=1/);
+    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+    await expect(page.getByRole('img', { name: 'Monthly revenue' })).toBeVisible();
+    expect(writes).toBe(0);
+    await page.getByRole('button', { name: 'Evidence', exact: true }).click();
+    await expect(page.getByRole('dialog')).toContainText('September');
+    await page.keyboard.press('Escape');
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'HTML', exact: true }).click();
+    const stream = await (await download).createReadStream();
+    let html = '';
+    for await (const chunk of stream!) html += chunk.toString();
+    expect(html).toContain('v1');
+    expect(html).toContain('September');
+    expect(html).not.toContain('Latest content');
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('version-light.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('version-dark-mobile.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v3');
+    expect(writes).toBe(1);
+    await selectReportVersion(page, 1);
+    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    await expectAppHealthy(appErrors);
+});
+
+test('version switching protects dirty edits and remains on the draft after a failed save', async ({ page }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const old = makeDocument();
+    let latest = { ...structuredClone(old), title: 'Latest report', revision: 2 };
+    let failSave = true;
+    let writes = 0;
+    const versions = [
+        { revision: 2, source: 'user', createdAt: now },
+        { revision: 1, source: 'agent', createdAt: now },
+    ];
+    await page.route('**/api/work-documents/doc-report*', async route => {
+        if (route.request().method() === 'PATCH') {
+            writes++;
+            if (failSave) return route.fulfill({ status: 409, json: { error: 'Save conflict' } });
+            const body = route.request().postDataJSON();
+            latest = { ...latest, title: body.draft.title, revision: latest.revision + 1 };
+            versions.unshift({ revision: latest.revision, source: 'user', createdAt: now });
+        }
+        return route.fulfill({ json: { document: new URL(route.request().url()).searchParams.has('revision') ? old : latest, versions } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/works/doc-report`);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Unsaved draft');
+    await expect.poll(() => writes).toBe(1);
+    await selectReportVersion(page, 1);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Unsaved draft');
+    await selectReportVersion(page, 1);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Save and continue', exact: true }).click();
+    await expect(page.getByRole('alertdialog').getByRole('alert')).toBeVisible();
+    await expect(page).not.toHaveURL(/revision=/);
+    failSave = false;
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Save and continue', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    expect(latest.title).toBe('Unsaved draft');
+    await page.getByRole('button', { name: 'Back to latest', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    failSave = true;
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Discard me');
+    await selectReportVersion(page, 1);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    expect(latest.title).toBe('Unsaved draft');
+});
+
+test('history requests cannot replace a newer selection and restore conflicts preserve the old snapshot', async ({ page }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const old = makeDocument();
+    const second = { ...structuredClone(old), title: 'Second version', revision: 2 };
+    let latest = { ...structuredClone(old), title: 'Latest report', revision: 3 };
+    let releaseFirst: (() => void) | undefined;
+    let failHistory = false;
+    let conflict = true;
+    let restoreCalls = 0;
+    const versions = [3, 2, 1].map(revision => ({ revision, source: 'agent', createdAt: now }));
+    await page.route('**/api/work-documents/doc-report*', async route => {
+        const revision = new URL(route.request().url()).searchParams.get('revision');
+        if (route.request().method() === 'PATCH') {
+            restoreCalls++;
+            if (conflict) {
+                latest = { ...latest, revision: 4 };
+                versions.unshift({ revision: 4, source: 'agent', createdAt: now });
+                return route.fulfill({ status: 409, json: { error: 'Work changed. Reload the latest version before saving.' } });
+            }
+            expect(route.request().postDataJSON().expectedRevision).toBe(4);
+            latest = { ...second, revision: 5 };
+        }
+        if (revision === '1') {
+            if (failHistory) return route.fulfill({ status: 404, json: { error: 'Version not found.' } });
+            await new Promise<void>(resolve => {
+                releaseFirst = resolve;
+            });
+        }
+        return route.fulfill({ json: { document: revision === '1' ? old : revision === '2' ? second : latest, versions } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    const url = `/${organization}/works/doc-report`;
+    await page.goto(url);
+    await selectReportVersion(page, 1);
+    await expect.poll(() => Boolean(releaseFirst)).toBe(true);
+    await expect(page.getByTestId('work-markdown')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'HTML', exact: true })).toBeDisabled();
+    await selectReportVersion(page, 2);
+    await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
+    releaseFirst!();
+    await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
+    await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
+    await expect(page.getByRole('alertdialog').getByRole('alert')).toContainText('Work changed');
+    expect(restoreCalls).toBe(1);
+    await expect(page.getByRole('heading', { name: 'Second version', includeHidden: true })).toBeVisible();
+    conflict = false;
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v5');
+    failHistory = true;
+    await page.goto(url + '?revision=1');
+    await expect(page.getByTestId('work-report').getByRole('alert')).toContainText('Version not found.');
+    await expect(page.getByTestId('work-markdown')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Back to latest', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
+});
+
+test('saved payment charts recover query rows and stay correct after reload', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [] } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [] } }));
+    await page.route('**/api/chat/run-activity?*', route => route.fulfill({ json: { work: null, events: [] } }));
+    await page.route('**/api/chat/session/payment-chart', route =>
+        route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    session: { id: 'payment-chart', type: 'global', title: 'Payments' },
+                    messages: [
+                        { id: 'request', role: 'user', parts: [{ type: 'text', text: 'Chart payment status' }] },
+                        {
+                            id: 'answer',
+                            role: 'assistant',
+                            parts: [
+                                {
+                                    type: 'tool-sqlRunner',
+                                    toolCallId: 'sql-payments',
+                                    state: 'output-available',
+                                    input: { sql: 'SELECT status, count FROM payments' },
+                                    output: {
+                                        result: [
+                                            { status: 'succeeded', count: 7829 },
+                                            { status: 'failed', count: 375 },
+                                        ],
+                                        columns: [{ name: 'status' }, { name: 'count' }],
+                                        rowCount: 2,
+                                    },
+                                },
+                                {
+                                    type: 'tool-chartBuilder',
+                                    toolCallId: 'chart-payments',
+                                    state: 'output-available',
+                                    input: { chartType: 'bar' },
+                                    output: {
+                                        type: 'chart',
+                                        chartType: 'bar',
+                                        title: 'Payment status',
+                                        xKey: 'status',
+                                        yKeys: [{ key: 'count' }],
+                                        data: [],
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+        }),
+    );
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/data-agent?chat=payment-chart&panel=closed`);
+    for (let i = 0; i < 2; i++) {
+        const bars = page.locator('.recharts-bar-rectangle path');
+        await expect(bars).toHaveCount(2);
+        await expect
+            .poll(async () => {
+                const grid = await page.locator('.recharts-cartesian-grid-horizontal line').evaluateAll(lines => lines.map(line => Number(line.getAttribute('y1'))));
+                return Number(await bars.first().getAttribute('height')) / (Math.max(...grid) - Math.min(...grid));
+            })
+            .toBeCloseTo(7829 / 8000, 2);
+        const heights = await bars.evaluateAll(elements => elements.map(element => Number(element.getAttribute('height'))));
+        expect(heights[0] / heights[1]).toBeCloseTo(7829 / 375, 1);
+        await expect(page.getByText('No query data is available for this chart.')).toHaveCount(0);
+        if (i === 0) await page.reload();
+    }
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('payment-chart.png') });
+    await expectAppHealthy(appErrors);
+});
+
+test('selecting a different report clears the previous historical revision', async ({ page }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const first = { ...makeDocument(), revision: 2 };
+    const second = { ...makeDocument(), id: 'doc-second', title: 'Another report', revision: 3 };
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [] } }));
+    await page.route('**/api/chat/session/report-chat', route => route.fulfill({ json: { code: 0, data: { session: { id: 'report-chat', type: 'global' }, messages: [] } } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [first, second] } }));
+    await page.route('**/api/work-documents/doc-*', route => {
+        const url = new URL(route.request().url());
+        const document = url.pathname.endsWith('doc-second') ? second : url.searchParams.has('revision') ? { ...first, revision: 1 } : first;
+        if (document.id === second.id) expect(url.searchParams.has('revision')).toBe(false);
+        return route.fulfill({ json: { document, versions: [document.id === second.id ? 3 : 2, 1].map(revision => ({ revision, source: 'agent', createdAt: now })) } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/data-agent?chat=report-chat&document=doc-report&panel=report&revision=1`);
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v1');
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    await page.getByRole('button', { name: 'Another report Ready' }).click();
+    await expect(page.getByRole('heading', { name: 'Another report' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v3');
+    await expect(page).not.toHaveURL(/revision=/);
 });

@@ -18,6 +18,8 @@ export type ChartResultCardProps = {
 
 export type ChartResultPart = {
     type: 'chart';
+    source?: { toolCallId?: string; artifactId?: string };
+    dataState?: 'ready' | 'empty' | 'missing' | 'invalid-fields';
     chartType: 'bar' | 'line' | 'area' | 'pie';
     title?: string;
     description?: string;
@@ -123,7 +125,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 pb-3 pt-0">
-                    <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">{t('ChartResult.NoData')}</div>
+                    <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">{t(result.dataState === 'empty' ? 'ChartResult.EmptyQuery' : result.dataState === 'invalid-fields' ? 'ChartResult.InvalidFields' : 'ChartResult.NoData')}</div>
                 </CardContent>
             </Card>
         );

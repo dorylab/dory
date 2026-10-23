@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { ListTree, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { parseAsArrayOf, parseAsJson, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
+import { parseAsArrayOf, parseAsInteger, parseAsJson, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { z } from 'zod';
 
 import { workRequest } from '@/lib/work-documents/client';
@@ -45,6 +45,7 @@ export function DataAgent() {
     const [state, setState] = useQueryStates({
         chat: parseAsString,
         document: parseAsString,
+        revision: parseAsInteger,
         panel: parseAsStringLiteral(['resources', 'report', 'closed'] as const),
         sources: parseAsArrayOf(parseAsString),
         knowledge: parseAsString,
@@ -85,11 +86,11 @@ export function DataAgent() {
         const previous = observedReports.current;
         const created = previous?.chatId === chatId ? reports.data.documents.find(item => !previous.ids.has(item.id)) : null;
         observedReports.current = { chatId, ids: new Set(reports.data.documents.map(item => item.id)) };
-        if (created && !editingReport && !state.document) void setState({ chat: chatId, document: created.id, panel: panel === 'closed' ? 'closed' : 'resources' });
+        if (created && !editingReport && !state.document) void setState({ chat: chatId, document: created.id, revision: null, panel: panel === 'closed' ? 'closed' : 'resources' });
     }, [reports.data, chatId, editingReport, state.document, panel, setState]);
     const navigatePanel = async (next: 'resources' | 'report' | 'closed', documentId?: string) => {
         if (reportRef.current && !(await reportRef.current.requestLeave())) return;
-        await setState({ panel: next, ...(documentId ? { document: documentId, chat: chatId } : {}) });
+        await setState({ panel: next, ...(documentId ? { document: documentId, chat: chatId, ...(documentId !== state.document ? { revision: null } : {}) } : {}) });
     };
     const scopeState = (value: AnalysisScope) => ({ sources: value.connectionIds, knowledge: value.knowledgeModelId ?? null, databases: value.databasesByConnection ?? {} });
     const newChat = () => {
@@ -97,7 +98,7 @@ export function DataAgent() {
         setPrompt(null);
         setLiveMessages([]);
         setNewId(crypto.randomUUID());
-        void setState({ chat: null, document: null, panel: null, ...scopeState(scope) });
+        void setState({ chat: null, document: null, revision: null, panel: null, ...scopeState(scope) });
     };
     // Opening a newly created draft must not unmount the streaming conversation.
     const loading = (chatId !== newId && history.isPending) || (Boolean(state.document) && !state.chat && openDocument.isPending);
@@ -116,7 +117,7 @@ export function DataAgent() {
                     if (busy || editingReport) return;
                     setPrompt(null);
                     setLiveMessages([]);
-                    void setState({ chat: id, document: null, panel: null, ...scopeState(sessionScope(options.data?.sessions.find(item => item.id === id))) });
+                    void setState({ chat: id, document: null, revision: null, panel: null, ...scopeState(sessionScope(options.data?.sessions.find(item => item.id === id))) });
                 }}
             />
             <Popover open={panel !== 'closed'} onOpenChange={open => void navigatePanel(open ? 'resources' : 'closed')}>

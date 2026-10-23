@@ -263,7 +263,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 resultContent: renderSqlResultBody(sqlResult, `${key}-result`),
             });
         }
-        const chartResult = getChartResultFromPart(part);
+        const chartResult = getChartResultFromPart(part, [...messages.slice(0, messageIndex), { ...message, parts: message.parts.slice(0, index) }]);
         if (chartResult) {
             chartResults.push(chartResult);
             chartItems.push(<ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />);

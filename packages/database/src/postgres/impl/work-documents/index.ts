@@ -94,15 +94,28 @@ export class PostgresWorkDocumentsRepository {
             .where(eq(workDocumentVersions.documentId, input.documentId))
             .orderBy(desc(workDocumentVersions.revision));
     }
-    async restore(input: Target & { revision: number; expectedRevision: number }) {
-        await this.get(input);
+    async getVersion(input: Target & { revision: number }) {
+        const current = await this.get(input);
         const [version] = await this.db
             .select()
             .from(workDocumentVersions)
             .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.revision)));
         if (!version) throw new DatabaseError('Version not found.', 404);
+        return {
+            ...current,
+            title: version.title,
+            content: version.content,
+            scope: version.scope,
+            status: version.status,
+            revision: version.revision,
+            updatedAt: version.createdAt,
+        };
+    }
+    async restore(input: Target & { revision: number; expectedRevision: number }) {
+        const version = await this.getVersion(input);
         return this.update({ ...input, title: version.title, content: version.content, scope: version.scope, status: version.status, source: 'restore' });
     }
+
     async rename(input: Target & { title: string; expectedRevision: number }) {
         const current = await this.get(input);
         return this.update({ ...input, content: current.content, scope: current.scope, status: current.status, source: 'user' });

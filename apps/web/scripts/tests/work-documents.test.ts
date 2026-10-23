@@ -10,6 +10,7 @@ import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
 import { Pool } from 'pg';
 
+import { parseWorkRevision } from '@/lib/work-documents/revision';
 import { markdownExportFiles } from '@/lib/work-documents/export';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
 import { renderWorkHtml, workChartSvg } from '@/lib/work-documents/render';
@@ -75,6 +76,16 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         assert.equal(saves.filter(result => result.status === 'fulfilled').length, 1);
         assert.equal(saves.filter(result => result.status === 'rejected').length, 1);
         assert.equal((await repository.versions(target)).length, 2);
+        const historical = await repository.getVersion({ ...target, revision: 1 });
+        assert.equal(historical.title, 'Revenue');
+        assert.equal(historical.revision, 1);
+        assert.deepEqual(historical.content, content);
+        assert.equal((await repository.get(target)).revision, 2);
+        assert.equal((await repository.versions(target)).length, 2);
+        await assert.rejects(repository.getVersion({ ...target, revision: 99 }), /not found/);
+        await assert.rejects(repository.getVersion({ ...target, userId: 'bob', revision: 1 }), /not found/);
+        await assert.rejects(repository.getVersion({ ...target, organizationId: 'another', revision: 1 }), /not found/);
+        await assert.rejects(repository.restore({ ...target, revision: 1, expectedRevision: 1 }), /changed/);
         const restored = await repository.restore({ ...target, expectedRevision: 2, revision: 1 });
         assert.equal(restored.revision, 3);
         assert.equal(restored.title, 'Revenue');
@@ -177,4 +188,10 @@ test('Markdown export contains offline visuals and result tables without SQL or 
     assert.ok(markdown.includes('| October | -20 |'));
     assert.ok(!markdown.includes('dory://'));
     assert.ok(!markdown.includes('secret_table'));
+});
+
+test('revision query parameters accept only positive safe integers', () => {
+    assert.equal(parseWorkRevision(null), undefined);
+    assert.equal(parseWorkRevision('5'), 5);
+    for (const value of ['', '0', '-1', '1.5', '1e2', 'NaN', ' 1', '01', '9007199254740992']) assert.throws(() => parseWorkRevision(value));
 });
