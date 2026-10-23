@@ -57,11 +57,12 @@ type MessageRendererProps = {
     onCopySql: (sql: string) => Promise<void> | void;
     onManualExecute?: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
 
+    showRunLinks?: boolean;
     mode?: ChatMode;
     onExecuteAction?: CopilotActionExecutor;
 };
 
-const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, onManualExecute, mode = 'global', onExecuteAction }: MessageRendererProps) => {
+const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, onManualExecute, mode = 'global', onExecuteAction, showRunLinks = true }: MessageRendererProps) => {
     const t = useTranslations('Chatbot');
     const runsT = useTranslations('AgentRuns');
     const metadata = message.metadata as { agentRunId?: string; requestId?: string } | undefined;
@@ -402,6 +403,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 <MessageContent className={isAssistant ? 'w-full max-w-none bg-transparent' : undefined}>
                     {isAssistant && metadata?.agentRunId && metadata.requestId ? (
                         <ChatRunActivity
+                            showLinks={showRunLinks}
                             workId={metadata.agentRunId}
                             requestId={metadata.requestId}
                             streaming={isLatestAssistant && isStreaming}

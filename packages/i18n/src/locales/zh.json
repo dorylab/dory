@@ -4874,7 +4874,10 @@
             "Tools": {
                 "SaveConclusions": "保存结论",
                 "QueryData": "查询数据",
-                "RunTool": "调用 {name}"
+                "RunTool": "调用 {name}",
+                "CreateWork": "创建 Work 报告",
+                "ReadWork": "读取 Work 报告",
+                "UpdateWork": "更新 Work 报告"
             },
             "ToolStatus": {
                 "Running": "进行中",
@@ -5489,6 +5492,30 @@
             "CheckDatabases": "请检查数据库选择",
             "ChooseSources": "请至少选择一个数据源",
             "UnavailableSource": "不可用的数据源（{id}）"
+        },
+        "Resources": {
+            "Title": "会话资源",
+            "Description": "当前会话的 Agent Runs 和 Work 报告",
+            "Back": "返回资源列表",
+            "Close": "关闭资源浮层",
+            "NoRuns": "暂无 Agent Run",
+            "NoWorks": "暂无 Work 报告",
+            "Loading": "加载中…",
+            "LoadFailed": "资源加载失败",
+            "Retry": "重试",
+            "Running": "运行中",
+            "Completed": "已完成",
+            "Failed": "失败",
+            "Archived": "已归档",
+            "Unknown": "状态暂不可用",
+            "Ready": "已完成",
+            "Draft": "草稿",
+            "UnsavedTitle": "保存报告修改？",
+            "UnsavedDescription": "离开前保存修改，或放弃尚未保存的内容。",
+            "SaveFailed": "保存失败，修改仍然保留。请重试保存或取消。",
+            "Cancel": "取消",
+            "Discard": "放弃修改",
+            "SaveAndContinue": "保存后继续"
         }
     }
 }

@@ -1,6 +1,9 @@
+import type { AnalysisScope } from '@dory/shared/types/work-document';
+
+import { formatChatToolError } from '@/lib/ai/agents/work-tool-input';
 import { createWorkDocumentTools } from '@/lib/server/work-document-tools';
 import { validateAnalysisScope } from '@/lib/server/work-documents';
-import type { AnalysisScope } from '@dory/shared/types/work-document';
+
 import 'server-only';
 
 import { getDBService } from '@dory/database';
@@ -545,7 +548,7 @@ export async function handleChatRequest(req: Request) {
                     error,
                 });
 
-                return error instanceof Error ? error.message : 'AI_SERVICE_UNAVAILABLE';
+                return formatChatToolError(error);
             },
         });
         const alignedStream =

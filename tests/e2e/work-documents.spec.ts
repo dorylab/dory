@@ -258,6 +258,17 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     created = true;
+    await expect(page.getByTestId('agent-resources')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Revenue analysis Draft' })).toBeVisible();
+    await expect(page.getByTestId('work-report')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Revenue analysis Draft' }).click();
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
+    await expect(page.getByTestId('work-report')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await page.getByRole('button', { name: 'Revenue analysis Draft' }).click();
     await expect(page.getByTestId('work-report')).toBeVisible();
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
@@ -456,5 +467,110 @@ test('database loading failures block send and can be retried', async ({ page, a
     await expect(page.getByRole('option', { name: 'Orders: main' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+    await expectAppHealthy(appErrors);
+});
+
+test('session resources open as a popover without resizing chat, guard unsaved reports, and fit narrow screens', async ({ page, appErrors }, testInfo) => {
+    let document = makeDocument();
+    let saveFails = true;
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({
+            json: {
+                connections: [{ id: connection.connection.id, name: 'Orders', type: 'postgres', defaultDatabase: 'main' }],
+                models: [],
+                sessions: [{ id: 'report-chat', title: 'Report conversation', connectionId: connection.connection.id, createdAt: now, updatedAt: now, scope: document.scope }],
+            },
+        }),
+    );
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [document] } }));
+    await page.route('**/api/chat/session/report-chat', route =>
+        route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    session: { id: 'report-chat', type: 'global', title: 'Report conversation' },
+                    messages: [
+                        { id: 'old', role: 'assistant', parts: [{ type: 'text', text: 'First analysis' }], metadata: { agentRunId: 'run-1', requestId: 'old' } },
+                        { id: 'new', role: 'assistant', parts: [{ type: 'text', text: 'Updated analysis' }], metadata: { agentRunId: 'run-1', requestId: 'new' } },
+                    ],
+                },
+            },
+        }),
+    );
+    await page.route('**/api/chat/run-activity?*', route =>
+        route.fulfill({ json: { work: { workId: 'run-1', title: 'Payment analysis', status: 'completed' }, events: [], runHref: '/demo/agent-runs/run-1', workspaceHref: null } }),
+    );
+    await page.route('**/api/work-documents/doc-report', async route => {
+        if (route.request().method() === 'PATCH') {
+            if (saveFails) return route.fulfill({ status: 409, json: { error: 'Work changed. Read the latest version.' } });
+            const body = route.request().postDataJSON();
+            expect(body.expectedRevision).toBe(document.revision);
+            document = { ...document, title: body.draft.title, content: { ...document.content, ...body.draft }, revision: document.revision + 1 };
+        }
+        return route.fulfill({ json: { document, versions: [] } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/data-agent?chat=report-chat`);
+    await expect(page.getByText('Updated analysis', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('agent-resources')).toHaveCount(0);
+    const chatWidth = (await page.getByTestId('data-agent').locator('main').boundingBox())!.width;
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await expect(page.getByTestId('agent-resources')).toBeVisible();
+    expect((await page.getByTestId('data-agent').locator('main').boundingBox())!.width).toBe(chatWidth);
+    await page.getByRole('textbox', { name: /Ask a question/ }).click();
+    await expect(page.getByTestId('agent-resources')).toHaveCount(0);
+    await expect(page.getByRole('textbox', { name: /Ask a question/ })).toBeFocused();
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await expect(page.getByRole('link', { name: 'Payment analysis' })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: 'Payment analysis' })).toHaveAttribute('target', '_blank');
+    await expect(page.getByRole('link', { name: 'View Agent Run' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Revenue analysis Ready' }).click();
+    expect((await page.getByTestId('data-agent').locator('main').boundingBox())!.width).toBe(chatWidth);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Unsaved analysis');
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Save and continue' }).click();
+    await expect(dialog).toContainText('Saving failed');
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    saveFails = false;
+    await dialog.getByRole('button', { name: 'Save and continue' }).click();
+    await expect(page.getByTestId('work-report')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Session resources', exact: true })).toBeFocused();
+    expect(document.title).toBe('Unsaved analysis');
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await page.getByRole('button', { name: 'Unsaved analysis Ready' }).click();
+    await expect(page.getByRole('heading', { name: 'Unsaved analysis' })).toBeVisible();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Discard this');
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true }).first()).toHaveValue('Discard this');
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.getByTestId('work-report')).toHaveCount(0);
+    expect(document.title).toBe('Unsaved analysis');
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-resources-light.png') });
+    await page.getByText('Toggle theme', { exact: true }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-resources-dark.png') });
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect(page.getByRole('dialog', { name: 'Session resources' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Session resources' })).toBeVisible();
+    const popupBounds = (await page.getByTestId('agent-resources').boundingBox())!;
+    expect(popupBounds.x).toBeGreaterThanOrEqual(0);
+    expect(popupBounds.x + popupBounds.width).toBeLessThanOrEqual(390);
+    await expect(page.getByRole('link', { name: 'Payment analysis' })).toBeVisible();
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-resources-mobile.png') });
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Session resources' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Session resources', exact: true })).toBeFocused();
     await expectAppHealthy(appErrors);
 });

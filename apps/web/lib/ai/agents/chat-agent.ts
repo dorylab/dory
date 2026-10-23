@@ -4,6 +4,8 @@ import { isStepCount, ToolLoopAgent, type LanguageModel, type StopCondition, typ
 
 import { recordAiUsage, type AiDebugInput, type AiGatewayContext } from '@/lib/ai/gateway';
 
+import { repairWorkToolInput } from './work-tool-input';
+
 type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     model: LanguageModel;
     tools: TOOLS;
@@ -46,6 +48,19 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
         model: options.model,
         tools: options.tools,
         toolsContext: {} as never,
+        repairToolCall: async ({ toolCall }) => {
+            const repaired = repairWorkToolInput(toolCall.toolName, toolCall.input);
+            if (!repaired) return null;
+            await (options.recordUsage ?? recordAiUsage)({
+                requestId: `${options.requestId}:tool-repair:${toolCall.toolCallId}`,
+                context: options.context,
+                input: options.debugInput ?? { instructions: options.instructions, messages: null, prompt: null },
+                latencyMs: Date.now() - startedAt,
+                status: 'ok',
+                outputJson: { kind: 'tool_input_repaired', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, originalInput: toolCall.input, repairedInput: repaired },
+            });
+            return { ...toolCall, input: repaired };
+        },
         instructions: options.instructions,
         temperature: options.temperature,
         stopWhen: [

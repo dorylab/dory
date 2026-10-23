@@ -4,9 +4,9 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { migrate } from 'drizzle-orm/pglite/migrator';
-import type { PgliteDatabase } from 'drizzle-orm/pglite';
 import type { ToolExecutionOptions } from 'ai';
+import type { PgliteDatabase } from 'drizzle-orm/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
 
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
@@ -51,6 +51,14 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             runId: async () => run.workId,
         });
         assert.deepEqual(await db.workDocuments.list(owner), []);
+        await assert.rejects(
+            reports.tools.createWorkReport.execute!(
+                { title: 'Sales analysis', markdown: '[Knowledge](dory://knowledge/model/definition)', visuals: [], status: 'draft' },
+                call,
+            ) as Promise<unknown>,
+            /WORK_REFERENCE_INVALID[\s\S]*Draft exists: documentId=.*revision=1/,
+        );
+        await assert.rejects(reports.tools.readWorkReport.execute!({ documentId: 'work-invented' }, call) as Promise<unknown>, /not found/i);
         const created = await reports.tools.createWorkReport.execute!({ title: 'Sales analysis', markdown: '', visuals: [], status: 'draft' }, call);
         const retry = await reports.tools.createWorkReport.execute!({ title: 'Sales analysis', markdown: '', visuals: [], status: 'draft' }, call);
         assert.ok('id' in created && 'id' in retry);

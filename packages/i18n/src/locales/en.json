@@ -4870,7 +4870,10 @@
             "Tools": {
                 "SaveConclusions": "Save conclusions",
                 "QueryData": "Query data",
-                "RunTool": "Run {name}"
+                "RunTool": "Run {name}",
+                "CreateWork": "Create Work report",
+                "ReadWork": "Read Work report",
+                "UpdateWork": "Update Work report"
             },
             "ToolStatus": {
                 "Running": "Running",
@@ -5485,6 +5488,30 @@
             "CheckDatabases": "Check database selections",
             "ChooseSources": "Select at least one data source",
             "UnavailableSource": "Unavailable source ({id})"
+        },
+        "Resources": {
+            "Title": "Session resources",
+            "Description": "Agent Runs and Work reports for this conversation",
+            "Back": "Back to resources",
+            "Close": "Close resources",
+            "NoRuns": "No Agent Runs yet",
+            "NoWorks": "No Work reports yet",
+            "Loading": "Loading…",
+            "LoadFailed": "Unable to load resources",
+            "Retry": "Retry",
+            "Running": "Running",
+            "Completed": "Completed",
+            "Failed": "Failed",
+            "Archived": "Archived",
+            "Unknown": "Status unavailable",
+            "Ready": "Ready",
+            "Draft": "Draft",
+            "UnsavedTitle": "Save report changes?",
+            "UnsavedDescription": "Save your changes before leaving, or discard unsaved changes.",
+            "SaveFailed": "Saving failed. Your changes are still here. Retry saving or cancel.",
+            "Cancel": "Cancel",
+            "Discard": "Discard changes",
+            "SaveAndContinue": "Save and continue"
         }
     }
 }

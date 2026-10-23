@@ -35,7 +35,9 @@ export function ChatRunActivity({
     tools,
     onCopySql,
     onManualExecute,
+    showLinks = true,
 }: {
+    showLinks?: boolean;
     workId: string;
     requestId: string;
     streaming: boolean;
@@ -72,16 +74,9 @@ export function ChatRunActivity({
                 ) : null}
                 {isError ? <p className="text-destructive">{t('Chat.LoadFailed')}</p> : null}
                 {children}
-                <ChatToolActivityList
-                    events={events}
-                    tools={tools}
-                    workId={workId}
-                    onCopySql={onCopySql}
-                    onManualExecute={onManualExecute}
-                    ended={ended}
-                />
+                <ChatToolActivityList events={events} tools={tools} workId={workId} onCopySql={onCopySql} onManualExecute={onManualExecute} ended={ended} />
             </ChatAnalysisProcess>
-            {ended && data ? (
+            {showLinks && ended && data ? (
                 <div className="mb-3 flex flex-wrap gap-2">
                     <Button asChild size="sm" variant="outline">
                         <Link href={data.runHref}>

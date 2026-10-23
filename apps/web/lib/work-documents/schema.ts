@@ -19,7 +19,10 @@ export const workVisualSchema = z
         type: z.enum(['metric', 'chart', 'table']),
         title: z.string().max(300),
         evidenceId: z.string().min(1),
-        chart: z.object({ type: z.enum(['bar', 'line']), xKey: z.string(), yKey: z.string() }).optional(),
+        chart: z
+            .object({ type: z.enum(['bar', 'line']), xKey: z.string(), yKey: z.string() })
+            .optional()
+            .describe('Required when type is chart. xKey and yKey must be exact columns from the referenced evidence. Omit for table.'),
         metric: z.object({ column: z.string(), rowIndex: z.number().int().min(0).max(499) }).optional(),
     })
     .superRefine((value, ctx) => {

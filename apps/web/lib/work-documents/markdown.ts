@@ -1,5 +1,5 @@
-import { Marked, type Token } from 'marked';
 import type { WorkVisual } from '@dory/shared/types/work-document';
+import { Marked, type Token } from 'marked';
 
 export const markdownParser = new Marked({ gfm: true, breaks: false });
 export function workReferences(markdown: string) {
@@ -19,7 +19,12 @@ export function workReferences(markdown: string) {
 }
 export function referencedEvidence(markdown: string, visuals: WorkVisual[]) {
     const refs = workReferences(markdown);
-    if (refs.invalid.length) throw new Error('Invalid Work reference: ' + refs.invalid[0]);
+    if (refs.invalid.length)
+        throw new Error(
+            'WORK_REFERENCE_INVALID: Invalid Work reference: ' +
+                refs.invalid[0] +
+                '. Use [Source](dory://evidence/ARTIFACT_ID) or ![Title](dory://visual/VISUAL_ID). Knowledge sources are recorded separately; do not use knowledge URLs or footnotes in the body.',
+        );
     if (new Set(visuals.map(v => v.id)).size !== visuals.length) throw new Error('Visual IDs must be unique.');
     const ids = new Set(refs.evidence);
     for (const id of refs.visuals) {

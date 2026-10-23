@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/registry/new-york-v4/ui/alert-dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
@@ -21,12 +22,15 @@ import { AddDefinitionDialog } from './add-definition-dialog';
 const MarkdownEditor = dynamic(() => import('./markdown-editor'), { ssr: false });
 
 type Detail = { document: WorkDocumentView; versions: Array<{ revision: number; source: string; createdAt: string }> };
+export type WorkReportHandle = { requestLeave: () => Promise<boolean> };
 export function WorkReport({
+    ref,
     documentId,
     onContinue,
     busy = false,
     onEditingChange,
 }: {
+    ref?: Ref<WorkReportHandle>;
     documentId: string;
     onContinue?: (prompt: string) => void;
     busy?: boolean;
@@ -39,6 +43,13 @@ export function WorkReport({
     const query = useQuery({ queryKey: key, queryFn: () => workRequest<Detail>(`/api/work-documents/${encodeURIComponent(documentId)}`), refetchInterval: busy ? 2000 : false });
     const [editing, setEditing] = useState<WorkDocumentView | null>(null);
     const [dirty, setDirty] = useState(false);
+    const [leaveDecision, setLeaveDecision] = useState<((leave: boolean) => void) | null>(null);
+    const leaveAfterSave = useRef(false);
+    const resolveLeave = (leave: boolean) => {
+        leaveAfterSave.current = false;
+        leaveDecision?.(leave);
+        setLeaveDecision(null);
+    };
     const [saveError, setSaveError] = useState(false);
     const [definition, setDefinition] = useState<{ title: string; text: string } | null>(null);
     const [knowledge, setKnowledge] = useState<WorkEvidence | null>(null);
@@ -57,15 +68,32 @@ export function WorkReport({
                 const wasChangedDuringSave = editRef.current !== savingRef.current;
                 setEditing(previous => (previous ? { ...previous, revision: data.document.revision } : null));
                 setDirty(wasChangedDuringSave);
+                if (!wasChangedDuringSave && leaveAfterSave.current) resolveLeave(true);
             }
             setSaveError(false);
             await Promise.all([client.invalidateQueries({ queryKey: key }), client.invalidateQueries({ queryKey: ['work-documents', organization] })]);
         },
         onError: error => {
+            leaveAfterSave.current = false;
             setSaveError(true);
             toast.error(error.message);
         },
     });
+    useImperativeHandle(
+        ref,
+        () => ({
+            requestLeave: () => {
+                if (!dirty && !mutation.isPending) return Promise.resolve(true);
+                return new Promise<boolean>(resolve => {
+                    setLeaveDecision((previous: ((leave: boolean) => void) | null) => {
+                        previous?.(false);
+                        return resolve;
+                    });
+                });
+            },
+        }),
+        [dirty, mutation.isPending],
+    );
     const savingRef = useRef<WorkDocumentView | null>(null);
     const { mutate, isPending } = mutation;
     const save = useCallback(() => {
@@ -79,10 +107,10 @@ export function WorkReport({
         });
     }, [mutate, isPending]);
     useEffect(() => {
-        if (!dirty || busy || saveError || mutation.isPending) return;
+        if (!dirty || busy || saveError || mutation.isPending || leaveDecision) return;
         const timer = setTimeout(save, 1200);
         return () => clearTimeout(timer);
-    }, [editing, dirty, busy, saveError, mutation.isPending, save]);
+    }, [editing, dirty, busy, saveError, mutation.isPending, save, leaveDecision]);
     useEffect(() => {
         const warn = (event: BeforeUnloadEvent) => {
             if (dirty) event.preventDefault();
@@ -141,6 +169,44 @@ export function WorkReport({
     };
     return (
         <article className="h-full overflow-auto bg-background p-6 text-foreground" data-testid="work-report">
+            <AlertDialog
+                open={Boolean(leaveDecision)}
+                onOpenChange={open => {
+                    if (!open) resolveLeave(false);
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('Resources.UnsavedTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('Resources.UnsavedDescription')}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {saveError ? (
+                        <p role="alert" className="text-sm text-destructive">
+                            {t('Resources.SaveFailed')}
+                        </p>
+                    ) : null}
+                    <AlertDialogFooter>
+                        <Button variant="ghost" onClick={() => resolveLeave(false)}>
+                            {t('Resources.Cancel')}
+                        </Button>
+                        <Button variant="outline" disabled={mutation.isPending} onClick={() => resolveLeave(true)}>
+                            {t('Resources.Discard')}
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                leaveAfterSave.current = true;
+                                if (!mutation.isPending) {
+                                    if (!dirty) resolveLeave(true);
+                                    else save();
+                                }
+                            }}
+                            disabled={mutation.isPending}
+                        >
+                            {t('Resources.SaveAndContinue')}
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             <div className="mb-6 flex flex-wrap items-center gap-2">
                 {onContinue ? (
                     <Button variant="outline" disabled={busy || dirty || Boolean(editing) || Boolean(document.archivedAt)} onClick={() => onContinue(t('RefreshPrompt'))}>

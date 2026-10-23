@@ -184,12 +184,16 @@ function ChatToolActivityRow({ activity, workId, ended, ...actions }: SqlActions
     const interrupted = ended && (state === 'input-available' || state === 'input-streaming');
     const noResults = state === 'output-available' && activity.toolName === 'search_assets' && (message?.noResults || activity.events.at(-1)?.outputSummary?.resultCount === 0);
     const key = getAgentActivityTitleKey(activity.toolName);
-    const title =
-        activity.toolName === 'finishAnalysis'
-            ? t('Chat.Tools.SaveConclusions')
-            : activity.toolName === 'sqlRunner'
-              ? t('Chat.Tools.QueryData')
-              : (message?.title ?? (key ? t(`Timeline.Titles.${key}`) : t('Chat.Tools.RunTool', { name: activity.toolName.replace(/^dory_/, '').replaceAll('_', ' ') })));
+    const reportTitle = ({ createWorkReport: 'CreateWork', readWorkReport: 'ReadWork', updateWorkReport: 'UpdateWork' } as const)[
+        activity.toolName as 'createWorkReport' | 'readWorkReport' | 'updateWorkReport'
+    ];
+    const title = reportTitle
+        ? t(`Chat.Tools.${reportTitle}`)
+        : activity.toolName === 'finishAnalysis'
+          ? t('Chat.Tools.SaveConclusions')
+          : activity.toolName === 'sqlRunner'
+            ? t('Chat.Tools.QueryData')
+            : (message?.title ?? (key ? t(`Timeline.Titles.${key}`) : t('Chat.Tools.RunTool', { name: activity.toolName.replace(/^dory_/, '').replaceAll('_', ' ') })));
     const messageHasDetails = message && (state === message.state || ['output-available', 'output-error', 'output-denied'].includes(message.state));
     const label = interrupted
         ? 'Interrupted'

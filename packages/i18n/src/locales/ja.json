@@ -4868,7 +4868,10 @@
             "Tools": {
                 "SaveConclusions": "結論を保存",
                 "QueryData": "データを照会",
-                "RunTool": "{name} を実行"
+                "RunTool": "{name} を実行",
+                "CreateWork": "Work レポートを作成",
+                "ReadWork": "Work レポートを読む",
+                "UpdateWork": "Work レポートを更新"
             },
             "ToolStatus": {
                 "Running": "実行中",
@@ -5483,6 +5486,30 @@
             "CheckDatabases": "データベースの選択を確認してください",
             "ChooseSources": "データソースを選択してください",
             "UnavailableSource": "利用できないデータソース（{id}）"
+        },
+        "Resources": {
+            "Title": "会話のリソース",
+            "Description": "この会話の Agent Runs と Work レポート",
+            "Back": "リソースに戻る",
+            "Close": "リソースを閉じる",
+            "NoRuns": "Agent Run はまだありません",
+            "NoWorks": "Work レポートはまだありません",
+            "Loading": "読み込み中…",
+            "LoadFailed": "リソースを読み込めません",
+            "Retry": "再試行",
+            "Running": "実行中",
+            "Completed": "完了",
+            "Failed": "失敗",
+            "Archived": "アーカイブ済み",
+            "Unknown": "状態を取得できません",
+            "Ready": "完了",
+            "Draft": "下書き",
+            "UnsavedTitle": "変更を保存しますか？",
+            "UnsavedDescription": "移動する前に変更を保存するか、未保存の変更を破棄してください。",
+            "SaveFailed": "保存に失敗しました。変更は保持されています。",
+            "Cancel": "キャンセル",
+            "Discard": "変更を破棄",
+            "SaveAndContinue": "保存して続行"
         }
     }
 }

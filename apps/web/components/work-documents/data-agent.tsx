@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Popover, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { useChat } from '@ai-sdk/react';
 import type { AnalysisScope, WorkDocumentSummary, WorkDocumentView } from '@dory/shared/types/work-document';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { Sparkles } from 'lucide-react';
+import { ListTree, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { parseAsArrayOf, parseAsJson, parseAsString, useQueryStates } from 'nuqs';
+import { parseAsArrayOf, parseAsJson, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { z } from 'zod';
 
 import { workRequest } from '@/lib/work-documents/client';
@@ -20,9 +21,10 @@ import { apiFetchSessionDetail } from '@/app/(app)/[organization]/[connectionId]
 import type { ChatSessionItem } from '@/app/(app)/[organization]/[connectionId]/chatbot/core/types';
 import MessageRenderer from '@/app/(app)/[organization]/[connectionId]/chatbot/thread/message-render';
 
+import { AgentResources } from './agent-resources';
 import { AgentScopePicker, useAgentDatabases, type AgentConnection, type AgentKnowledge } from './agent-scope-picker';
 import { AgentSessionSidebar } from './agent-session-sidebar';
-import { WorkReport } from './work-report';
+import { WorkReport, type WorkReportHandle } from './work-report';
 
 type AgentSession = ChatSessionItem & { connectionId: string | null; activeDatabase?: string | null; scope: AnalysisScope | null };
 type Options = { connections: AgentConnection[]; models: AgentKnowledge[]; sessions: AgentSession[] };
@@ -43,6 +45,7 @@ export function DataAgent() {
     const [state, setState] = useQueryStates({
         chat: parseAsString,
         document: parseAsString,
+        panel: parseAsStringLiteral(['resources', 'report', 'closed'] as const),
         sources: parseAsArrayOf(parseAsString),
         knowledge: parseAsString,
         databases: parseAsJson(databaseSelections.parse),
@@ -72,20 +75,29 @@ export function DataAgent() {
     });
     const [prompt, setPrompt] = useState<{ id: string; text: string } | null>(null);
     const [editingReport, setEditingReport] = useState(false);
+    const [liveMessages, setLiveMessages] = useState<UIMessage[]>([]);
+    const reportRef = useRef<WorkReportHandle>(null);
+    const resourcesButton = useRef<HTMLButtonElement>(null);
+    const panel = state.panel ?? (state.document ? 'report' : 'closed');
     const observedReports = useRef<{ chatId: string; ids: Set<string> } | null>(null);
     useEffect(() => {
         if (!reports.data) return;
         const previous = observedReports.current;
         const created = previous?.chatId === chatId ? reports.data.documents.find(item => !previous.ids.has(item.id)) : null;
         observedReports.current = { chatId, ids: new Set(reports.data.documents.map(item => item.id)) };
-        if (created && !editingReport) void setState({ chat: chatId, document: created.id });
-    }, [reports.data, chatId, editingReport, setState]);
+        if (created && !editingReport && !state.document) void setState({ chat: chatId, document: created.id, panel: panel === 'closed' ? 'closed' : 'resources' });
+    }, [reports.data, chatId, editingReport, state.document, panel, setState]);
+    const navigatePanel = async (next: 'resources' | 'report' | 'closed', documentId?: string) => {
+        if (reportRef.current && !(await reportRef.current.requestLeave())) return;
+        await setState({ panel: next, ...(documentId ? { document: documentId, chat: chatId } : {}) });
+    };
     const scopeState = (value: AnalysisScope) => ({ sources: value.connectionIds, knowledge: value.knowledgeModelId ?? null, databases: value.databasesByConnection ?? {} });
     const newChat = () => {
         if (busy || editingReport) return;
         setPrompt(null);
+        setLiveMessages([]);
         setNewId(crypto.randomUUID());
-        void setState({ chat: null, document: null, ...scopeState(scope) });
+        void setState({ chat: null, document: null, panel: null, ...scopeState(scope) });
     };
     // Opening a newly created draft must not unmount the streaming conversation.
     const loading = (chatId !== newId && history.isPending) || (Boolean(state.document) && !state.chat && openDocument.isPending);
@@ -103,78 +115,96 @@ export function DataAgent() {
                 onSelect={id => {
                     if (busy || editingReport) return;
                     setPrompt(null);
-                    void setState({ chat: id, document: null, ...scopeState(sessionScope(options.data?.sessions.find(item => item.id === id))) });
+                    setLiveMessages([]);
+                    void setState({ chat: id, document: null, panel: null, ...scopeState(sessionScope(options.data?.sessions.find(item => item.id === id))) });
                 }}
             />
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
-                <main className={state.document ? 'flex min-h-80 min-w-0 flex-1 flex-col lg:w-2/5' : 'flex min-h-0 min-w-0 flex-1 flex-col'}>
-                    {error ? (
-                        <p role="alert" className="p-4 text-sm text-destructive">
-                            {error.message}
-                        </p>
-                    ) : null}
-                    {loading ? (
-                        <p className="p-6">{t('Loading')}</p>
-                    ) : (
-                        <AgentConversation
-                            key={chatId}
-                            chatId={chatId}
-                            initialMessages={history.data?.messages ?? []}
-                            scope={scope}
-                            documentId={state.document}
-                            prompt={prompt}
-                            blocked={editingReport}
-                            ready={databases.ready && !options.isError}
-                            onBusy={setBusy}
-                            onFinished={() => {
-                                void setState({ chat: chatId });
-                            }}
-                            onCreateReport={() => setPrompt({ id: crypto.randomUUID(), text: t('CreatePrompt') })}
-                            scopePicker={
-                                <AgentScopePicker
-                                    connections={options.data?.connections ?? emptyConnections}
-                                    models={options.data?.models ?? []}
-                                    scope={scope}
-                                    databases={databases}
-                                    disabled={busy || editingReport || options.isPending}
-                                    onChange={value => {
-                                        if (!busy && !editingReport) void setState(scopeState(value));
-                                    }}
-                                />
-                            }
-                            reportLinks={
-                                reports.data?.documents.length ? (
-                                    <div className="flex flex-wrap gap-2 pb-3">
-                                        {reports.data.documents.map(item => (
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="max-w-full truncate"
-                                                key={item.id}
-                                                disabled={busy || editingReport}
-                                                onClick={() => void setState({ document: item.id })}
-                                            >
-                                                {item.title}
-                                            </Button>
-                                        ))}
-                                    </div>
-                                ) : null
-                            }
-                        />
-                    )}
-                </main>
-                {state.document ? (
-                    <div className="min-h-96 min-w-0 flex-1 border-t lg:w-3/5 lg:border-l lg:border-t-0">
-                        <WorkReport
-                            key={state.document}
-                            documentId={state.document}
-                            busy={busy}
-                            onEditingChange={setEditingReport}
-                            onContinue={text => setPrompt({ id: crypto.randomUUID(), text })}
-                        />
+            <Popover open={panel !== 'closed'} onOpenChange={open => void navigatePanel(open ? 'resources' : 'closed')}>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    <div className="flex shrink-0 justify-end px-3 py-2">
+                        <PopoverTrigger asChild>
+                            <Button
+                                ref={resourcesButton}
+                                variant="ghost"
+                                size="icon"
+                                title={t('Resources.Title')}
+                                aria-label={t('Resources.Title')}
+                                aria-expanded={panel !== 'closed'}
+                            >
+                                <ListTree className="size-5" />
+                            </Button>
+                        </PopoverTrigger>
                     </div>
-                ) : null}
-            </div>
+                    <div className="flex min-h-0 min-w-0 flex-1">
+                        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+                            {error ? (
+                                <p role="alert" className="p-4 text-sm text-destructive">
+                                    {error.message}
+                                </p>
+                            ) : null}
+                            {loading ? (
+                                <p className="p-6">{t('Loading')}</p>
+                            ) : (
+                                <AgentConversation
+                                    key={chatId}
+                                    chatId={chatId}
+                                    initialMessages={history.data?.messages ?? []}
+                                    scope={scope}
+                                    documentId={state.document}
+                                    prompt={prompt}
+                                    blocked={editingReport}
+                                    ready={databases.ready && !options.isError}
+                                    onBusy={setBusy}
+                                    onFinished={() => {
+                                        void setState({ chat: chatId });
+                                    }}
+                                    onCreateReport={() => setPrompt({ id: crypto.randomUUID(), text: t('CreatePrompt') })}
+                                    scopePicker={
+                                        <AgentScopePicker
+                                            connections={options.data?.connections ?? emptyConnections}
+                                            models={options.data?.models ?? []}
+                                            scope={scope}
+                                            databases={databases}
+                                            disabled={busy || editingReport || options.isPending}
+                                            onChange={value => {
+                                                if (!busy && !editingReport) void setState(scopeState(value));
+                                            }}
+                                        />
+                                    }
+                                    onMessages={setLiveMessages}
+                                />
+                            )}
+                        </main>
+                        <AgentResources
+                            activeDocumentId={state.document}
+                            open={panel !== 'closed'}
+                            reportVisible={panel === 'report' && Boolean(state.document)}
+                            editing={editingReport}
+                            reports={reports.data?.documents ?? []}
+                            messages={liveMessages.length ? liveMessages : (history.data?.messages ?? [])}
+                            busy={busy}
+                            loading={reports.isPending}
+                            error={reports.error}
+                            onRetry={() => void reports.refetch()}
+                            onSelect={id => void navigatePanel('report', id)}
+                            onBack={() => void navigatePanel('resources')}
+                            onClose={() => void navigatePanel('closed')}
+                            onRestoreFocus={() => resourcesButton.current?.focus()}
+                        >
+                            {state.document && panel === 'report' ? (
+                                <WorkReport
+                                    ref={reportRef}
+                                    key={state.document}
+                                    documentId={state.document}
+                                    busy={busy}
+                                    onEditingChange={setEditingReport}
+                                    onContinue={text => setPrompt({ id: crypto.randomUUID(), text })}
+                                />
+                            ) : null}
+                        </AgentResources>
+                    </div>
+                </div>
+            </Popover>
         </div>
     );
 }
@@ -188,7 +218,7 @@ function AgentConversation({
     blocked,
     ready,
     scopePicker,
-    reportLinks,
+    onMessages,
     onBusy,
     onFinished,
     onCreateReport,
@@ -201,7 +231,7 @@ function AgentConversation({
     blocked: boolean;
     ready: boolean;
     scopePicker: ReactNode;
-    reportLinks: ReactNode;
+    onMessages: (messages: UIMessage[]) => void;
     onBusy: (busy: boolean) => void;
     onFinished: () => void;
     onCreateReport: () => void;
@@ -219,11 +249,15 @@ function AgentConversation({
         onFinish: () => {
             onFinished();
             void client.invalidateQueries({ queryKey: ['data-agent', organization] });
+            void client.invalidateQueries({ queryKey: ['agent-resource-run', organization] });
             void client.invalidateQueries({ queryKey: ['agent-history', organization, chatId] });
             void client.invalidateQueries({ queryKey: ['work-documents', organization] });
             void client.invalidateQueries({ queryKey: ['work-document', organization] });
         },
     });
+    useEffect(() => {
+        onMessages(messages);
+    }, [messages, onMessages]);
     const busy = status === 'submitted' || status === 'streaming';
     useEffect(() => {
         onBusy(busy);
@@ -275,6 +309,7 @@ function AgentConversation({
                                 messageIndex={index}
                                 messages={messages}
                                 status={status}
+                                showRunLinks={false}
                                 onCopySql={sql => navigator.clipboard.writeText(sql)}
                             />
                         ))}
@@ -288,7 +323,6 @@ function AgentConversation({
                         {error.message}
                     </p>
                 ) : null}
-                {reportLinks}
                 <PromptInput onSubmit={message => submit(message.text)}>
                     <PromptInputBody>
                         <PromptInputTextarea

@@ -4862,7 +4862,10 @@
             "Tools": {
                 "SaveConclusions": "Guardar conclusiones",
                 "QueryData": "Consultar datos",
-                "RunTool": "Ejecutar {name}"
+                "RunTool": "Ejecutar {name}",
+                "CreateWork": "Crear informe Work",
+                "ReadWork": "Leer informe Work",
+                "UpdateWork": "Actualizar informe Work"
             },
             "ToolStatus": {
                 "Running": "En curso",
@@ -5477,6 +5480,30 @@
             "CheckDatabases": "Revisa las bases de datos seleccionadas",
             "ChooseSources": "Selecciona al menos una fuente de datos",
             "UnavailableSource": "Fuente no disponible ({id})"
+        },
+        "Resources": {
+            "Title": "Recursos de la conversación",
+            "Description": "Agent Runs e informes Work de esta conversación",
+            "Back": "Volver a recursos",
+            "Close": "Cerrar recursos",
+            "NoRuns": "Aún no hay Agent Runs",
+            "NoWorks": "Aún no hay informes Work",
+            "Loading": "Cargando…",
+            "LoadFailed": "No se pueden cargar los recursos",
+            "Retry": "Reintentar",
+            "Running": "En curso",
+            "Completed": "Completado",
+            "Failed": "Fallido",
+            "Archived": "Archivado",
+            "Unknown": "Estado no disponible",
+            "Ready": "Listo",
+            "Draft": "Borrador",
+            "UnsavedTitle": "¿Guardar los cambios?",
+            "UnsavedDescription": "Guarda los cambios antes de salir o descarta los cambios sin guardar.",
+            "SaveFailed": "No se pudo guardar. Tus cambios se conservan.",
+            "Cancel": "Cancelar",
+            "Discard": "Descartar cambios",
+            "SaveAndContinue": "Guardar y continuar"
         }
     }
 }
