@@ -188,7 +188,7 @@
     },
     "Connections": {
         "Connections": "Data sources",
-        "All Connections": "Manage data sources",
+        "All Connections": "Workspace",
         "about": "about",
         "MoreActions": "More actions",
         "Search": {
@@ -1029,7 +1029,7 @@
             }
         },
         "AuthRequired": {
-            "Title": "Sign in to use Data Agent",
+            "Title": "Sign in to use Work",
             "Description": "After sign-in, your current workspace stay with you.",
             "Hint": "After sign-in, your current workspace stay with you.",
             "WorkspaceNotice": "When you sign in, your current guest workspace will be kept with your account.",
@@ -1062,7 +1062,7 @@
             "Cancel": "Cancel",
             "ConfirmDelete": "Delete",
             "DeleteSuccess": "Session deleted",
-            "CopilotAutoCreate": "Data Agent sessions are created automatically for the current tab",
+            "CopilotAutoCreate": "Work sessions are created automatically for the current tab",
             "NoMatches": "No matching sessions",
             "SearchPlaceholder": "Search sessions",
             "Groups": {
@@ -1074,16 +1074,16 @@
         "Errors": {
             "FetchSessions": "Failed to fetch sessions",
             "FetchSessionDetail": "Failed to fetch session details",
-            "FetchCopilotSession": "Failed to fetch Data Agent session",
+            "FetchCopilotSession": "Failed to fetch Work session",
             "CreateSession": "Failed to create session",
             "RenameSession": "Failed to rename session",
             "DeleteSession": "Failed to delete session",
             "SessionNotFoundRename": "Session not found. Unable to rename.",
             "SessionNotFoundDelete": "Session not found. Unable to delete.",
             "SessionNameRequired": "Session name cannot be empty",
-            "CopilotRenameUnsupported": "Data Agent sessions cannot be renamed",
-            "CopilotDeleteUnsupported": "Data Agent sessions cannot be deleted (managed by the current tab)",
-            "CreateCopilotSession": "Failed to create Data Agent session",
+            "CopilotRenameUnsupported": "Work sessions cannot be renamed",
+            "CopilotDeleteUnsupported": "Work sessions cannot be deleted (managed by the current tab)",
+            "CreateCopilotSession": "Failed to create Work session",
             "SessionNotSelected": "No session selected",
             "RequestFailed": "Request failed",
             "SendFailed": "Failed to send message",
@@ -1149,14 +1149,14 @@
     },
     "Welcome": {
         "Badge": "Anonymous mode",
-        "Title": "Start with an anonymous workspace, upgrade only when you need Data Agent.",
+        "Title": "Start with an anonymous workspace, upgrade only when you need Work.",
         "Description": "Explore Dory immediately without creating an account. We will create a temporary workspace for you and keep your organization data when you later sign in.",
         "CardTitle": "Enter Dory instantly",
         "CardDescription": "Create an anonymous account and a personal workspace with one click.",
         "Start": "Start with anonymous account",
         "Resume": "Continue anonymous workspace",
         "Starting": "Preparing workspace…",
-        "Hint": "You can keep browsing anonymously. When you need Data Agent, sign in and we will link this workspace to your real account.",
+        "Hint": "You can keep browsing anonymously. When you need Work, sign in and we will link this workspace to your real account.",
         "HaveAccount": "Already have an account?",
         "SignIn": "Sign in",
         "Highlights": {
@@ -1309,12 +1309,12 @@
             "ActionRunSelection": "Run selection",
             "ActionSave": "Save Query",
             "ActionNewTab": "New tab",
-            "ActionToggleCopilot": "Open Data Agent",
+            "ActionToggleCopilot": "Open Work",
             "ActionFormat": "Format SQL",
             "ShortcutRunSelection": "Run selection: Cmd/Ctrl+Enter",
             "ShortcutSave": "Save Query: Cmd/Ctrl+S",
             "ShortcutNewTab": "New tab: Cmd/Ctrl+Option/Alt+L",
-            "ShortcutToggleCopilot": "Open Data Agent: Cmd/Ctrl+I",
+            "ShortcutToggleCopilot": "Open Work: Cmd/Ctrl+I",
             "ShortcutFormat": "Format SQL: Shift+Cmd/Ctrl+F",
             "NewConsole": "New console",
             "OrDivider": "or",
@@ -1375,10 +1375,10 @@
                 "NewTab": "New tab created"
             },
             "NewTabTitle": "AI Query",
-            "ToggleOpen": "Open Data Agent",
-            "ToggleClose": "Close Data Agent",
-            "ToggleAria": "Toggle Data Agent",
-            "ToggleLabel": "Data Agent",
+            "ToggleOpen": "Open Work",
+            "ToggleClose": "Close Work",
+            "ToggleAria": "Toggle Work",
+            "ToggleLabel": "Work",
             "Context": {
                 "SqlTitle": "SQL Context",
                 "EditorTitle": "Editor Context",
@@ -1412,7 +1412,7 @@
                 "TopShareShort": "top {value}",
                 "PrimaryKeyLabel": "Primary key",
                 "TableLabel": "Table",
-                "RawCopilot": "Raw Data Agent Context",
+                "RawCopilot": "Raw Work Context",
                 "RawBundle": "Raw Context Bundle",
                 "CopyJson": "Copy JSON",
                 "NotReady": "Context is not ready"
@@ -1491,15 +1491,15 @@
                     "Optimize": "Optimize",
                     "Rewrite": "Rewrite",
                     "ToAggregation": "Convert to aggregation",
-                    "Default": "Ask Data Agent"
+                    "Default": "Ask Work"
                 },
                 "AppliedLabel": "{action} applied",
                 "AppliedDescription": "Your SQL has been updated in the editor.",
                 "GoToActions": "Go to Actions"
             },
             "Panel": {
-                "NoSqlTab": "Select a SQL tab to use Data Agent.",
-                "UnsupportedTab": "Data Agent is not supported for {type} tabs.",
+                "NoSqlTab": "Select a SQL tab to use Work.",
+                "UnsupportedTab": "Work is not supported for {type} tabs.",
                 "TabAsk": "Ask",
                 "TabAction": "Action",
                 "TabContext": "Context"
@@ -2672,13 +2672,13 @@
                 "UpdateSessionFailed": "Failed to update session",
                 "DeleteSessionFailed": "Failed to delete session",
                 "MissingTabId": "Missing tabId",
-                "FetchCopilotSessionFailed": "Failed to fetch Data Agent session",
+                "FetchCopilotSessionFailed": "Failed to fetch Work session",
                 "InvalidSessionType": "Invalid session type",
                 "ConnectionIdRequired": "Data source ID is required",
                 "ListSessionsFailed": "Failed to fetch sessions",
-                "CopilotCreationNotAllowed": "Data Agent sessions cannot be created via this endpoint",
+                "CopilotCreationNotAllowed": "Work sessions cannot be created via this endpoint",
                 "CreateSessionFailed": "Failed to create session",
-                "FullAccountRequired": "Please sign in to use Data Agent."
+                "FullAccountRequired": "Please sign in to use Work."
             },
             "Tools": {
                 "Rag": {
@@ -2730,7 +2730,7 @@
             "Prompt": {
                 "SchemaContextTitle": "[Current data context]",
                 "DatabaseContextTitle": "[Database context]",
-                "CopilotContextTitle": "[Current Data Agent context]",
+                "CopilotContextTitle": "[Current Work context]",
                 "ExecutionIntent": {
                     "Policy": "Current turn execution policy:\n- Classify the latest user message before deciding whether to use sqlRunner.\n- If the user explicitly asks to only generate, show, or write SQL, or asks not to execute the query, do not call sqlRunner and return SQL only unless clarification is needed.\n- If the user asks to view, list, rank, compare, aggregate, chart, or otherwise obtain actual database results, and sqlRunner is available, call sqlRunner with a read-only SQL query before the final answer.\n- Do not stop after only writing SQL for data-result requests.\n- Keep exploratory/detail result limits at 100 rows or fewer."
                 }
@@ -2747,7 +2747,7 @@
                 "SqlRequired": "SQL cannot be empty",
                 "MissingConnection": "Missing data source info; unable to execute query.",
                 "ReadOnlyOnly": "Only read-only queries are allowed (SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA). Do not include write or update statements.",
-                "SelectAllNotAllowed": "SELECT * is not allowed in SQL generated by Data Agent. Select only the columns needed for the answer.",
+                "SelectAllNotAllowed": "SELECT * is not allowed in SQL generated by Work. Select only the columns needed for the answer.",
                 "OrderByIndexMissing": "This query may be expensive: ORDER BY uses column(s) {columns} on table {table}, and they are not confirmed to be indexed. Narrow the selected columns or inspect indexes first.",
                 "OrderByIndexUnknown": "This query may be expensive: ORDER BY uses column(s) {columns} on table {table}, but index support could not be confirmed. Narrow the selected columns or inspect indexes first.",
                 "ExecuteFailed": "SQL execution failed"
@@ -3094,7 +3094,7 @@
         },
         "AssistantFallback": {
             "Title": "Response error",
-            "Description": "Data Agent did not return usable content. Please try again later or refine your prompt.",
+            "Description": "Work did not return usable content. Please try again later or refine your prompt.",
             "MissingAiEnvTitle": "Missing AI configuration",
             "MissingAiEnvDescription": "Please set DORY_AI_API_KEY and DORY_AI_URL to enable AI features."
         },
@@ -3548,7 +3548,7 @@
             "ChatSessionNotFound": "Session not found",
             "ChatSessionForbidden": "You do not have access to this session",
             "ChatSessionArchived": "Session is archived and cannot be modified",
-            "ChatCopilotSessionFailed": "Failed to get or create Data Agent session",
+            "ChatCopilotSessionFailed": "Failed to get or create Work session",
             "ChatGlobalSessionFailed": "Failed to create or get global session",
             "ChatUpdateSessionNotFound": "Session not found",
             "ChatInsertMessageFailed": "Failed to write message"
@@ -4384,7 +4384,7 @@
         "DataSources": "Data Sources",
         "Knowledge": "Knowledge",
         "Artifacts": "Artifacts",
-        "More": "More",
+        "More": "More...",
         "NoDataSourceSelected": "No data source selected",
         "WorkspaceTitle": "Workspace",
         "WorkspaceDataSourcesCount": "{count} data source",
@@ -4395,7 +4395,7 @@
         "Explorer": "Explorer",
         "Import": "Data import",
         "Schema": "Schema",
-        "Chatbot": "Data Agent",
+        "Chatbot": "Work",
         "Monitoring": "Monitoring",
         "Privileges": "Privileges",
         "GetHelp": "Get Help",
@@ -4430,7 +4430,8 @@
             "Confirm": "Delete workspace",
             "Cancel": "Keep workspace",
             "DeleteFailed": "Failed to delete guest session. Please try again."
-        }
+        },
+        "Reports": "Reports"
     },
     "Artifacts": {
         "Eyebrow": "Workspace outputs",
@@ -4873,9 +4874,9 @@
                 "SaveConclusions": "Save conclusions",
                 "QueryData": "Query data",
                 "RunTool": "Run {name}",
-                "CreateWork": "Create Work report",
-                "ReadWork": "Read Work report",
-                "UpdateWork": "Update Work report"
+                "CreateWork": "Create report",
+                "ReadWork": "Read report",
+                "UpdateWork": "Update report"
             },
             "ToolStatus": {
                 "Running": "Running",
@@ -5100,8 +5101,8 @@
                 "ViewSetup": "View connection commands",
                 "UsageSetupHint": "Install the Dory Codex Agent service on this device, then refresh this panel to enable Codex Agent from the Web app.",
                 "UsageBridgeReadyHint": "The Dory Codex Agent is connected. Enable Codex Agent next, then make it the default model.",
-                "UsageEnabledHint": "Local AI is enabled. Make it the default model to run Data Agent requests through the agent on this device.",
-                "UsageDefaultHint": "Local AI is the default model. The Dory Codex Agent service runs Data Agent requests on this device.",
+                "UsageEnabledHint": "Local AI is enabled. Make it the default model to run Work requests through the agent on this device.",
+                "UsageDefaultHint": "Local AI is the default model. The Dory Codex Agent service runs Work requests on this device.",
                 "UsageDesktopHint": "On Desktop, Dory detects Codex or Claude Code CLI on this device. Once detected, enable it and make it the default model.",
                 "ModelServiceDescription": "Use the local OpenAI-compatible endpoint at {endpoint}."
             }
@@ -5428,15 +5429,15 @@
         "Knowledge": "Knowledge",
         "Versions": "Version history",
         "Restore": "Restore as new version",
-        "RefreshPrompt": "Update this Work: rerun its relevant queries, review all conclusions against the new evidence, and save a new version. Preserve the existing report if queries fail and explain missing sources.",
-        "CreatePrompt": "Create a Work report from our analysis, with supported conclusions, charts or tables and the actual evidence. Clearly mark limitations.",
+        "RefreshPrompt": "Update this report: rerun its relevant queries, review all conclusions against the new evidence, and save a new version. Preserve the existing report if queries fail and explain missing sources.",
+        "CreatePrompt": "Create a report from our analysis, with supported conclusions, charts or tables and the actual evidence. Clearly mark limitations.",
         "AgentDescription": "Analyze selected data sources and create reports grounded in evidence.",
         "NewChat": "New chat",
         "Scope": "Analysis scope",
         "ChooseKnowledge": "Choose Knowledge (optional)",
         "ChooseSources": "Select at least one data source.",
         "RecentChats": "Recent chats",
-        "RecentWork": "Recent Work",
+        "RecentWork": "Recent reports",
         "Untitled": "Untitled chat",
         "Welcome": "What would you like to understand?",
         "AnomalyPrompt": "Investigate a recent anomaly",
@@ -5444,19 +5445,19 @@
         "ReportPrompt": "Create a report with key findings",
         "Analyzing": "Analyzing…",
         "Question": "Ask a question or request a report…",
-        "CreateWork": "Generate Work",
+        "CreateWork": "Generate report",
         "Stop": "Stop",
         "Send": "Send",
         "LibraryDescription": "Your private, editable analysis reports and their evidence.",
-        "Search": "Search Work…",
+        "Search": "Search reports…",
         "AllSources": "All data sources",
         "ShowArchived": "Include archived",
-        "Empty": "No Work yet. Ask Data Agent to create a report.",
+        "Empty": "No reports yet. Ask Work to create a report.",
         "Archived": "Archived",
         "Archive": "Archive",
         "Unarchive": "Unarchive",
         "AddDefinition": "Add definition to Knowledge",
-        "DefinitionReview": "Review this text as a reusable business definition before publishing. Temporary conclusions should stay in Work.",
+        "DefinitionReview": "Review this text as a reusable business definition before publishing. Temporary conclusions should stay in reports.",
         "DefinitionNeedsKnowledge": "First create a Knowledge linked to one of this report’s data sources.",
         "DefinitionAdded": "Definition added to Knowledge.",
         "DefinitionKind": "Definition type",
@@ -5492,12 +5493,14 @@
             "UnavailableSource": "Unavailable source ({id})"
         },
         "Resources": {
+            "NoArtifacts": "No artifacts yet.",
+            "NoQueries": "No queries yet.",
             "Title": "Session resources",
-            "Description": "Agent Runs and Work reports for this conversation",
+            "Description": "Agent Runs and reports for this conversation",
             "Back": "Back to resources",
             "Close": "Close resources",
             "NoRuns": "No Agent Runs yet",
-            "NoWorks": "No Work reports yet",
+            "NoWorks": "No reports yet",
             "Loading": "Loading…",
             "LoadFailed": "Unable to load resources",
             "Retry": "Retry",
@@ -5513,7 +5516,8 @@
             "SaveFailed": "Saving failed. Your changes are still here. Retry saving or cancel.",
             "Cancel": "Cancel",
             "Discard": "Discard changes",
-            "SaveAndContinue": "Save and continue"
+            "SaveAndContinue": "Save and continue",
+            "Reports": "Reports"
         },
         "VersionHistory": {
             "Select": "Report version",
@@ -5526,6 +5530,8 @@
             "Restore": "Restore this version",
             "RestoreDescription": "Restore v{revision} as a new version? All existing versions will be preserved.",
             "RestoreFailed": "Restore failed. Review the latest version before retrying."
-        }
+        },
+        "GenerateFailed": "Unable to generate report.",
+        "Reports": "Reports"
     }
 }

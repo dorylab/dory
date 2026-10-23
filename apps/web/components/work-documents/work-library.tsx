@@ -42,11 +42,11 @@ export function WorkLibrary() {
         <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold">Work</h1>
+                    <h1 className="text-2xl font-semibold">{t('Reports')}</h1>
                     <p className="mt-1 text-sm text-muted-foreground">{t('LibraryDescription')}</p>
                 </div>
                 <Button asChild>
-                    <Link href={`/${organization}/data-agent`}>{t('CreateWork')}</Link>
+                    <Link href={`/${organization}/work`}>{t('CreateWork')}</Link>
                 </Button>
             </div>
             <div className="flex flex-wrap items-center gap-3">

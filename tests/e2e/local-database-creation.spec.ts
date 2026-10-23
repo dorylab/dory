@@ -1,10 +1,11 @@
+import { openDataSources } from './helpers/navigation';
 import { expect } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
 
 test('shows create-new fields for SQLite and DuckDB without creating a file during testing', async ({ page, appErrors }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
     await page.getByRole('button', { name: /add (connection|data source)/i }).click();
     const dialog = page.getByTestId('connection-dialog');

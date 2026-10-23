@@ -21,6 +21,7 @@ import { apiFetchSessionDetail } from '@/app/(app)/[organization]/[connectionId]
 import type { ChatSessionItem } from '@/app/(app)/[organization]/[connectionId]/chatbot/core/types';
 import MessageRenderer from '@/app/(app)/[organization]/[connectionId]/chatbot/thread/message-render';
 
+import { AgentArtifactPreview, AgentQueryPreview } from './agent-resource-preview';
 import { AgentResources } from './agent-resources';
 import { AgentScopePicker, useAgentDatabases, type AgentConnection, type AgentKnowledge } from './agent-scope-picker';
 import { AgentSessionSidebar } from './agent-session-sidebar';
@@ -46,7 +47,11 @@ export function DataAgent() {
         chat: parseAsString,
         document: parseAsString,
         revision: parseAsInteger,
-        panel: parseAsStringLiteral(['resources', 'report', 'closed'] as const),
+        panel: parseAsStringLiteral(['resources', 'report', 'query', 'artifact', 'closed'] as const),
+        queryRun: parseAsString,
+        querySession: parseAsString,
+        artifact: parseAsString,
+        resourcePage: parseAsInteger.withDefault(0),
         sources: parseAsArrayOf(parseAsString),
         knowledge: parseAsString,
         databases: parseAsJson(databaseSelections.parse),
@@ -86,11 +91,22 @@ export function DataAgent() {
         const previous = observedReports.current;
         const created = previous?.chatId === chatId ? reports.data.documents.find(item => !previous.ids.has(item.id)) : null;
         observedReports.current = { chatId, ids: new Set(reports.data.documents.map(item => item.id)) };
-        if (created && !editingReport && !state.document) void setState({ chat: chatId, document: created.id, revision: null, panel: panel === 'closed' ? 'closed' : 'resources' });
+        if (created && !editingReport && !state.document) void setState({ chat: chatId, document: created.id, revision: null, panel });
     }, [reports.data, chatId, editingReport, state.document, panel, setState]);
-    const navigatePanel = async (next: 'resources' | 'report' | 'closed', documentId?: string) => {
+    const navigatePanel = async (
+        next: 'resources' | 'report' | 'query' | 'artifact' | 'closed',
+        target: { document?: string; queryRun?: string; querySession?: string; artifact?: string } = {},
+    ) => {
         if (reportRef.current && !(await reportRef.current.requestLeave())) return;
-        await setState({ panel: next, ...(documentId ? { document: documentId, chat: chatId, ...(documentId !== state.document ? { revision: null } : {}) } : {}) });
+        await setState({
+            panel: next,
+            queryRun: null,
+            querySession: null,
+            artifact: null,
+            resourcePage: 0,
+            ...target,
+            ...(target.document ? { chat: chatId, ...(target.document !== state.document ? { revision: null } : {}) } : {}),
+        });
     };
     const scopeState = (value: AnalysisScope) => ({ sources: value.connectionIds, knowledge: value.knowledgeModelId ?? null, databases: value.databasesByConnection ?? {} });
     const newChat = () => {
@@ -98,7 +114,7 @@ export function DataAgent() {
         setPrompt(null);
         setLiveMessages([]);
         setNewId(crypto.randomUUID());
-        void setState({ chat: null, document: null, revision: null, panel: null, ...scopeState(scope) });
+        void setState({ chat: null, document: null, revision: null, panel: null, queryRun: null, querySession: null, artifact: null, resourcePage: 0, ...scopeState(scope) });
     };
     // Opening a newly created draft must not unmount the streaming conversation.
     const loading = (chatId !== newId && history.isPending) || (Boolean(state.document) && !state.chat && openDocument.isPending);
@@ -117,7 +133,17 @@ export function DataAgent() {
                     if (busy || editingReport) return;
                     setPrompt(null);
                     setLiveMessages([]);
-                    void setState({ chat: id, document: null, revision: null, panel: null, ...scopeState(sessionScope(options.data?.sessions.find(item => item.id === id))) });
+                    void setState({
+                        chat: id,
+                        document: null,
+                        revision: null,
+                        panel: null,
+                        queryRun: null,
+                        querySession: null,
+                        artifact: null,
+                        resourcePage: 0,
+                        ...scopeState(sessionScope(options.data?.sessions.find(item => item.id === id))),
+                    });
                 }}
             />
             <Popover open={panel !== 'closed'} onOpenChange={open => void navigatePanel(open ? 'resources' : 'closed')}>
@@ -179,7 +205,7 @@ export function DataAgent() {
                         <AgentResources
                             activeDocumentId={state.document}
                             open={panel !== 'closed'}
-                            reportVisible={panel === 'report' && Boolean(state.document)}
+                            detailVisible={panel === 'report' || panel === 'query' || panel === 'artifact'}
                             editing={editingReport}
                             reports={reports.data?.documents ?? []}
                             messages={liveMessages.length ? liveMessages : (history.data?.messages ?? [])}
@@ -187,11 +213,24 @@ export function DataAgent() {
                             loading={reports.isPending}
                             error={reports.error}
                             onRetry={() => void reports.refetch()}
-                            onSelect={id => void navigatePanel('report', id)}
+                            onSelect={id => void navigatePanel('report', { document: id })}
+                            onSelectQuery={(queryRun, querySession) => void navigatePanel('query', { queryRun, querySession })}
+                            onSelectArtifact={artifact => void navigatePanel('artifact', { artifact })}
                             onBack={() => void navigatePanel('resources')}
                             onClose={() => void navigatePanel('closed')}
                             onRestoreFocus={() => resourcesButton.current?.focus()}
                         >
+                            {panel === 'query' && state.queryRun && state.querySession ? (
+                                <AgentQueryPreview key={`${state.queryRun}:${state.querySession}`} workId={state.queryRun} sessionId={state.querySession} />
+                            ) : null}
+                            {panel === 'artifact' && state.artifact ? (
+                                <AgentArtifactPreview
+                                    key={state.artifact}
+                                    artifactId={state.artifact}
+                                    page={Math.max(0, state.resourcePage)}
+                                    onPageChange={resourcePage => void setState({ resourcePage })}
+                                />
+                            ) : null}
                             {state.document && panel === 'report' ? (
                                 <WorkReport
                                     ref={reportRef}

@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect, type Page } from '@playwright/test';
 
 import { test } from './fixtures';
@@ -130,7 +131,7 @@ async function openAnalysis(page: Page, failed = false, legacy = false, options:
         }),
     );
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1]!;
     const event = {
         eventId: 'search-1',

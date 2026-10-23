@@ -22,7 +22,7 @@ export default function CreateOrganizationClient() {
             }),
         onSuccess: organization => {
             toast.success('Organization created');
-            router.push(`/${organization.slug}/connections`);
+            router.push(`/${organization.slug}`);
             router.refresh();
         },
         onError: error => {

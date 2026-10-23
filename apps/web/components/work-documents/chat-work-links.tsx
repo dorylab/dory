@@ -18,11 +18,13 @@ export function ChatWorkLinks({ chatId, busy }: { chatId: string; busy: boolean 
         <div className="flex flex-wrap gap-2 px-2">
             {query.data?.documents.map(document => (
                 <Button key={document.id} variant="outline" size="sm" asChild>
-                    <Link href={`/${organization}/data-agent?chat=${chatId}&document=${document.id}`}>Work · {document.title}</Link>
+                    <Link href={`/${organization}/work?chat=${chatId}&document=${document.id}`}>
+                        {t('Reports')} · {document.title}
+                    </Link>
                 </Button>
             ))}
             <Button variant="ghost" size="sm" disabled={busy} asChild>
-                <Link href={`/${organization}/data-agent?chat=${chatId}${connectionId ? `&sources=${connectionId}` : ''}`}>{t('CreateWork')}</Link>
+                <Link href={`/${organization}/work?chat=${chatId}${connectionId ? `&sources=${connectionId}` : ''}`}>{t('CreateWork')}</Link>
             </Button>
         </div>
     );

@@ -96,9 +96,9 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
 
     const organizationItems = [
         { title: t('DataSources'), url: dataSourcesUrl, icon: Database, requiresConnection: false },
+        { title: t('Chatbot'), url: `/${organization}/work`, icon: Bot, requiresConnection: false },
+        { title: t('Reports'), url: `/${organization}/works`, icon: FileChartColumnIncreasing, requiresConnection: false },
         { title: t('Knowledge'), url: `/${organization}/knowledge`, matchPrefix: `/${organization}/knowledge`, icon: BrainCircuit, requiresConnection: false },
-        { title: t('Chatbot'), url: `/${organization}/data-agent`, icon: Bot, requiresConnection: false },
-        { title: 'Work', url: `/${organization}/works`, icon: FileChartColumnIncreasing, requiresConnection: false },
     ];
     const navMain = connectionId
         ? [

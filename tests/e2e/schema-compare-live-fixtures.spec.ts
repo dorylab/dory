@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import path from 'node:path';
 
 import { expect } from '@playwright/test';
@@ -44,7 +45,7 @@ test('live fixture connections create deterministic saved Comparisons and Runs',
     });
 
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0]!;
 
     const results = await page.evaluate(

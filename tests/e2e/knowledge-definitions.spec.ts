@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect, type Route } from '@playwright/test';
 
 import { test } from './fixtures';
@@ -55,7 +56,7 @@ async function actionResponse(route: Route, data: unknown) {
 
 async function currentOrganization(page: import('@playwright/test').Page) {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     return new URL(page.url()).pathname.split('/')[1]!;
 }
 

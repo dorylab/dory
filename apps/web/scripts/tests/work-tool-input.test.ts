@@ -53,8 +53,8 @@ test('repair only missing container endings in otherwise complete, valid report 
         ),
         true,
     );
-    assert.equal(formatChatToolError({ message: 'Work not found.' }), 'Work not found.');
-    assert.equal(formatChatToolError(new Error('Work changed. Read the latest version.')), 'Work changed. Read the latest version.');
+    assert.equal(formatChatToolError({ message: 'Report not found.' }), 'Report not found.');
+    assert.equal(formatChatToolError(new Error('Report changed. Read the latest version.')), 'Report changed. Read the latest version.');
 });
 
 test('the agent repairs provider-shaped report calls once, validates and records original input', async () => {

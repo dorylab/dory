@@ -7,6 +7,7 @@ const connection = createWorkbenchConnection();
 const now = '2026-10-22T10:00:00Z';
 
 test.beforeEach(async ({ page }) => {
+    await page.route('**/api/works/*/snapshot', route => route.fulfill({ json: { data: { snapshot: { sessions: [] } } } }));
     await page.route('**/api/actions/execute', async route => {
         const body = route.request().postDataJSON();
         if (body.actionId === 'schema.listDatabases')
@@ -68,7 +69,7 @@ const makeDocument = () => ({
     },
 });
 
-test('Work edits, saves, restores and exports the same snapshot', async ({ page, appErrors }, testInfo) => {
+test('Reports edit, save, restore and export the same snapshot', async ({ page, appErrors }, testInfo) => {
     let document = makeDocument();
     const original = structuredClone(document);
     const versions = [{ revision: 1, source: 'agent', createdAt: now }];
@@ -169,7 +170,7 @@ test('Work edits, saves, restores and exports the same snapshot', async ({ page,
     await expectAppHealthy(appErrors);
 });
 
-test('Data Agent has explicit multi-source scope without creating an unsolicited report', async ({ page, appErrors }) => {
+test('Work has explicit multi-source scope without creating an unsolicited report', async ({ page, appErrors }) => {
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.route('**/api/data-agent', route =>
         route.fulfill({
@@ -187,7 +188,7 @@ test('Data Agent has explicit multi-source scope without creating an unsolicited
     await page.route('**/api/work-documents', route => route.fulfill({ json: { documents: [] } }));
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/data-agent`);
+    await page.goto(`/${organization}/work`);
     await expect(page.getByRole('heading', { name: /Ask anything about your data/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
@@ -210,6 +211,45 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     const document = { ...makeDocument(), status: 'draft', chatId: '', revision: 2 };
     const historical = { ...structuredClone(document), revision: 1, content: { ...structuredClone(document.content), markdown: 'Historical snapshot content' } };
     let latestRead = 0;
+    await page.route('**/api/chat/run-activity?*', route => route.fulfill({ json: { work: { workId: 'run-live', status: 'active' }, events: [] } }));
+    await page.route('**/api/works/run-live/snapshot', route =>
+        route.fulfill({
+            json: {
+                data: {
+                    snapshot: {
+                        sessions: [
+                            {
+                                session: { sessionId: 'live-query', sqlText: 'SELECT amount FROM payments', database: 'sales', status: 'success' },
+                                queryResultSets: [{ columns: [{ name: 'amount' }], rowCount: 1 }],
+                                results: [[{ amount: 42 }]],
+                            },
+                        ],
+                    },
+                    artifacts: [{ id: 'live-artifact', title: 'Live results', type: 'result_set', status: 'ready', rowCount: 1, createdAt: now }],
+                },
+            },
+        }),
+    );
+    await page.route('**/api/actions/execute', route => {
+        const body = route.request().postDataJSON();
+        if (body.actionId === 'artifact.get')
+            return route.fulfill({
+                json: {
+                    ok: true,
+                    data: {
+                        id: 'live-artifact',
+                        title: 'Live results',
+                        type: 'result_set',
+                        status: 'ready',
+                        sourceResultSetId: 'live-result-set',
+                        resultSet: { sql: 'SELECT amount FROM payments', columns: [{ name: 'amount' }] },
+                    },
+                },
+            });
+        if (body.actionId === 'resultSet.rows.read')
+            return route.fulfill({ json: { ok: true, data: { rows: [{ amount: 42 }], columns: [{ name: 'amount' }], rowCount: 1, dataAvailability: 'full' } } });
+        return route.fallback();
+    });
     let created = false;
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.route('**/api/data-agent', route =>
@@ -233,7 +273,7 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/data-agent`);
+    await page.goto(`/${organization}/work`);
     await toggleSource(page, 'Orders');
     await expect(page.getByTestId('agent-scope-picker').getByText('Check database selections')).toHaveCount(0);
     await page.evaluate(() => {
@@ -246,7 +286,7 @@ test('opening a generated draft preserves the active chat stream', async ({ page
                 new ReadableStream({
                     start(controller) {
                         const send = (chunk: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
-                        send({ type: 'start', messageId: 'live-report' });
+                        send({ type: 'start', messageId: 'live-report', messageMetadata: { agentRunId: 'run-live', requestId: 'turn-live' } });
                         send({ type: 'start-step' });
                         send({ type: 'text-start', id: 'progress' });
                         send({ type: 'text-delta', id: 'progress', delta: 'Preparing both sources.' });
@@ -269,6 +309,15 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     created = true;
     await expect(page.getByTestId('agent-resources')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    await page.getByRole('region', { name: 'Queries', exact: true }).getByRole('button').first().click();
+    await expect(page.getByTestId('agent-query-preview').getByRole('cell', { name: '42', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    await page.getByRole('region', { name: 'Artifacts', exact: true }).getByRole('button').first().click();
+    await expect(page.getByTestId('agent-artifact-preview').getByRole('cell', { name: '42', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
     await page.getByRole('button', { name: 'Session resources', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Revenue analysis Draft' })).toBeVisible();
     await expect(page.getByTestId('work-report')).toHaveCount(0);
@@ -404,7 +453,7 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/data-agent`);
+    await page.goto(`/${organization}/work`);
     await expect(page.getByRole('heading', { name: /Ask anything about your data/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Data sources', exact: true })).toBeEnabled();
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-welcome-light.png') });
@@ -475,7 +524,7 @@ test('database loading failures block send and can be retried', async ({ page, a
     await page.route('**/api/work-documents**', route => route.fulfill({ json: { documents: [] } }));
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/data-agent?sources=conn-1,missing`);
+    await page.goto(`/${organization}/work?sources=conn-1,missing`);
     await toggleSource(page, 'Unavailable source');
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Inspect data');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
@@ -522,7 +571,7 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     );
     await page.route('**/api/work-documents/doc-report', async route => {
         if (route.request().method() === 'PATCH') {
-            if (saveFails) return route.fulfill({ status: 409, json: { error: 'Work changed. Read the latest version.' } });
+            if (saveFails) return route.fulfill({ status: 409, json: { error: 'Report changed. Read the latest version.' } });
             const body = route.request().postDataJSON();
             expect(body.expectedRevision).toBe(document.revision);
             document = { ...document, title: body.draft.title, content: { ...document.content, ...body.draft }, revision: document.revision + 1 };
@@ -531,7 +580,7 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/data-agent?chat=report-chat`);
+    await page.goto(`/${organization}/work?chat=report-chat`);
     await expect(page.getByText('Updated analysis', { exact: true })).toBeVisible();
     await expect(page.getByTestId('agent-resources')).toHaveCount(0);
     const chatWidth = (await page.getByTestId('data-agent').locator('main').boundingBox())!.width;
@@ -591,6 +640,184 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Session resources' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Session resources', exact: true })).toBeFocused();
+    await expectAppHealthy(appErrors);
+});
+
+test('global SQL tools show saved rows and Queries restore the exact source and session', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const sql = 'SELECT amount FROM payments';
+    const query = {
+        session: { sessionId: 'query-1', sqlText: sql, database: 'sales', connectionId: connection.connection.id, tabId: 'tab-1', status: 'success', startedAt: now },
+        queryResultSets: [{ columns: [{ name: 'amount', type: 'number' }], rowCount: 1 }],
+        results: [[{ amount: 42 }]],
+    };
+    const resultArtifact = {
+        id: 'result-payments',
+        title: 'Payment results',
+        type: 'result_set',
+        status: 'ready',
+        workId: 'run-queries',
+        connectionName: 'Orders',
+        rowCount: 1,
+        createdAt: now,
+    };
+    const chartArtifact = { ...resultArtifact, id: 'chart-payments', title: 'Payment trend', type: 'chart', createdAt: '2026-10-23T10:00:00Z' };
+    const fileArtifact = { ...resultArtifact, id: 'file-payments', title: 'Payment export', type: 'file', status: 'unavailable' };
+    let failSnapshot = true;
+    let failArtifact = true;
+    await page.route('**/api/actions/execute', route => {
+        const body = route.request().postDataJSON();
+        if (body.actionId === 'artifact.get') {
+            if (failArtifact) return route.fulfill({ json: { ok: false, message: 'Artifact unavailable' } });
+            const artifact = [resultArtifact, chartArtifact, fileArtifact].find(item => item.id === body.input.artifactId)!;
+            return route.fulfill({
+                json: {
+                    ok: true,
+                    data: {
+                        ...artifact,
+                        sourceResultSetId: 'saved-result',
+                        resultSet: { sql, columns: [{ name: 'amount' }] },
+                        fileName: 'payments.csv',
+                        fileFormat: 'csv',
+                        chartState: { chartType: 'bar', xKey: 'amount', yKey: 'amount', groupKey: '__none__' },
+                    },
+                },
+            });
+        }
+        if (body.actionId === 'resultSet.rows.read')
+            return route.fulfill({
+                json: { ok: true, data: { rows: [{ amount: body.input.offset ? 84 : 42 }], columns: [{ name: 'amount' }], rowCount: 101, dataAvailability: 'full' } },
+            });
+        if (body.actionId === 'resultSet.chart.read')
+            return route.fulfill({ json: { ok: true, data: { data: [{ __x: 'October', __y: 42 }], series: [{ key: '__y', label: 'Amount' }] } } });
+        return route.fallback();
+    });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({ json: { connections: [], models: [], sessions: [{ id: 'query-chat', title: 'Payments', createdAt: now, updatedAt: now }] } }),
+    );
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [] } }));
+    await page.route('**/api/works/run-queries/snapshot', route =>
+        route.fulfill(
+            failSnapshot
+                ? { status: 503, json: { error: 'Unavailable' } }
+                : {
+                      json: {
+                          data: {
+                              artifacts: [resultArtifact, chartArtifact, fileArtifact, resultArtifact],
+                              snapshot: {
+                                  sessions: [
+                                      query,
+                                      {
+                                          ...query,
+                                          session: {
+                                              ...query.session,
+                                              sessionId: 'query-2',
+                                              sqlText: 'SELECT total FROM orders',
+                                              database: 'analytics',
+                                              connectionId: 'source-2',
+                                              tabId: 'tab-2',
+                                              startedAt: '2026-10-23T10:00:00Z',
+                                          },
+                                      },
+                                  ],
+                              },
+                          },
+                      },
+                  },
+        ),
+    );
+    await page.route('**/api/chat/run-activity?*', route =>
+        route.fulfill({ json: { work: { workId: 'run-queries', title: 'Payment queries', status: 'completed' }, events: [] } }),
+    );
+    await page.route('**/api/chat/session/query-chat', route =>
+        route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    session: { id: 'query-chat', type: 'global', title: 'Payments' },
+                    messages: [
+                        {
+                            id: 'query-answer',
+                            role: 'assistant',
+                            metadata: { agentRunId: 'run-queries', requestId: 'query-request' },
+                            parts: [
+                                {
+                                    type: 'tool-sqlRunner',
+                                    toolCallId: 'call-query',
+                                    state: 'output-available',
+                                    input: { sql, connectionId: connection.connection.id, database: 'sales' },
+                                    output: {
+                                        result: [{ amount: 42 }],
+                                        columns: [{ name: 'amount', type: 'number' }],
+                                        rowCount: 1,
+                                        executionTimeMs: 8,
+                                        sessionId: 'query-1',
+                                        work: { workId: 'run-queries' },
+                                    },
+                                },
+                                { type: 'text', text: 'Payment query complete.' },
+                            ],
+                        },
+                    ],
+                },
+            },
+        }),
+    );
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=query-chat`);
+    await page.getByText('Analysis process', { exact: true }).click();
+    const tool = page.getByTestId('chat-tool-activity');
+    await tool.getByRole('button', { name: /Query data/ }).click();
+    await expect(tool.getByRole('cell', { name: '42', exact: true })).toBeVisible();
+    await expect(tool.getByText('Tool completed.', { exact: true })).toHaveCount(0);
+    await expect(tool).toContainText(sql);
+    await page.getByRole('button', { name: 'Session resources', exact: true }).click();
+    const queries = page.getByRole('region', { name: 'Queries', exact: true });
+    await expect(queries.getByRole('alert')).toBeVisible();
+    failSnapshot = false;
+    await queries.getByRole('button', { name: 'Retry', exact: true }).click();
+    const pageCount = page.context().pages().length;
+    await expect(queries.getByRole('button')).toHaveCount(2);
+    await expect(queries.getByRole('button').first()).toContainText('analytics');
+    await queries.getByRole('button').first().click();
+    await expect(page.getByTestId('agent-query-preview')).toContainText('SELECT total FROM orders');
+    await expect(page).toHaveURL(/querySession=query-2/);
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    await queries.getByRole('button').last().click();
+    await expect(page.getByTestId('agent-query-preview').getByRole('cell', { name: '42', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/querySession=query-1/);
+    await page.reload();
+    await expect(page.getByTestId('agent-query-preview').getByRole('cell', { name: '42', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    const artifacts = page.getByRole('region', { name: 'Artifacts', exact: true });
+    await expect(artifacts.getByRole('button')).toHaveCount(3);
+    await expect(artifacts.getByRole('button').first()).toContainText('Payment trend');
+    await artifacts.getByRole('button', { name: /Payment results/ }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Unable to load resources' })).toBeVisible();
+    failArtifact = false;
+    await page.getByRole('button', { name: 'Retry', exact: true }).click();
+    const preview = page.getByTestId('agent-artifact-preview');
+    await expect(preview.getByRole('heading', { name: 'Payment results' })).toBeVisible();
+    await expect(preview.getByRole('cell', { name: '42', exact: true })).toBeVisible();
+    await preview.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(preview.getByRole('cell', { name: '84', exact: true })).toBeVisible();
+    await page.reload();
+    await expect(preview.getByRole('cell', { name: '84', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    await artifacts.getByRole('button', { name: /Payment trend/ }).click();
+    await expect(page.getByTestId('agent-artifact-chart')).toBeVisible();
+    await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
+    await artifacts.getByRole('button', { name: /Payment export/ }).click();
+    await expect(preview.getByText('Unavailable', { exact: true })).toBeVisible();
+    await expect(preview.getByText('payments.csv', { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: testInfo.outputPath('agent-artifact-inline.png'), animations: 'disabled' });
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
+    await expect(preview).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Session resources', exact: true })).toBeFocused();
+    expect(page.context().pages()).toHaveLength(pageCount);
+    expect(new URL(page.url()).pathname).toBe(`/${organization}/work`);
     await expectAppHealthy(appErrors);
 });
 
@@ -720,7 +947,7 @@ test('history requests cannot replace a newer selection and restore conflicts pr
             if (conflict) {
                 latest = { ...latest, revision: 4 };
                 versions.unshift({ revision: 4, source: 'agent', createdAt: now });
-                return route.fulfill({ status: 409, json: { error: 'Work changed. Reload the latest version before saving.' } });
+                return route.fulfill({ status: 409, json: { error: 'Report changed. Reload the latest version before saving.' } });
             }
             expect(route.request().postDataJSON().expectedRevision).toBe(4);
             latest = { ...second, revision: 5 };
@@ -747,7 +974,7 @@ test('history requests cannot replace a newer selection and restore conflicts pr
     await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
     await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
-    await expect(page.getByRole('alertdialog').getByRole('alert')).toContainText('Work changed');
+    await expect(page.getByRole('alertdialog').getByRole('alert')).toContainText('Report changed');
     expect(restoreCalls).toBe(1);
     await expect(page.getByRole('heading', { name: 'Second version', includeHidden: true })).toBeVisible();
     conflict = false;
@@ -815,7 +1042,7 @@ test('saved payment charts recover query rows and stay correct after reload', as
     );
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/data-agent?chat=payment-chart&panel=closed`);
+    await page.goto(`/${organization}/work?chat=payment-chart&panel=closed`);
     for (let i = 0; i < 2; i++) {
         const bars = page.locator('.recharts-bar-rectangle path');
         await expect(bars).toHaveCount(2);
@@ -849,7 +1076,7 @@ test('selecting a different report clears the previous historical revision', asy
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/data-agent?chat=report-chat&document=doc-report&panel=report&revision=1`);
+    await page.goto(`/${organization}/work?chat=report-chat&document=doc-report&panel=report&revision=1`);
     await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v1');
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
     await page.getByRole('button', { name: 'Another report Ready' }).click();

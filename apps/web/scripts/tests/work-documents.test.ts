@@ -152,7 +152,7 @@ test('report validation rejects invalid visuals and resolves only real Markdown 
     assert.equal(workDraftSchema.safeParse({ ...base, status: 'draft' }).success, true);
     assert.equal(workDraftSchema.safeParse({ ...base, visuals: [{ id: 'm', title: '', type: 'metric', evidenceId: 'art-1' }] }).success, false);
     assert.throws(() => referencedEvidence('![Missing](dory://visual/missing)', []), /Unknown visual/);
-    assert.throws(() => referencedEvidence('[broken](dory://visual/chart)', []), /Invalid Work/);
+    assert.throws(() => referencedEvidence('[broken](dory://visual/chart)', []), /Invalid report/);
     assert.deepEqual(referencedEvidence('`[example](dory://evidence/private)`', []).ids, []);
 });
 

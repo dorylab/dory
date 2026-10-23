@@ -42,7 +42,7 @@ export async function saveWorkDraft(
 ) {
     await assertDocumentWrite(input);
     const existing = await db.workDocuments.get(input);
-    if (existing.revision !== input.expectedRevision) throw new DatabaseError('Work changed. Read the latest version before editing.', 409);
+    if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const draft = workDraftSchema.parse(input.draft);
     const scope = input.scope ?? existing.scope;
     if (input.source === 'agent' && existing.status === 'ready' && draft.status === 'draft') {
@@ -175,7 +175,7 @@ export async function patchWorkDocument(
     input: Owner & { documentId: string; expectedRevision: number; patch: z.infer<typeof workPatchSchema>; runId: string; scope: AnalysisScope },
 ) {
     const existing = await db.workDocuments.get(input);
-    if (existing.revision !== input.expectedRevision) throw new DatabaseError('Work changed. Read the latest version before editing.', 409);
+    if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const patch = workPatchSchema.parse(input.patch);
     let markdown: string;
     try {

@@ -13,7 +13,7 @@ export function GenerateWorkFromRun({ runId }: { runId: string }) {
         mutationFn: async () => {
             const response = await authFetch('/api/work-documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId }) });
             const result = await response.json();
-            if (!response.ok) throw new Error(result.error ?? 'Unable to generate Work.');
+            if (!response.ok) throw new Error(result.error ?? t('GenerateFailed'));
             return result as { document: { id: string } };
         },
         onSuccess: result => router.push(`/${organization}/works/${result.document.id}`),

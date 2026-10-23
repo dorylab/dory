@@ -24,7 +24,7 @@ export default function AcceptInvitationClient({ invitationId }: { invitationId:
             await queryClient.invalidateQueries({ queryKey: ['organization-user-invitations'] });
             await queryClient.invalidateQueries({ queryKey: ['organization-list'] });
             const nextSlug = invitation?.organizationSlug;
-            router.push(nextSlug ? `/${nextSlug}/connections` : '/');
+            router.push(nextSlug ? `/${nextSlug}` : '/');
             router.refresh();
         },
         onError: error => {

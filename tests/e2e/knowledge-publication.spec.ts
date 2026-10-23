@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
@@ -13,7 +14,7 @@ async function removeModel(request: APIRequestContext, id: string) {
 
 test('model publication defaults to review, persists automatic mode and keeps drafts unchanged', async ({ page, request }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const org = new URL(page.url()).pathname.split('/')[1];
     const { connections } = await action(request, 'connection.list', {});
     const model = await action(request, 'knowledge.create', { name: `publication-${randomUUID()}`, connectionIds: [connections[0].connection.id] });
@@ -52,7 +53,7 @@ test('model publication defaults to review, persists automatic mode and keeps dr
 
 test('processing history shows background evidence, restore, withdrawal and failure retry on narrow dark screens', async ({ page, request }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const org = new URL(page.url()).pathname.split('/')[1];
     const { connections } = await action(request, 'connection.list', {});
     const model = await action(request, 'knowledge.create', { name: `publication-history-${randomUUID()}`, connectionIds: [connections[0].connection.id] });

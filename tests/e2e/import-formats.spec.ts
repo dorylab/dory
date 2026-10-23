@@ -1,8 +1,9 @@
+import { openDataSources } from './helpers/navigation';
 import { expectAppHealthy, test } from './fixtures';
 
 test('import wizard accepts typed source formats and identifies Parquet before upload', async ({ page, appErrors }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     if (!organization) throw new Error('The demo workspace does not contain an organization');

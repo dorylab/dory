@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -174,7 +175,7 @@ test.describe('Commerce Linear real API Key acceptance', () => {
         }
         expect((await action<Model>(request, 'knowledge.get', { knowledgeModelId: model.id })).modelRevision).toBe(model.modelRevision);
         await page.goto('/');
-        await page.waitForURL(/\/[^/]+\/connections$/);
+        await openDataSources(page);
         const organizationSlug = organizationId ?? new URL(page.url()).pathname.split('/')[1];
         await page.goto(`/${organizationSlug}/knowledge/${model.id}?tab=sources`);
         for (const source of sources) {

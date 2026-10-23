@@ -168,7 +168,7 @@ export function SignInForm({
             }
 
             router.refresh();
-            router.push(`/${payload.organizationSlug}/connections`);
+            router.push(callbackURL && callbackURL !== '/' ? callbackURL : `/${payload.organizationSlug}`);
         } catch (nextError) {
             setErr(nextError instanceof Error ? nextError.message : t('SignIn.Guest.StartFailed'));
         } finally {
@@ -195,7 +195,7 @@ export function SignInForm({
             }
 
             const organizationSlug = typeof payload?.organizationSlug === 'string' ? payload.organizationSlug : null;
-            const destination = callbackURL && callbackURL !== '/' ? callbackURL : organizationSlug ? `/${organizationSlug}/connections` : '/';
+            const destination = callbackURL && callbackURL !== '/' ? callbackURL : organizationSlug ? `/${organizationSlug}` : '/';
 
             posthog.capture('user_signed_in', { method: 'demo' });
             router.refresh();
@@ -355,16 +355,16 @@ export function SignInForm({
                                                     className="text-foreground inline-flex min-h-5 items-center justify-center gap-1.5 align-middle leading-none cursor-pointer underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline disabled:opacity-70"
                                                     disabled={guestActionLoading}
                                                     aria-busy={guestActionLoading}
-                                                onClick={() => {
-                                                    void onGuestContinue();
-                                                }}
-                                                data-testid="guest-sign-in"
+                                                    onClick={() => {
+                                                        void onGuestContinue();
+                                                    }}
+                                                    data-testid="guest-sign-in"
                                                 >
                                                     {guestActionLoading ? (
                                                         <>
                                                             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
                                                             <span>{t('SignIn.Guest.Starting')}</span>
-                                                </>
+                                                        </>
                                                     ) : (
                                                         t(resumeAnonymousSession ? 'SignIn.Guest.ResumeAction' : 'SignIn.Guest.Link')
                                                     )}

@@ -26,7 +26,7 @@ const BASE_PRESETS: Record<ModelRole, BasePreset> = {
     chat: {
         temperature: 0.7,
         system: {
-            persona: 'Dory Data Agent',
+            persona: 'Dory Work',
             language: 'auto',
             output: { kind: 'text' },
             rules: ['Be specific and actionable.'],

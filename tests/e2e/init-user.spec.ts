@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
@@ -17,9 +18,9 @@ test('init user can sign in and reach the default organization workspace', async
     await form.locator('input[type="password"]').fill(initPassword);
     await form.locator('button[type="submit"]').click();
 
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
-    await expect(page.getByRole('heading', { name: /connections/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /data sources/i })).toBeVisible();
     await expect(page.getByText(initEmail)).toBeVisible();
     await expectAppHealthy(appErrors);
 });

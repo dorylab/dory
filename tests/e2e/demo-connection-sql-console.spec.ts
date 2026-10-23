@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -141,7 +142,7 @@ async function resetFocus(page: Parameters<typeof test>[0]['page'], pauseMs = FO
 }
 
 async function getOrganizationSlug(page: Parameters<typeof test>[0]['page']) {
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
     const url = new URL(page.url());
     const [organization] = url.pathname.split('/').filter(Boolean);
@@ -166,7 +167,7 @@ async function loginAsDemo(page: Parameters<typeof test>[0]['page']) {
     await demoButton.hover();
     await shortBeat(page);
     await demoButton.click();
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     await resetFocus(page);
     await beat(page);
     console.log('[demo-flow] login:done');

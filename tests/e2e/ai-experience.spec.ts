@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect, type Page, type Route } from '@playwright/test';
 
 import { test } from './fixtures';
@@ -100,16 +101,13 @@ async function mockChatApis(page: Page) {
  */
 async function openMockConnectionChatbot(page: Page, connection = seededConnection) {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
     const match = page.url().match(/\/([^/]+)\/connections$/);
     const orgId = match?.[1];
     if (!orgId) throw new Error(`Failed to resolve org id from URL: ${page.url()}`);
 
-    await page.evaluate(
-        value => window.localStorage.setItem('currentConnection', JSON.stringify(value)),
-        connection,
-    );
+    await page.evaluate(value => window.localStorage.setItem('currentConnection', JSON.stringify(value)), connection);
 
     await page.goto(`/${orgId}/${connection.connection.id}/chatbot`);
 }
@@ -159,4 +157,3 @@ test.describe('Chatbot welcome page', () => {
         await expectAppHealthy(appErrors);
     });
 });
-

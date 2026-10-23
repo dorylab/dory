@@ -21,7 +21,7 @@ export function referencedEvidence(markdown: string, visuals: WorkVisual[]) {
     const refs = workReferences(markdown);
     if (refs.invalid.length)
         throw new Error(
-            'WORK_REFERENCE_INVALID: Invalid Work reference: ' +
+            'WORK_REFERENCE_INVALID: Invalid report reference: ' +
                 refs.invalid[0] +
                 '. Use [Source](dory://evidence/ARTIFACT_ID) or ![Title](dory://visual/VISUAL_ID). Knowledge sources are recorded separately; do not use knowledge URLs or footnotes in the body.',
         );

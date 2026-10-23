@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
@@ -20,7 +21,7 @@ const draft = (id: string, patch: Partial<Draft> = {}): Draft => ({
 });
 async function fixture(page: Page, request: APIRequestContext) {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1];
     async function action(actionId: string, input: Record<string, unknown>, confirmationToken?: string) {
         const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });

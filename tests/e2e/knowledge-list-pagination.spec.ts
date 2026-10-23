@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
@@ -10,7 +11,7 @@ async function action(request: APIRequestContext, actionId: string, input: Recor
 
 test('all five knowledge lists paginate independently and preserve asset deep links', async ({ page, request }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1];
     const { connections } = await action(request, 'connection.list', {});
     const connectionId: string = connections[0].connection.id;

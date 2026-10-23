@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import type { OssieDocument } from '@dory/database/postgres/schemas';
 import { OSSIE_VERSION } from '@dory/shared/types/ossie';
@@ -6,7 +7,7 @@ import { stringify } from 'yaml';
 
 test('internal placeholder datasets stay hidden while metrics-only models can be edited and emptied', async ({ page, request }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1];
     type Model = { id: string; model: { definitions: Array<{ id: string; name: string; expression?: string; description?: string }> } };
     async function call<T>(actionId: string, input: Record<string, unknown>, confirmationToken?: string): Promise<T> {
@@ -64,7 +65,7 @@ test('internal placeholder datasets stay hidden while metrics-only models can be
 
 test('Knowledge imports and displays the new Ossie format and rejects legacy files without changing the model', async ({ page, request }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1];
     const call = async <T>(actionId: string, input: Record<string, unknown>, confirmationToken?: string): Promise<T> => {
         const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });

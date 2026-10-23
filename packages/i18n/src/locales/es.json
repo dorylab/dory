@@ -188,7 +188,7 @@
     },
     "Connections": {
         "Connections": "Fuentes de datos",
-        "All Connections": "Todas las fuentes de datos",
+        "All Connections": "Espacio de trabajo",
         "about": "acerca de",
         "MoreActions": "Más acciones",
         "Search": {
@@ -1029,8 +1029,8 @@
             }
         },
         "AuthRequired": {
-            "Title": "Inicia sesión para usar Data Agent",
-            "Description": "Los espacios de trabajo de invitado permiten explorar la app, pero Data Agent requiere una cuenta completa.",
+            "Title": "Inicia sesión para usar Trabajo",
+            "Description": "Los espacios de trabajo de invitado permiten explorar la app, pero Trabajo requiere una cuenta completa.",
             "Hint": "Después de iniciar sesión, tu espacio de trabajo actual seguirá contigo.",
             "WorkspaceNotice": "Cuando inicies sesión, tu espacio de trabajo de invitado actual se mantendrá en tu cuenta.",
             "SignIn": "Iniciar sesión",
@@ -1062,7 +1062,7 @@
             "Cancel": "Cancelar",
             "ConfirmDelete": "Eliminar",
             "DeleteSuccess": "Sesión eliminada",
-            "CopilotAutoCreate": "Las sesiones de Data Agent se crean automáticamente para la pestaña actual",
+            "CopilotAutoCreate": "Las sesiones de Trabajo se crean automáticamente para la pestaña actual",
             "NoMatches": "No hay sesiones coincidentes",
             "SearchPlaceholder": "Buscar sesiones",
             "Groups": {
@@ -1074,16 +1074,16 @@
         "Errors": {
             "FetchSessions": "No se pudieron obtener las sesiones",
             "FetchSessionDetail": "No se pudieron obtener los detalles de la sesión",
-            "FetchCopilotSession": "No se pudo obtener la sesión de Data Agent",
+            "FetchCopilotSession": "No se pudo obtener la sesión de Trabajo",
             "CreateSession": "No se pudo crear la sesión",
             "RenameSession": "No se pudo renombrar la sesión",
             "DeleteSession": "No se pudo eliminar la sesión",
             "SessionNotFoundRename": "No se encontró la sesión. No se puede renombrar.",
             "SessionNotFoundDelete": "No se encontró la sesión. No se puede eliminar.",
             "SessionNameRequired": "El nombre de la sesión no puede estar vacío",
-            "CopilotRenameUnsupported": "Las sesiones de Data Agent no se pueden renombrar",
-            "CopilotDeleteUnsupported": "Las sesiones de Data Agent no se pueden eliminar (las gestiona la pestaña actual)",
-            "CreateCopilotSession": "No se pudo crear la sesión de Data Agent",
+            "CopilotRenameUnsupported": "Las sesiones de Trabajo no se pueden renombrar",
+            "CopilotDeleteUnsupported": "Las sesiones de Trabajo no se pueden eliminar (las gestiona la pestaña actual)",
+            "CreateCopilotSession": "No se pudo crear la sesión de Trabajo",
             "SessionNotSelected": "No hay una sesión seleccionada",
             "RequestFailed": "La solicitud falló",
             "SendFailed": "No se pudo enviar el mensaje",
@@ -1149,14 +1149,14 @@
     },
     "Welcome": {
         "Badge": "Modo anónimo",
-        "Title": "Empieza con un espacio de trabajo anónimo y mejora solo cuando necesites Data Agent.",
+        "Title": "Empieza con un espacio de trabajo anónimo y mejora solo cuando necesites Trabajo.",
         "Description": "Explora Dory de inmediato sin crear una cuenta. Crearemos un espacio de trabajo temporal para ti y conservaremos los datos de tu organización cuando más tarde inicies sesión.",
         "CardTitle": "Entra en Dory al instante",
         "CardDescription": "Crea una cuenta anónima y un espacio de trabajo personal con un solo clic.",
         "Start": "Empezar con una cuenta anónima",
         "Resume": "Continuar en el espacio de trabajo anónimo",
         "Starting": "Preparando espacio de trabajo…",
-        "Hint": "Puedes seguir navegando de forma anónima. Cuando necesites Data Agent, inicia sesión y vincularemos este espacio de trabajo con tu cuenta real.",
+        "Hint": "Puedes seguir navegando de forma anónima. Cuando necesites Trabajo, inicia sesión y vincularemos este espacio de trabajo con tu cuenta real.",
         "HaveAccount": "¿Ya tienes una cuenta?",
         "SignIn": "Iniciar sesión",
         "Highlights": {
@@ -1309,12 +1309,12 @@
             "ActionRunSelection": "Ejecutar selección",
             "ActionSave": "Guardar consulta",
             "ActionNewTab": "Nueva pestaña",
-            "ActionToggleCopilot": "Abrir Data Agent",
+            "ActionToggleCopilot": "Abrir Trabajo",
             "ActionFormat": "Formatear SQL",
             "ShortcutRunSelection": "Ejecutar selección: Cmd/Ctrl+Enter",
             "ShortcutSave": "Guardar consulta: Cmd/Ctrl+S",
             "ShortcutNewTab": "Nueva pestaña: Cmd/Ctrl+Option/Alt+L",
-            "ShortcutToggleCopilot": "Abrir Data Agent: Cmd/Ctrl+I",
+            "ShortcutToggleCopilot": "Abrir Trabajo: Cmd/Ctrl+I",
             "ShortcutFormat": "Formatear SQL: Shift+Cmd/Ctrl+F",
             "NewConsole": "Nueva consola",
             "OrDivider": "o",
@@ -1375,10 +1375,10 @@
                 "NewTab": "Nueva pestaña creada"
             },
             "NewTabTitle": "Consulta con IA",
-            "ToggleOpen": "Abrir Data Agent",
-            "ToggleClose": "Cerrar Data Agent",
-            "ToggleAria": "Alternar Data Agent",
-            "ToggleLabel": "Data Agent",
+            "ToggleOpen": "Abrir Trabajo",
+            "ToggleClose": "Cerrar Trabajo",
+            "ToggleAria": "Alternar Trabajo",
+            "ToggleLabel": "Trabajo",
             "Context": {
                 "SqlTitle": "Contexto SQL",
                 "EditorTitle": "Contexto del editor",
@@ -1412,7 +1412,7 @@
                 "TopShareShort": "principal {value}",
                 "PrimaryKeyLabel": "Clave primaria",
                 "TableLabel": "Tabla",
-                "RawCopilot": "Contexto bruto de Data Agent",
+                "RawCopilot": "Contexto bruto de Trabajo",
                 "RawBundle": "Paquete de contexto bruto",
                 "CopyJson": "Copiar JSON",
                 "NotReady": "El contexto no está listo"
@@ -1491,15 +1491,15 @@
                     "Optimize": "Optimizar",
                     "Rewrite": "Reescribir",
                     "ToAggregation": "Convertir a agregación",
-                    "Default": "Preguntar a Data Agent"
+                    "Default": "Preguntar a Trabajo"
                 },
                 "AppliedLabel": "{action} aplicado",
                 "AppliedDescription": "Tu SQL se ha actualizado en el editor.",
                 "GoToActions": "Ir a Acciones"
             },
             "Panel": {
-                "NoSqlTab": "Selecciona una pestaña SQL para usar Data Agent.",
-                "UnsupportedTab": "Data Agent no es compatible con pestañas de tipo {type}.",
+                "NoSqlTab": "Selecciona una pestaña SQL para usar Trabajo.",
+                "UnsupportedTab": "Trabajo no es compatible con pestañas de tipo {type}.",
                 "TabAsk": "Preguntar",
                 "TabAction": "Acción",
                 "TabContext": "Contexto"
@@ -2670,13 +2670,13 @@
                 "UpdateSessionFailed": "No se pudo actualizar la sesión",
                 "DeleteSessionFailed": "No se pudo eliminar la sesión",
                 "MissingTabId": "Falta tabId",
-                "FetchCopilotSessionFailed": "No se pudo obtener la sesión de Data Agent",
+                "FetchCopilotSessionFailed": "No se pudo obtener la sesión de Trabajo",
                 "InvalidSessionType": "Tipo de sesión no válido",
                 "ConnectionIdRequired": "Se requiere el ID de la fuente de datos",
                 "ListSessionsFailed": "No se pudieron obtener las sesiones",
-                "CopilotCreationNotAllowed": "Las sesiones de Data Agent no se pueden crear desde este endpoint",
+                "CopilotCreationNotAllowed": "Las sesiones de Trabajo no se pueden crear desde este endpoint",
                 "CreateSessionFailed": "No se pudo crear la sesión",
-                "FullAccountRequired": "Inicia sesión para usar Data Agent."
+                "FullAccountRequired": "Inicia sesión para usar Trabajo."
             },
             "Tools": {
                 "Rag": {
@@ -2728,7 +2728,7 @@
             "Prompt": {
                 "SchemaContextTitle": "[Contexto de datos actual]",
                 "DatabaseContextTitle": "[Contexto de base de datos]",
-                "CopilotContextTitle": "[Contexto actual de Data Agent]",
+                "CopilotContextTitle": "[Contexto actual de Trabajo]",
                 "ExecutionIntent": {
                     "Policy": "Política de ejecución del turno actual:\n- Clasifica el último mensaje del usuario antes de decidir si usar sqlRunner.\n- Si el usuario pide explícitamente solo generar, mostrar o escribir SQL, o pide no ejecutar la consulta, no llames a sqlRunner en este turno y devuelve solo SQL salvo que necesites una aclaración.\n- Si el usuario pide ver, listar, ordenar por ranking, comparar, agregar, crear un gráfico u obtener resultados reales de la base de datos de otra forma, y sqlRunner está disponible, llama a sqlRunner con una consulta SQL de solo lectura antes de la respuesta final.\n- Para solicitudes que requieren resultados de datos, no termines solo escribiendo SQL.\n- Mantén los límites de resultados exploratorios o de detalle en 100 filas o menos."
                 }
@@ -2745,7 +2745,7 @@
                 "SqlRequired": "El SQL no puede estar vacío",
                 "MissingConnection": "Falta información de la fuente de datos; no se puede ejecutar la consulta.",
                 "ReadOnlyOnly": "Solo se permiten consultas de solo lectura (SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA). No incluyas sentencias de escritura o actualización.",
-                "SelectAllNotAllowed": "No se permite usar SELECT * en el SQL generado por Data Agent. Selecciona solo las columnas necesarias para responder.",
+                "SelectAllNotAllowed": "No se permite usar SELECT * en el SQL generado por Trabajo. Selecciona solo las columnas necesarias para responder.",
                 "OrderByIndexMissing": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, y no se confirmó que tengan índice. Reduce las columnas seleccionadas o revisa los índices primero.",
                 "OrderByIndexUnknown": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, pero no se pudo confirmar si tienen índice. Reduce las columnas seleccionadas o revisa los índices primero.",
                 "ExecuteFailed": "La ejecución SQL falló"
@@ -3092,7 +3092,7 @@
         },
         "AssistantFallback": {
             "Title": "Error de respuesta",
-            "Description": "Data Agent no devolvió contenido utilizable. Inténtalo de nuevo más tarde o ajusta tu prompt.",
+            "Description": "Trabajo no devolvió contenido utilizable. Inténtalo de nuevo más tarde o ajusta tu prompt.",
             "MissingAiEnvTitle": "Falta la configuración de IA",
             "MissingAiEnvDescription": "Define DORY_AI_API_KEY y DORY_AI_URL para habilitar las funciones de IA."
         },
@@ -3542,7 +3542,7 @@
             "ChatSessionNotFound": "Sesión no encontrada",
             "ChatSessionForbidden": "No tienes acceso a esta sesión",
             "ChatSessionArchived": "La sesión está archivada y no se puede modificar",
-            "ChatCopilotSessionFailed": "No se pudo obtener o crear la sesión de Data Agent",
+            "ChatCopilotSessionFailed": "No se pudo obtener o crear la sesión de Trabajo",
             "ChatGlobalSessionFailed": "No se pudo crear u obtener la sesión global",
             "ChatUpdateSessionNotFound": "Sesión no encontrada",
             "ChatInsertMessageFailed": "No se pudo escribir el mensaje"
@@ -4378,7 +4378,7 @@
         "DataSources": "Fuentes de datos",
         "Knowledge": "Conocimiento",
         "Artifacts": "Artefactos",
-        "More": "Más",
+        "More": "Más…",
         "NoDataSourceSelected": "Sin fuente de datos seleccionada",
         "WorkspaceTitle": "Espacio de trabajo",
         "WorkspaceDataSourcesCount": "{count} fuente de datos",
@@ -4389,7 +4389,7 @@
         "Explorer": "Explorador",
         "Import": "Importación de datos",
         "Schema": "Esquema",
-        "Chatbot": "Data Agent",
+        "Chatbot": "Trabajo",
         "Monitoring": "Monitoreo",
         "Privileges": "Privilegios",
         "GetHelp": "Ayuda",
@@ -4424,7 +4424,8 @@
             "Confirm": "Eliminar espacio",
             "Cancel": "Mantener espacio",
             "DeleteFailed": "No se pudo eliminar la sesión de invitado. Inténtalo de nuevo."
-        }
+        },
+        "Reports": "Informes"
     },
     "Artifacts": {
         "Eyebrow": "Resultados del espacio de trabajo",
@@ -4865,9 +4866,9 @@
                 "SaveConclusions": "Guardar conclusiones",
                 "QueryData": "Consultar datos",
                 "RunTool": "Ejecutar {name}",
-                "CreateWork": "Crear informe Work",
-                "ReadWork": "Leer informe Work",
-                "UpdateWork": "Actualizar informe Work"
+                "CreateWork": "Crear informe",
+                "ReadWork": "Leer informe",
+                "UpdateWork": "Actualizar informe"
             },
             "ToolStatus": {
                 "Running": "En curso",
@@ -5092,8 +5093,8 @@
                 "ViewSetup": "Ver comandos de conexión",
                 "UsageSetupHint": "Instala el servicio Dory Codex Agent en este dispositivo y luego actualiza este panel para habilitar Codex Agent desde la app web.",
                 "UsageBridgeReadyHint": "Dory Codex Agent está conectado. Habilita Codex Agent y configúralo como modelo predeterminado.",
-                "UsageEnabledHint": "La IA local está habilitada. Configúrala como modelo predeterminado para ejecutar las solicitudes de Data Agent mediante el agente de este dispositivo.",
-                "UsageDefaultHint": "La IA local es el modelo predeterminado. El servicio Dory Codex Agent ejecuta las solicitudes de Data Agent en este dispositivo.",
+                "UsageEnabledHint": "La IA local está habilitada. Configúrala como modelo predeterminado para ejecutar las solicitudes de Trabajo mediante el agente de este dispositivo.",
+                "UsageDefaultHint": "La IA local es el modelo predeterminado. El servicio Dory Codex Agent ejecuta las solicitudes de Trabajo en este dispositivo.",
                 "UsageDesktopHint": "En Desktop, Dory detecta Codex o Claude Code CLI en este dispositivo. Cuando se detecte, habilítalo y configúralo como modelo predeterminado.",
                 "ModelServiceDescription": "Usa el endpoint local compatible con OpenAI en {endpoint}."
             }
@@ -5420,15 +5421,15 @@
         "Knowledge": "Knowledge",
         "Versions": "Historial de versiones",
         "Restore": "Restaurar como nueva versión",
-        "RefreshPrompt": "Actualiza este Work: vuelve a ejecutar sus consultas, revisa todas las conclusiones según la nueva evidencia y guarda una nueva versión. Conserva el informe anterior si fallan las consultas y explica las fuentes que faltan.",
-        "CreatePrompt": "Crea un informe Work a partir de nuestro análisis, con conclusiones respaldadas, gráficos o tablas y evidencia real. Indica las limitaciones.",
+        "RefreshPrompt": "Actualiza este informe: vuelve a ejecutar sus consultas, revisa todas las conclusiones según la nueva evidencia y guarda una nueva versión. Conserva el informe anterior si fallan las consultas y explica las fuentes que faltan.",
+        "CreatePrompt": "Crea un informe a partir de nuestro análisis, con conclusiones respaldadas, gráficos o tablas y evidencia real. Indica las limitaciones.",
         "AgentDescription": "Analiza las fuentes seleccionadas y crea informes respaldados por evidencia.",
         "NewChat": "Nueva conversación",
         "Scope": "Alcance del análisis",
         "ChooseKnowledge": "Elegir Knowledge (opcional)",
         "ChooseSources": "Selecciona al menos una fuente de datos.",
         "RecentChats": "Conversaciones recientes",
-        "RecentWork": "Work recientes",
+        "RecentWork": "Informes recientes",
         "Untitled": "Conversación sin título",
         "Welcome": "¿Qué te gustaría entender?",
         "AnomalyPrompt": "Investigar una anomalía reciente",
@@ -5436,19 +5437,19 @@
         "ReportPrompt": "Crear un informe con los principales hallazgos",
         "Analyzing": "Analizando…",
         "Question": "Haz una pregunta o solicita un informe…",
-        "CreateWork": "Generar Work",
+        "CreateWork": "Generar informe",
         "Stop": "Detener",
         "Send": "Enviar",
         "LibraryDescription": "Tus informes de análisis privados y editables, con su evidencia.",
-        "Search": "Buscar Work…",
+        "Search": "Buscar informes…",
         "AllSources": "Todas las fuentes",
         "ShowArchived": "Incluir archivados",
-        "Empty": "Aún no hay Work. Pide a Data Agent que cree un informe.",
+        "Empty": "Aún no hay informes. Pide a Trabajo que cree un informe.",
         "Archived": "Archivado",
         "Archive": "Archivar",
         "Unarchive": "Desarchivar",
         "AddDefinition": "Añadir definición a Knowledge",
-        "DefinitionReview": "Revisa el texto como definición de negocio reutilizable antes de publicarlo. Las conclusiones temporales deben permanecer en Work.",
+        "DefinitionReview": "Revisa el texto como definición de negocio reutilizable antes de publicarlo. Las conclusiones temporales deben permanecer en los informes.",
         "DefinitionNeedsKnowledge": "Primero crea un Knowledge vinculado a una fuente de este informe.",
         "DefinitionAdded": "Definición añadida a Knowledge.",
         "DefinitionKind": "Tipo de definición",
@@ -5484,12 +5485,14 @@
             "UnavailableSource": "Fuente no disponible ({id})"
         },
         "Resources": {
+            "NoArtifacts": "Aún no hay artefactos.",
+            "NoQueries": "Aún no hay consultas.",
             "Title": "Recursos de la conversación",
-            "Description": "Agent Runs e informes Work de esta conversación",
+            "Description": "Agent Runs e informes de esta conversación",
             "Back": "Volver a recursos",
             "Close": "Cerrar recursos",
             "NoRuns": "Aún no hay Agent Runs",
-            "NoWorks": "Aún no hay informes Work",
+            "NoWorks": "Aún no hay informes",
             "Loading": "Cargando…",
             "LoadFailed": "No se pueden cargar los recursos",
             "Retry": "Reintentar",
@@ -5505,7 +5508,8 @@
             "SaveFailed": "No se pudo guardar. Tus cambios se conservan.",
             "Cancel": "Cancelar",
             "Discard": "Descartar cambios",
-            "SaveAndContinue": "Guardar y continuar"
+            "SaveAndContinue": "Guardar y continuar",
+            "Reports": "Informes"
         },
         "VersionHistory": {
             "Select": "Versión del informe",
@@ -5518,6 +5522,8 @@
             "Restore": "Restaurar esta versión",
             "RestoreDescription": "¿Restaurar v{revision} como una nueva versión? Se conservarán todas las versiones existentes.",
             "RestoreFailed": "No se pudo restaurar. Revisa la última versión antes de intentarlo de nuevo."
-        }
+        },
+        "GenerateFailed": "No se pudo generar el informe.",
+        "Reports": "Informes"
     }
 }

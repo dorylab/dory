@@ -14,9 +14,11 @@ import { useTranslations } from 'next-intl';
 import type { AgentRunWorkLike } from '@/lib/agent-runs/summary';
 import { workRequest } from '@/lib/work-documents/client';
 
+import { AgentQueries } from './agent-queries';
+
 export function AgentResources({
     open,
-    reportVisible,
+    detailVisible,
     activeDocumentId,
     editing,
     reports,
@@ -26,13 +28,15 @@ export function AgentResources({
     error,
     onRetry,
     onSelect,
+    onSelectQuery,
+    onSelectArtifact,
     onBack,
     onClose,
     onRestoreFocus,
     children,
 }: {
     open: boolean;
-    reportVisible: boolean;
+    detailVisible: boolean;
     activeDocumentId: string | null;
     editing: boolean;
     reports: WorkDocumentSummary[];
@@ -42,6 +46,8 @@ export function AgentResources({
     error: Error | null;
     onRetry: () => void;
     onSelect: (id: string) => void;
+    onSelectQuery: (workId: string, sessionId: string) => void;
+    onSelectArtifact: (id: string) => void;
     onBack: () => void;
     onClose: () => void;
     onRestoreFocus: () => void;
@@ -51,11 +57,11 @@ export function AgentResources({
     const { organization } = useParams<{ organization: string }>();
     const closeButton = useRef<HTMLButtonElement>(null);
     const restoreFocus = useRef(false);
-    const previousView = useRef({ open, reportVisible });
+    const previousView = useRef({ open, detailVisible });
     useEffect(() => {
-        if (open && (!previousView.current.open || previousView.current.reportVisible !== reportVisible)) closeButton.current?.focus();
-        previousView.current = { open, reportVisible };
-    }, [open, reportVisible]);
+        if (open && (!previousView.current.open || previousView.current.detailVisible !== detailVisible)) closeButton.current?.focus();
+        previousView.current = { open, detailVisible };
+    }, [open, detailVisible]);
     const runs = [
         ...new Map(
             [...messages].reverse().flatMap(message => {
@@ -74,7 +80,7 @@ export function AgentResources({
     const content = (
         <>
             <div className="flex shrink-0 items-center justify-between gap-2 border-b p-3">
-                {reportVisible ? (
+                {detailVisible ? (
                     <Button variant="ghost" size="sm" onClick={onBack}>
                         <ArrowLeft className="size-4" />
                         {t('Back')}
@@ -95,7 +101,7 @@ export function AgentResources({
                     <X className="size-4" />
                 </Button>
             </div>
-            {reportVisible ? (
+            {detailVisible ? (
                 <div className="min-h-0 flex-1">{children}</div>
             ) : (
                 <div className="min-h-0 flex-1 space-y-5 overflow-auto p-4">
@@ -147,8 +153,16 @@ export function AgentResources({
                             })
                         )}
                     </section>
-                    <section aria-label="Work" className="space-y-2 border-t pt-4">
-                        <h3 className="text-xs font-medium text-muted-foreground">Work</h3>
+                    <AgentQueries
+                        onSelectQuery={onSelectQuery}
+                        onSelectArtifact={onSelectArtifact}
+                        organization={organization}
+                        runIds={runs.map(([id]) => id)}
+                        open={open}
+                        busy={busy}
+                    />
+                    <section aria-label={t('Reports')} className="space-y-2 border-t pt-4">
+                        <h3 className="text-xs font-medium text-muted-foreground">{t('Reports')}</h3>
                         {loading ? (
                             <Loader2 aria-label={t('Loading')} className="size-4 animate-spin" />
                         ) : error ? (
@@ -191,7 +205,7 @@ export function AgentResources({
             side="bottom"
             sideOffset={8}
             collisionPadding={12}
-            className={`flex max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl p-0 shadow-xl ${reportVisible ? 'h-[min(48rem,var(--radix-popover-content-available-height))] w-[48rem]' : 'max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[22rem]'}`}
+            className={`flex max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl p-0 shadow-xl ${detailVisible ? 'h-[min(48rem,var(--radix-popover-content-available-height))] w-[48rem]' : 'max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[22rem]'}`}
             onOpenAutoFocus={() => {
                 restoreFocus.current = false;
             }}

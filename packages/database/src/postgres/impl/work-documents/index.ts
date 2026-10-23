@@ -18,7 +18,7 @@ export class PostgresWorkDocumentsRepository {
     }
     async get(input: Target) {
         const [row] = await this.db.select().from(workDocuments).where(this.owned(input));
-        if (!row) throw new DatabaseError('Work not found.', 404);
+        if (!row) throw new DatabaseError('Report not found.', 404);
         return row;
     }
     async list(input: Owner & { query?: string; connectionId?: string; chatId?: string; archived?: boolean }) {
@@ -81,7 +81,7 @@ export class PostgresWorkDocumentsRepository {
                 .set({ title: input.title, content: input.content, scope: input.scope, status: input.status, revision: sql`${workDocuments.revision} + 1`, updatedAt: new Date() })
                 .where(and(this.owned(input), eq(workDocuments.revision, input.expectedRevision), isNull(workDocuments.archivedAt)))
                 .returning();
-            if (!row) throw new DatabaseError('Work changed or was archived. Reload the latest version before saving.', 409);
+            if (!row) throw new DatabaseError('Report changed or was archived. Reload the latest version before saving.', 409);
             await tx.insert(workDocumentVersions).values(this.version(row, input.source));
             return row;
         });
@@ -126,7 +126,7 @@ export class PostgresWorkDocumentsRepository {
             .set({ archivedAt: input.archived ? new Date() : null, updatedAt: new Date() })
             .where(this.owned(input))
             .returning();
-        if (!row) throw new DatabaseError('Work not found.', 404);
+        if (!row) throw new DatabaseError('Report not found.', 404);
         return row;
     }
 }

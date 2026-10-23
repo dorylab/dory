@@ -269,7 +269,7 @@ export function WorkReport({
                     </Button>
                 ) : (
                     <Button variant="outline" asChild>
-                        <Link href={`/${organization}/data-agent?document=${document.id}${document.chatId ? `&chat=${document.chatId}` : ''}`}>{t('Continue')}</Link>
+                        <Link href={`/${organization}/work?document=${document.id}${document.chatId ? `&chat=${document.chatId}` : ''}`}>{t('Continue')}</Link>
                     </Button>
                 )}
                 <Button

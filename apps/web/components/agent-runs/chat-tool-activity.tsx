@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 
 import { chatToolActivityState, mergeChatToolActivities, type ChatMessageTool, type ChatToolActivity, type ChatToolState } from '@/lib/agent-runs/chat-tool-activity';
+import { querySnapshotOptions } from '@/lib/agent-runs/query-snapshot';
 import { getAgentActivityTitleKey, type AgentRunEventLike } from '@/lib/agent-runs/summary';
 import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
 import type { SqlResultBodyProps } from '@/components/@dory/ui/ai/sql-result/type';
@@ -24,33 +26,29 @@ type SqlActions = {
     onManualExecute?: SqlResultBodyProps['onManualExecute'];
 };
 
-type SnapshotResponse = {
-    data: {
-        snapshot: {
-            sessions: Array<{
-                session: { sessionId: string; sqlText: string; database: string | null; status: string; durationMs?: number | null; errorMessage?: string | null };
-                queryResultSets: Array<{ columns: Array<{ name: string; type?: string | null }> | null; rowCount: number | null; limited?: boolean | null }>;
-                results: unknown[][];
-            }>;
-        };
-    };
-};
-
-function SavedSqlDetail({ workId, sessionId, open, onCopySql, onManualExecute }: SqlActions & { workId: string; sessionId: string; open: boolean }) {
+export function SavedSqlDetail({ workId, sessionId, open, onCopySql, onManualExecute }: SqlActions & { workId: string; sessionId: string; open: boolean }) {
     const t = useTranslations('AgentRuns');
-    const { data, isPending, isError } = useQuery({
-        queryKey: ['chat-tool-sql-snapshot', workId, sessionId],
+    const { organization } = useParams<{ organization: string }>();
+    const {
+        data: snapshot,
+        isPending,
+        isError,
+        refetch,
+    } = useQuery({
+        ...querySnapshotOptions(organization, workId),
         enabled: open,
-        staleTime: 60_000,
-        queryFn: async ({ signal }) => {
-            const response = await fetch(`/api/works/${encodeURIComponent(workId)}/snapshot`, { signal });
-            if (!response.ok) throw new Error('Unable to load SQL evidence');
-            const body: SnapshotResponse = await response.json();
-            return body.data.snapshot.sessions.find(item => item.session.sessionId === sessionId) ?? null;
-        },
     });
+    const data = snapshot?.sessions.find(item => item.session.sessionId === sessionId);
     if (isPending) return <p className="text-muted-foreground">{t('Chat.Loading')}</p>;
-    if (isError || !data) return <p className="text-muted-foreground">{t('Chat.ResultUnavailable')}</p>;
+    if (isError || !data)
+        return (
+            <div className="space-y-2 text-muted-foreground">
+                <p>{t('Chat.ResultUnavailable')}</p>
+                <button className="underline" onClick={() => void refetch()}>
+                    {t('Report.Retry')}
+                </button>
+            </div>
+        );
     const set = data.queryResultSets[0];
     const rows = (data.results[0] ?? []).filter((row): row is Record<string, unknown> => Boolean(row && typeof row === 'object' && !Array.isArray(row)));
     return (

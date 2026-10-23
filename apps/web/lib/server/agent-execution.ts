@@ -249,7 +249,7 @@ export const finishWorkInputSchema = z
             })
             .optional()
             .describe(
-                'Only for a bound built-in chat: save a Work report. A draft without finalAnswer saves progress without ending the Run; a ready report with finalAnswer finishes the analysis. External Agent Runs cannot use this field.',
+                'Only for a bound built-in chat: save a report. A draft without finalAnswer saves progress without ending the Run; a ready report with finalAnswer finishes the analysis. External Agent Runs cannot use this field.',
             ),
         summaryTitle: z.string().min(1).max(1000).optional(),
         findings: z
@@ -1742,7 +1742,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         throw new McpFacadeError('FINAL_ANSWER_REQUIRED', 'Provide finalAnswer with the exact answer to display in chat.');
     let reportDocumentId: string | undefined;
     if (input.report) {
-        if (!turn) throw new McpFacadeError('REPORT_REQUIRES_CHAT', 'Reports may only be created by the built-in Data Agent.', { status: 403 });
+        if (!turn) throw new McpFacadeError('REPORT_REQUIRES_CHAT', 'Reports may only be created by the built-in Work agent.', { status: 403 });
         const owner = { organizationId: ctx.organizationId, userId: ctx.userId };
         await assertDocumentWrite(owner);
         const run = await ctx.services.db.works.getById({ ...owner, workId: turn.workId });
@@ -1780,7 +1780,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         }
         if (input.status === 'completed' && (input.report.draft?.status ?? input.report.patch?.status) !== 'ready')
             throw new McpFacadeError('REPORT_INCOMPLETE', 'Save a ready report before marking this analysis completed.');
-        if (input.report.documentId && !input.report.expectedRevision) throw new McpFacadeError('VERSION_REQUIRED', 'Pass the version from the current Work snapshot.');
+        if (input.report.documentId && !input.report.expectedRevision) throw new McpFacadeError('VERSION_REQUIRED', 'Pass the version from the current report snapshot.');
         const saved =
             !input.report.documentId && existing.revision > 1
                 ? existing

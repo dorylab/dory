@@ -1,3 +1,4 @@
+import { openDataSources } from './navigation';
 import { expect, type Page, type Route } from '@playwright/test';
 
 type ConnectionRecord = {
@@ -411,7 +412,7 @@ export async function createConnectionAndOpenConsole(page: Page) {
     const connection = createWorkbenchConnection();
 
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
     await page.getByRole('button', { name: /add connection/i }).click();
     const dialog = page.getByRole('dialog', { name: /create connection/i });
@@ -439,7 +440,7 @@ export async function openMockConnectionConsole(
     options: { requireInteractiveReady?: boolean } = {},
 ) {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
     const match = page.url().match(/\/([^/]+)\/connections$/);
     const organizationId = match?.[1];
