@@ -1,3 +1,4 @@
+import { GenerateWorkFromRun } from '@/components/work-documents/generate-from-run';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -125,6 +126,7 @@ export default async function AgentRunDetailPage({
                             </Button>
                         )}
                     </div>
+                    <GenerateWorkFromRun runId={workId} />
                     <p className="text-xs text-muted-foreground">{t(hasWorkspace ? 'Report.WorkspaceHint' : 'Report.WorkspaceUnavailable')}</p>
                 </header>
 

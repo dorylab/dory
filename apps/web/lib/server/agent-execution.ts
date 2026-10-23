@@ -3,6 +3,7 @@ import { DEFAULT_ACTION_PROJECTION_BY_ACTOR, hasActionScope, toActionError } fro
 import type { WorkEventCreateInput, WorkSqlSnapshotPayload } from '@dory/database/postgres/impl/works';
 import { newEntityId } from '@dory/shared/id';
 import { getDesktopProtocolSchemeForServer } from '@dory/shared/runtime';
+import type { AnalysisScope } from '@dory/shared/types/work-document';
 import { z } from 'zod';
 
 import { executeAction } from '@/lib/actions/server/execute';
@@ -13,6 +14,9 @@ import { AGENT_RUN_FINDING_INSTRUCTIONS } from '@/lib/agent-runs/finding-instruc
 import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { recordSemanticModelUsage, resolveSemanticModelContext, type SemanticModelContextResult } from '@/lib/server/semantic-model-context';
+import { assertDocumentWrite, emptyWorkContent, patchWorkDocument, saveWorkDraft } from '@/lib/server/work-documents';
+import { applyAnalysisDatabase } from '@/lib/work-documents/analysis-scope';
+import { workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
 
 const DEFAULT_APPEND_SEPARATOR = '\n\n';
 const DEFAULT_WORK_TITLE = 'Agent Run';
@@ -226,6 +230,27 @@ export const finishWorkInputSchema = z
             .max(100000)
             .optional()
             .describe('Final answer in the user language. Required for a built-in chat Run; this exact text is saved and displayed.'),
+        report: z
+            .object({
+                documentId: z.string().optional(),
+                read: z.literal(true).optional(),
+                expectedRevision: z.number().int().positive().optional(),
+                draft: workDraftSchema.optional(),
+                patch: workPatchSchema.optional(),
+            })
+            .superRefine((value, ctx) => {
+                if (value.read) {
+                    if (!value.documentId || value.patch || value.draft || value.expectedRevision)
+                        ctx.addIssue({ code: 'custom', message: 'Read with documentId and read:true only.' });
+                    return;
+                }
+                if (value.documentId ? !value.patch || value.draft || !value.expectedRevision : !value.draft || value.patch)
+                    ctx.addIssue({ code: 'custom', message: 'Create with draft; update with documentId, expectedRevision and patch.' });
+            })
+            .optional()
+            .describe(
+                'Only for a bound built-in chat: save a Work report. A draft without finalAnswer saves progress without ending the Run; a ready report with finalAnswer finishes the analysis. External Agent Runs cannot use this field.',
+            ),
         summaryTitle: z.string().min(1).max(1000).optional(),
         findings: z
             .array(
@@ -1713,7 +1738,75 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     const input = finishWorkInputSchema.parse(rawInput);
     const findings = input.findings;
     const turn = ctx.services.agentTurn;
-    if (turn && !input.finalAnswer) throw new McpFacadeError('FINAL_ANSWER_REQUIRED', 'Provide finalAnswer with the exact answer to display in chat.');
+    if (turn && !input.finalAnswer && !input.report?.read && (input.report?.draft?.status ?? input.report?.patch?.status) !== 'draft')
+        throw new McpFacadeError('FINAL_ANSWER_REQUIRED', 'Provide finalAnswer with the exact answer to display in chat.');
+    let reportDocumentId: string | undefined;
+    if (input.report) {
+        if (!turn) throw new McpFacadeError('REPORT_REQUIRES_CHAT', 'Reports may only be created by the built-in Data Agent.', { status: 403 });
+        const owner = { organizationId: ctx.organizationId, userId: ctx.userId };
+        await assertDocumentWrite(owner);
+        const run = await ctx.services.db.works.getById({ ...owner, workId: turn.workId });
+        if (run?.metadata?.source !== 'internal_chat') throw new McpFacadeError('REPORT_REQUIRES_CHAT', 'Report requires an internal chat.', { status: 403 });
+        const scope = (run.metadata.analysisScope as AnalysisScope | undefined) ?? { connectionIds: run.connectionId ? [run.connectionId] : [] };
+        const existing = input.report.documentId
+            ? await ctx.services.db.workDocuments.get({ ...owner, documentId: input.report.documentId })
+            : await ctx.services.db.workDocuments.create({
+                  ...owner,
+                  title: input.report.draft!.title,
+                  creationKey:
+                      typeof (run.metadata.chatTurn as { reportCreationKey?: unknown })?.reportCreationKey === 'string'
+                          ? (run.metadata.chatTurn as { reportCreationKey: string }).reportCreationKey
+                          : `local:${run.workId}:${turn.requestId}`,
+                  chatId: typeof run.metadata.chatId === 'string' ? run.metadata.chatId : null,
+                  scope,
+                  content: emptyWorkContent(),
+              });
+        if (input.report.read) {
+            return withWork(
+                {
+                    status: 'active',
+                    reportDocumentId: existing.id,
+                    reportRevision: existing.revision,
+                    report: {
+                        title: existing.title,
+                        markdown: existing.content.markdown,
+                        visuals: existing.content.visuals,
+                        evidence: existing.content.evidence.map(item => ({ ...item, rows: item.rows.slice(0, 10) })),
+                        status: existing.status,
+                    },
+                },
+                work,
+            );
+        }
+        if (input.status === 'completed' && (input.report.draft?.status ?? input.report.patch?.status) !== 'ready')
+            throw new McpFacadeError('REPORT_INCOMPLETE', 'Save a ready report before marking this analysis completed.');
+        if (input.report.documentId && !input.report.expectedRevision) throw new McpFacadeError('VERSION_REQUIRED', 'Pass the version from the current Work snapshot.');
+        const saved =
+            !input.report.documentId && existing.revision > 1
+                ? existing
+                : input.report.documentId
+                  ? await patchWorkDocument(ctx.services.db, {
+                        ...owner,
+                        documentId: existing.id,
+                        expectedRevision: input.report.expectedRevision!,
+                        patch: input.report.patch!,
+                        runId: run.workId,
+                        scope,
+                    })
+                  : await saveWorkDraft(ctx.services.db, {
+                        ...owner,
+                        documentId: existing.id,
+                        expectedRevision: input.report.expectedRevision ?? existing.revision,
+                        draft: input.report.draft!,
+                        source: 'agent',
+                        runId: run.workId,
+                        scope,
+                    });
+        reportDocumentId = saved.id;
+        if (saved.status === 'draft' && !input.finalAnswer) {
+            return withWork({ status: 'active', reportDocumentId: saved.id, reportRevision: saved.revision, reportSaved: true, incomplete: true }, work);
+        }
+    }
     const updated = await ctx.services.db.works.finishWithSummary({
         organizationId: ctx.organizationId,
         userId: ctx.userId,
@@ -1753,6 +1846,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     return withWork(
         {
             status: updated.status,
+            ...(reportDocumentId ? { reportDocumentId } : {}),
             ...(turn ? { summarySaved: true, finalAnswer } : {}),
             summaryTitle: summary?.summaryTitle ?? null,
             findings: summary?.findings ?? findings.map(finding => (typeof finding === 'string' ? finding : finding.title)),
@@ -1873,7 +1967,13 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                     const output = await executeInternal<UnknownRecord>(ctx, 'connection.list', {});
                     return withOptionalWork(
                         {
-                            connections: (Array.isArray(output.connections) ? output.connections : []).map(toPublicConnection).filter(item => item.connectionId),
+                            connections: (Array.isArray(output.connections) ? output.connections : [])
+                                .map(toPublicConnection)
+                                .filter(
+                                    item =>
+                                        item.connectionId &&
+                                        (!Array.isArray(ctx.actor.metadata?.allowedConnectionIds) || ctx.actor.metadata.allowedConnectionIds.includes(item.connectionId)),
+                                ),
                         },
                         work,
                     );
@@ -1895,6 +1995,8 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                 executeWithOptionalWork(ctx, 'dory_artifacts', rawInput, async (input, work) => {
                     const artifactId = requireString(input.artifactId, 'artifactId');
                     const artifact = await executeInternal<UnknownRecord>(ctx, 'artifact.get', { artifactId });
+                    if (Array.isArray(ctx.actor.metadata?.allowedConnectionIds) && !ctx.actor.metadata.allowedConnectionIds.includes(artifact.connectionId))
+                        throw new McpFacadeError('SCOPE_MISMATCH', 'Evidence is outside the selected analysis scope.', { status: 403 });
                     const sourceResultSetId = getString(artifact.sourceResultSetId);
                     const previewRows = Math.min(getNumber(input.previewRows) ?? 100, 200);
                     const result = sourceResultSetId
@@ -1975,7 +2077,7 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
             name: 'dory_get_schema_graph',
             title: 'Get Dory schema graph',
             description: `Return tables, columns, primary keys, and declared foreign-key relationships for a Dory connection. Supports schema scopes and one- or two-hop table neighborhoods. Without a workId this is recorded as Agent audit activity. ${WORK_CONTEXT_INSTRUCTION}`,
-            inputSchema: schemaGraphInputSchema,
+            inputSchema: schemaGraphInputSchema.partial({ database: true }),
             outputSchema: unknownObjectOutputSchema,
             annotations: {
                 readOnlyHint: true,
@@ -2062,6 +2164,33 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                 if (owned?.metadata?.source === 'internal_chat') {
                     if (!requestId) throw new McpFacadeError('TURN_REQUIRED', 'Pass the current chat requestId with this Run.');
                     const current = await ctx.services.db.works.assertChatTurn({ organizationId: ctx.organizationId, userId: ctx.userId, workId, requestId });
+                    const scope = current.metadata?.analysisScope as AnalysisScope | undefined;
+                    if (scope?.connectionIds) {
+                        const priorAllowed = ctx.actor.metadata?.allowedConnectionIds;
+                        const allowed = Array.isArray(priorAllowed) ? scope.connectionIds.filter(id => priorAllowed.includes(id)) : scope.connectionIds;
+                        const requested = getString(input.connectionId) ?? getString(toRecord(input.input).connectionId);
+                        if (requested && !allowed.includes(requested))
+                            throw new McpFacadeError('SCOPE_MISMATCH', 'Data source is outside the selected analysis scope.', { status: 403 });
+                        if (
+                            ![
+                                'dory_create_work',
+                                'dory_finish_work',
+                                'dory_list_connections',
+                                'dory_artifacts',
+                                'dory_search_assets',
+                                'dory_read_asset',
+                                'dory_explore_schema',
+                                'dory_get_schema_graph',
+                                'dory_run_readonly_sql',
+                            ].includes(definition.name)
+                        )
+                            throw new McpFacadeError('SCOPE_MISMATCH', 'Use the dedicated schema, query and asset tools within this analysis scope.', { status: 403 });
+                        if (['dory_run_readonly_sql', 'dory_explore_schema', 'dory_get_schema_graph'].includes(definition.name) && !requested)
+                            throw new McpFacadeError('CONNECTION_REQUIRED', 'Choose an explicit connectionId from the selected scope.');
+                        ctx = { ...ctx, currentConnectionId: requested, actor: { ...ctx.actor, metadata: { ...ctx.actor.metadata, allowedConnectionIds: allowed } } };
+                        if (definition.name === 'dory_search_assets' && scope.knowledgeModelId) input.knowledgeModelId = scope.knowledgeModelId;
+                        Object.assign(input, applyAnalysisDatabase(scope, definition.name, input));
+                    }
                     if ((current.metadata?.chatTurn as { summarySaved?: boolean } | undefined)?.summarySaved && definition.name !== 'dory_finish_work') {
                         throw new McpFacadeError('TURN_FINALIZED', 'The analysis is already finalized. Start a new turn for additional work.');
                     }

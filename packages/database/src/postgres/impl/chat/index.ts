@@ -165,10 +165,11 @@ export class PostgresChatRepository implements ChatRepository {
         return row as ChatSessionRecord;
     }
 
-    async listSessions(params: { organizationId: string; userId: string; connectionId: string; includeArchived?: boolean; type?: ChatSessionType }) {
+    async listSessions(params: { organizationId: string; userId: string; connectionId?: string; includeArchived?: boolean; type?: ChatSessionType }) {
         this.assertInited();
 
-        const conds = [eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId), eq(chatSessions.connectionId, params.connectionId)];
+        const conds = [eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)];
+        if (params.connectionId) conds.push(eq(chatSessions.connectionId, params.connectionId));
         if (!params.includeArchived) conds.push(isNull(chatSessions.archivedAt));
         if (params.type) conds.push(eq(chatSessions.type, params.type));
 

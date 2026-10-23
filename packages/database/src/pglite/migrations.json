@@ -634,5 +634,16 @@
     "bps": true,
     "folderMillis": 1792483200004,
     "hash": "8aa939aa8076c6a1b38c0b576c2a9cf056fdbd9ee160960d781f3f01ebef07c0"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"work_documents\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"creation_key\" text NOT NULL,\n    \"chat_id\" text,\n    \"title\" text NOT NULL,\n    \"scope\" jsonb NOT NULL,\n    \"content\" jsonb NOT NULL,\n    \"revision\" integer DEFAULT 1 NOT NULL,\n    \"status\" text DEFAULT 'draft' NOT NULL,\n    \"archived_at\" timestamptz,\n    \"created_at\" timestamptz DEFAULT now() NOT NULL,\n    \"updated_at\" timestamptz DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"work_documents_creation_key\" ON \"work_documents\" (\"organization_id\", \"user_id\", \"creation_key\");\n",
+      "\nCREATE INDEX \"work_documents_owner_updated\" ON \"work_documents\" (\"organization_id\", \"user_id\", \"updated_at\");\n",
+      "\nCREATE TABLE \"work_document_versions\" (\n    \"document_id\" text NOT NULL REFERENCES \"work_documents\"(\"id\") ON DELETE CASCADE,\n    \"revision\" integer NOT NULL,\n    \"title\" text NOT NULL,\n    \"content\" jsonb NOT NULL,\n    \"scope\" jsonb NOT NULL,\n    \"status\" text NOT NULL,\n    \"source\" text NOT NULL,\n    \"created_at\" timestamptz DEFAULT now() NOT NULL,\n    PRIMARY KEY (\"document_id\", \"revision\")\n);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1792627200000,
+    "hash": "57e0c06ec9bcd871a7de756684400ec8a32b15345fc202d970c4d477c602b60c"
   }
 ]

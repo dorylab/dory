@@ -29,6 +29,9 @@ export function prepareChatHistory(messages: UIMessage[]): UIMessage[] {
             ...message,
             parts: message.parts.filter(part => {
                 if (part.type !== 'dynamic-tool' && !part.type.startsWith('tool-')) return true;
+                // Failed JSON generation has rawInput but no valid input. Replaying
+                // it poisons the next provider request instead of allowing a retry.
+                if (!('input' in part) || !part.input || typeof part.input !== 'object' || Array.isArray(part.input)) return false;
                 return 'state' in part && typeof part.state === 'string' && ['output-available', 'output-error', 'output-denied'].includes(part.state);
             }),
         }))

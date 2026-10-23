@@ -46,6 +46,7 @@ test('historical terminal tools remain available while interrupted calls are exc
                 { type: 'text', text: 'Earlier analysis' },
                 { type: 'tool-retiredTool', state: 'output-available', toolCallId: 'done', input: {}, output: {} },
                 { type: 'tool-retiredTool', state: 'input-streaming', toolCallId: 'aborted' },
+                { type: 'tool-updateWorkReport', state: 'output-error', toolCallId: 'malformed', input: undefined, rawInput: '{"draft":', errorText: 'Invalid JSON' },
             ],
         },
     ]);

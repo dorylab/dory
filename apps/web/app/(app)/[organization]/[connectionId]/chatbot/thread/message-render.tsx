@@ -55,7 +55,7 @@ type MessageRendererProps = {
     status: string;
 
     onCopySql: (sql: string) => Promise<void> | void;
-    onManualExecute: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
+    onManualExecute?: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
 
     mode?: ChatMode;
     onExecuteAction?: CopilotActionExecutor;
@@ -162,10 +162,12 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         <SqlResultBody
             key={key}
             result={sqlResult}
-            onManualExecute={onManualExecute}
+            onManualExecute={onManualExecute ?? (() => undefined)}
             mode={mode}
             manualPrimaryAction={
-                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
+                !onManualExecute ? (
+                    <></>
+                ) : showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
                     <Button
                         type="button"
                         size="sm"
@@ -177,7 +179,9 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 ) : undefined
             }
             manualMenuActions={
-                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
+                !onManualExecute ? (
+                    <></>
+                ) : showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
                     <DropdownMenuItem onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}>{t('Tools.NewTab')}</DropdownMenuItem>
                 ) : undefined
             }

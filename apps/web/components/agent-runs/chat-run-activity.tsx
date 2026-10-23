@@ -42,7 +42,7 @@ export function ChatRunActivity({
     children?: ReactNode;
     tools: ChatMessageToolRow[];
     onCopySql: (sql: string) => Promise<void> | void;
-    onManualExecute: SqlResultBodyProps['onManualExecute'];
+    onManualExecute?: SqlResultBodyProps['onManualExecute'];
 }) {
     const t = useTranslations('AgentRuns');
     const { data, isPending, isError } = useQuery({
@@ -59,6 +59,7 @@ export function ChatRunActivity({
     });
     const events = data?.events ?? [];
     const turn = data?.work.metadata?.chatTurn as { requestId?: string; summarySaved?: boolean; responseSaved?: boolean } | undefined;
+    const ended = !streaming && Boolean(data && (data.work.status !== 'active' || turn?.requestId !== requestId));
     const incomplete = data?.work.status === 'error' && turn?.requestId === requestId && (!turn.summarySaved || !turn.responseSaved);
     return (
         <>
@@ -77,10 +78,10 @@ export function ChatRunActivity({
                     workId={workId}
                     onCopySql={onCopySql}
                     onManualExecute={onManualExecute}
-                    ended={!streaming && Boolean(data && (data.work.status !== 'active' || turn?.requestId !== requestId))}
+                    ended={ended}
                 />
             </ChatAnalysisProcess>
-            {data ? (
+            {ended && data ? (
                 <div className="mb-3 flex flex-wrap gap-2">
                     <Button asChild size="sm" variant="outline">
                         <Link href={data.runHref}>
@@ -95,7 +96,7 @@ export function ChatRunActivity({
                     ) : null}
                 </div>
             ) : null}
-            {incomplete ? <p className="mb-3 text-sm text-muted-foreground">{t('Chat.Incomplete')}</p> : null}
+            {ended && incomplete ? <p className="mb-3 text-sm text-muted-foreground">{t('Chat.Incomplete')}</p> : null}
         </>
     );
 }

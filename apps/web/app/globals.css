@@ -650,3 +650,24 @@ body {
         font-weight: 500;
     }
 }
+
+/* Work documents share the product's existing semantic theme tokens. */
+.work-prose { overflow-wrap: anywhere; line-height: 1.75; }
+.work-prose h1 { font-size: 1.75rem; font-weight: 650; margin: 1.5rem 0 .75rem; }
+.work-prose h2 { font-size: 1.4rem; font-weight: 600; margin: 1.5rem 0 .75rem; }
+.work-prose h3 { font-size: 1.15rem; font-weight: 600; margin: 1.25rem 0 .5rem; }
+.work-prose p { margin: .75rem 0; }
+.work-prose ul { list-style: disc; padding-left: 1.5rem; }
+.work-prose ol { list-style: decimal; padding-left: 1.5rem; }
+.work-prose blockquote { border-left: 3px solid var(--border); padding-left: 1rem; color: var(--muted-foreground); }
+.work-prose a { color: var(--primary); text-decoration: underline; cursor: pointer; }
+.work-prose pre { background: var(--muted); padding: 1rem; border-radius: var(--radius); white-space: pre-wrap; }
+.work-prose code { background: var(--muted); border-radius: .2rem; padding: .1rem .25rem; }
+.work-prose table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.work-prose th, .work-prose td { border: 1px solid var(--border); padding: .5rem; text-align: left; }
+.work-prose th { background: var(--muted); }
+.work-prose figure { margin: 1.5rem 0; }
+.work-prose figcaption { font-weight: 600; }
+.work-prose svg { width: 100%; max-height: 400px; }
+.work-prose .metric { font-size: 2rem; }
+.work-prose .source { color: var(--muted-foreground); font-size: .75rem; }

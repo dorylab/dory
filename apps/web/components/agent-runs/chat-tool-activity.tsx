@@ -21,7 +21,7 @@ export type ChatMessageToolRow = ChatMessageTool & {
 
 type SqlActions = {
     onCopySql: (sql: string) => Promise<void> | void;
-    onManualExecute: SqlResultBodyProps['onManualExecute'];
+    onManualExecute?: SqlResultBodyProps['onManualExecute'];
 };
 
 type SnapshotResponse = {
@@ -58,7 +58,9 @@ function SavedSqlDetail({ workId, sessionId, open, onCopySql, onManualExecute }:
             <SqlStatementBlock sql={data.session.sqlText} onCopy={onCopySql} />
             <SqlResultBody
                 embedded
-                onManualExecute={onManualExecute}
+                onManualExecute={onManualExecute ?? (() => undefined)}
+                manualPrimaryAction={onManualExecute ? undefined : <></>}
+                manualMenuActions={onManualExecute ? undefined : <></>}
                 result={{
                     type: 'sql-result',
                     ok: data.session.status === 'success',

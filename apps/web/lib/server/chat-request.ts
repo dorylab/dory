@@ -1,3 +1,6 @@
+import { createWorkDocumentTools } from '@/lib/server/work-document-tools';
+import { validateAnalysisScope } from '@/lib/server/work-documents';
+import type { AnalysisScope } from '@dory/shared/types/work-document';
 import 'server-only';
 
 import { getDBService } from '@dory/database';
@@ -53,6 +56,8 @@ type ChatRequestBody = {
     webSearch?: boolean;
     copilotEnvelope?: CopilotEnvelopeV1 | null;
     candidateTables?: DoryAgentSchemaTableRef[] | null;
+    analysisScope?: AnalysisScope;
+    documentId?: string | null;
 };
 
 function mergeHeaders(headers: Record<string, string | undefined> | undefined, extraHeaders: Record<string, string> | null): Record<string, string | undefined> | undefined {
@@ -144,6 +149,12 @@ export async function handleChatRequest(req: Request) {
     let connectionId = connectionIdFromBody ?? req.headers.get('x-connection-id') ?? null;
     const db = userId ? await getDBService() : null;
 
+    const analysisScope = body.analysisScope && db && userId && organizationId ? await validateAnalysisScope(db, { userId, organizationId }, body.analysisScope) : undefined;
+    if (body.analysisScope && !analysisScope) return Response.json({ error: 'Unauthorized.' }, { status: 401 });
+    // Organization-level sessions use an explicit set of connections, not an ambient connection.
+    if (analysisScope) connectionId = null;
+    if (body.documentId && db && userId && organizationId) await db.workDocuments.get({ userId, organizationId, documentId: body.documentId });
+
     const execution = await resolveAiRouteExecution({
         req: req as any,
         db,
@@ -171,6 +182,7 @@ export async function handleChatRequest(req: Request) {
     const sessionMetadata =
         userId && (chatId || tabId)
             ? {
+                  analysisScope: analysisScope ?? null,
                   requestedModel: requestedModel ?? null,
                   providerModel: execution.modelName,
                   webSearch: Boolean(webSearch),
@@ -214,14 +226,14 @@ export async function handleChatRequest(req: Request) {
                 if (existed.connectionId && connectionId && existed.connectionId !== connectionId) {
                     return Response.json({ error: translateApi('Api.Chat.ConnectionChanged', undefined, locale) }, { status: 409 });
                 }
-                connectionId ??= existed.connectionId;
+                if (!analysisScope) connectionId ??= existed.connectionId;
                 if (sessionMetadata) sessionMetadata.connectionId = connectionId;
                 await db.chat.updateSession({
                     organizationId,
                     sessionId: chatId,
                     userId,
                     patch: {
-                        connectionId: connectionId ?? null,
+                        connectionId: analysisScope ? existed.connectionId : (connectionId ?? null),
                         activeDatabase: database ?? null,
                         activeSchema: activeSchema ?? null,
                         metadata: sessionMetadata ?? null,
@@ -271,6 +283,8 @@ export async function handleChatRequest(req: Request) {
                   title: sessionTitle ?? currentUserText.slice(0, 64),
                   signal: req.signal,
                   requireSummary: true,
+                  analysisScope,
+                  reportCreationKey: `${chatId}:${currentUserMessage?.id ?? requestMessageId}`,
               })
             : null;
 
@@ -284,15 +298,33 @@ export async function handleChatRequest(req: Request) {
                       chatId,
                       requestId,
                       connectionId,
+                      analysisScope,
                       database,
                       locale,
                       requestOrigin: new URL(req.url).origin,
                       signal: req.signal,
                       resolveWork: () => chatRun.resolve(),
+                      beforeComplete: async () => {
+                          await reports?.assertReady();
+                      },
                   })
                 : null;
-        const tools = analysis?.tools ?? { chartBuilder: createChartBuilderTool(locale) };
-        const sqlToolEnabled = Boolean(analysis && connectionId);
+        const reports =
+            db && userId && organizationId && chatId && chatRun
+                ? createWorkDocumentTools({
+                      db,
+                      userId,
+                      organizationId,
+                      chatId,
+                      creationKey: `${chatId}:${currentUserMessage?.id ?? requestMessageId}`,
+                      requestId,
+                      scope: analysisScope ?? { connectionIds: connectionId ? [connectionId] : [] },
+                      documentId: body.documentId,
+                      runId: async () => (await chatRun.resolve()).workId,
+                  })
+                : null;
+        const tools = { ...(analysis?.tools ?? { chartBuilder: createChartBuilderTool(locale) }), ...(!isLocalAiAgentProvider(execution.providerKey) ? reports?.tools : {}) };
+        const sqlToolEnabled = Boolean(analysis && (connectionId || analysisScope?.connectionIds.length));
         const work = await chatRun?.resolve();
         const knowledgeDiscovery = await analysis?.prepareKnowledge(currentUserText);
 
@@ -316,15 +348,22 @@ export async function handleChatRequest(req: Request) {
         const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
         const agentInstructions = [
             agentContext.instructions,
+            reports ? await reports.instructions(isLocalAiAgentProvider(execution.providerKey)) : null,
+            analysisScope
+                ? `Analysis scope: ${JSON.stringify(analysisScope)}. Explore schema for EACH selected connection before querying. Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
+                : null,
             currentTurnExecutionInstruction,
             knowledgeDiscovery,
             analysis
-                ? 'Complete analysis with finishAnalysis: provide structured findings and finalAnswer in the user language. finalAnswer is the exact answer shown in chat. Only cite actual returned Artifact IDs. Do not stop after charts. Use findings: [] for setup checks. If business definitions conflict, ask for clarification in finalAnswer instead of guessing.'
+                ? 'Complete analysis with finishAnalysis: include status:"completed" (or "error" for incomplete work), structured findings and finalAnswer in the user language. finalAnswer is the exact answer shown in chat. Only cite actual returned Artifact IDs. Do not stop after charts. Use findings: [] for setup checks. If business definitions conflict, ask for clarification in finalAnswer instead of guessing.'
                 : null,
         ]
             .filter(Boolean)
             .join('\n\n')
-            .replaceAll('dory_finish_work', 'finishAnalysis');
+            .replaceAll(
+                isLocalAiAgentProvider(execution.providerKey) ? 'finishAnalysis' : 'dory_finish_work',
+                isLocalAiAgentProvider(execution.providerKey) ? 'dory_finish_work' : 'finishAnalysis',
+            );
 
         const currentUserMessageId =
             typeof (currentUserMessage as any)?.id === 'string' && (currentUserMessage as any).id ? (currentUserMessage as any).id : requestMessageId || null;
@@ -400,7 +439,7 @@ export async function handleChatRequest(req: Request) {
             tools,
             instructions: agentInstructions,
             temperature: preset.temperature,
-            maxSteps: 12,
+            maxSteps: analysisScope || body.documentId ? 24 : 16,
             structuredCompletion: Boolean(analysis && !isLocalAiAgentProvider(execution.providerKey)),
             headers,
             context: {
@@ -482,7 +521,8 @@ export async function handleChatRequest(req: Request) {
                 }
             },
             onError: error => {
-                void chatRun?.fail().catch(error => console.error('[chat] failed to finish Agent Run after stream error', error));
+                // This callback also formats recoverable tool/input errors. Finalize
+                // only in onEnd, after the agent has had a chance to recover.
                 void recordAiUsage({
                     requestId,
                     context: {

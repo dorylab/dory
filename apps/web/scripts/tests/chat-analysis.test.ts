@@ -33,6 +33,9 @@ const [{ createChatAnalysis }, { buildDoryChatAgent }, { catalogSearchAction, ca
         import('@/lib/actions/server/domains/query/read-only-execute'),
         import('@/lib/auth/organization-ac'),
     ]);
+const { schemaGetGraphAction } = await import('@/lib/actions/server/domains/schema/graph');
+const { schemaListTablesAction } = await import('@/lib/actions/server/domains/schema/list-tables');
+const { getAgentExecutionTools } = await import('@/lib/server/agent-execution');
 const { getChatResponseText } = await import('@/lib/agent-runs/chat-response');
 
 const scope = { organizationId: 'org', userId: 'user' };
@@ -66,15 +69,26 @@ async function fixture() {
     const db = { works, chat, tabState } as DBService;
     await database.insert(schema.user).values({ id: 'user', name: 'User', email: 'user@example.test' });
     await chat.createGlobalSession({ ...scope, id: 'chat', connectionId: 'connection' });
-    const start = (requestId: string) =>
-        works.startChatTurn({ ...scope, requestId, connectionId: 'connection', externalSessionId: 'chat:chat', metadata: { source: 'internal_chat', chatId: 'chat' } });
-    const makeAnalysis = (requestId: string, signal = new AbortController().signal) =>
+    const start = (requestId: string, connectionIds?: string[], databasesByConnection?: Record<string, string>) =>
+        works.startChatTurn({
+            ...scope,
+            requestId,
+            connectionId: connectionIds ? null : 'connection',
+            externalSessionId: 'chat:chat',
+            metadata: {
+                source: 'internal_chat',
+                chatId: 'chat',
+                ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
+            },
+        });
+    const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string>) =>
         createChatAnalysis({
             db,
             ...scope,
             chatId: 'chat',
             requestId,
-            connectionId: 'connection',
+            connectionId: connectionIds ? null : 'connection',
+            ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
             locale: 'en',
             requestOrigin: 'https://dory.test',
             signal,
@@ -87,7 +101,7 @@ async function fixture() {
                 role: 'owner',
                 permissions: getOrganizationPermissionMap('owner'),
             },
-            resolveWork: () => start(requestId),
+            resolveWork: () => start(requestId, connectionIds, databasesByConnection),
         });
     return {
         db,
@@ -131,7 +145,7 @@ test('built-in analysis closes the Knowledge → SQL → chart → Findings loop
     t.mock.method(catalogSearchAction, 'handler', async () => ({ assets: [asset], total: 1, nextCursor: null }));
     t.mock.method(catalogReadAction, 'handler', async () => ({
         asset,
-        content: { definition: 'SUM(amount - refunded_amount)' },
+        content: { definition: 'SUM(amount - refunded_amount)', checkedAt: new Date('2026-10-23T00:00:00Z') },
         relatedRefs: [],
         citation: { ref: asset.ref, title: asset.title, revision: 'v1', deepLink: asset.deepLink },
     }));
@@ -449,4 +463,113 @@ test('analysis budget reserves a finalization call and one correction', async ()
     const result = await agent.generate({ prompt: 'Analyze' });
     assert.equal(result.steps.length, 14);
     assert.equal(finishes, 2);
+});
+
+test('global analysis queries two selected sources, retains per-source evidence and rejects out-of-scope SQL', async t => {
+    const f = await fixture();
+    const executed: Array<{ connectionId: string; database: string | null | undefined }> = [];
+    const selectedDatabases = { connection: 'sales', second: 'advertising' };
+    const graphs: Array<{ connectionId?: string; database: string }> = [];
+    t.mock.method(schemaGetGraphAction, 'handler', async (_ctx: unknown, input: { connectionId?: string; database: string }) => {
+        graphs.push(input);
+        return { tables: [], relations: [] };
+    });
+    const explored: Array<{ connectionId?: string; database?: string }> = [];
+    t.mock.method(schemaListTablesAction, 'handler', async (_ctx: unknown, input: { connectionId?: string; database?: string }) => {
+        explored.push(input);
+        return { tables: [] };
+    });
+    t.mock.method(
+        queryReadOnlyExecuteAction,
+        'handler',
+        async (_ctx: Parameters<typeof queryReadOnlyExecuteAction.handler>[0], input: Parameters<typeof queryReadOnlyExecuteAction.handler>[1]) => {
+            assert.ok(input.connectionId);
+            executed.push({ connectionId: input.connectionId, database: input.database });
+            const sessionId = `multi-${executed.length}`;
+            return {
+                session: { sessionId, userId: scope.userId, connectionId: input.connectionId, sqlText: input.sql, status: 'success', source: 'ai', durationMs: 1 },
+                queryResultSets: [{ sessionId, setIndex: 0, sqlText: input.sql, columns: [{ name: 'total', type: 'numeric' }], rowCount: 1, status: 'success' }],
+                results: [[{ total: 42 }]],
+                meta: {},
+            };
+        },
+    );
+    try {
+        await f.start('old-single');
+        const work = await f.start('multi', ['connection', 'second'], selectedDatabases);
+        assert.equal(work.connectionId, null);
+        const analysis = f.makeAnalysis('multi', undefined, ['connection', 'second'], selectedDatabases);
+        const execute = analysis.tools.sqlRunner.execute!;
+        await execute({ connectionId: 'connection', sql: 'select 42 as total' }, call('one'));
+        await execute({ connectionId: 'second', sql: 'select 42 as total', database: 'advertising' }, call('two'));
+        assert.deepEqual(executed, [
+            { connectionId: 'connection', database: 'sales' },
+            { connectionId: 'second', database: 'advertising' },
+        ]);
+        await assert.rejects(async () => execute({ connectionId: 'second', sql: 'select 42', database: 'sales' }, call('wrong-db')), /does not match/);
+        await analysis.tools.exploreSchema.execute!({ operation: 'list_tables', connectionId: 'connection' }, call('schema-one'));
+        await analysis.tools.exploreSchema.execute!({ operation: 'list_tables', connectionId: 'second' }, call('schema-two'));
+        assert.deepEqual(
+            explored.map(item => [item.connectionId, item.database]),
+            [
+                ['connection', 'sales'],
+                ['second', 'advertising'],
+            ],
+        );
+        await assert.rejects(
+            async () => analysis.tools.exploreSchema.execute!({ operation: 'list_tables', connectionId: 'second', database: 'sales' }, call('schema-wrong')),
+            /does not match/,
+        );
+        await analysis.tools.getSchemaGraph.execute!({ connectionId: 'second' }, call('graph'));
+        assert.deepEqual(
+            graphs.map(item => [item.connectionId, item.database]),
+            [['second', 'advertising']],
+        );
+        // External/bridge tools recover the same scope from the persisted Run.
+        const bridgeSql = getAgentExecutionTools().find(tool => tool.name === 'dory_run_readonly_sql')!;
+        const bridgeContext = {
+            ...scope,
+            locale: 'en' as const,
+            runtime: 'desktop' as const,
+            currentConnectionId: null,
+            actor: { type: 'agent' as const, id: 'user', scopes: ['connections:read', 'query:read', 'tabs:read', 'tabs:write', 'schema:read'] },
+            access: {
+                source: 'local' as const,
+                userId: 'user',
+                organization: { id: 'org' },
+                organizationId: 'org',
+                isMember: true,
+                role: 'owner' as const,
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+            services: { db: f.db, requestOrigin: 'https://dory.test' },
+        };
+        await bridgeSql.execute(bridgeContext, { workId: work.workId, requestId: 'multi', connectionId: 'second', sql: 'select 42 as total' });
+        assert.deepEqual(executed.at(-1), { connectionId: 'second', database: 'advertising' });
+        await assert.rejects(
+            bridgeSql.execute(bridgeContext, { workId: work.workId, requestId: 'multi', connectionId: 'second', sql: 'select 42', database: 'sales' }),
+            /does not match/,
+        );
+        const bridgeGraph = getAgentExecutionTools().find(tool => tool.name === 'dory_get_schema_graph')!;
+        const graphInput = { workId: work.workId, requestId: 'multi', connectionId: 'connection' };
+        assert.ok(bridgeGraph.inputSchema.safeParse(graphInput).success);
+        await bridgeGraph.execute(bridgeContext, graphInput);
+        assert.equal(graphs.at(-1)?.database, 'sales');
+        const persisted = await f.works.getById({ ...scope, workId: work.workId });
+        assert.deepEqual(persisted?.metadata?.analysisScope, { connectionIds: ['connection', 'second'], databasesByConnection: selectedDatabases });
+        await f.chat.updateSession({ ...scope, sessionId: 'chat', patch: { metadata: { analysisScope: persisted?.metadata?.analysisScope } } });
+        assert.deepEqual((await f.chat.readSession({ ...scope, sessionId: 'chat' }))?.metadata?.analysisScope, persisted?.metadata?.analysisScope);
+        await assert.rejects(async () => execute({ connectionId: 'other', sql: 'select 42' }, call('denied')), /outside the selected/);
+        await assert.rejects(async () => execute({ sql: 'select 42' }, call('missing')), /explicit connectionId/);
+        const snapshot = await f.works.getSnapshot({ ...scope, workId: work.workId });
+        assert.ok(snapshot);
+        const artifacts = await f.database.select().from(schema.artifacts);
+        assert.deepEqual(new Set(artifacts.map(item => item.connectionId)), new Set(['connection', 'second']));
+        assert.equal((await f.works.getById({ ...scope, workId: work.workId }))?.connectionId, null);
+        const narrowed = await f.start('narrowed', ['second']);
+        assert.deepEqual(narrowed.metadata?.analysisScope, { connectionIds: ['second'] });
+        await assert.rejects(f.works.resolveExisting({ ...scope, workId: work.workId, connectionId: 'connection' }), /outside the selected/);
+    } finally {
+        await f.close();
+    }
 });

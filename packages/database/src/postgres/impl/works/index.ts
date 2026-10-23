@@ -398,12 +398,13 @@ export class PostgresWorksRepository {
             }));
         if ((work.metadata?.chatTurn as { requestId?: string } | undefined)?.requestId === input.requestId) return work;
         const now = new Date();
-        const chatTurn = { requestId: input.requestId, startedAt: now.toISOString() };
+        const chatTurn = { requestId: input.requestId, startedAt: now.toISOString(), reportCreationKey: input.metadata?.reportCreationKey };
         const [row] = await this.db
             .update(works)
             .set({
                 status: 'active',
-                metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ chatTurn })}::jsonb`,
+                ...(input.metadata?.analysisScope ? { connectionId: null } : work.metadata?.analysisScope ? { connectionId: input.connectionId ?? null } : {}),
+                metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ chatTurn, analysisScope: input.metadata?.analysisScope ?? null })}::jsonb`,
                 updatedAt: now,
                 lastActiveAt: now,
             })
@@ -453,6 +454,11 @@ export class PostgresWorksRepository {
 
     private async prepareExistingWork(row: WorkRecord, input: ResolveWorkInput, now: Date): Promise<WorkRecord> {
         const requestedConnectionId = input.connectionId?.trim() || null;
+        const scope = row.metadata?.analysisScope as { connectionIds?: string[] } | undefined;
+        if (scope?.connectionIds) {
+            if (requestedConnectionId && !scope.connectionIds.includes(requestedConnectionId)) throw new DatabaseError('Data source is outside the selected analysis scope.', 403);
+            return row;
+        }
         if (requestedConnectionId && row.connectionId && row.connectionId !== requestedConnectionId) {
             throw Object.assign(new Error(`Work ${row.workId} is already bound to connection ${row.connectionId}; received ${requestedConnectionId}.`), {
                 code: 'WORK_CONNECTION_MISMATCH',

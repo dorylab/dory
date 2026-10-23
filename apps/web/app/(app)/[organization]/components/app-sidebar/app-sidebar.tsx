@@ -97,7 +97,8 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const organizationItems = [
         { title: t('DataSources'), url: dataSourcesUrl, icon: Database, requiresConnection: false },
         { title: t('Knowledge'), url: `/${organization}/knowledge`, matchPrefix: `/${organization}/knowledge`, icon: BrainCircuit, requiresConnection: false },
-        { title: t('AgentRuns'), url: `/${organization}/agent-runs`, icon: Bot, requiresConnection: false },
+        { title: t('Chatbot'), url: `/${organization}/data-agent`, icon: Bot, requiresConnection: false },
+        { title: 'Work', url: `/${organization}/works`, icon: FileChartColumnIncreasing, requiresConnection: false },
     ];
     const navMain = connectionId
         ? [
@@ -154,6 +155,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
           ]
         : organizationItems;
     const moreItems = [
+        { title: t('AgentRuns'), url: `/${organization}/agent-runs`, icon: Bot, requiresConnection: false },
         {
             title: t('SchemaCompare'),
             url: `/${organization}/comparisons`,

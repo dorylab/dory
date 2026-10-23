@@ -1,3 +1,5 @@
+import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { ZodError } from 'zod';
 import { isLocalMissingAiEnvError } from '@/lib/ai/execution/route-dispatch';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
 import { handleChatRequest } from '@/lib/server/chat-request';
@@ -10,6 +12,9 @@ export const POST = withUserAndOrganizationHandler(async ({ req }) => {
     try {
         return await handleChatRequest(req);
     } catch (error) {
+        if (error instanceof DatabaseError || error instanceof ZodError) {
+            return Response.json({ error: error.message }, { status: error instanceof DatabaseError ? error.code : 400 });
+        }
         if (isAiQuotaExceededError(error)) {
             return toAiQuotaExceededResponse(error);
         }
