@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect, type Route } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
@@ -304,7 +305,7 @@ test('saved Comparisons support create, AI recovery, immutable Run history, Diff
     );
 
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0]!;
 
     const removedRoute = await page.goto(`/${organization}/compare`);
@@ -367,7 +368,7 @@ test('saved Comparisons support create, AI recovery, immutable Run history, Diff
 
 test('failed first Run preserves the saved Comparison and exposes retry', async ({ page, appErrors }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0]!;
     const failedRun = comparisonRun('cmprun_failed', 'cmp_failed', {
         status: 'failed',

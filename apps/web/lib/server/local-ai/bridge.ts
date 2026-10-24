@@ -1,9 +1,12 @@
+import { newEntityId } from '@dory/shared/id';
+
 import 'server-only';
 
 import type { DBService } from '@dory/database';
 import type { LocalAiAgentProvider } from '@dory/ee/ai/provider-options';
 import { isLocalAiAgentProvider } from '@dory/ee/ai/provider-options';
-import { MCP_LOCAL_AI_SCOPE, authenticateMcpRequest, hasMcpScope, type McpAuthContext } from '@/lib/server/mcp/auth';
+
+import { authenticateMcpRequest, hasMcpScope, MCP_LOCAL_AI_SCOPE, type McpAuthContext } from '@/lib/server/mcp/auth';
 
 export const LOCAL_AI_BRIDGE_TARGET_PREFIX = 'bridge:';
 const LOCAL_AI_BRIDGE_ONLINE_WINDOW_MS = 45_000;
@@ -101,6 +104,7 @@ export function assertLocalAiBridgePayloadSize(input: { prompt?: string | null; 
 }
 
 export async function createAndWaitForLocalAiBridgeJob(options: {
+    agentTurn?: { workId: string; requestId: string; userId: string };
     db: DBService;
     organizationId: string;
     provider: LocalAiAgentProvider;
@@ -114,7 +118,10 @@ export async function createAndWaitForLocalAiBridgeJob(options: {
 
     const startedAt = Date.now();
     const expiresAt = new Date(startedAt + LOCAL_AI_JOB_TIMEOUT_MS);
+    const jobId = newEntityId();
+    if (options.agentTurn) await options.db.works.bindChatBridgeJob({ organizationId: options.organizationId, ...options.agentTurn, jobId });
     const job = await options.db.mcp.createLocalAiJob({
+        id: jobId,
         organizationId: options.organizationId,
         bridgeId: options.bridgeId,
         provider: options.provider,

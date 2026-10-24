@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect } from '@playwright/test';
 
 import { test } from './fixtures';
@@ -9,7 +10,7 @@ test.describe('instant workbench navigation', () => {
 
     test('keeps the client document while moving between SQL Console and Explorer', async ({ page }) => {
         await page.goto('/');
-        await page.waitForURL(/\/[^/]+\/connections$/);
+        await openDataSources(page);
 
         const connectionCard = page.getByTestId('connection-card').filter({ hasText: 'Demo Database' }).first();
         await expect(connectionCard).toBeVisible();
@@ -28,7 +29,7 @@ test.describe('instant workbench navigation', () => {
         for (const title of ['Data Sources', 'Knowledge', 'Agent Runs']) {
             await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
         }
-        await expect(page.getByRole('button', { name: 'More', exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'More...', exact: true })).toHaveCount(0);
 
         await page.evaluate(() => sessionStorage.setItem('instant-navigation-document-marker', 'preserved'));
 

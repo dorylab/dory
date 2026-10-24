@@ -1,13 +1,16 @@
+import { newEntityId } from '@dory/shared/id';
+import type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
+import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
-import { newEntityId } from '@dory/shared/id';
-import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { connections } from './connections';
 
 export { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 
 export type KnowledgeDefinitionKind = 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
-export type KnowledgeDefinitionStatus = 'verified' | 'unverified';
+export type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
+export { isPublishedDefinition } from '@dory/shared/types/knowledge';
+
 export type KnowledgeAssetType = 'definition' | 'verified_query' | 'business_rule';
 export type KnowledgeSourceRelationType = 'provided' | 'generated';
 
@@ -114,6 +117,8 @@ export const knowledgeModels = pgTable(
         organizationId: text('organization_id').notNull(),
         name: text('name').notNull(),
         description: text('description'),
+        publicationMode: text('publication_mode').$type<'review' | 'automatic'>().notNull().default('review'),
+        publicationEpoch: integer('publication_epoch').notNull().default(0),
         businessContextMd: text('business_context_md').notNull().default(''),
         modelYaml: text('model_yaml').notNull().default(EMPTY_OSSIE_YAML),
         modelJson: jsonb('model_json').$type<OssieDocument>().notNull().default(EMPTY_OSSIE_DOCUMENT),

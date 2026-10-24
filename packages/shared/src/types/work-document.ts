@@ -1,0 +1,45 @@
+export type AnalysisScope = {
+    connectionIds: string[];
+    knowledgeModelId?: string | null;
+    databasesByConnection?: Record<string, string>;
+};
+export type WorkEvidence = {
+    artifactId: string;
+    title: string;
+    connectionId: string | null;
+    connectionName: string | null;
+    sql: string | null;
+    capturedAt: string;
+    columns: string[];
+    rows: Record<string, unknown>[];
+    rowCount: number | null;
+    truncated: boolean;
+    runId: string | null;
+};
+export type WorkVisual = {
+    id: string;
+    type: 'metric' | 'chart' | 'table';
+    title: string;
+    evidenceId: string;
+    chart?: { type: 'bar' | 'line'; xKey: string; yKey: string };
+    metric?: { column: string; rowIndex: number };
+};
+export type WorkDocumentContent = {
+    markdown: string;
+    visuals: WorkVisual[];
+    evidence: WorkEvidence[];
+    knowledge: Array<{ ref: string; title: string; revision: string; content: string }>;
+};
+export type WorkDocumentView = {
+    id: string;
+    title: string;
+    chatId: string | null;
+    scope: AnalysisScope;
+    content: WorkDocumentContent;
+    revision: number;
+    status: 'draft' | 'ready';
+    archivedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+};
+export type WorkDocumentSummary = Omit<WorkDocumentView, 'content'>;

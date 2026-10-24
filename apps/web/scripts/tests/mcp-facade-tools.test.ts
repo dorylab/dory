@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import test from 'node:test';
+import type { ActionContext } from '@dory/actions';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ActionContext } from '@dory/actions';
-import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
+
 import type { WebActionServices } from '@/lib/actions/server/types';
+import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
@@ -140,6 +141,14 @@ function createWorksMock() {
         knowledgeUsage,
         finishInputs,
         works,
+        getById: async (input: any) => findByWorkId(input),
+        assertChatTurn: async (input: any) => {
+            const work = findByWorkId(input);
+            if (!work || work.metadata?.chatTurn?.requestId !== input.requestId) {
+                throw Object.assign(new Error('Chat turn is no longer current.'), { code: 'TURN_NOT_FOUND' });
+            }
+            return work;
+        },
         summarizeInput: (input: unknown) => input,
         create: async (input: any) => {
             if (input.workId) {
@@ -813,6 +822,7 @@ test('dory_create_work returns and records relevant semantic model context', asy
         db: {
             works,
             knowledge: {
+                extraction: { listRules: async () => [], evidenceFor: async () => [] },
                 listModels: async () => [
                     {
                         id: 'model-1',
@@ -857,10 +867,11 @@ test('dory_create_work returns and records relevant semantic model context', asy
     assert.match(output.semanticContext, /SUM\(orders\.amount\)/);
     assert.deepEqual(
         output.semanticModelsUsed.map((item: any) => item.modelRevision),
-        ['revision-1'],
+        [works.knowledgeUsage[0].revision],
     );
     assert.equal(works.knowledgeUsage[0].assetKind, 'semantic_model');
-    assert.match(works.knowledgeUsage[0].assetRef, /revision-1$/);
+    assert.match(works.knowledgeUsage[0].revision, /^[a-f0-9]{64}$/);
+    assert.ok(works.knowledgeUsage[0].assetRef.endsWith(works.knowledgeUsage[0].revision));
 });
 
 test('dory_create_work fails open when semantic context resolution fails', async () => {
@@ -990,16 +1001,22 @@ test('dory_create_work continues a Chat Run across MCP tokens without replacing 
         userId: 'user-1',
         externalSessionId: 'chat:chat-1',
         connectionId: 'conn-1',
-        metadata: { source: 'internal_chat', chatId: 'chat-1', agentRunSummary: { findings: ['existing'] } },
+        metadata: { source: 'internal_chat', chatId: 'chat-1', chatTurn: { requestId: 'turn-1' }, agentRunSummary: { findings: ['existing'] } },
     });
     const ctx = createContext({ db: { works } } as unknown as WebActionServices);
-    const output = (await getTool('dory_create_work').execute(ctx, { workId: original.workId, externalSessionId: 'another-agent', connectionId: 'conn-1' })) as typeof original;
+    const output = (await getTool('dory_create_work').execute(ctx, {
+        workId: original.workId,
+        requestId: 'turn-1',
+        externalSessionId: 'another-agent',
+        connectionId: 'conn-1',
+    })) as typeof original;
     assert.equal(output.workId, original.workId);
     assert.equal(output.externalSessionId, 'chat:chat-1');
     assert.equal(works.works.size, 1);
-    assert.deepEqual(original.metadata, { source: 'internal_chat', chatId: 'chat-1', agentRunSummary: { findings: ['existing'] } });
-    assert.equal(works.events.at(-1)?.workId, original.workId);
-    assert.equal(works.events.at(-1)?.tokenId, 'token-1');
+    assert.deepEqual(original.metadata, { source: 'internal_chat', chatId: 'chat-1', chatTurn: { requestId: 'turn-1' }, agentRunSummary: { findings: ['existing'] } });
+    assert.equal(original.tokenId, null);
+    await assert.rejects(() => getTool('dory_create_work').execute(ctx, { workId: original.workId }), { code: 'TURN_REQUIRED' });
+    await assert.rejects(() => getTool('dory_create_work').execute(ctx, { workId: original.workId, requestId: 'stale-turn' }), { code: 'TURN_NOT_FOUND' });
 });
 
 test('dory_create_work rejects invalid continuation instead of creating another Run', async () => {

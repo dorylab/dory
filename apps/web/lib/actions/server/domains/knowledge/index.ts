@@ -1,26 +1,28 @@
+import { isPublishedDefinition } from '@dory/database/postgres/schemas/knowledge';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 import { z } from 'zod';
 
-import { generateText } from '@/lib/ai/gateway';
 import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
+import { generateText } from '@/lib/ai/gateway';
 import { createGitHubInstallationUrl, githubAppConfigured, signGitHubConnectorState, verifyGitHubConnectorState } from '@/lib/server/github-app';
 import { listGitHubDirectories, listGitHubRepositories } from '@/lib/server/github-connector';
 import { getKnowledgeConnectorSyncRunner } from '@/lib/server/knowledge-connector-sync';
 import { assertLinearAdmin, assertLinearAvailable } from '@/lib/server/linear-credentials';
-import { isDesktopRuntime } from '@dory/shared/runtime';
+
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
-import { linearKnowledgeActions } from './linear';
 import { extractionKnowledgeActions } from './extraction';
+import { linearKnowledgeActions } from './linear';
 import {
-    knowledgeConnectorSchema,
     knowledgeAssetTypeSchema,
+    knowledgeConnectorSchema,
     knowledgeDefinitionSchema,
     knowledgeGraphSchema,
+    knowledgeModelOutputSchema,
+    knowledgeSourceRelationTypeSchema,
     knowledgeSourceSchema,
     knowledgeSourceSummarySchema,
-    knowledgeModelOutputSchema,
     knowledgeVerifiedQuerySchema,
-    knowledgeSourceRelationTypeSchema,
     ossieAiContextObjectSchema,
 } from './shared';
 
@@ -114,7 +116,7 @@ export const knowledgeSaveDefinitionsAction = defineWebAction({
     permissions: writeWorkspace,
     scopes: ['knowledge:write'],
     actors: ['user'],
-    handler: (ctx, input) => ctx.services.db.knowledge.saveDefinitions({ organizationId: ctx.organizationId, ...input }),
+    handler: (ctx, input) => ctx.services.db.knowledge.saveDefinitions({ userId: ctx.userId, organizationId: ctx.organizationId, ...input }),
 });
 
 export const knowledgeListDefinitionsAction = defineWebAction({
@@ -147,6 +149,7 @@ export const knowledgeCreateDefinitionAction = defineWebAction({
         const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
         const definition = { ...input.definition, id: input.definition.id ?? `${input.definition.kind}:${crypto.randomUUID()}` };
         return ctx.services.db.knowledge.saveDefinitions({
+            userId: ctx.userId,
             organizationId: ctx.organizationId,
             knowledgeModelId: input.knowledgeModelId,
             definitions: [...model.model.definitions, definition],
@@ -169,7 +172,7 @@ export const knowledgeUpdateDefinitionAction = defineWebAction({
         const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
         if (!model.model.definitions.some(item => item.id === input.definitionId)) throw new Error('Knowledge definition not found.');
         const definitions = model.model.definitions.map(item => (item.id === input.definitionId ? { ...input.definition, id: input.definitionId } : item));
-        return ctx.services.db.knowledge.saveDefinitions({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId, definitions });
+        return ctx.services.db.knowledge.saveDefinitions({ userId: ctx.userId, organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId, definitions });
     },
 });
 
@@ -188,7 +191,7 @@ export const knowledgeDeleteDefinitionAction = defineWebAction({
         const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
         const definitions = model.model.definitions.filter(item => item.id !== input.definitionId);
         if (definitions.length === model.model.definitions.length) throw new Error('Knowledge definition not found.');
-        return ctx.services.db.knowledge.saveDefinitions({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId, definitions });
+        return ctx.services.db.knowledge.saveDefinitions({ userId: ctx.userId, organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId, definitions });
     },
 });
 
@@ -514,7 +517,7 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
                         id: z.string(),
                         name: z.string(),
                         kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']),
-                        status: z.enum(['verified', 'unverified']),
+                        status: z.enum(['verified', 'unverified', 'auto_published']),
                         description: z.string().optional(),
                     }),
                 ),
@@ -549,6 +552,7 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
                 definitions: model.model.definitions
                     .filter(
                         item =>
+                            isPublishedDefinition(item) &&
                             item.sourceConnectionId === input.connectionId &&
                             [item.name, item.description, ...(item.aliases ?? [])].filter(Boolean).join(' ').toLowerCase().includes(needle),
                     )
@@ -586,7 +590,7 @@ export const knowledgeGetDefinitionAction = defineWebAction({
     handler: async (ctx, input) => {
         const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
         if (!model.dataSources.some(source => source.connectionId === input.connectionId)) throw new Error('Knowledge model is not linked to this data source.');
-        const definition = model.model.definitions.find(item => item.id === input.definitionId && item.sourceConnectionId === input.connectionId);
+        const definition = model.model.definitions.find(item => isPublishedDefinition(item) && item.id === input.definitionId && item.sourceConnectionId === input.connectionId);
         if (!definition) throw new Error('Knowledge definition not found.');
         return definition;
     },

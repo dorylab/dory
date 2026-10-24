@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { OSSIE_DATA_TYPES, OSSIE_DIALECTS, OSSIE_VERSION } from '@dory/shared/types/ossie';
-import type { OssieDocument } from '../../src/postgres/schemas/knowledge';
 
 import {
     getKnowledgeReadiness,
@@ -16,6 +15,7 @@ import {
 } from '../../src/postgres/impl/knowledge/index';
 import {
     applyKnowledgeDefinitions,
+    createOssieDocument,
     ossieRevision,
     parseOssieYaml,
     projectOssieDocument,
@@ -23,6 +23,7 @@ import {
     updateOssieMetadata,
     validateOssieDocument,
 } from '../../src/postgres/impl/knowledge/ossie';
+import type { OssieDocument } from '../../src/postgres/schemas/knowledge';
 
 const sources = new Set(['postgres', 'clickhouse']);
 const ossieDocument = {
@@ -92,6 +93,75 @@ test('knowledge readiness requires connected data and a verified non-relationshi
     assert.equal(getKnowledgeReadiness([verifiedMetric], 1).status, 'ready');
     assert.equal(getKnowledgeReadiness([verifiedMetric], 0).status, 'not_ready');
     assert.equal(getKnowledgeReadiness([{ ...verifiedMetric, status: 'unverified' }], 1).status, 'not_ready');
+});
+
+test('new and legacy internal datasets stay out of public definitions without changing stored documents', () => {
+    const document = createOssieDocument('电商', null, 'postgres');
+    assert.equal(document.datasets[0].name, 'item_dataset');
+    const legacy = structuredClone(document);
+    legacy.datasets[0].custom_extensions![0].data = JSON.stringify({
+        dory: { id: 'entity:item_dataset', kind: 'entity', status: 'unverified', sourceConnectionId: 'postgres' },
+    });
+    for (const source of [document, legacy, updateOssieMetadata(legacy, { name: 'Renamed' })]) {
+        const before = structuredClone(source);
+        assert.deepEqual(projectOssieDocument(source).definitions, []);
+        assert.deepEqual(source, before);
+        assert.deepEqual(parseKnowledgeYaml(serializeOssieDocument(source)).definitions, []);
+        assert.doesNotThrow(() => validateOssieDocument(source));
+    }
+});
+
+test('metrics-only and empty models save with an internal dataset and stable metric IDs', () => {
+    const document = createOssieDocument('电商', null, 'postgres');
+    const metric = {
+        id: 'metric:net-revenue',
+        name: '净收入',
+        kind: 'metric' as const,
+        status: 'verified' as const,
+        sourceConnectionId: 'postgres',
+        expression: 'SUM(orders.net_amount)',
+    };
+    const saved = applyKnowledgeDefinitions(document, [metric]);
+    const definitions = projectOssieDocument(saved).definitions;
+    assert.equal(definitions.length, 1);
+    assert.equal(definitions[0].id, metric.id);
+    assert.equal(definitions[0].expression, metric.expression);
+    assert.equal(definitions[0].source, undefined);
+    const edited = applyKnowledgeDefinitions(saved, [{ ...definitions[0], description: 'Exclude failed orders.' }]);
+    assert.equal(projectOssieDocument(edited).definitions[0].id, metric.id);
+    assert.equal(projectOssieDocument(edited).definitions[0].description, 'Exclude failed orders.');
+    assert.deepEqual(projectOssieDocument(applyKnowledgeDefinitions(edited, [])).definitions, []);
+    assert.equal(parseOssieYaml(serializeOssieDocument(edited)).metrics?.[0].name, metric.name);
+});
+
+test('real datasets remain visible, replace the skeleton and can be removed without invalidating Ossie', () => {
+    const document = createOssieDocument('电商', null, 'postgres');
+    const entity = {
+        id: 'entity:item_dataset',
+        name: 'item_dataset',
+        kind: 'entity' as const,
+        status: 'unverified' as const,
+        sourceConnectionId: 'postgres',
+        source: 'public.items',
+    };
+    const saved = applyKnowledgeDefinitions(document, [entity]);
+    assert.equal(saved.datasets.length, 1);
+    assert.equal(projectOssieDocument(saved).definitions[0].source, entity.source);
+    // Explicitly created entities are public even before a source is configured.
+    const unconfigured = applyKnowledgeDefinitions(document, [{ ...entity, source: '__unconfigured__' }]);
+    assert.equal(projectOssieDocument(unconfigured).definitions[0].id, entity.id);
+    assert.deepEqual(projectOssieDocument(applyKnowledgeDefinitions(saved, [])).definitions, []);
+    // Existing skeletons that have acquired user content must not be hidden.
+    for (const patch of [
+        { source: 'public.items' },
+        { description: 'Items available for purchase.' },
+        { ai_context: { instructions: 'Use this dataset for items.' } },
+        { fields: [{ name: 'id', expression: { dialects: [{ dialect: 'ANSI_SQL' as const, expression: 'id' }] } }] },
+    ]) {
+        const source = structuredClone(document);
+        Object.assign(source.datasets[0], patch);
+        assert.equal(projectOssieDocument(source).definitions[0].id, entity.id);
+    }
 });
 
 test('Ossie YAML round-trips dialects, AI context and extensions with a formatting-independent revision', () => {

@@ -12,7 +12,7 @@ export default async function Page() {
     if (!currentOrganizationId) {
         const fallbackOrganization = bootstrap.organization;
         if (fallbackOrganization) {
-            redirect(`/${fallbackOrganization.slug}/connections`);
+            redirect(`/${fallbackOrganization.slug}/work`);
         }
 
         if (isAnonymousUser(session.user)) {
@@ -22,5 +22,5 @@ export default async function Page() {
         redirect('/create-organization');
     }
 
-    redirect(`/${bootstrap.organization?.slug ?? currentOrganizationId}/connections`);
+    redirect(`/${bootstrap.organization?.slug ?? currentOrganizationId}/work`);
 }

@@ -19,7 +19,9 @@
         "./postgres/schemas/*": "./src/postgres/schemas/*.ts",
         "./postgres/impl/*": "./src/postgres/impl/*/index.ts",
         "./postgres/migrate": "./src/postgres/migrate.ts",
-        "./pglite/*": "./src/pglite/*.ts"
+        "./pglite/*": "./src/pglite/*.ts",
+        "./postgres/impl/knowledge/organization": "./src/postgres/impl/knowledge/organization.ts",
+        "./postgres/impl/knowledge/extraction": "./src/postgres/impl/knowledge/extraction.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit"

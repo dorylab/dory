@@ -1,5 +1,7 @@
 'use client';
 
+import { ChatWorkLinks } from '@/components/work-documents/chat-work-links';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useChat } from '@ai-sdk/react';
@@ -444,6 +446,7 @@ const ChatBotComp = ({
                 <ConversationScrollButton />
             </Conversation>
 
+            {sessionId ? <ChatWorkLinks chatId={sessionId} busy={status === 'streaming' || status === 'submitted'} /> : null}
             <div className="mt-4">
                 <PromptInput onSubmit={handleSubmit} className="mt-1" globalDrop multiple>
                     <PromptInputBody>

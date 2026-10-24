@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
@@ -6,7 +7,7 @@ test.skip(process.env.E2E_COMMERCE_EVALUATION !== '1', 'Seed Commerce Agent Eval
 
 test('Commerce Agent Evaluation connection, Knowledge, Agent Runs, and Artifacts pages are reachable', async ({ page, appErrors }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0]!;
 
     await expect(page.getByText('Commerce Agent Evaluation', { exact: true })).toBeVisible();

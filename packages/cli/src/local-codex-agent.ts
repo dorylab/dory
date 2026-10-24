@@ -1,8 +1,8 @@
+import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
-import { delimiter, join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { postJson, type FetchLike } from './bridge-api.js';
@@ -43,6 +43,7 @@ type ClaimResponse = {
         provider: string;
         model: string;
         prompt: string;
+        agentTurn?: { workId: string; requestId: string };
     };
 };
 
@@ -57,6 +58,7 @@ export type CodexDoryMcpConfig = {
     auth: { type: 'bearer-env'; envVar: string; token: string };
     enabledTools: string[];
     toolTimeoutSec: number;
+    agentTurn?: { workId: string; requestId: string };
 };
 
 type RunCodexAgent = (modelId: string, prompt: string, config: CodexDoryMcpConfig) => Promise<CommandResult>;
@@ -67,6 +69,9 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_finish_work',
     'dory_read',
     'dory_write',
+    'dory_search_assets',
+    'dory_read_asset',
+    'dory_get_schema_graph',
     'dory_list_connections',
     'dory_explore_schema',
     'dory_run_readonly_sql',
@@ -101,6 +106,12 @@ export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
         `mcp_servers.dory.enabled_tools=${toTomlStringArray(config.enabledTools)}`,
         '-c',
         `mcp_servers.dory.bearer_token_env_var=${toTomlString(config.auth.envVar)}`,
+        ...(config.agentTurn
+            ? [
+                  '-c',
+                  `mcp_servers.dory.http_headers={ "x-dory-agent-work-id" = ${toTomlString(config.agentTurn.workId)}, "x-dory-agent-request-id" = ${toTomlString(config.agentTurn.requestId)} }`,
+              ]
+            : []),
     ];
 }
 
@@ -375,7 +386,7 @@ export async function startCodexAgentBridge(options: CodexAgentOptions = {}) {
         }
 
         try {
-            const result = await runCodex(claimed.job.model, claimed.job.prompt, doryMcpConfig);
+            const result = await runCodex(claimed.job.model, claimed.job.prompt, { ...doryMcpConfig, agentTurn: claimed.job.agentTurn });
             await completeJob(credential, bridgeId, claimed.job.id, result, options.fetchFn);
         } catch (error) {
             await completeJob(credential, bridgeId, claimed.job.id, error instanceof Error ? error : new Error(String(error)), options.fetchFn);

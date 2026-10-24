@@ -19,7 +19,7 @@ import {
 function replaceOrganizationInPath(pathname: string, currentSlug: string, nextSlug: string) {
     const segments = pathname.split('/').filter(Boolean);
     if (!segments.length) {
-        return `/${nextSlug}/connections`;
+        return `/${nextSlug}`;
     }
 
     if (segments[0] === currentSlug) {
@@ -27,7 +27,7 @@ function replaceOrganizationInPath(pathname: string, currentSlug: string, nextSl
         return `/${segments.join('/')}`;
     }
 
-    return `/${nextSlug}/connections`;
+    return `/${nextSlug}`;
 }
 
 export function OrganizationPanel() {

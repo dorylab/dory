@@ -1,3 +1,5 @@
+import * as workDocumentsSchema from './work-documents';
+export * from './work-documents';
 import * as tabsSchema from './tabs';
 import * as authSchemaSchema from './auth-schema';
 import * as authRelationsSchema from './auth-relations';
@@ -51,6 +53,7 @@ export * from './knowledge';
 export * from './knowledge-extraction';
 
 export const schema = {
+    ...workDocumentsSchema,
     ...tabsSchema,
     ...authSchemaSchema,
     ...authRelationsSchema,

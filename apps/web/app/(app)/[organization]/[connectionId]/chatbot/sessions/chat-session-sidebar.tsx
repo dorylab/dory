@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { Button } from '@/registry/new-york-v4/ui/button';
-import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { cn } from '@/registry/new-york-v4/lib/utils';
+import { Button } from '@/registry/new-york-v4/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
+import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { ChevronDown, Loader2, MoreHorizontal, PlusIcon, RefreshCw } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+
 import { type ChatSessionItem } from '../core/types';
 
 export type ChatSessionSidebarProps = {
@@ -28,6 +29,7 @@ export type ChatSessionSidebarProps = {
     onDelete: (sessionId: string) => void;
     onRefresh?: () => void;
     variant?: 'sidebar' | 'compact';
+    emptySelectionLabel?: string;
 };
 
 export default function ChatSessionSidebar({
@@ -47,6 +49,7 @@ export default function ChatSessionSidebar({
     onDelete,
     onRefresh,
     variant = 'sidebar',
+    emptySelectionLabel,
 }: ChatSessionSidebarProps) {
     const submittedRef = useRef(false);
     const [popoverOpen, setPopoverOpen] = useState(false);
@@ -329,7 +332,7 @@ export default function ChatSessionSidebar({
         );
     };
 
-    const selectedTitle = sessions.find(item => item.id === selectedSessionId)?.title ?? sessions[0]?.title ?? t('Sessions.SelectPlaceholder');
+    const selectedTitle = sessions.find(item => item.id === selectedSessionId)?.title ?? emptySelectionLabel ?? sessions[0]?.title ?? t('Sessions.SelectPlaceholder');
 
     if (variant === 'compact') {
         return (

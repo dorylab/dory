@@ -97,7 +97,6 @@ export interface ChatSessionPatchById {
     lastMessageAt?: Date | null;
 }
 
-
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export type ChatMessagePart =
@@ -178,7 +177,7 @@ export interface ChatRepository {
 
     createGlobalSession(input: ChatSessionCreateGlobal): Promise<ChatSessionRecord>;
 
-    listSessions(params: { organizationId: string; userId: string; connectionId: string; includeArchived?: boolean; type?: ChatSessionType }): Promise<ChatSessionRecord[]>;
+    listSessions(params: { organizationId: string; userId: string; connectionId?: string; includeArchived?: boolean; type?: ChatSessionType }): Promise<ChatSessionRecord[]>;
 
     readSession(params: { organizationId: string; sessionId: string; userId: string }): Promise<ChatSessionRecord | null>;
 
@@ -186,12 +185,7 @@ export interface ChatRepository {
 
     archiveSession(params: { organizationId: string; sessionId: string; userId: string }): Promise<void>;
 
-    appendMessage(params: {
-        organizationId: string;
-        sessionId: string;
-        userId: string;
-        message: ChatMessageInsert;
-    }): Promise<ChatMessageRecord>;
+    appendMessage(params: { organizationId: string; sessionId: string; userId: string; message: ChatMessageInsert }): Promise<ChatMessageRecord>;
 
     listMessages(params: { organizationId: string; sessionId: string; userId: string; limit?: number }): Promise<ChatMessageRecord[]>;
 }

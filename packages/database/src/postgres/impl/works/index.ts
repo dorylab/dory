@@ -1,28 +1,29 @@
-import { and, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
-
+import { createHash } from 'node:crypto';
+import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
+import { createDataSchema, rowDataStream, schemaToIpc } from '@dory/data-plane';
+import { translateDatabase } from '@dory/database/i18n';
 import { getClient } from '@dory/database/postgres/client';
 import {
-    agentRunResultSets,
     agentActivities,
+    agentRunResultSets,
     artifacts,
+    chatMessages,
+    chatSessions,
     findingArtifacts,
     findings,
     queryRuns,
     resultSets as resultSetsTable,
     tabs,
     user,
+    workAgentAssets,
     workChartStates,
     workEvents,
-    workAgentAssets,
     workQueryResultSets,
     workQuerySessions,
     works,
     type FindingPresentation,
     type WorkStatus,
 } from '@dory/database/postgres/schemas';
-import { translateDatabase } from '@dory/database/i18n';
-import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
-import { createDataSchema, rowDataStream, schemaToIpc } from '@dory/data-plane';
 import {
     buildResultSetPreview,
     createDefaultResultSetDataWriter,
@@ -32,9 +33,10 @@ import {
     type ResultSetDataWriter,
     type ResultSetManifest,
 } from '@dory/resultset';
+import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
-import type { PostgresDBClient } from '@dory/shared';
+import { and, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 const DEFAULT_WORK_TITLE = 'Agent Run';
 
@@ -62,6 +64,7 @@ export type ResolveWorkInput = {
 };
 
 export type WorkEventCreateInput = {
+    eventId?: string;
     workId: string;
     organizationId: string;
     userId: string;
@@ -71,7 +74,7 @@ export type WorkEventCreateInput = {
     connectionId?: string | null;
     toolName: string;
     actionId?: string | null;
-    status: 'success' | 'error';
+    status: 'running' | 'success' | 'error';
     inputSummary?: Record<string, unknown> | null;
     outputSummary?: Record<string, unknown> | null;
     errorCode?: string | null;
@@ -101,6 +104,8 @@ export type WorkFinishInput = {
     summaryTitle?: string | null;
     findings: Array<string | WorkFindingInput>;
     steps: string[];
+    requestId?: string;
+    responseMessageId?: string;
 };
 
 export type WorkFindingInput = {
@@ -250,6 +255,9 @@ function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
                       findings,
                       steps,
                       finishedAt,
+                      ...(typeof sectionRecord.requestId === 'string' ? { requestId: sectionRecord.requestId } : {}),
+                      ...(typeof sectionRecord.responseMessageId === 'string' ? { responseMessageId: sectionRecord.responseMessageId } : {}),
+                      ...(Array.isArray(sectionRecord.findingIds) ? { findingIds: cleanSummaryItems(sectionRecord.findingIds) } : {}),
                   };
               })
               .filter((section): section is { summaryTitle: string | null; findings: string[]; steps: string[]; finishedAt: string } => Boolean(section))
@@ -300,6 +308,10 @@ export class PostgresWorksRepository {
             }
         }
 
+        return this.insertWork(input);
+    }
+
+    private async insertWork(input: ResolveWorkInput): Promise<WorkRecord> {
         const now = new Date();
         const [row] = await this.db
             .insert(works)
@@ -320,8 +332,13 @@ export class PostgresWorksRepository {
                 lastActiveAt: now,
                 archivedAt: null,
             })
+            .onConflictDoNothing()
             .returning();
 
+        if (!row && input.workId && input.metadata?.source === 'internal_chat') {
+            const existing = await this.getById({ ...input, workId: input.workId });
+            if (existing && existing.externalSessionId === input.externalSessionId && !existing.archivedAt) return this.prepareExistingWork(existing, input, now);
+        }
         if (!row) throw new DatabaseError('Failed to create Work', 500);
         return row as WorkRecord;
     }
@@ -378,14 +395,28 @@ export class PostgresWorksRepository {
     }
 
     async startChatTurn(input: ResolveWorkInput & { requestId: string }): Promise<WorkRecord> {
-        const work = await this.resolve(input);
+        const existing = await this.resolveExisting(input);
+        const work =
+            existing ??
+            (input.workId
+                ? await this.create(input)
+                : await this.insertWork({
+                      ...input,
+                      workId:
+                          input.workId ??
+                          (input.metadata?.source === 'internal_chat' && input.externalSessionId
+                              ? `chat_${createHash('sha256').update(`${input.organizationId}:${input.userId}:${input.externalSessionId}`).digest('hex').slice(0, 32)}`
+                              : undefined),
+                  }));
+        if ((work.metadata?.chatTurn as { requestId?: string } | undefined)?.requestId === input.requestId) return work;
         const now = new Date();
-        const chatTurn = { requestId: input.requestId, startedAt: now.toISOString() };
+        const chatTurn = { requestId: input.requestId, startedAt: now.toISOString(), reportCreationKey: input.metadata?.reportCreationKey };
         const [row] = await this.db
             .update(works)
             .set({
                 status: 'active',
-                metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ chatTurn })}::jsonb`,
+                ...(input.metadata?.analysisScope ? { connectionId: null } : work.metadata?.analysisScope ? { connectionId: input.connectionId ?? null } : {}),
+                metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ chatTurn, analysisScope: input.metadata?.analysisScope ?? null })}::jsonb`,
                 updatedAt: now,
                 lastActiveAt: now,
             })
@@ -401,6 +432,7 @@ export class PostgresWorksRepository {
         workId: string;
         requestId: string;
         outcome: 'completed' | 'failed' | 'aborted';
+        requireSummary?: boolean;
     }): Promise<WorkRecord | null> {
         this.assertInited();
         const now = new Date();
@@ -408,7 +440,12 @@ export class PostgresWorksRepository {
         const [row] = await this.db
             .update(works)
             .set({
-                status: input.outcome === 'completed' ? 'completed' : 'error',
+                status:
+                    input.outcome === 'completed'
+                        ? input.requireSummary
+                            ? sql`CASE WHEN ${works.metadata}->'chatTurn'->>'summarySaved' = 'true' AND ${works.metadata}->'chatTurn'->>'responseSaved' = 'true' AND ${works.metadata}->'chatTurn'->>'analysisStatus' = 'completed' THEN 'completed' ELSE 'error' END`
+                            : 'completed'
+                        : 'error',
                 metadata: sql`jsonb_set(${works.metadata}, '{chatTurn}', (${works.metadata}->'chatTurn') || ${JSON.stringify(completion)}::jsonb)`,
                 updatedAt: now,
                 lastActiveAt: now,
@@ -429,6 +466,11 @@ export class PostgresWorksRepository {
 
     private async prepareExistingWork(row: WorkRecord, input: ResolveWorkInput, now: Date): Promise<WorkRecord> {
         const requestedConnectionId = input.connectionId?.trim() || null;
+        const scope = row.metadata?.analysisScope as { connectionIds?: string[] } | undefined;
+        if (scope?.connectionIds) {
+            if (requestedConnectionId && !scope.connectionIds.includes(requestedConnectionId)) throw new DatabaseError('Data source is outside the selected analysis scope.', 403);
+            return row;
+        }
         if (requestedConnectionId && row.connectionId && row.connectionId !== requestedConnectionId) {
             throw Object.assign(new Error(`Work ${row.workId} is already bound to connection ${row.connectionId}; received ${requestedConnectionId}.`), {
                 code: 'WORK_CONNECTION_MISMATCH',
@@ -587,6 +629,7 @@ export class PostgresWorksRepository {
         const [row] = await this.db
             .insert(workEvents)
             .values({
+                eventId: input.eventId,
                 workId: input.workId,
                 organizationId: input.organizationId,
                 userId: input.userId,
@@ -603,9 +646,42 @@ export class PostgresWorksRepository {
                 errorMessage: input.errorMessage ?? null,
                 durationMs: Math.max(0, Math.round(input.durationMs ?? 0)),
             })
+            .onConflictDoUpdate({
+                target: workEvents.eventId,
+                set: {
+                    status: input.status,
+                    actionId: input.actionId ?? null,
+                    inputSummary: input.inputSummary ?? null,
+                    outputSummary: input.outputSummary ?? null,
+                    errorCode: input.errorCode ?? null,
+                    errorMessage: input.errorMessage ?? null,
+                    durationMs: Math.max(0, Math.round(input.durationMs ?? 0)),
+                },
+                setWhere: and(
+                    eq(workEvents.organizationId, input.organizationId),
+                    eq(workEvents.userId, input.userId),
+                    eq(workEvents.workId, input.workId),
+                    eq(workEvents.status, 'running'),
+                ),
+            })
             .returning();
 
-        await this.appendAgentRunEvent(input, row);
+        if (!row) {
+            const [existing] = await this.db
+                .select()
+                .from(workEvents)
+                .where(
+                    and(
+                        eq(workEvents.eventId, input.eventId ?? ''),
+                        eq(workEvents.organizationId, input.organizationId),
+                        eq(workEvents.userId, input.userId),
+                        eq(workEvents.workId, input.workId),
+                    ),
+                );
+            if (!existing) throw new DatabaseError('Activity is not available', 404);
+            return existing;
+        }
+        if (input.status !== 'running') await this.appendAgentRunEvent(input, row);
         await this.touch(input.workId);
         return row as WorkEventRecord;
     }
@@ -658,6 +734,7 @@ export class PostgresWorksRepository {
             const [eventRow] = await tx
                 .insert(workEvents)
                 .values({
+                    eventId: event.eventId,
                     workId: input.workId,
                     organizationId: input.organizationId,
                     userId: input.userId,
@@ -674,7 +751,19 @@ export class PostgresWorksRepository {
                     errorMessage: event.errorMessage ?? null,
                     durationMs: Math.max(0, Math.round(event.durationMs ?? 0)),
                 })
+                .onConflictDoUpdate({
+                    target: workEvents.eventId,
+                    set: {
+                        status: event.status,
+                        actionId: event.actionId ?? null,
+                        inputSummary: event.inputSummary ?? null,
+                        outputSummary: event.outputSummary ?? null,
+                        durationMs: Math.max(0, Math.round(event.durationMs ?? 0)),
+                    },
+                    setWhere: and(eq(workEvents.organizationId, input.organizationId), eq(workEvents.userId, input.userId), eq(workEvents.workId, input.workId)),
+                })
                 .returning();
+            if (!eventRow) throw new DatabaseError('Activity is not available', 404);
             await tx.update(works).set({ updatedAt: now, lastActiveAt: now }).where(eq(works.workId, input.workId));
             return eventRow!;
         });
@@ -693,60 +782,84 @@ export class PostgresWorksRepository {
     }
     async finishWithSummary(input: WorkFinishInput): Promise<WorkRecord> {
         this.assertInited();
-        const existing = await this.getById({
-            organizationId: input.organizationId,
-            userId: input.userId,
-            workId: input.workId,
-        });
-        if (!existing) {
-            throw Object.assign(new Error(`Work not found: ${input.workId}.`), {
-                code: 'WORK_NOT_FOUND',
-                status: 404,
-                details: {
-                    workId: input.workId,
-                },
-            });
-        }
-
-        const now = new Date();
-        const finishedAt = now.toISOString();
-        const currentMetadata = existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata) ? existing.metadata : {};
-        const existingSummary = getAgentRunSummaryMetadata(currentMetadata);
-        const normalizedFindings = input.findings.map(normalizeFinding).filter(finding => finding.title);
-        if (normalizedFindings.filter(finding => finding.isPrimary).length > 1) {
-            throw new DatabaseError('Only one primary Finding can be created per Agent Run update', 400);
-        }
-        if (normalizedFindings.some(finding => finding.presentation && !finding.evidenceArtifactIds.length)) {
-            throw new DatabaseError('Structured Finding presentation requires at least one Evidence Artifact', 400);
-        }
-        const newFindings = normalizedFindings.map(finding => finding.title);
-        const newSteps = cleanSummaryItems(input.steps);
-        const nextFindings = [...existingSummary.findings, ...newFindings];
-        const nextSteps = [...existingSummary.steps, ...newSteps];
-        const metadata = {
-            ...currentMetadata,
-            agentRunSummary: {
-                summaryTitle: input.summaryTitle?.trim() || existingSummary.summaryTitle,
-                findings: nextFindings,
-                steps: nextSteps,
-                sections: [
-                    ...existingSummary.sections,
-                    {
-                        summaryTitle: input.summaryTitle?.trim() || null,
-                        findings: newFindings,
-                        steps: newSteps,
-                        finishedAt,
+        return this.db.transaction(async tx => {
+            // Serialize summary writes with turn starts/completion and reject stale callbacks.
+            const [existingRow] = await tx
+                .select()
+                .from(works)
+                .where(and(eq(works.workId, input.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId)))
+                .for('update');
+            const existing = existingRow as WorkRecord | undefined;
+            if (!existing) {
+                throw Object.assign(new Error(`Work not found: ${input.workId}.`), {
+                    code: 'WORK_NOT_FOUND',
+                    status: 404,
+                    details: {
+                        workId: input.workId,
                     },
-                ],
-                updatedAt: finishedAt,
-            },
-        };
+                });
+            }
 
-        // Evidence must be explicitly cited by the agent. Attaching every Artifact
-        // from a Run to a Finding when IDs are omitted creates false evidence links.
-        const findingsToCreate = normalizedFindings;
+            if (existing.archivedAt) throw new DatabaseError('Agent Run is archived', 409);
+            if (input.requestId) {
+                const turn = existing.metadata?.chatTurn as { requestId?: string; summarySaved?: boolean } | undefined;
+                if (turn?.requestId !== input.requestId || existing.status !== 'active') {
+                    throw new DatabaseError('This analysis turn is no longer active', 409);
+                }
+                if (turn.summarySaved) return existing;
+            }
+            const now = new Date();
+            const finishedAt = now.toISOString();
+            const currentMetadata = existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata) ? existing.metadata : {};
+            const existingSummary = getAgentRunSummaryMetadata(currentMetadata);
+            const normalizedFindings = input.findings.map(normalizeFinding).filter(finding => finding.title);
+            if (normalizedFindings.filter(finding => finding.isPrimary).length > 1) {
+                throw new DatabaseError('Only one primary Finding can be created per Agent Run update', 400);
+            }
+            if (normalizedFindings.some(finding => finding.presentation && !finding.evidenceArtifactIds.length)) {
+                throw new DatabaseError('Structured Finding presentation requires at least one Evidence Artifact', 400);
+            }
+            const newFindings = normalizedFindings.map(finding => finding.title);
+            const newSteps = cleanSummaryItems(input.steps);
+            const nextFindings = [...existingSummary.findings, ...newFindings];
+            const nextSteps = [...existingSummary.steps, ...newSteps];
+            const findingIds: string[] = [];
+            const metadata = {
+                ...currentMetadata,
+                ...(input.requestId
+                    ? {
+                          chatTurn: {
+                              ...(currentMetadata.chatTurn as Record<string, unknown>),
+                              summarySaved: true,
+                              analysisStatus: input.status,
+                              responseMessageId: input.responseMessageId ?? null,
+                          },
+                      }
+                    : {}),
+                agentRunSummary: {
+                    summaryTitle: input.summaryTitle?.trim() || existingSummary.summaryTitle,
+                    findings: nextFindings,
+                    steps: nextSteps,
+                    sections: [
+                        ...existingSummary.sections,
+                        {
+                            summaryTitle: input.summaryTitle?.trim() || null,
+                            findings: newFindings,
+                            steps: newSteps,
+                            finishedAt,
+                            requestId: input.requestId ?? null,
+                            responseMessageId: input.responseMessageId ?? null,
+                            ...(input.requestId ? { findingIds } : {}),
+                        },
+                    ],
+                    updatedAt: finishedAt,
+                },
+            };
 
-        const [row] = await this.db.transaction(async tx => {
+            // Evidence must be explicitly cited by the agent. Attaching every Artifact
+            // from a Run to a Finding when IDs are omitted creates false evidence links.
+            const findingsToCreate = normalizedFindings;
+
             const evidenceIds = [...new Set(findingsToCreate.flatMap(finding => finding.evidenceArtifactIds))];
             if (evidenceIds.length) {
                 const evidenceRows = await tx
@@ -781,19 +894,105 @@ export class PostgresWorksRepository {
                         isPrimary: finding.isPrimary,
                     })
                     .returning({ id: findings.id });
+                findingIds.push(created.id);
                 if (finding.evidenceArtifactIds.length) {
                     await tx.insert(findingArtifacts).values(finding.evidenceArtifactIds.map(artifactId => ({ findingId: created.id, artifactId })));
                 }
             }
-            return tx
+            const [row] = await tx
                 .update(works)
-                .set({ status: input.status, metadata, updatedAt: now, lastActiveAt: now })
+                .set({ status: input.requestId ? 'active' : input.status, metadata, updatedAt: now, lastActiveAt: now })
                 .where(and(eq(works.workId, input.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId)))
                 .returning();
-        });
 
-        if (!row) throw new DatabaseError('Failed to finish Work', 500);
-        return row as WorkRecord;
+            if (!row) throw new DatabaseError('Failed to finish Work', 500);
+            return row as WorkRecord;
+        });
+    }
+
+    async assertChatTurn(input: { organizationId: string; userId: string; workId: string; requestId: string }) {
+        const work = await this.getById(input);
+        const turn = work?.metadata?.chatTurn as { requestId?: string } | undefined;
+        if (!work || work.archivedAt || work.status !== 'active' || turn?.requestId !== input.requestId) {
+            throw new DatabaseError('This analysis turn is no longer active', 409);
+        }
+        return work;
+    }
+
+    async markChatResponseSaved(input: { organizationId: string; userId: string; workId: string; requestId: string }) {
+        const [row] = await this.db
+            .update(works)
+            .set({ metadata: sql`jsonb_set(${works.metadata}, '{chatTurn,responseSaved}', 'true'::jsonb)` })
+            .where(
+                and(
+                    eq(works.workId, input.workId),
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    eq(works.status, 'active'),
+                    isNull(works.archivedAt),
+                    sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                    sql`${works.metadata}->'chatTurn'->>'summarySaved' = 'true'`,
+                ),
+            )
+            .returning();
+        if (!row) throw new DatabaseError('This analysis turn is no longer active', 409);
+    }
+
+    async bindChatBridgeJob(input: { organizationId: string; userId: string; workId: string; requestId: string; jobId: string }) {
+        const [row] = await this.db
+            .update(works)
+            .set({ metadata: sql`jsonb_set(${works.metadata}, '{chatTurn,bridgeJobId}', ${JSON.stringify(input.jobId)}::jsonb)` })
+            .where(
+                and(
+                    eq(works.workId, input.workId),
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    eq(works.status, 'active'),
+                    isNull(works.archivedAt),
+                    sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                ),
+            )
+            .returning();
+        if (!row) throw new DatabaseError('This analysis turn is no longer active', 409);
+    }
+
+    async getChatBridgeTurn(input: { organizationId: string; userId: string; jobId: string }) {
+        const [work] = await this.db
+            .select()
+            .from(works)
+            .where(
+                and(
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    eq(works.status, 'active'),
+                    isNull(works.archivedAt),
+                    sql`${works.metadata}->'chatTurn'->>'bridgeJobId' = ${input.jobId}`,
+                ),
+            );
+        const turn = work?.metadata?.chatTurn as { requestId?: string } | undefined;
+        return work && turn?.requestId ? { workId: work.workId, requestId: turn.requestId } : null;
+    }
+
+    async listChatResponses(input: { organizationId: string; userId: string; workId: string }) {
+        const work = await this.getById(input);
+        if (!work) throw new DatabaseError('Work not found', 404);
+        const chatId = work.metadata?.chatId;
+        if (typeof chatId !== 'string') return [];
+        return this.db
+            .select({ id: chatMessages.id, parts: chatMessages.parts, metadata: chatMessages.metadata, createdAt: chatMessages.createdAt })
+            .from(chatMessages)
+            .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+            .where(
+                and(
+                    eq(chatSessions.id, chatId),
+                    eq(chatSessions.organizationId, input.organizationId),
+                    eq(chatSessions.userId, input.userId),
+                    eq(chatMessages.organizationId, input.organizationId),
+                    eq(chatMessages.role, 'assistant'),
+                    sql`${chatMessages.metadata}->>'agentRunId' = ${input.workId}`,
+                ),
+            )
+            .orderBy(chatMessages.createdAt);
     }
 
     async listFindings(input: { organizationId: string; userId: string; workId: string }): Promise<WorkFinding[]> {

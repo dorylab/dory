@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { splitKnowledgeContent, parseKnowledgeExtraction, knowledgeExtractionFailure } from '../../lib/server/knowledge-extraction-core';
+
+import { knowledgeExtractionFailure, parseKnowledgeExtraction, splitKnowledgeContent } from '../../lib/server/knowledge-extraction-core';
 import { validateMetricReferences } from '../../lib/server/knowledge-metric-references';
+
 const payload = { kind: 'business_rule', name: 'UTC', description: 'Use UTC.', aliases: [], sourceConnectionId: null };
 test('chunking covers the entire source, including long paragraphs, tables, SQL and the final rule', () => {
     const input = '# Heading\n\n' + 'prefix '.repeat(4500) + '\n\n| Unit | USD |\n| --- | --- |\n\n```sql\nSELECT SUM(net_amount) FROM orders;\n```\n\nFINAL_RULE_USE_UTC';
@@ -78,4 +80,22 @@ test('background failures distinguish configuration and quota blocks from retrya
     }
     assert.equal(knowledgeExtractionFailure(new Error('network timeout')).retry, true);
     assert.equal(knowledgeExtractionFailure(new Error('invalid structure')).retry, false);
+});
+
+test('background classification retains exact evidence and requires an explicit reason', () => {
+    const text = 'Evaluation window: 2026 Q2. Incident is an investigation hypothesis.';
+    const result = {
+        candidates: [
+            {
+                payload: { ...payload, name: 'Evaluation context', description: text },
+                disposition: 'background',
+                reason: 'One-time evaluation context, not a reusable rule.',
+                evidenceIds: ['E1'],
+            },
+        ],
+    };
+    const parsed = parseKnowledgeExtraction(JSON.stringify(result), text, new Set());
+    assert.equal(parsed[0].disposition, 'background');
+    assert.deepEqual(parsed[0].quotes, [text]);
+    assert.throws(() => parseKnowledgeExtraction(JSON.stringify({ candidates: [{ ...result.candidates[0], reason: undefined }] }), text, new Set()), /reason/);
 });

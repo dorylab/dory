@@ -1,8 +1,10 @@
 import 'server-only';
 
-import { hasToolCall, isStepCount, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
+import { isStepCount, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
 
 import { recordAiUsage, type AiDebugInput, type AiGatewayContext } from '@/lib/ai/gateway';
+
+import { repairWorkToolInput } from './work-tool-input';
 
 type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     model: LanguageModel;
@@ -10,11 +12,13 @@ type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     instructions: string;
     temperature?: number;
     maxSteps?: number;
+    structuredCompletion?: boolean;
     headers?: Record<string, string | undefined> | null;
     context: AiGatewayContext;
     requestId: string;
     startedAt?: number;
     debugInput?: AiDebugInput;
+    recordUsage?: typeof recordAiUsage;
 };
 
 function isManualExecutionRequired(value: unknown): boolean {
@@ -44,12 +48,46 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
         model: options.model,
         tools: options.tools,
         toolsContext: {} as never,
+        repairToolCall: async ({ toolCall }) => {
+            const repaired = repairWorkToolInput(toolCall.toolName, toolCall.input);
+            if (!repaired) return null;
+            await (options.recordUsage ?? recordAiUsage)({
+                requestId: `${options.requestId}:tool-repair:${toolCall.toolCallId}`,
+                context: options.context,
+                input: options.debugInput ?? { instructions: options.instructions, messages: null, prompt: null },
+                latencyMs: Date.now() - startedAt,
+                status: 'ok',
+                outputJson: { kind: 'tool_input_repaired', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, originalInput: toolCall.input, repairedInput: repaired },
+            });
+            return { ...toolCall, input: repaired };
+        },
         instructions: options.instructions,
         temperature: options.temperature,
-        stopWhen: [isStepCount(options.maxSteps ?? 6), hasToolCall('chartBuilder' as keyof TOOLS & string), stopAfterManualSqlResult<TOOLS>()],
+        stopWhen: [
+            isStepCount((options.maxSteps ?? 12) + 2),
+            ...(options.structuredCompletion ? [] : [stopAfterManualSqlResult<TOOLS>()]),
+            ({ steps }) =>
+                steps.some(step =>
+                    step.toolResults.some(result => {
+                        const output: unknown = result.output;
+                        return result.toolName === 'finishAnalysis' && Boolean(output && typeof output === 'object' && 'ok' in output && output.ok === true);
+                    }),
+                ),
+        ],
+        prepareStep: options.structuredCompletion
+            ? ({ stepNumber }) => ({
+                  toolChoice: 'required',
+                  ...(stepNumber >= (options.maxSteps ?? 12)
+                      ? {
+                            activeTools: ['finishAnalysis' as keyof TOOLS & string],
+                            instructions: `${options.instructions}\nAnalysis budget exhausted. Save supported findings and explain any remaining work in finalAnswer. Use status: error if requested analysis remains unfinished. Do not claim unfinished analysis is complete.`,
+                        }
+                      : {}),
+              })
+            : undefined,
         headers: options.headers ?? undefined,
         onEnd: async event => {
-            await recordAiUsage({
+            await (options.recordUsage ?? recordAiUsage)({
                 requestId: options.requestId,
                 context: options.context,
                 input: options.debugInput ?? {

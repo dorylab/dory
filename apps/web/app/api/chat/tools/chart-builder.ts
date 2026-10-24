@@ -1,8 +1,8 @@
-import { tool, type ModelMessage } from 'ai';
+import { tool } from 'ai';
 import { z } from 'zod';
 
 import { translateApi } from '@/app/api/utils/i18n';
-import { buildResultAutoChartProfile, toChartResultPart } from '@dory/analysis/core/result-chart-profile';
+import { buildQueryChart } from '@/lib/agent-runs/chart-result';
 import { Locale } from '@dory/i18n/routing';
 
 function createChartInputSchema(locale: Locale) {
@@ -42,62 +42,7 @@ export function createChartBuilderTool(locale: Locale) {
         description: t('Api.Chat.ChartBuilder.Description'),
         inputSchema: chartInputSchema,
         execute: async (input, options) => {
-            const data = findLatestSqlPreviewRows(options.messages);
-            const profile = buildResultAutoChartProfile({
-                rows: data,
-                overrides: {
-                    chartType: input.chartType,
-                    xKey: input.xKey,
-                    yKeys: input.yKeys,
-                    categoryKey: input.categoryKey,
-                    valueKey: input.valueKey,
-                },
-            });
-            const result = toChartResultPart(profile, {
-                title: input.title,
-                description: input.description,
-            });
-
-            return (
-                result ?? {
-                    type: 'chart',
-                    ...input,
-                    data,
-                }
-            );
+            return buildQueryChart(input, options.messages);
         },
     });
-}
-
-function findLatestSqlPreviewRows(messages: ModelMessage[]): Array<Record<string, unknown>> {
-    for (const message of [...messages].reverse()) {
-        const content = (message as any)?.content;
-        if (!Array.isArray(content)) continue;
-
-        for (const part of [...content].reverse()) {
-            const value = extractToolResultValue(part);
-            if (!value || typeof value !== 'object') continue;
-
-            const result = value as Record<string, unknown>;
-            if (result.type !== 'sql-result' || result.ok !== true || !Array.isArray(result.previewRows)) {
-                continue;
-            }
-
-            return result.previewRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row));
-        }
-    }
-
-    return [];
-}
-
-function extractToolResultValue(part: unknown): unknown {
-    if (!part || typeof part !== 'object') return null;
-
-    const record = part as Record<string, any>;
-    const output = record.output;
-    if (output && typeof output === 'object' && output.type === 'json') {
-        return output.value;
-    }
-
-    return record.result ?? record.value ?? null;
 }

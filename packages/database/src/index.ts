@@ -1,3 +1,4 @@
+import { PostgresWorkDocumentsRepository } from './postgres/impl/work-documents';
 import { getDatabaseProvider } from './provider';
 import { PostgresChatRepository } from './postgres/impl/chat';
 import { PostgresTabStateRepository } from './postgres/impl/sql-console/tabs/tab-states';
@@ -45,6 +46,7 @@ export type PostgresDBService = {
     localFiles: PostgresLocalFilesRepository;
     organizationAiProviders: PostgresOrganizationAiProvidersRepository;
     works: PostgresWorksRepository;
+    workDocuments: PostgresWorkDocumentsRepository;
     resultSets: PostgresResultSetsRepository;
     comparisons: PostgresComparisonsRepository;
     importRuns: PostgresImportRunsRepository;
@@ -114,6 +116,9 @@ export async function getDBService(): Promise<DBService> {
             const actionAuditRepo = new PostgresActionAuditRepository();
             await actionAuditRepo.init();
 
+            const workDocuments = new PostgresWorkDocumentsRepository();
+            await workDocuments.init();
+
             const worksRepo = new PostgresWorksRepository();
             await worksRepo.init();
 
@@ -151,6 +156,7 @@ export async function getDBService(): Promise<DBService> {
                 localFiles: localFilesRepo,
                 organizationAiProviders: organizationAiProvidersRepo,
                 works: worksRepo,
+                workDocuments,
                 resultSets: resultSetsRepo,
                 comparisons: comparisonsRepo,
                 importRuns: importRunsRepo,

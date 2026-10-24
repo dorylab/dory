@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { OSSIE_DATA_TYPES, OSSIE_DIALECTS, OSSIE_VERSION } from '@dory/shared/types/ossie';
+import { z } from 'zod';
 
 export const ossieAiContextObjectSchema = z
     .object({ instructions: z.string().optional(), synonyms: z.array(z.string()).optional(), examples: z.array(z.string()).optional() })
@@ -10,7 +10,7 @@ export const knowledgeDefinitionSchema = z.object({
     id: z.string().min(1).optional(),
     name: z.string().min(1).max(160),
     kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']),
-    status: z.enum(['verified', 'unverified']).default('verified'),
+    status: z.enum(['verified', 'unverified', 'auto_published']).default('verified'),
     sourceConnectionId: z.string().min(1),
     description: z.string().max(4000).optional(),
     aliases: z.array(z.string().min(1).max(160)).max(30).optional(),
@@ -72,6 +72,7 @@ export const knowledgeModelOutputSchema = z.object({
 export const knowledgeAssetTypeSchema = z.enum(['definition', 'verified_query', 'business_rule']);
 export const knowledgeSourceRelationTypeSchema = z.enum(['provided', 'generated']);
 export const knowledgeGraphSchema = z.object({
+    metricRuleEdges: z.array(z.object({ metricId: z.string(), ruleId: z.string() })),
     queryDefinitionEdges: z.array(z.object({ queryId: z.string(), definitionId: z.string() })),
     sourceAssetEdges: z.array(
         z.object({

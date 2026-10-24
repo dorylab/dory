@@ -1,25 +1,38 @@
 'use client';
 
 import { ReactNode } from 'react';
-import type { UIMessage } from 'ai';
-
-import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
-import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
-import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { Tool, ToolContent, ToolHeader } from '@/components/ai-elements/tool';
-import { ChartResultPart, ChartResultCard } from '@/components/@dory/ui/ai/charts-result';
-import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
-import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenuItem } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { buildAutoChartFromSql } from '@/components/@dory/ui/ai/utils/auto-charts';
+import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
 import { getAssistantResponseError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
+import { getChatResponseText } from '@/lib/agent-runs/chat-response';
+import { getAgentActivityTitleKey } from '@/lib/agent-runs/summary';
+import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
+import { ChartResultCard, ChartResultPart } from '@/components/@dory/ui/ai/charts-result';
+import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
+import { SqlResultManualExecutionMode, SqlResultPart } from '@/components/@dory/ui/ai/sql-result/type';
+import { buildAutoChartFromSql } from '@/components/@dory/ui/ai/utils/auto-charts';
+import { ChatAnalysisProcess, ChatRunActivity } from '@/components/agent-runs/chat-run-activity';
+import { ChatToolActivityList, type ChatMessageToolRow } from '@/components/agent-runs/chat-tool-activity';
+import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
+import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
+import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
+
 import type { CopilotActionExecutor } from '../copilot/action-bridge';
-import { SqlResultPart, SqlResultManualExecutionMode } from '@/components/@dory/ui/ai/sql-result/type';
 import { ChatMode } from '../core/types';
 import { DoryToolContent } from './dory-tool-content';
+import {
+    didUserRequestChart,
+    extractStandaloneSqlText,
+    formatToolName,
+    getChartResultFromPart,
+    getSqlResultFromPart,
+    getSqlStepLabel,
+    removeUnavailableImageMarkdown,
+    summarizeSqlStep,
+} from './message-render-utils';
 import {
     buildToolCompatibilityIndex,
     buildTypedToolPreferredIndex,
@@ -35,16 +48,6 @@ import {
     isTypedToolPart,
     mergeLegacyToolResult,
 } from './message-tool-compat';
-import {
-    didUserRequestChart,
-    extractStandaloneSqlText,
-    formatToolName,
-    getChartResultFromPart,
-    getSqlResultFromPart,
-    getSqlStepLabel,
-    removeUnavailableImageMarkdown,
-    summarizeSqlStep,
-} from './message-render-utils';
 
 type MessageRendererProps = {
     message: UIMessage;
@@ -53,21 +56,39 @@ type MessageRendererProps = {
     status: string;
 
     onCopySql: (sql: string) => Promise<void> | void;
-    onManualExecute: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
+    onManualExecute?: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
 
+    showRunLinks?: boolean;
     mode?: ChatMode;
     onExecuteAction?: CopilotActionExecutor;
 };
 
-const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, onManualExecute, mode = 'global', onExecuteAction }: MessageRendererProps) => {
+const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, onManualExecute, mode = 'global', onExecuteAction, showRunLinks = true }: MessageRendererProps) => {
     const t = useTranslations('Chatbot');
+    const runsT = useTranslations('AgentRuns');
+    const metadata = message.metadata as { agentRunId?: string; requestId?: string } | undefined;
     const assistantMessage = message.role === 'assistant';
     const isLatestAssistant = assistantMessage && messageIndex === messages.length - 1;
-    const isStreaming = status !== 'ready';
+    const isStreaming = status === 'streaming' || status === 'submitted';
     const showCopilotSqlActions = mode === 'copilot' && typeof onExecuteAction === 'function';
     const sourceParts = assistantMessage ? (message.parts ?? []).filter((part: any) => part?.type === 'source-url') : [];
     const sqlResults: SqlResultPart[] = [];
     const chartResults: ChartResultPart[] = [];
+    const chartItems: ReactNode[] = [];
+    const processItems: ReactNode[] = [];
+    const toolRows: ChatMessageToolRow[] = [];
+    const finishParts = (message.parts ?? []).filter(part => getToolName(part) === 'finishAnalysis');
+    const savedAnswer = finishParts.find(part => getToolOutput(part)?.ok === true);
+    const finalAnswer = savedAnswer ? getChatResponseText([savedAnswer]) : !isLatestAssistant || !isStreaming ? getChatResponseText(finishParts) : '';
+    const hasProcess =
+        assistantMessage &&
+        Boolean(
+            metadata?.agentRunId ||
+            (message.parts ?? []).some(
+                part => isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part) || part.type === 'reasoning' || part.type === 'reasoning-file',
+            ),
+        );
+    const lastTextIndex = (message.parts ?? []).findLastIndex(part => part.type === 'text' && part.text.trim());
     const renderedLegacyResultIds = new Set<string>();
     let didRenderSources = false;
     const { toolResultById, toolCallLocationById } = buildToolCompatibilityIndex(messages);
@@ -87,13 +108,15 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
             return chartType ? t('Tools.Steps.BuildChartWithType', { chartType }) : t('Tools.Steps.BuildChart');
         }
 
+        const activityKey = getAgentActivityTitleKey(toolName);
+        if (activityKey) return runsT(`Timeline.Titles.${activityKey}`);
         return toolName ? formatToolName(toolName, t) : t('Tools.Steps.RunTool');
     };
 
     const getToolDisplayTitle = (part: any) => {
         const summary = getToolStepSummary(part);
         const toolName = getToolName(part);
-        if (toolName === 'sqlRunner' || toolName === 'chartBuilder') return summary;
+        if (toolName === 'sqlRunner' || getAgentActivityTitleKey(toolName)) return summary;
 
         const toolLabel = formatToolName(toolName, t);
         return summary === toolLabel ? summary : `${summary} · ${toolLabel}`;
@@ -141,10 +164,12 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         <SqlResultBody
             key={key}
             result={sqlResult}
-            onManualExecute={onManualExecute}
+            onManualExecute={onManualExecute ?? (() => undefined)}
             mode={mode}
             manualPrimaryAction={
-                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
+                !onManualExecute ? (
+                    <></>
+                ) : showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
                     <Button
                         type="button"
                         size="sm"
@@ -156,7 +181,9 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 ) : undefined
             }
             manualMenuActions={
-                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
+                !onManualExecute ? (
+                    <></>
+                ) : showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
                     <DropdownMenuItem onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}>{t('Tools.NewTab')}</DropdownMenuItem>
                 ) : undefined
             }
@@ -198,149 +225,149 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         const output = getToolOutput(part);
         const errorText = getToolErrorText(part);
 
-        return (
-            <Tool key={`${key}-${state}`} defaultOpen={false} className="mb-0 border-border/60 shadow-none">
-                <ToolHeader type="dynamic-tool" state={state} toolName={getToolDisplayTitle(part)} title={getToolDisplayTitle(part)} />
-                <ToolContent>
-                    {resultContent ? (
-                        <div className="space-y-3 pt-3">
-                            {inputContent}
-                            {resultContent}
-                        </div>
-                    ) : (
-                        <div className="pt-3">
-                            <DoryToolContent part={part} state={state} input={input} output={output} errorText={errorText} />
-                        </div>
-                    )}
-                </ToolContent>
-            </Tool>
-        );
+        toolRows.push({
+            toolCallId: getToolCallId(part) ?? key,
+            toolName: getToolName(part) ?? '',
+            title: getToolDisplayTitle(part),
+            state,
+            input,
+            output,
+            noResults: getToolName(part) === 'search_assets' && Array.isArray(output?.assets) && output.assets.length === 0,
+            content: resultContent ? (
+                <div className="space-y-3">
+                    {inputContent}
+                    {resultContent}
+                </div>
+            ) : (
+                <DoryToolContent part={part} state={state} input={input} output={output} errorText={errorText} />
+            ),
+        });
+        return null;
     };
     const renderToolPart = (part: any, index: number) => {
         const key = `${message.id}-tool-${getToolCallId(part) ?? index}`;
         const toolName = getToolName(part);
+        const output = getToolOutput(part);
+        if (toolName === 'finishAnalysis' && output?.ok === true && typeof output.finalAnswer === 'string') {
+            renderToolStateCard({ part, key });
+            return <MessageResponse key={key}>{output.finalAnswer}</MessageResponse>;
+        }
         const sqlResult = getSqlResultFromPart(part, t('Errors.SqlExecutionFailed'));
 
         if (sqlResult) {
             sqlResults.push(sqlResult);
-            return (
-                <div key={key} className="py-1.5">
-                    {renderToolStateCard({
-                        part,
-                        key: `${key}-card`,
-                        fallbackInput: inferToolArgsFromResult(part),
-                        inputContent: sqlResult.sql ? <SqlStatementBlock sql={sqlResult.sql} onCopy={onCopySql} /> : undefined,
-                        resultContent: renderSqlResultBody(sqlResult, `${key}-result`),
-                    })}
-                </div>
-            );
+            return renderToolStateCard({
+                part,
+                key,
+                fallbackInput: inferToolArgsFromResult(part),
+                inputContent: sqlResult.sql ? <SqlStatementBlock sql={sqlResult.sql} onCopy={onCopySql} /> : undefined,
+                resultContent: renderSqlResultBody(sqlResult, `${key}-result`),
+            });
         }
-
-        const chartResult = getChartResultFromPart(part);
+        const chartResult = getChartResultFromPart(part, [...messages.slice(0, messageIndex), { ...message, parts: message.parts.slice(0, index) }]);
         if (chartResult) {
             chartResults.push(chartResult);
+            chartItems.push(<ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />);
+        }
+        if (!toolName) return null;
+        return renderToolStateCard({ part, key, fallbackInput: inferToolArgsFromResult(part) });
+    };
+
+    const renderPart = (part: any, index: number) => {
+        if (!part || typeof part !== 'object') return null;
+
+        if (part.type === 'text') {
+            return renderTextPart(part.text ?? '', `${message.id}-text-${index}`);
+        }
+
+        if (part.type === 'reasoning') {
+            const reasoningText = typeof part.text === 'string' ? part.text.trim() : '';
+            if (!reasoningText) return null;
+
             return (
-                <div key={key} className="space-y-2 py-1.5">
-                    {renderToolStateCard({
-                        part,
-                        key: `${key}-card`,
-                        fallbackInput: inferToolArgsFromResult(part),
-                    })}
-                    <ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />
-                </div>
+                <Reasoning
+                    key={`${message.id}-reasoning-${index}`}
+                    className="w-full"
+                    isStreaming={status === 'streaming' && index === message.parts.length - 1 && message.id === messages.at(-1)?.id}
+                >
+                    <ReasoningTrigger />
+                    <ReasoningContent>{reasoningText}</ReasoningContent>
+                </Reasoning>
             );
         }
 
-        if (!toolName) return null;
+        if (part.type === 'source-url') {
+            return renderSources(`${message.id}-sources`);
+        }
 
-        return (
-            <div key={key} className="py-1.5">
-                {renderToolStateCard({
-                    part,
-                    key: `${key}-card`,
-                    fallbackInput: inferToolArgsFromResult(part),
-                })}
-            </div>
-        );
-    };
+        if (part.type === 'reasoning-file') {
+            if (typeof part.url !== 'string' || !part.url) return null;
+            return (
+                <a
+                    key={`${message.id}-reasoning-file-${index}`}
+                    className="text-sm text-muted-foreground underline underline-offset-4"
+                    href={part.url}
+                    rel="noreferrer"
+                    target="_blank"
+                >
+                    {part.mediaType || 'Reasoning attachment'}
+                </a>
+            );
+        }
 
-    const contentItems = (message.parts ?? [])
-        .map((part: any, index: number) => {
-            if (!part || typeof part !== 'object') return null;
+        if (part.type === 'source-document' || part.type === 'file' || part.type === 'step-start') {
+            return null;
+        }
 
-            if (part.type === 'text') {
-                return renderTextPart(part.text ?? '', `${message.id}-text-${index}`);
-            }
-
-            if (part.type === 'reasoning') {
-                const reasoningText = typeof part.text === 'string' ? part.text.trim() : '';
-                if (!reasoningText) return null;
-
-                return (
-                    <Reasoning
-                        key={`${message.id}-reasoning-${index}`}
-                        className="w-full"
-                        isStreaming={status === 'streaming' && index === message.parts.length - 1 && message.id === messages.at(-1)?.id}
-                    >
-                        <ReasoningTrigger />
-                        <ReasoningContent>{reasoningText}</ReasoningContent>
-                    </Reasoning>
-                );
-            }
-
-            if (part.type === 'source-url') {
-                return renderSources(`${message.id}-sources`);
-            }
-
-            if (part.type === 'reasoning-file') {
-                if (typeof part.url !== 'string' || !part.url) return null;
-                return (
-                    <a
-                        key={`${message.id}-reasoning-file-${index}`}
-                        className="text-sm text-muted-foreground underline underline-offset-4"
-                        href={part.url}
-                        rel="noreferrer"
-                        target="_blank"
-                    >
-                        {part.mediaType || 'Reasoning attachment'}
-                    </a>
-                );
-            }
-
-            if (part.type === 'source-document' || part.type === 'file' || part.type === 'step-start') {
+        if (isTypedToolPart(part)) {
+            const id = getToolCallId(part);
+            if (id && typedToolPreferredIndexById.get(id) !== index) {
                 return null;
             }
+            const pairedResult = id && !isFinalToolState(part) ? toolResultById.get(id) : null;
+            return renderToolPart(mergeLegacyToolResult(part, pairedResult), index);
+        }
 
-            if (isTypedToolPart(part)) {
-                const id = getToolCallId(part);
-                if (id && typedToolPreferredIndexById.get(id) !== index) {
-                    return null;
-                }
-                const pairedResult = id && !isFinalToolState(part) ? toolResultById.get(id) : null;
-                return renderToolPart(mergeLegacyToolResult(part, pairedResult), index);
+        if (isLegacyToolCallPart(part)) {
+            const id = getToolCallId(part);
+            const pairedResult = id ? toolResultById.get(id) : null;
+            if (id && pairedResult) {
+                renderedLegacyResultIds.add(id);
             }
+            return renderToolPart(mergeLegacyToolResult(part, pairedResult), index);
+        }
 
-            if (isLegacyToolCallPart(part)) {
-                const id = getToolCallId(part);
-                const pairedResult = id ? toolResultById.get(id) : null;
-                if (id && pairedResult) {
-                    renderedLegacyResultIds.add(id);
-                }
-                return renderToolPart(mergeLegacyToolResult(part, pairedResult), index);
+        if (isLegacyToolResultPart(part)) {
+            const id = getToolCallId(part);
+            const pairedCallLocation = id ? toolCallLocationById.get(id) : null;
+            if (id && (renderedLegacyResultIds.has(id) || (pairedCallLocation && pairedCallLocation.messageIndex <= messageIndex))) {
+                return null;
             }
+            return renderToolPart(part, index);
+        }
 
-            if (isLegacyToolResultPart(part)) {
-                const id = getToolCallId(part);
-                const pairedCallLocation = id ? toolCallLocationById.get(id) : null;
-                if (id && (renderedLegacyResultIds.has(id) || (pairedCallLocation && pairedCallLocation.messageIndex <= messageIndex))) {
-                    return null;
-                }
-                return renderToolPart(part, index);
+        return null;
+    };
+    const contentItems: ReactNode[] = [];
+    (message.parts ?? []).forEach((part, index) => {
+        const item = renderPart(part, index);
+        if (!item) return;
+        if (hasProcess) {
+            const toolPart = isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part);
+            const completedAnswer = getToolName(part) === 'finishAnalysis' && getToolOutput(part)?.ok === true;
+            if (part.type === 'text' && finalAnswer && part.text.trim() === finalAnswer.trim()) return;
+            if (
+                (toolPart && !completedAnswer) ||
+                part.type === 'reasoning' ||
+                part.type === 'reasoning-file' ||
+                (part.type === 'text' && (Boolean(finalAnswer) || index !== lastTextIndex || (isLatestAssistant && isStreaming)))
+            ) {
+                processItems.push(item);
+                return;
             }
-
-            return null;
-        })
-        .filter(Boolean) as ReactNode[];
+        }
+        contentItems.push(item);
+    });
 
     if (!didRenderSources) {
         const sources = renderSources(`${message.id}-sources`);
@@ -358,7 +385,16 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         }
     }
 
-    if (assistantMessage && (contentItems.length === 0 || getAssistantResponseError(message)) && (!isLatestAssistant || !isStreaming)) {
+    if (assistantMessage && (!isLatestAssistant || !isStreaming) && finishParts.length && !finishParts.some(part => getToolOutput(part)?.ok === true)) {
+        const pendingAnswer = getChatResponseText(finishParts);
+        if (pendingAnswer) contentItems.push(<MessageResponse key={`${message.id}-unsaved-answer`}>{pendingAnswer}</MessageResponse>);
+    }
+
+    if (
+        assistantMessage &&
+        (getAssistantResponseError(message) || (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0 && chartItems.length === 0)) &&
+        (!isLatestAssistant || !isStreaming)
+    ) {
         contentItems.push(
             <AssistantFallbackCard
                 key={`${message.id}-fallback`}
@@ -368,14 +404,35 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         );
     }
 
-    if (contentItems.length === 0) return null;
+    if (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0 && chartItems.length === 0 && !hasProcess) return null;
 
     const isAssistant = message.role === 'assistant';
 
     return (
         <div key={message.id} className="w-full space-y-1.5">
             <Message from={message.role} className={isAssistant ? 'w-full' : undefined}>
-                <MessageContent className={isAssistant ? 'w-full max-w-none bg-transparent' : undefined}>{contentItems}</MessageContent>
+                <MessageContent className={isAssistant ? 'w-full max-w-none bg-transparent' : undefined}>
+                    {isAssistant && metadata?.agentRunId && metadata.requestId ? (
+                        <ChatRunActivity
+                            showLinks={showRunLinks}
+                            workId={metadata.agentRunId}
+                            requestId={metadata.requestId}
+                            streaming={isLatestAssistant && isStreaming}
+                            tools={toolRows}
+                            onCopySql={onCopySql}
+                            onManualExecute={onManualExecute}
+                        >
+                            {processItems}
+                        </ChatRunActivity>
+                    ) : processItems.length || toolRows.length ? (
+                        <ChatAnalysisProcess streaming={isLatestAssistant && isStreaming}>
+                            {processItems}
+                            <ChatToolActivityList tools={toolRows} ended={!isLatestAssistant || !isStreaming} onCopySql={onCopySql} onManualExecute={onManualExecute} />
+                        </ChatAnalysisProcess>
+                    ) : null}
+                    {chartItems}
+                    {contentItems}
+                </MessageContent>
             </Message>
         </div>
     );

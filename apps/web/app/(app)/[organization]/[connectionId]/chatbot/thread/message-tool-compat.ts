@@ -49,6 +49,7 @@ export function getToolName(part: any) {
 }
 
 export function getToolState(part: any): any {
+    if (getToolOutput(part)?.ok === false) return 'output-error';
     if (part?.state) return part.state;
     if (part?.type === 'tool-error') return 'output-error';
     if (isLegacyToolResultPart(part) || part?.output) return 'output-available';

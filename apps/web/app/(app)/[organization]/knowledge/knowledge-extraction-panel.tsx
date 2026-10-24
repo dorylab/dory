@@ -1,24 +1,35 @@
 'use client';
 
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
-import { toast } from 'sonner';
-import { ExternalLink, RefreshCw } from 'lucide-react';
-import type { ExtractedKnowledge } from '@dory/database/postgres/schemas/knowledge-extraction';
-import { executeActionClient } from '@/lib/actions/client';
-import { Button } from '@/registry/new-york-v4/ui/button';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
+import { Button } from '@/registry/new-york-v4/ui/button';
 import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Input } from '@/registry/new-york-v4/ui/input';
-import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/registry/new-york-v4/ui/dialog';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
+import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
+import type { ExtractedKnowledge } from '@dory/database/postgres/schemas/knowledge-extraction';
+import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import { parseAsString, useQueryState } from 'nuqs';
+import { toast } from 'sonner';
 
+import { executeActionClient } from '@/lib/actions/client';
+import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
+
+import { useKnowledgeListPagination } from './knowledge-list-pagination';
+import { KnowledgePublicationControls } from './knowledge-publication-controls';
+
+type Metric = { id: string; name: string; sourceConnectionId: string; revision?: string };
 type DataSource = { connectionId: string; name: string };
 type Evidence = { id: string; quote: string; sourceUrl: string | null; sourceTitle: string; state: string };
 type Candidate = {
+    publicationReason?: string | null;
+    classificationReason?: string | null;
     id: string;
     payload: ExtractedKnowledge;
     action: 'add' | 'update' | 'conflict' | 'source_changed' | 'remove';
@@ -27,8 +38,20 @@ type Candidate = {
     evidence: Evidence[];
 };
 type Target = { id: string; name: string; kind: string; revision: string; content: Partial<ExtractedKnowledge> };
-type Rule = { id: string; payload: ExtractedKnowledge; status: string; revision: number; sourceState: string; evidence: Evidence[] };
+type Rule = {
+    publicationMethod?: 'human' | 'automatic';
+    id: string;
+    payload: ExtractedKnowledge;
+    status: string;
+    revision: number;
+    sourceState: string;
+    evidence: Evidence[];
+    applicationScope?: string;
+    metricIds?: string[];
+    metrics?: Metric[];
+};
 export type ExtractionStatus = {
+    organizationJob?: { status: string; error: string | null; lastCompletedAt?: string | null } | null;
     canManage: boolean;
     connectors: Array<{ id: string; autoExtract: boolean }>;
     pendingCount: number;
@@ -48,7 +71,10 @@ export function useExtractionStatus(organization: string, knowledgeModelId: stri
     return useQuery({
         queryKey: extractionStatusKey(organization, knowledgeModelId),
         queryFn: () => executeActionClient<ExtractionStatus>('knowledge.getExtractionStatus', { knowledgeModelId }, { organizationId: organization }),
-        refetchInterval: query => (query.state.data?.jobs.some(j => ['queued', 'running'].includes(j.status)) ? 2000 : 10_000),
+        refetchInterval: query =>
+            query.state.data?.jobs.some(j => ['queued', 'running'].includes(j.status)) || ['queued', 'running'].includes(query.state.data?.organizationJob?.status ?? '')
+                ? 2000
+                : 10_000,
     });
 }
 function useExtractionAction(organization: string, knowledgeModelId: string) {
@@ -100,6 +126,18 @@ export function ExtractionConnectorStatus({ organization, knowledgeModelId, conn
             </div>
             {connector.autoExtract && jobs.length ? (
                 <div>{[...new Set(jobs.map(j => j.status))].map(s => `${t(`Job.${s}`)} ${jobs.filter(j => j.status === s).length}`).join(' · ')}</div>
+            ) : null}
+            {connector.autoExtract && status.data?.organizationJob && status.data.organizationJob.status !== 'completed' ? (
+                <div className="flex items-center justify-between gap-2" role="status">
+                    <span>
+                        {t('OrganizationStatus')}: {t(`Job.${status.data.organizationJob.status}`)}
+                    </span>
+                    {status.data.canManage && ['failed', 'blocked'].includes(status.data.organizationJob.status) ? (
+                        <Button size="sm" variant="outline" disabled={action.isPending} onClick={() => action.mutate({ actionId: 'knowledge.organizeCandidates', input: {} })}>
+                            {t('Retry')}
+                        </Button>
+                    ) : null}
+                </div>
             ) : null}
             {failed.length ? (
                 <div className="flex items-center justify-between gap-2">
@@ -162,7 +200,7 @@ function EvidenceList({ evidence }: { evidence: Evidence[] }) {
             {evidence.map(e => (
                 <div key={e.id} className="rounded-md border bg-muted/30 p-3 text-sm">
                     <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{e.sourceTitle.split(' · ')[0]}</span>
+                        <span>{knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl })}</span>
                         {e.state !== 'current' ? <Badge variant="outline">{t('SourceChanged')}</Badge> : null}
                         {e.sourceUrl ? (
                             <Tooltip>
@@ -186,11 +224,13 @@ function PayloadEditor({
     onChange,
     dataSources,
     allowKindChange = false,
+    metrics = [],
 }: {
     value: ExtractedKnowledge;
     onChange: (value: ExtractedKnowledge) => void;
     dataSources: DataSource[];
     allowKindChange?: boolean;
+    metrics?: Metric[];
 }) {
     const t = useTranslations('Knowledge.Extraction');
     const text = (key: 'name' | 'description' | 'source' | 'expression' | 'timeDimension' | 'unit' | 'scope') => (
@@ -221,9 +261,85 @@ function PayloadEditor({
             ) : null}
             {text('name')}
             {text('description')}
+            {value.kind === 'business_rule' ? (
+                <div className="space-y-2">
+                    <label className="block space-y-1 text-sm">
+                        <span>{t('ApplicationScope')}</span>
+                        <Select
+                            value={value.applicationScope ?? (value.sourceConnectionId ? 'data_source' : 'model')}
+                            onValueChange={scope =>
+                                onChange({
+                                    ...value,
+                                    applicationScope: scope as ExtractedKnowledge['applicationScope'],
+                                    ...(scope === 'model' ? { sourceConnectionId: null, metricIds: [] } : {}),
+                                })
+                            }
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {(['model', 'data_source', 'metrics'] as const).map(scope => (
+                                    <SelectItem key={scope} value={scope}>
+                                        {t(`Scope.${scope}`)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </label>
+                    {value.applicationScope === 'metrics' ? (
+                        <fieldset className="space-y-2 rounded-md border p-3">
+                            <legend className="text-sm">{t('ApplicableMetrics')}</legend>
+                            {metrics
+                                .filter(m => !value.sourceConnectionId || m.sourceConnectionId === value.sourceConnectionId)
+                                .map(metric => (
+                                    <label key={metric.id} className="flex items-center gap-2 text-sm">
+                                        <Checkbox
+                                            checked={value.metricIds?.includes(metric.id) ?? false}
+                                            onCheckedChange={checked =>
+                                                onChange({
+                                                    ...value,
+                                                    metricIds: checked ? [...(value.metricIds ?? []), metric.id] : value.metricIds?.filter(id => id !== metric.id),
+                                                })
+                                            }
+                                        />
+                                        {metric.name}
+                                    </label>
+                                ))}
+                            {value.applicableMetricNames?.length ? (
+                                <p className="text-xs text-muted-foreground">
+                                    {t('SuggestedMetrics')}: {value.applicableMetricNames.join(', ')}
+                                </p>
+                            ) : null}
+                        </fieldset>
+                    ) : null}
+                    {value.sharingEvidence ? (
+                        <p className="text-xs text-muted-foreground">
+                            {t('SharingEvidence')}: {value.sharingEvidence}
+                        </p>
+                    ) : null}
+                </div>
+            ) : (
+                <label className="block space-y-1 text-sm">
+                    <span>{t('SpecificConditions')}</span>
+                    <Textarea
+                        value={value.specificConditions?.join('\n') ?? ''}
+                        onChange={event => onChange({ ...value, specificConditions: event.target.value.split('\n').filter(Boolean) })}
+                    />
+                </label>
+            )}
             <label className="block space-y-1 text-sm">
                 <span>{t('Field.dataSource')}</span>
-                <Select value={value.sourceConnectionId ?? '__shared__'} onValueChange={id => onChange({ ...value, sourceConnectionId: id === '__shared__' ? null : id })}>
+                <Select
+                    value={value.sourceConnectionId ?? '__shared__'}
+                    onValueChange={id =>
+                        onChange({
+                            ...value,
+                            sourceConnectionId: id === '__shared__' ? null : id,
+                            ...(value.kind === 'business_rule' && value.applicationScope !== 'metrics' ? { applicationScope: id === '__shared__' ? 'model' : 'data_source' } : {}),
+                        })
+                    }
+                >
                     <SelectTrigger className="w-full">
                         <SelectValue />
                     </SelectTrigger>
@@ -273,6 +389,9 @@ function PayloadEditor({
 }
 function CandidateReview({
     candidate,
+    candidates,
+    metrics,
+    rules,
     targets,
     dataSources,
     organization,
@@ -280,6 +399,9 @@ function CandidateReview({
     onClose,
 }: {
     candidate: Candidate;
+    candidates: Candidate[];
+    metrics: Metric[];
+    rules: Rule[];
     targets: Target[];
     dataSources: DataSource[];
     organization: string;
@@ -287,26 +409,75 @@ function CandidateReview({
     onClose: () => void;
 }) {
     const t = useTranslations('Knowledge.Extraction');
-    const [payload, setPayload] = useState(candidate.payload);
+    const [payload, setPayload] = useState({
+        ...candidate.payload,
+        ...(candidate.payload.kind === 'metric' && candidate.payload.ruleIds === undefined && candidate.targetAssetId
+            ? { ruleIds: rules.filter(r => r.metricIds?.includes(candidate.targetAssetId!)).map(r => r.id) }
+            : {}),
+    });
+    const [dependencies, setDependencies] = useState<Array<{ candidate: Candidate; payload: ExtractedKnowledge; targetId: string }>>(() =>
+        candidates
+            .filter(c => candidate.payload.ruleCandidateIds?.includes(c.id))
+            .map(c => ({
+                candidate: c,
+                payload: { ...c.payload, applicableMetricNames: [...new Set([...(c.payload.applicableMetricNames ?? []), candidate.payload.name])] },
+                targetId: c.action === 'conflict' ? '__choose__' : (c.targetAssetId ?? '__new__'),
+            })),
+    );
+    const pendingDependencies = dependencies.filter(d => payload.ruleCandidateIds?.includes(d.candidate.id));
     // Freeze the review's published revisions. Polling must not silently accept a newer target.
     const [reviewTargets] = useState(targets);
+    const [reviewRules] = useState(rules);
+    const [reviewMetrics] = useState(metrics);
     const [targetId, setTargetId] = useState(candidate.action === 'conflict' ? '__choose__' : (candidate.targetAssetId ?? '__new__'));
     const action = useExtractionAction(organization, knowledgeModelId);
     const invalidation = candidate.action === 'remove' || candidate.action === 'source_changed';
     const target = reviewTargets.find(target => target.id === targetId);
-    const submit = (decision: string) =>
+    const submit = (decision: string) => {
+        if (decision === 'approve' && pendingDependencies.length) {
+            const item = {
+                expectedRuleRevisions: Object.fromEntries(reviewRules.map(r => [r.id, r.revision])),
+                candidateId: candidate.id,
+                payload,
+                ...(target ? { targetAssetId: target.id, expectedTargetRevision: target.revision } : { createNew: true }),
+            };
+            action.mutate(
+                {
+                    actionId: 'knowledge.reviewCandidateBundle',
+                    input: {
+                        items: [
+                            item,
+                            ...pendingDependencies.map(d => {
+                                const selected = reviewTargets.find(t => t.id === d.targetId);
+                                return {
+                                    candidateId: d.candidate.id,
+                                    expectedMetricRevisions: Object.fromEntries(reviewMetrics.map(m => [m.id, m.revision])),
+                                    payload: d.payload,
+                                    ...(selected ? { targetAssetId: selected.id, expectedTargetRevision: selected.revision } : { createNew: true }),
+                                };
+                            }),
+                        ],
+                    },
+                },
+                { onSuccess: onClose },
+            );
+            return;
+        }
         action.mutate(
             {
                 actionId: 'knowledge.reviewCandidate',
                 input: {
                     candidateId: candidate.id,
                     decision,
+                    expectedMetricRevisions: Object.fromEntries(reviewMetrics.map(m => [m.id, m.revision])),
+                    expectedRuleRevisions: Object.fromEntries(reviewRules.map(r => [r.id, r.revision])),
                     payload,
                     ...(target ? { targetAssetId: target.id, expectedTargetRevision: target.revision } : !invalidation ? { createNew: true } : {}),
                 },
             },
             { onSuccess: onClose },
         );
+    };
     return (
         <Dialog open onOpenChange={open => !open && onClose()}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -369,11 +540,77 @@ function CandidateReview({
                             ) : null}
                             <section className="space-y-2">
                                 <h3 className="font-medium">{t('SuggestedVersion')}</h3>
-                                <PayloadEditor value={payload} onChange={setPayload} dataSources={dataSources} allowKindChange={targetId === '__new__'} />
+                                <PayloadEditor value={payload} onChange={setPayload} dataSources={dataSources} metrics={metrics} allowKindChange={targetId === '__new__'} />
                             </section>
                         </div>
                     </>
                 )}
+                {!invalidation && payload.kind === 'metric' ? (
+                    <fieldset className="space-y-2 rounded-md border p-3">
+                        <legend>{t('ReferencedRules')}</legend>
+                        {rules
+                            .filter(r => r.status === 'active' && (!r.payload.sourceConnectionId || r.payload.sourceConnectionId === payload.sourceConnectionId))
+                            .map(rule => (
+                                <label key={rule.id} className="flex items-center gap-2 text-sm">
+                                    <Checkbox
+                                        checked={payload.ruleIds?.includes(rule.id) ?? false}
+                                        onCheckedChange={checked =>
+                                            setPayload({ ...payload, ruleIds: checked ? [...(payload.ruleIds ?? []), rule.id] : payload.ruleIds?.filter(id => id !== rule.id) })
+                                        }
+                                    />
+                                    {rule.payload.name}
+                                </label>
+                            ))}
+                    </fieldset>
+                ) : null}
+                {pendingDependencies.length ? (
+                    <section className="space-y-4 rounded-md border p-4">
+                        <h3 className="font-medium">{t('ReviewTogether')}</h3>
+                        <p className="text-sm text-muted-foreground">{t('RuleSemantics')}</p>
+                        {pendingDependencies.map(dependency => (
+                            <div key={dependency.candidate.id} className="space-y-3 border-t pt-3">
+                                <Select value={dependency.targetId} onValueChange={id => setDependencies(ds => ds.map(d => (d === dependency ? { ...d, targetId: id } : d)))}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__choose__" disabled>
+                                            {t('ChooseTarget')}
+                                        </SelectItem>
+                                        <SelectItem value="__new__">{t('CreateNew')}</SelectItem>
+                                        {reviewTargets
+                                            .filter(t => t.kind === 'business_rule')
+                                            .map(t => (
+                                                <SelectItem key={t.id} value={t.id}>
+                                                    {t.name}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
+                                <PayloadEditor
+                                    value={dependency.payload}
+                                    onChange={value => setDependencies(ds => ds.map(d => (d === dependency ? { ...d, payload: value } : d)))}
+                                    dataSources={dataSources}
+                                    metrics={metrics}
+                                />
+                                <EvidenceList evidence={dependency.candidate.evidence} />
+                                <Button
+                                    variant="outline"
+                                    onClick={() =>
+                                        setPayload({
+                                            ...payload,
+                                            description: `${payload.description}\n${dependency.payload.description}`,
+                                            specificConditions: [...(payload.specificConditions ?? []), dependency.payload.description],
+                                            ruleCandidateIds: payload.ruleCandidateIds?.filter(id => id !== dependency.candidate.id),
+                                        })
+                                    }
+                                >
+                                    {t('KeepConditionLocal')}
+                                </Button>
+                            </div>
+                        ))}
+                    </section>
+                ) : null}
                 <h3 className="font-medium">{t('Evidence')}</h3>
                 <EvidenceList evidence={candidate.evidence} />
                 <DialogFooter className="flex-wrap">
@@ -395,7 +632,12 @@ function CandidateReview({
                     ) : (
                         <Button
                             disabled={
-                                action.isPending || !payload.name || !payload.description || targetId === '__choose__' || (payload.kind === 'metric' && !payload.sourceConnectionId)
+                                pendingDependencies.some(d => d.targetId === '__choose__') ||
+                                action.isPending ||
+                                !payload.name ||
+                                !payload.description ||
+                                targetId === '__choose__' ||
+                                (payload.kind === 'metric' && !payload.sourceConnectionId)
                             }
                             onClick={() => submit('approve')}
                         >
@@ -407,66 +649,241 @@ function CandidateReview({
         </Dialog>
     );
 }
+function bulkReviewRestriction(candidate: Candidate, dataSources: DataSource[]) {
+    if (candidate.action !== 'add' || candidate.targetAssetId || candidate.classificationReason) return 'IndividualReviewRequired';
+    if (candidate.payload.ruleCandidateIds?.length) return 'JointReviewRequired';
+    if (candidate.payload.kind === 'metric' && !dataSources.some(source => source.connectionId === candidate.payload.sourceConnectionId)) return 'NeedsMapping';
+    return null;
+}
+
 export function KnowledgeReviewPanel({ organization, knowledgeModelId, dataSources }: { organization: string; knowledgeModelId: string; dataSources: DataSource[] }) {
     const t = useTranslations('Knowledge.Extraction');
+    const pub = useTranslations('Knowledge.Publication');
+    const locale = useLocale();
+    const client = useQueryClient();
     const status = useExtractionStatus(organization, knowledgeModelId);
     const action = useExtractionAction(organization, knowledgeModelId);
     const [selected, setSelected] = useState<string[]>([]);
+    const [approvalErrors, setApprovalErrors] = useState<string[]>([]);
     const [reviewing, setReviewing] = useState<Candidate | null>(null);
     const query = useQuery({
         queryKey: ['knowledge-model', knowledgeModelId, 'candidates', organization],
-        queryFn: () => executeActionClient<{ candidates: Candidate[]; targets: Target[] }>('knowledge.listCandidates', { knowledgeModelId }, { organizationId: organization }),
+        queryFn: () =>
+            executeActionClient<{ candidates: Candidate[]; targets: Target[]; metrics: Metric[]; rules: Rule[] }>(
+                'knowledge.listCandidates',
+                { knowledgeModelId },
+                { organizationId: organization },
+            ),
         enabled: status.data?.canManage === true,
         refetchInterval: 5000,
     });
+    const candidates = query.data?.candidates ?? [];
+    const pagination = useKnowledgeListPagination('review', query.data?.candidates.length);
+    const eligibleIds = candidates.filter(candidate => !bulkReviewRestriction(candidate, dataSources)).map(candidate => candidate.id);
+    const selectedIds = eligibleIds.filter(id => selected.includes(id));
+    const batch = useMutation({
+        retry: false,
+        mutationFn: async (ids: string[]) => {
+            const expectedRuleRevisions = Object.fromEntries((query.data?.rules ?? []).map(rule => [rule.id, rule.revision]));
+            const expectedMetricRevisions = Object.fromEntries((query.data?.metrics ?? []).map(metric => [metric.id, metric.revision]));
+            let approvedCount = 0;
+            for (let offset = 0; offset < ids.length; offset += 50) {
+                const candidateIds = ids.slice(offset, offset + 50);
+                const result = await executeActionClient<{ results: Array<{ id: string; approved: boolean; error?: string }> }>(
+                    'knowledge.approveCandidates',
+                    { knowledgeModelId, candidateIds, expectedRuleRevisions, expectedMetricRevisions },
+                    { organizationId: organization },
+                );
+                const approved = new Set(result.results.filter(item => item.approved).map(item => item.id));
+                approvedCount += approved.size;
+                setSelected(current => current.filter(id => !approved.has(id)));
+                const failures = candidateIds
+                    .filter(id => !approved.has(id))
+                    .map(id => {
+                        const name = candidates.find(candidate => candidate.id === id)?.payload.name ?? id;
+                        return `${name}: ${result.results.find(item => item.id === id)?.error ?? t('ApprovalFailed')}`;
+                    });
+                if (failures.length) setApprovalErrors(current => [...current, ...failures]);
+            }
+            return approvedCount;
+        },
+        onMutate: () => setApprovalErrors([]),
+        onSuccess: count => {
+            if (count) toast.success(t('ApprovedCount', { count }));
+        },
+        onError: error => {
+            const message = error instanceof Error ? error.message : t('ApprovalFailed');
+            setApprovalErrors(current => [...current, message]);
+            toast.error(t('BatchInterrupted'));
+        },
+        onSettled: () => client.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] }),
+    });
+    const organizing = ['queued', 'running'].includes(status.data?.organizationJob?.status ?? '');
+    const busy = organizing || action.isPending || batch.isPending;
+    const organizationJob = status.data?.organizationJob;
+    if (status.isPending)
+        return (
+            <p role="status" className="text-sm text-muted-foreground">
+                {t('Loading')}
+            </p>
+        );
+    if (status.error)
+        return (
+            <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                <span className="min-w-0 break-words">{status.error.message}</span>
+                <Button variant="outline" size="sm" onClick={() => void status.refetch()}>
+                    {t('RetryLoading')}
+                </Button>
+            </div>
+        );
     if (!status.data?.canManage) return <p className="text-sm text-muted-foreground">{t('AdminOnly')}</p>;
     return (
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4 text-foreground">
             <p className="text-sm text-muted-foreground">{t('ReviewNotice')}</p>
-            <Button
-                variant="outline"
-                disabled={!selected.length || action.isPending}
-                onClick={() => action.mutate({ actionId: 'knowledge.approveCandidates', input: { candidateIds: selected } }, { onSuccess: () => setSelected([]) })}
-            >
-                {t('ApproveSelected', { count: selected.length })}
-            </Button>
-            {query.error ? (
-                <p role="alert" className="text-sm text-destructive">
-                    {query.error.message}
-                </p>
-            ) : null}
-            {query.isLoading ? (
-                <p>{t('Loading')}</p>
-            ) : !query.data?.candidates.length ? (
-                <p className="text-sm text-muted-foreground">{t('NoCandidates')}</p>
-            ) : (
-                query.data.candidates.map(candidate => (
-                    <div key={candidate.id} className="flex items-center justify-between gap-3 rounded-md border p-4">
-                        <div className="flex items-center gap-3">
+            <div className="overflow-hidden rounded-md border">
+                <div role="toolbar" aria-label={t('ReviewToolbar')} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                        <label className="flex items-center gap-3">
                             <Checkbox
-                                aria-label={t('SelectNamed', { name: candidate.payload.name })}
-                                checked={selected.includes(candidate.id)}
-                                disabled={candidate.action !== 'add' || (candidate.payload.kind === 'metric' && !candidate.payload.sourceConnectionId)}
-                                onCheckedChange={checked => setSelected(ids => (checked ? [...ids, candidate.id] : ids.filter(id => id !== candidate.id)))}
+                                aria-label={t('SelectAll')}
+                                checked={selectedIds.length > 0 && selectedIds.length === eligibleIds.length ? true : selectedIds.length ? 'indeterminate' : false}
+                                disabled={!eligibleIds.length || busy || query.isPending || query.isError}
+                                onCheckedChange={checked => setSelected(checked === true ? eligibleIds : [])}
                             />
-                            <div>
-                                <div className="font-medium">{candidate.payload.name}</div>
-                                <div className="mt-1 flex flex-wrap gap-2">
-                                    <Badge variant="outline">{t(candidate.payload.kind === 'metric' ? 'Metric' : 'BusinessRule')}</Badge>
-                                    <Badge variant="outline">{t(`Action.${candidate.action}`)}</Badge>
+                            {t('SelectAll')}
+                        </label>
+                        <span role="status" className="text-muted-foreground">
+                            {t('SelectedCount', { count: selectedIds.length })}
+                        </span>
+                    </div>
+                    <div className="ml-auto flex flex-wrap justify-end gap-2">
+                        <KnowledgePublicationControls organization={organization} modelId={knowledgeModelId} variant="toolbar" />
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex" tabIndex={busy || query.isPending || query.isError ? 0 : undefined}>
+                                    <Button
+                                        variant="outline"
+                                        className="border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+                                        aria-description={t('OrganizeHelp')}
+                                        disabled={busy || query.isPending || query.isError}
+                                        onClick={() => action.mutate({ actionId: 'knowledge.organizeCandidates', input: {} })}
+                                    >
+                                        {organizing || action.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                                        {t('Organize')}
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[min(22rem,calc(100vw-2rem))] space-y-2 leading-relaxed">
+                                <p>{t('OrganizeHelp')}</p>
+                                <div className="space-y-1 border-t border-current/20 pt-2">
+                                    {organizationJob ? (
+                                        <p>
+                                            {t('OrganizationStatus')}: {t(`OrganizationJob.${organizationJob.status}`)}
+                                        </p>
+                                    ) : null}
+                                    <p>
+                                        {t('LastCompleted')}{' '}
+                                        {organizationJob?.lastCompletedAt ? (
+                                            <time dateTime={organizationJob.lastCompletedAt}>{new Date(organizationJob.lastCompletedAt).toLocaleString(locale)}</time>
+                                        ) : (
+                                            <span>{t('NoOrganizationCompleted')}</span>
+                                        )}
+                                    </p>
+                                    {organizationJob?.error ? (
+                                        <p className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{organizationJob.error}</p>
+                                    ) : null}
                                 </div>
-                            </div>
-                        </div>
-                        <Button variant="outline" onClick={() => setReviewing(candidate)}>
-                            {t('Review')}
+                            </TooltipContent>
+                        </Tooltip>
+                        <Button disabled={!selectedIds.length || busy || query.isError} onClick={() => batch.mutate(selectedIds)}>
+                            {batch.isPending ? <Loader2 className="animate-spin" /> : null}
+                            {batch.isPending ? t('Approving') : t('ApproveSelected', { count: selectedIds.length })}
                         </Button>
                     </div>
-                ))
-            )}
+                </div>
+                {approvalErrors.length ? (
+                    <div role="alert" className="mx-4 mb-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                        <p className="text-destructive">{t('BatchFailureNotice')}</p>
+                        <ul className="mt-1 list-inside list-disc space-y-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                            {approvalErrors.map((error, index) => (
+                                <li key={index}>{error}</li>
+                            ))}
+                        </ul>
+                    </div>
+                ) : null}
+                {query.error ? (
+                    <div role="alert" className="flex flex-wrap items-center gap-2 border-t px-4 py-3 text-sm text-destructive">
+                        <span className="min-w-0 break-words">{query.error.message}</span>
+                        <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+                            {t('RetryLoading')}
+                        </Button>
+                    </div>
+                ) : null}
+                {query.isPending ? (
+                    <p role="status" className="border-t px-4 py-3 text-sm text-muted-foreground">
+                        {t('Loading')}
+                    </p>
+                ) : !candidates.length ? (
+                    !query.error ? (
+                        <p className="border-t p-6 text-center text-sm text-muted-foreground">{t('NoCandidates')}</p>
+                    ) : null
+                ) : (
+                    <ul aria-label={t('PendingReview')} className="divide-y border-t">
+                        {candidates.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).map(candidate => {
+                            const restriction = bulkReviewRestriction(candidate, dataSources);
+                            const checked = selectedIds.includes(candidate.id);
+                            return (
+                                <li
+                                    key={candidate.id}
+                                    className={`grid grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 transition-colors ${checked ? 'bg-primary/5' : 'hover:bg-muted/30'}`}
+                                >
+                                    <Checkbox
+                                        aria-label={t('SelectNamed', { name: candidate.payload.name })}
+                                        aria-describedby={restriction ? `review-restriction-${candidate.id}` : undefined}
+                                        checked={checked}
+                                        disabled={Boolean(restriction) || busy || query.isError}
+                                        onCheckedChange={value =>
+                                            setSelected(ids => (value === true ? [...new Set([...ids, candidate.id])] : ids.filter(id => id !== candidate.id)))
+                                        }
+                                    />
+                                    <div className="min-w-0 flex-1 space-y-1.5">
+                                        <div className="break-words font-medium [overflow-wrap:anywhere]">{candidate.payload.name}</div>
+                                        {candidate.classificationReason ? <p className="text-xs text-muted-foreground">{pub('NeedsAttention')}</p> : null}
+                                        {candidate.publicationReason ? (
+                                            <p className="text-xs text-muted-foreground">
+                                                {pub.has(`Reasons.${candidate.publicationReason}`) ? pub(`Reasons.${candidate.publicationReason}`) : pub('NeedsAttention')}
+                                            </p>
+                                        ) : null}
+                                        {candidate.payload.description ? (
+                                            <p className="line-clamp-2 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{candidate.payload.description}</p>
+                                        ) : null}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Badge variant="outline">{t(candidate.payload.kind === 'metric' ? 'Metric' : 'BusinessRule')}</Badge>
+                                            <Badge variant="outline">{t(`Action.${candidate.action}`)}</Badge>
+                                            {restriction ? (
+                                                <span id={`review-restriction-${candidate.id}`} className="text-xs text-muted-foreground">
+                                                    {t(restriction)}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => setReviewing(candidate)}>
+                                        {t('Review')}
+                                    </Button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+                {candidates.length ? <DataTablePagination total={candidates.length} {...pagination} className="border-t" /> : null}
+            </div>
             {reviewing ? (
                 <CandidateReview
                     key={reviewing.id}
                     candidate={reviewing}
+                    candidates={candidates}
+                    metrics={query.data?.metrics ?? []}
+                    rules={query.data?.rules ?? []}
                     targets={query.data?.targets ?? []}
                     dataSources={dataSources}
                     organization={organization}
@@ -489,17 +906,37 @@ export function KnowledgeEvidenceWarning({ organization, knowledgeModelId, asset
 }
 export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources }: { organization: string; knowledgeModelId: string; dataSources: DataSource[] }) {
     const t = useTranslations('Knowledge.Extraction');
+    const [focusedRuleId, setFocusedRuleId] = useQueryState('rule', parseAsString);
     const status = useExtractionStatus(organization, knowledgeModelId);
     const action = useExtractionAction(organization, knowledgeModelId);
     const query = useQuery({
         queryKey: ['knowledge-model', knowledgeModelId, 'business-rules', organization],
-        queryFn: () => executeActionClient<{ rules: Rule[] }>('knowledge.listBusinessRules', { knowledgeModelId }, { organizationId: organization }),
+        queryFn: () =>
+            executeActionClient<{ rules: Rule[]; metrics: Metric[] }>('knowledge.listBusinessRules', { knowledgeModelId, includeArchived: true }, { organizationId: organization }),
         refetchInterval: 10_000,
     });
+    const pagination = useKnowledgeListPagination('rules', query.data?.rules.length, {
+        id: focusedRuleId,
+        index: query.data?.rules.findIndex(rule => rule.id === focusedRuleId) ?? -1,
+    });
+    const scrolledRule = useRef<string | null>(null);
+    useEffect(() => {
+        if (!focusedRuleId) {
+            scrolledRule.current = null;
+            return;
+        }
+        if (!query.data?.rules.length || scrolledRule.current === focusedRuleId) return;
+        const index = query.data.rules.findIndex(rule => rule.id === focusedRuleId);
+        if (index < pagination.pageIndex * pagination.pageSize || index >= (pagination.pageIndex + 1) * pagination.pageSize) return;
+        scrolledRule.current = focusedRuleId;
+        requestAnimationFrame(() => document.getElementById(`rule-${focusedRuleId}`)?.scrollIntoView({ block: 'start' }));
+    }, [focusedRuleId, pagination.pageIndex, pagination.pageSize, query.data?.rules]);
     const [editing, setEditing] = useState<Rule | null>(null);
+    const [metricRevisions, setMetricRevisions] = useState<Record<string, string>>({});
     const [payload, setPayload] = useState<ExtractedKnowledge | null>(null);
     return (
         <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t('RulesNotice')}</p>
             {query.error ? (
                 <p role="alert" className="text-destructive">
                     {query.error.message}
@@ -510,12 +947,17 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
             ) : !query.data?.rules.length ? (
                 <p className="text-sm text-muted-foreground">{t('NoRules')}</p>
             ) : (
-                query.data.rules.map(rule => (
-                    <section key={rule.id} className="space-y-3 rounded-md border p-4">
+                query.data.rules.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).map(rule => (
+                    <section key={rule.id} id={`rule-${rule.id}`} className="space-y-3 rounded-md border p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <h3 className="font-medium">{rule.payload.name}</h3>
-                                <p className="text-xs text-muted-foreground">{dataSources.find(s => s.connectionId === rule.payload.sourceConnectionId)?.name ?? t('ModelWide')}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {t(`Scope.${rule.applicationScope ?? rule.payload.applicationScope ?? (rule.payload.sourceConnectionId ? 'data_source' : 'model')}`)} ·{' '}
+                                    {rule.publicationMethod === 'automatic' ? `${t('AutomaticPublished')} · ` : ''}
+                                    {t('LinkedMetricCount', { count: rule.metricIds?.length ?? 0 })} · v{rule.revision}
+                                    {rule.status === 'archived' ? ` · ${t('Inactive')}` : ''}
+                                </p>
                             </div>
                             {rule.sourceState !== 'current' ? <Badge variant="outline">{t('SourceChanged')}</Badge> : null}
                             {status.data?.canManage ? (
@@ -525,7 +967,8 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
                                         variant="outline"
                                         onClick={() => {
                                             setEditing(rule);
-                                            setPayload(rule.payload);
+                                            setMetricRevisions(Object.fromEntries((query.data?.metrics ?? []).map(m => [m.id, m.revision!])));
+                                            setPayload({ ...rule.payload, metricIds: rule.metricIds });
                                         }}
                                     >
                                         {t('Edit')}
@@ -535,25 +978,51 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
                                         variant="ghost"
                                         disabled={action.isPending}
                                         onClick={() =>
-                                            action.mutate({ actionId: 'knowledge.updateBusinessRule', input: { id: rule.id, expectedRevision: rule.revision, archived: true } })
+                                            action.mutate({
+                                                actionId: 'knowledge.updateBusinessRule',
+                                                input: { id: rule.id, expectedRevision: rule.revision, archived: rule.status !== 'archived' },
+                                            })
                                         }
                                     >
-                                        {t('Archive')}
+                                        {t(rule.status === 'archived' ? 'Restore' : 'Archive')}
                                     </Button>
                                 </div>
                             ) : null}
                         </div>
                         <p className="whitespace-pre-wrap text-sm">{rule.payload.description}</p>
+                        {rule.metrics?.length ? (
+                            <div className="flex flex-wrap gap-2">
+                                {rule.metrics.map(metric => (
+                                    <Link key={metric.id} className="text-sm underline" href={`?tab=definitions&definition=${encodeURIComponent(metric.id)}`}>
+                                        {metric.name}
+                                    </Link>
+                                ))}
+                            </div>
+                        ) : null}
                         <EvidenceList evidence={rule.evidence} />
                     </section>
                 ))
             )}
+            {query.data?.rules.length ? (
+                <DataTablePagination
+                    total={query.data.rules.length}
+                    {...pagination}
+                    onPageChange={index => {
+                        void setFocusedRuleId(null);
+                        pagination.onPageChange(index);
+                    }}
+                    onPageSizeChange={size => {
+                        void setFocusedRuleId(null);
+                        pagination.onPageSizeChange(size);
+                    }}
+                />
+            ) : null}
             <Dialog open={Boolean(editing)} onOpenChange={open => !open && setEditing(null)}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{t('Edit')}</DialogTitle>
                     </DialogHeader>
-                    {payload ? <PayloadEditor value={payload} onChange={setPayload} dataSources={dataSources} /> : null}
+                    {payload ? <PayloadEditor value={payload} onChange={setPayload} dataSources={dataSources} metrics={query.data?.metrics ?? []} /> : null}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setEditing(null)}>
                             {t('Cancel')}
@@ -563,7 +1032,10 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
                             onClick={() =>
                                 editing &&
                                 action.mutate(
-                                    { actionId: 'knowledge.updateBusinessRule', input: { id: editing.id, expectedRevision: editing.revision, payload } },
+                                    {
+                                        actionId: 'knowledge.updateBusinessRule',
+                                        input: { id: editing.id, expectedRevision: editing.revision, payload, expectedMetricRevisions: metricRevisions },
+                                    },
                                     { onSuccess: () => setEditing(null) },
                                 )
                             }
@@ -574,5 +1046,103 @@ export function BusinessRulesPanel({ organization, knowledgeModelId, dataSources
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+export function MetricRulesPanel({ organization, knowledgeModelId, metricId }: { organization: string; knowledgeModelId: string; metricId: string }) {
+    const t = useTranslations('Knowledge.Extraction');
+    const status = useExtractionStatus(organization, knowledgeModelId);
+    const action = useExtractionAction(organization, knowledgeModelId);
+    const query = useQuery({
+        queryKey: ['knowledge-model', knowledgeModelId, 'business-rules', organization],
+        queryFn: () =>
+            executeActionClient<{ rules: Rule[]; metrics: Metric[] }>('knowledge.listBusinessRules', { knowledgeModelId, includeArchived: true }, { organizationId: organization }),
+    });
+    const metric = query.data?.metrics?.find(m => m.id === metricId);
+    const [editing, setEditing] = useState(false);
+    const [selected, setSelected] = useState<string[]>([]);
+    const [snapshot, setSnapshot] = useState<{ revision: string; rules: Rule[]; referenceIds: string[] } | null>(null);
+    if (!metric) return null;
+    const applicable = query.data!.rules.filter(
+        r => r.metricIds?.includes(metricId) || (r.applicationScope !== 'metrics' && (!r.payload.sourceConnectionId || r.payload.sourceConnectionId === metric.sourceConnectionId)),
+    );
+    return (
+        <section className="mt-5 space-y-3 rounded-md border p-4">
+            <div className="flex items-center justify-between">
+                <h3 className="font-medium">{t('ReferencedRules')}</h3>
+                {status.data?.canManage ? (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                            setSelected(query.data!.rules.filter(r => r.metricIds?.includes(metricId)).map(r => r.id));
+                            setSnapshot({
+                                revision: metric.revision!,
+                                rules: query.data!.rules,
+                                referenceIds: query.data!.rules.filter(r => r.metricIds?.includes(metricId)).map(r => r.id),
+                            });
+                            setEditing(true);
+                        }}
+                    >
+                        {t('Edit')}
+                    </Button>
+                ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">{t('RuleSemantics')}</p>
+            {applicable.map(rule => (
+                <div key={rule.id} className="text-sm">
+                    <Link className="underline" href={`?tab=rules&rule=${encodeURIComponent(rule.id)}#rule-${rule.id}`}>
+                        {rule.payload.name}
+                    </Link>{' '}
+                    · v{rule.revision} {rule.status === 'archived' ? <Badge variant="outline">{t('Inactive')}</Badge> : null}
+                    <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{rule.payload.description}</p>
+                </div>
+            ))}
+            {!applicable.length ? <p className="text-sm text-muted-foreground">{t('NoReferencedRules')}</p> : null}
+            <Dialog open={editing} onOpenChange={setEditing}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{t('ReferencedRules')}</DialogTitle>
+                    </DialogHeader>
+                    {snapshot?.rules
+                        .filter(r => !r.payload.sourceConnectionId || r.payload.sourceConnectionId === metric.sourceConnectionId)
+                        .map(rule => (
+                            <label key={rule.id} className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                    disabled={rule.status === 'archived' && !selected.includes(rule.id)}
+                                    checked={selected.includes(rule.id)}
+                                    onCheckedChange={checked => setSelected(ids => (checked ? [...ids, rule.id] : ids.filter(id => id !== rule.id)))}
+                                />
+                                {rule.payload.name} · {t(`Scope.${rule.applicationScope ?? 'model'}`)}
+                            </label>
+                        ))}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditing(false)}>
+                            {t('Cancel')}
+                        </Button>
+                        <Button
+                            disabled={action.isPending || !snapshot}
+                            onClick={() =>
+                                action.mutate(
+                                    {
+                                        actionId: 'knowledge.updateMetricRules',
+                                        input: {
+                                            metricId,
+                                            expectedRevision: snapshot!.revision,
+                                            ruleIds: selected,
+                                            expectedReferenceIds: snapshot!.referenceIds,
+                                            expectedRuleRevisions: Object.fromEntries(snapshot!.rules.map(r => [r.id, r.revision])),
+                                        },
+                                    },
+                                    { onSuccess: () => setEditing(false) },
+                                )
+                            }
+                        >
+                            {t('Save')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </section>
     );
 }

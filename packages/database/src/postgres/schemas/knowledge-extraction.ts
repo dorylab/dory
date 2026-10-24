@@ -1,5 +1,6 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+
 import { knowledgeConnectors, knowledgeModels, knowledgeSources } from './knowledge';
 
 export type ExtractedKnowledge = {
@@ -14,9 +15,17 @@ export type ExtractedKnowledge = {
     timeDimension?: string;
     unit?: string;
     scope?: string;
+    applicationScope?: 'model' | 'data_source' | 'metrics';
+    metricIds?: string[];
+    applicableMetricNames?: string[];
+    sharingEvidence?: string;
+    specificConditions?: string[];
+    ruleIds?: string[];
+    ruleCandidateIds?: string[];
 };
 export type ExtractionEvidenceInput = { quote: string; sourceId: string; sourceHash: string; sourceTitle: string; sourceUrl: string | null };
-export type ExtractedCandidate = { payload: ExtractedKnowledge; quotes: string[] };
+export type ExtractedCandidate = { payload: ExtractedKnowledge; quotes: string[]; disposition?: 'knowledge' | 'background'; reason?: string };
+export type PublicationMode = 'review' | 'automatic';
 
 export const knowledgeExtractionJobs = pgTable(
     'knowledge_extraction_jobs',
@@ -34,9 +43,11 @@ export const knowledgeExtractionJobs = pgTable(
         sourceId: text('source_id').references(() => knowledgeSources.id, { onDelete: 'set null' }),
         originalSourceId: text('original_source_id').notNull(),
         sourceHash: text('source_hash').notNull(),
+        publicationEpoch: integer('publication_epoch'),
         extractionVersion: integer('extraction_version').notNull().default(1),
         status: text('status').$type<'queued' | 'running' | 'completed' | 'failed' | 'blocked' | 'cancelled'>().notNull().default('queued'),
         attempts: integer('attempts').notNull().default(0),
+        stagedOutput: jsonb('staged_output').$type<ExtractedCandidate[]>(),
         completedChunks: integer('completed_chunks').notNull().default(0),
         totalChunks: integer('total_chunks').notNull().default(0),
         leaseToken: text('lease_token'),
@@ -69,7 +80,10 @@ export const knowledgeCandidates = pgTable(
         payloadHash: text('payload_hash').notNull(),
         payload: jsonb('payload').$type<ExtractedKnowledge>().notNull(),
         action: text('action').$type<'add' | 'update' | 'conflict' | 'source_changed' | 'remove'>().notNull().default('add'),
-        status: text('status').$type<'pending' | 'approved' | 'rejected' | 'superseded'>().notNull().default('pending'),
+        publicationEpoch: integer('publication_epoch'),
+        manualOnly: integer('manual_only').notNull().default(0),
+        classificationReason: text('classification_reason'),
+        status: text('status').$type<'pending' | 'approved' | 'rejected' | 'superseded' | 'background'>().notNull().default('pending'),
         targetAssetId: text('target_asset_id'),
         targetRevision: text('target_revision'),
         reviewedBy: text('reviewed_by'),
@@ -92,6 +106,8 @@ export const knowledgeBusinessRules = pgTable(
             .notNull()
             .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
         payload: jsonb('payload').$type<ExtractedKnowledge>().notNull(),
+        publicationMethod: text('publication_method').$type<'human' | 'automatic'>().notNull().default('human'),
+        applicationScope: text('application_scope').$type<'model' | 'data_source' | 'metrics'>().notNull().default('model'),
         status: text('status').$type<'active' | 'archived'>().notNull().default('active'),
         revision: integer('revision').notNull().default(1),
         updatedBy: text('updated_by'),
@@ -127,4 +143,92 @@ export const knowledgeEvidence = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
     table => [index('idx_evidence_asset').on(table.knowledgeModelId, table.assetType, table.assetId), index('idx_evidence_source').on(table.originalSourceId)],
+);
+
+// Metric IDs belong to the versioned Ossie document and are validated under its row lock.
+export const knowledgeMetricRules = pgTable(
+    'knowledge_metric_rules',
+    {
+        organizationId: text('organization_id').notNull(),
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        metricId: text('metric_id').notNull(),
+        ruleId: text('rule_id')
+            .notNull()
+            .references(() => knowledgeBusinessRules.id, { onDelete: 'cascade' }),
+    },
+    table => [uniqueIndex('uidx_metric_rules').on(table.knowledgeModelId, table.metricId, table.ruleId)],
+);
+
+export const knowledgeOrganizationJobs = pgTable(
+    'knowledge_organization_jobs',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `koj_${newEntityId()}`),
+        organizationId: text('organization_id').notNull(),
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        status: text('status').$type<'queued' | 'running' | 'completed' | 'failed' | 'blocked'>().notNull().default('queued'),
+        generation: integer('generation').notNull().default(1),
+        attempts: integer('attempts').notNull().default(0),
+        leaseToken: text('lease_token'),
+        leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+        availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+        error: text('error'),
+        lastCompletedAt: timestamp('last_completed_at', { withTimezone: true }),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [uniqueIndex('uidx_knowledge_organization_model').on(table.knowledgeModelId), index('idx_knowledge_organization_queue').on(table.status, table.availableAt)],
+);
+
+export const knowledgePublicationJobs = pgTable(
+    'knowledge_publication_jobs',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `kpj_${newEntityId()}`),
+        organizationId: text('organization_id').notNull(),
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        candidateId: text('candidate_id')
+            .notNull()
+            .references(() => knowledgeCandidates.id, { onDelete: 'cascade' }),
+        publicationEpoch: integer('publication_epoch').notNull(),
+        status: text('status').$type<'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'review'>().notNull().default('queued'),
+        attempts: integer('attempts').notNull().default(0),
+        leaseToken: text('lease_token'),
+        leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+        availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+        error: text('error'),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [uniqueIndex('uidx_publication_candidate').on(table.candidateId), index('idx_publication_queue').on(table.status, table.availableAt)],
+);
+
+export const knowledgeProcessingHistory = pgTable(
+    'knowledge_processing_history',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `kph_${newEntityId()}`),
+        organizationId: text('organization_id').notNull(),
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        candidateId: text('candidate_id').references(() => knowledgeCandidates.id, { onDelete: 'set null' }),
+        kind: text('kind').$type<'background' | 'automatic' | 'human' | 'rejected' | 'restored' | 'withdrawn' | 'edited'>().notNull(),
+        assetId: text('asset_id'),
+        assetRevision: text('asset_revision'),
+        publicationEpoch: integer('publication_epoch'),
+        actorId: text('actor_id'),
+        reason: text('reason'),
+        payload: jsonb('payload').$type<ExtractedKnowledge & { classificationVersion?: number; inputIds?: string[] }>().notNull(),
+        evidence: jsonb('evidence').$type<ExtractionEvidenceInput[]>().notNull().default([]),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [index('idx_processing_history_model').on(table.organizationId, table.knowledgeModelId)],
 );

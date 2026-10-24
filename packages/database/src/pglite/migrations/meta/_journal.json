@@ -239,6 +239,34 @@
             "when": 1792483200001,
             "tag": "0034_knowledge_extraction",
             "breakpoints": true
+        },
+        {
+            "idx": 34,
+            "version": "7",
+            "when": 1792483200002,
+            "tag": "0035_knowledge_rule_scopes",
+            "breakpoints": true
+        },
+        {
+            "idx": 35,
+            "version": "7",
+            "when": 1792483200003,
+            "tag": "0036_knowledge_organization_completion",
+            "breakpoints": true
+        },
+        {
+            "idx": 36,
+            "version": "7",
+            "when": 1792483200004,
+            "tag": "0037_knowledge_publication",
+            "breakpoints": true
+        },
+        {
+            "idx": 37,
+            "version": "7",
+            "when": 1792627200000,
+            "tag": "0038_work_documents",
+            "breakpoints": true
         }
     ]
 }

@@ -1,20 +1,8 @@
 'use client';
 
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import NextLink from 'next/link';
-import { useTranslations } from 'next-intl';
-import { parseAsString, useQueryStates } from 'nuqs';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { IconBrandGithub } from '@tabler/icons-react';
-import { ExternalLink, FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
-import { toast } from 'sonner';
-
-import { LinearConnectorDialog, fetchLinearSetup, linearSetupKey, type KnowledgeConnectorView } from './linear-connector-dialog';
-import { LinearLogo } from './linear-logo';
-import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
-
-import { executeActionClient } from '@/lib/actions/client';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -32,13 +20,28 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
+import { IconBrandGithub } from '@tabler/icons-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ExternalLink, Eye, FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { parseAsString, useQueryStates } from 'nuqs';
+import { toast } from 'sonner';
+
+import { executeActionClient } from '@/lib/actions/client';
+import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
+
+import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
+import { useKnowledgeListPagination } from './knowledge-list-pagination';
+import { knowledgeSourceDisplayName } from './knowledge-source-display';
+import { fetchLinearSetup, LinearConnectorDialog, linearSetupKey, type KnowledgeConnectorView } from './linear-connector-dialog';
+import { LinearLogo } from './linear-logo';
 
 type DataSource = { connectionId: string; name: string; type: string; engine: string };
 type Definition = {
     id: string;
     name: string;
     kind: 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
-    status: 'verified' | 'unverified';
+    status: 'verified' | 'unverified' | 'auto_published';
     sourceConnectionId: string;
     description?: string;
     aliases?: string[];
@@ -98,15 +101,10 @@ const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-edit
     ssr: false,
     loading: () => <div className="h-full animate-pulse bg-muted" />,
 });
+const MarkdownViewer = dynamic(() => import('@/components/ai-elements/message').then(module => module.MessageResponse), { ssr: false });
 
 const knowledgeSourcesKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-sources'] as const;
 const knowledgeConnectorsKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-connectors'] as const;
-
-function sourceDisplayName(source: KnowledgeSourceSummary) {
-    if (source.connectorProvider !== 'linear' || !source.connectorId || !source.remotePath) return source.fileName;
-    const suffix = ` · ${source.connectorId.slice(-8)} · ${source.remotePath.split('/').pop()}`;
-    return source.fileName.endsWith(suffix) ? source.fileName.slice(0, -suffix.length) : source.fileName;
-}
 
 function formatBytes(bytes: number) {
     if (bytes < 1_000) return `${bytes} B`;
@@ -294,6 +292,77 @@ function UploadSourcesDialog({
     );
 }
 
+function SourceViewerDialog({
+    source,
+    organization,
+    knowledgeModelId,
+    onClose,
+}: {
+    source: KnowledgeSourceSummary;
+    organization: string;
+    knowledgeModelId: string;
+    onClose: () => void;
+}) {
+    const t = useTranslations('Knowledge.KnowledgeSources');
+    const detail = useQuery({
+        queryKey: [...knowledgeSourcesKey(knowledgeModelId), source.id, source.updatedAt, 'viewer'],
+        queryFn: () => executeActionClient<KnowledgeSource>('knowledge.getKnowledgeSource', { knowledgeModelId, id: source.id }, { organizationId: organization }),
+        refetchOnMount: 'always',
+        retry: false,
+    });
+
+    return (
+        <Dialog open onOpenChange={open => !open && onClose()}>
+            <DialogContent className="flex h-[min(48rem,calc(100dvh-2rem))] w-[calc(100vw-2rem)] flex-col sm:max-w-4xl">
+                <DialogHeader className="shrink-0">
+                    <DialogTitle className="break-words pr-8">{knowledgeSourceDisplayName(source)}</DialogTitle>
+                    <DialogDescription>{t('ViewerDescription')}</DialogDescription>
+                </DialogHeader>
+                <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="outline">{source.format}</Badge>
+                    <span>{source.connectorProvider === 'github' ? 'GitHub' : source.connectorProvider === 'linear' ? 'Linear' : t('ViewerLocalSource')}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{new Date(source.updatedAt).toLocaleString()}</span>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-card p-4">
+                    {detail.isFetching || detail.isPending ? (
+                        <div className="space-y-3" role="status" aria-label={t('ViewerLoading')}>
+                            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                            <div className="h-4 w-full animate-pulse rounded bg-muted" />
+                            <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                        </div>
+                    ) : detail.isError ? (
+                        <div className="flex flex-col items-start gap-3 text-sm" role="alert">
+                            <p>{t('ViewerLoadFailed')}</p>
+                            <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
+                                {t('ViewerRetry')}
+                            </Button>
+                        </div>
+                    ) : !detail.data?.contentText ? (
+                        <p className="text-sm text-muted-foreground">{t('ViewerEmpty')}</p>
+                    ) : detail.data.format === 'markdown' ? (
+                        <MarkdownViewer mode="static">{detail.data.contentText}</MarkdownViewer>
+                    ) : (
+                        <pre className="whitespace-pre-wrap break-words font-mono text-sm">{detail.data.contentText}</pre>
+                    )}
+                </div>
+                <DialogFooter className="shrink-0">
+                    {source.sourceUrl ? (
+                        <Button variant="outline" size="sm" asChild>
+                            <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink /> {t('OpenOriginal')}
+                            </a>
+                        </Button>
+                    ) : null}
+                    <Button variant="outline" size="sm" onClick={onClose}>
+                        {t('ViewerClose')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function SourceEditorDialog({
     source,
     open,
@@ -343,7 +412,7 @@ function SourceEditorDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>{source ? sourceDisplayName(source) : t('Title')}</DialogTitle>
+                    <DialogTitle>{source ? knowledgeSourceDisplayName(source) : t('Title')}</DialogTitle>
                     <DialogDescription>{t('EditorDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="flex shrink-0 items-center gap-3">
@@ -445,7 +514,7 @@ function ImportReviewDialog({
         <Dialog open={Boolean(source && suggestions.length)} onOpenChange={onOpenChange}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader>
-                    <DialogTitle>{t('ReviewTitle', { name: source?.fileName ?? '' })}</DialogTitle>
+                    <DialogTitle>{t('ReviewTitle', { name: source ? knowledgeSourceDisplayName(source) : '' })}</DialogTitle>
                     <DialogDescription>{t('ReviewDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 divide-y overflow-y-auto rounded-md border">
@@ -705,6 +774,7 @@ export function KnowledgeSourcesPanel({
     const [uploadOpen, setUploadOpen] = useState(false);
     const [connectorOpen, setConnectorOpen] = useState(Boolean(githubEntry.githubInstallationId && githubEntry.githubConnectionState));
     const [editing, setEditing] = useState<KnowledgeSourceSummary | null>(null);
+    const [viewing, setViewing] = useState<KnowledgeSourceSummary | null>(null);
     const [deleting, setDeleting] = useState<KnowledgeSourceSummary | null>(null);
     const [reviewing, setReviewing] = useState<KnowledgeSourceSummary | null>(null);
     const [suggestions, setSuggestions] = useState<ImportSuggestion[]>([]);
@@ -723,6 +793,10 @@ export function KnowledgeSourcesPanel({
     const sources = useQuery({
         queryKey: knowledgeSourcesKey(knowledgeModelId),
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
+    });
+    const pagination = useKnowledgeListPagination('sources', sources.data?.sources.length, {
+        id: selectedSourceId.source,
+        index: sources.data?.sources.findIndex(source => source.id === selectedSourceId.source) ?? -1,
     });
     const connectors = useQuery({
         queryKey: knowledgeConnectorsKey(knowledgeModelId),
@@ -895,7 +969,7 @@ export function KnowledgeSourcesPanel({
                             </tr>
                         </thead>
                         <tbody>
-                            {sources.data.sources.flatMap(source => {
+                            {sources.data.sources.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).flatMap(source => {
                                 const assets = sourceAssets.get(source.id) ?? [];
                                 const definitionCount = assets.filter(asset => asset.assetType === 'definition').length;
                                 const queryCount = assets.filter(asset => asset.assetType === 'verified_query').length;
@@ -914,7 +988,7 @@ export function KnowledgeSourcesPanel({
                                                 ) : (
                                                     <FileText className="size-4 shrink-0 text-muted-foreground" />
                                                 )}
-                                                <span className="min-w-0 break-words">{sourceDisplayName(source)}</span>
+                                                <span className="min-w-0 break-words">{knowledgeSourceDisplayName(source)}</span>
                                                 <SourceExtractionStatus organization={organization} knowledgeModelId={knowledgeModelId} sourceId={source.id} />
                                                 {source.connectorProvider ? (
                                                     <Badge variant="outline">
@@ -955,13 +1029,16 @@ export function KnowledgeSourcesPanel({
                                                     <Button
                                                         variant="ghost"
                                                         size="icon-sm"
-                                                        aria-label={t('ActionsFor', { name: sourceDisplayName(source) })}
+                                                        aria-label={t('ActionsFor', { name: knowledgeSourceDisplayName(source) })}
                                                         onClick={event => event.stopPropagation()}
                                                     >
                                                         <MoreHorizontal />
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" onClick={event => event.stopPropagation()}>
+                                                    <DropdownMenuItem onSelect={() => setViewing(source)}>
+                                                        <Eye /> {t('View')}
+                                                    </DropdownMenuItem>
                                                     {!source.connectorId ? (
                                                         <DropdownMenuItem onSelect={() => setEditing(source)}>
                                                             <Pencil /> {t('Edit')}
@@ -1024,6 +1101,18 @@ export function KnowledgeSourcesPanel({
                             })}
                         </tbody>
                     </table>
+                    <DataTablePagination
+                        total={sources.data.sources.length}
+                        {...pagination}
+                        onPageChange={index => {
+                            void setSelectedSourceId({ source: '' });
+                            pagination.onPageChange(index);
+                        }}
+                        onPageSizeChange={size => {
+                            void setSelectedSourceId({ source: '' });
+                            pagination.onPageSizeChange(size);
+                        }}
+                    />
                 </div>
             ) : sources.data ? (
                 <div className="flex min-h-64 flex-col items-center justify-center rounded-md border border-dashed px-6 text-center">
@@ -1099,6 +1188,7 @@ export function KnowledgeSourcesPanel({
                     ]);
                 }}
             />
+            {viewing ? <SourceViewerDialog source={viewing} organization={organization} knowledgeModelId={knowledgeModelId} onClose={() => setViewing(null)} /> : null}
             <SourceEditorDialog
                 source={editing}
                 open={Boolean(editing)}
@@ -1155,7 +1245,7 @@ export function KnowledgeSourcesPanel({
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>{t('DeleteTitle')}</AlertDialogTitle>
-                        <AlertDialogDescription>{t('DeleteDescription', { name: deleting?.fileName ?? '' })}</AlertDialogDescription>
+                        <AlertDialogDescription>{t('DeleteDescription', { name: deleting ? knowledgeSourceDisplayName(deleting) : '' })}</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={remove.isPending}>{t('Cancel')}</AlertDialogCancel>

@@ -53,7 +53,7 @@ export default function WelcomePageClient({ resumeAnonymousSession = false }: We
             }
 
             router.refresh();
-            router.push(`/${payload.organizationSlug}/connections`);
+            router.push(`/${payload.organizationSlug}`);
         } catch (nextError) {
             setError(nextError instanceof Error ? nextError.message : t('Errors.StartFailed'));
         } finally {

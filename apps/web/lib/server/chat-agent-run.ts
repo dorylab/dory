@@ -1,4 +1,5 @@
 import type { DBService } from '@dory/database';
+import type { AnalysisScope } from '@dory/shared/types/work-document';
 
 type ChatRunEnd = {
     isAborted?: boolean;
@@ -15,6 +16,9 @@ export function createChatAgentRunLifecycle(options: {
     connectionId?: string | null;
     title?: string | null;
     signal: AbortSignal;
+    requireSummary?: boolean;
+    reportCreationKey?: string;
+    analysisScope?: AnalysisScope;
 }) {
     let workPromise: ReturnType<typeof options.works.startChatTurn> | undefined;
     let finishPromise: Promise<void> | undefined;
@@ -40,6 +44,7 @@ export function createChatAgentRunLifecycle(options: {
                 workId: work.workId,
                 requestId: options.requestId,
                 outcome,
+                requireSummary: options.requireSummary,
             });
         });
         return finishPromise;
@@ -54,7 +59,12 @@ export function createChatAgentRunLifecycle(options: {
                 tokenId: null,
                 externalSessionId: `chat:${options.chatId}`,
                 title: options.title ?? 'Chat Agent Run',
-                metadata: { chatId: options.chatId, source: 'internal_chat' },
+                metadata: {
+                    reportCreationKey: options.reportCreationKey,
+                    chatId: options.chatId,
+                    source: 'internal_chat',
+                    ...(options.analysisScope ? { analysisScope: options.analysisScope } : {}),
+                },
                 requestId: options.requestId,
             });
             return workPromise;

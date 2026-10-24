@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getDBService } from '@dory/database';
-import { getSessionFromRequest } from '@/lib/auth/session';
-import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
-import { resolveOrganizationAccess } from '@/lib/server/authz';
-import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
+
+import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
+import { getSessionFromRequest } from '@/lib/auth/session';
+import { ResponseUtil } from '@/lib/result';
+import { resolveOrganizationAccess } from '@/lib/server/authz';
 
 export const runtime = 'nodejs';
 
@@ -28,10 +29,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ workId: str
     }
 
     const db = await getDBService();
-    const [snapshot, events] = await Promise.all([db.works.getSnapshot({ organizationId, userId, workId }), db.works.listEvents({ organizationId, userId, workId })]);
+    const [snapshot, events, artifacts] = await Promise.all([
+        db.works.getSnapshot({ organizationId, userId, workId }),
+        db.works.listEvents({ organizationId, userId, workId }),
+        db.artifacts.listByWork({ organizationId, workId }),
+    ]);
     if (!snapshot) {
         return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: 'Work not found.' }), { status: 404 });
     }
 
-    return NextResponse.json(ResponseUtil.success({ snapshot, events }));
+    return NextResponse.json(ResponseUtil.success({ snapshot, events, artifacts }));
 }

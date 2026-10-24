@@ -392,8 +392,8 @@ export function ConnectionSwitcher({ displayMode = 'active-connection' }: Connec
         startConnect(match, identity, null);
     }, [autoConnectedRouteId, connectLoadings, connectionId, connections, isLoading, navigatingConnectionId]);
 
-    const goToConnections = () => {
-        router.push(`/${organizationId}/connections`);
+    const goToWorkspace = () => {
+        router.push(`/${organizationId}/work`);
     };
 
     const openCreateDialog = () => {
@@ -443,7 +443,7 @@ export function ConnectionSwitcher({ displayMode = 'active-connection' }: Connec
                     </DropdownMenuTrigger>
 
                     <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg" align="start" side={isMobile ? 'bottom' : 'right'} sideOffset={4}>
-                        <DropdownMenuItem className={cn('gap-2 p-2', displayAllConnections && 'bg-sidebar-accent text-sidebar-accent-foreground')} onClick={goToConnections}>
+                        <DropdownMenuItem className={cn('gap-2 p-2', displayAllConnections && 'bg-sidebar-accent text-sidebar-accent-foreground')} onClick={goToWorkspace}>
                             <div className="bg-background flex size-6 items-center justify-center rounded-md border">
                                 <Grip className="size-4" />
                             </div>

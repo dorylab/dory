@@ -1,18 +1,19 @@
 import type { Readable, Writable } from 'node:stream';
+import type { DBService } from '@dory/database';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import type { DBService } from '@dory/database';
 
 import { getPublicDoryMcpTools, structuredMcpFacadeError, structuredMcpFacadeResult } from '../../../../apps/web/lib/server/mcp/facade-tools';
-import type { DoryMcpAuthContext } from '../tokens';
 import { createHeadlessActionContext } from '../runtime';
+import type { DoryMcpAuthContext } from '../tokens';
 import { waitForInputClose } from './stdio-lifecycle';
 
 const SERVER_VERSION = '0.12.2';
 
 export type DoryMcpServerContext = {
     db: DBService;
+    agentTurn?: { workId: string; requestId: string };
     auth: DoryMcpAuthContext;
     requestOrigin?: string | null;
     workspaceOrigin?: string | null;
@@ -48,6 +49,7 @@ export function createDoryMcpServer(context: DoryMcpServerContext) {
                         requestOrigin: context.requestOrigin ?? null,
                         workspaceOrigin: context.workspaceOrigin ?? null,
                     });
+                    if (context.agentTurn) ctx.services.agentTurn = { ...context.agentTurn, responseMessageId: `msg_${context.agentTurn.requestId}` };
                     return structuredMcpFacadeResult(await tool.execute(ctx, input ?? {}));
                 } catch (error) {
                     return structuredMcpFacadeError(error);
@@ -60,7 +62,9 @@ export function createDoryMcpServer(context: DoryMcpServerContext) {
 }
 
 export async function handleDoryMcpRequest(req: Request, context: DoryMcpServerContext): Promise<Response> {
-    const server = createDoryMcpServer(context);
+    const workId = req.headers.get('x-dory-agent-work-id');
+    const requestId = req.headers.get('x-dory-agent-request-id');
+    const server = createDoryMcpServer({ ...context, agentTurn: workId && requestId ? { workId, requestId } : context.agentTurn });
     const transport = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,

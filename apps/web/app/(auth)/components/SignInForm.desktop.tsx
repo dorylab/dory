@@ -225,7 +225,7 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
             }
 
             router.refresh();
-            router.push(`/${payload.organizationSlug}/connections`);
+            router.push(callbackURL && callbackURL !== '/' ? callbackURL : `/${payload.organizationSlug}`);
         } catch (nextError) {
             setErr(nextError instanceof Error ? nextError.message : t('SignIn.Guest.StartFailed'));
         } finally {

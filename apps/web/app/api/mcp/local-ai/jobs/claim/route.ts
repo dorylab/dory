@@ -1,9 +1,9 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-
 import { getDBService } from '@dory/database';
 import { ErrorCodes } from '@dory/shared/errors';
+import { z } from 'zod';
+
 import { ResponseUtil } from '@/lib/result';
 import { authenticateLocalAiBridgeRequest, localAiBridgeResponseContext } from '@/lib/server/local-ai/bridge';
 
@@ -56,6 +56,7 @@ export async function POST(req: Request) {
                         provider: job.provider,
                         model: job.model,
                         prompt: job.prompt,
+                        agentTurn: await db.works.getChatBridgeTurn({ organizationId: context.organizationId, userId: auth.context.userId, jobId: job.id }),
                         createdAt: job.createdAt,
                         expiresAt: job.expiresAt,
                     },

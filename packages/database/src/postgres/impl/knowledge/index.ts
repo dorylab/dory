@@ -1,30 +1,39 @@
-import { and, asc, desc, eq, lte, getTableColumns, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
-import { parseDocument } from 'yaml';
-
 import { getClient } from '@dory/database/postgres/client';
 import {
     connections,
+    isPublishedDefinition,
     knowledgeAssetSources,
-    knowledgeLinearCredentials,
     knowledgeConnectorItems,
-    knowledgeConnectorSyncJobs,
     knowledgeConnectors,
-    knowledgeSources,
+    knowledgeConnectorSyncJobs,
+    knowledgeEvidence,
+    knowledgeLinearCredentials,
+    knowledgeMetricRules,
     knowledgeModels,
     knowledgeModelSources,
+    knowledgeProcessingHistory,
+    knowledgeSources,
     knowledgeVerifiedQueries,
-    user,
-    type KnowledgeDefinition,
-    type KnowledgeAssetType,
-    type KnowledgeSourceRelationType,
-    type KnowledgeSourceFormat,
-    type KnowledgeModelDocument,
     OSSIE_VERSION,
+    user,
+    type KnowledgeAssetType,
+    type KnowledgeDefinition,
+    type KnowledgeModelDocument,
+    type KnowledgeSourceFormat,
+    type KnowledgeSourceRelationType,
     type OssieDocument,
 } from '@dory/database/postgres/schemas';
-import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
+import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { newEntityId } from '@dory/shared/id';
 import { OSSIE_DATA_TYPES, OSSIE_DIALECTS } from '@dory/shared/types/ossie';
+import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
+import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { parseDocument } from 'yaml';
+
+import { enqueueSourceExtraction, invalidateSourceEvidence, KnowledgeExtractionStore, knowledgeHash } from './extraction';
+import { LinearKnowledgeStore } from './linear';
+import { migrateLegacyOssieModels } from './migrate-ossie';
 import {
     applyKnowledgeDefinitions,
     createOssieDocument,
@@ -37,10 +46,6 @@ import {
     updateOssieMetadata,
     validateOssieDocument,
 } from './ossie';
-import { migrateLegacyOssieModels } from './migrate-ossie';
-import { LinearKnowledgeStore } from './linear';
-import { KnowledgeExtractionStore, enqueueSourceExtraction, invalidateSourceEvidence } from './extraction';
-import { newEntityId } from '@dory/shared/id';
 
 export { ossieRevision, parseOssieYaml, serializeOssieDocument, validateOssieDocument } from './ossie';
 export { knowledgeHash } from './extraction';
@@ -81,6 +86,7 @@ export type KnowledgeReadiness = {
 };
 
 export type KnowledgeGraph = {
+    metricRuleEdges: Array<{ metricId: string; ruleId: string }>;
     queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
     sourceAssetEdges: Array<{
         sourceId: string;
@@ -103,7 +109,7 @@ export type KnowledgeSourceVerifiedQueryImport = {
 export function getKnowledgeReadiness(definitions: KnowledgeDefinition[], dataSourceCount: number): KnowledgeReadiness {
     const requirements = {
         dataSource: dataSourceCount > 0,
-        verifiedDefinition: definitions.some(definition => definition.status === 'verified' && definition.kind !== 'relationship'),
+        verifiedDefinition: definitions.some(definition => isPublishedDefinition(definition) && definition.kind !== 'relationship'),
     };
     return {
         status: requirements.dataSource && requirements.verifiedDefinition ? 'ready' : 'not_ready',
@@ -144,7 +150,7 @@ function normalizeDefinition(value: unknown): KnowledgeDefinition {
         id: optional('id') ?? `${kind}:${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
         name,
         kind: kind as KnowledgeDefinition['kind'],
-        status: input.status === 'unverified' ? 'unverified' : 'verified',
+        status: input.status === 'auto_published' ? 'auto_published' : input.status === 'unverified' ? 'unverified' : 'verified',
         sourceConnectionId,
         ...(optional('description') ? { description: optional('description') } : {}),
         ...(list('aliases') ? { aliases: list('aliases') } : {}),
@@ -255,7 +261,7 @@ export class PostgresKnowledgeRepository {
 
     private async sourceDetails(modelIds: string[]) {
         if (!modelIds.length) return [];
-        return this.db
+        const rows = await this.db
             .select({
                 knowledgeModelId: knowledgeModelSources.knowledgeModelId,
                 connectionId: connections.id,
@@ -266,6 +272,7 @@ export class PostgresKnowledgeRepository {
             .from(knowledgeModelSources)
             .innerJoin(connections, eq(connections.id, knowledgeModelSources.connectionId))
             .where(inArray(knowledgeModelSources.knowledgeModelId, modelIds));
+        return rows;
     }
 
     private async touchModel(knowledgeModelId: string) {
@@ -305,7 +312,7 @@ export class PostgresKnowledgeRepository {
             const model = validateKnowledgeModelDocument(projectOssieDocument(ossieDocument));
             const modelDataSources = dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source);
             const verifiedQueryCount = verified.filter(queryRow => queryRow.knowledgeModelId === row.id).length;
-            const verifiedDefinitions = model.definitions.filter(definition => definition.status === 'verified' && definition.kind !== 'relationship');
+            const verifiedDefinitions = model.definitions.filter(definition => isPublishedDefinition(definition) && definition.kind !== 'relationship');
             return {
                 ...row,
                 businessContextMd: ossieBusinessContext(ossieDocument),
@@ -375,37 +382,96 @@ export class PostgresKnowledgeRepository {
         await this.db.delete(knowledgeModels).where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
     }
 
-    async saveDefinitions(input: { organizationId: string; knowledgeModelId: string; definitions: unknown }) {
+    async saveDefinitions(input: { organizationId: string; knowledgeModelId: string; definitions: unknown; userId?: string }) {
         const model = await this.getModel(input);
         const document = validateKnowledgeModelDocument({ definitions: input.definitions }, new Set(model.dataSources.map(source => source.connectionId)));
-        const ossieDocument = applyKnowledgeDefinitions(model.ossieDocument, document.definitions);
-        await this.db
-            .update(knowledgeModels)
-            .set({ modelJson: ossieDocument, modelYaml: serializeOssieDocument(ossieDocument), businessContextMd: ossieBusinessContext(ossieDocument) })
-            .where(eq(knowledgeModels.id, model.id));
-        const definitionIds = document.definitions.map(definition => definition.id);
-        const linkedDefinitions = await this.db
-            .select({ sourceId: knowledgeAssetSources.knowledgeSourceId, assetId: knowledgeAssetSources.assetId })
-            .from(knowledgeAssetSources)
-            .where(and(eq(knowledgeAssetSources.knowledgeModelId, model.id), eq(knowledgeAssetSources.assetType, 'definition')));
-        const removedIds = [...new Set(linkedDefinitions.map(link => link.assetId).filter(id => !definitionIds.includes(id)))];
-        if (removedIds.length) {
-            await this.db
-                .delete(knowledgeAssetSources)
-                .where(
-                    and(
-                        eq(knowledgeAssetSources.knowledgeModelId, model.id),
-                        eq(knowledgeAssetSources.assetType, 'definition'),
-                        inArray(knowledgeAssetSources.assetId, removedIds),
-                    ),
-                );
+        for (const definition of document.definitions) {
+            const original = model.model.definitions.find(d => d.id === definition.id);
+            if (definition.status === 'auto_published' && (!original || knowledgeHash(original) !== knowledgeHash(definition))) definition.status = 'verified';
         }
+        const ossieDocument = applyKnowledgeDefinitions(model.ossieDocument, document.definitions);
+        await this.db.transaction(async tx => {
+            const [locked] = await tx
+                .select()
+                .from(knowledgeModels)
+                .where(and(eq(knowledgeModels.id, model.id), eq(knowledgeModels.organizationId, input.organizationId)))
+                .for('update');
+            if (!locked || ossieRevision(locked.modelJson) !== model.modelRevision) throw new Error('Knowledge changed; reload before saving.');
+            for (const definition of document.definitions) {
+                const old = model.model.definitions.find(d => d.id === definition.id);
+                if (old?.status === 'auto_published' && knowledgeHash(old) !== knowledgeHash(definition)) {
+                    const links = await tx
+                        .select()
+                        .from(knowledgeEvidence)
+                        .where(and(eq(knowledgeEvidence.knowledgeModelId, model.id), eq(knowledgeEvidence.assetId, definition.id)));
+                    await tx.insert(knowledgeProcessingHistory).values({
+                        organizationId: input.organizationId,
+                        knowledgeModelId: model.id,
+                        kind: 'edited',
+                        actorId: input.userId ?? null,
+                        assetId: definition.id,
+                        assetRevision: knowledgeHash(definition),
+                        payload: {
+                            kind: 'metric',
+                            name: definition.name,
+                            description: definition.description ?? '',
+                            aliases: definition.aliases ?? [],
+                            sourceConnectionId: definition.sourceConnectionId,
+                            source: definition.source,
+                            expression: definition.expression,
+                            filters: definition.filters,
+                            timeDimension: definition.timeDimension,
+                        },
+                        evidence: links.map(e => ({
+                            quote: e.quote,
+                            sourceId: e.originalSourceId,
+                            sourceHash: e.sourceHash,
+                            sourceTitle: e.sourceTitle,
+                            sourceUrl: e.sourceUrl,
+                        })),
+                    });
+                }
+            }
+            await tx
+                .update(knowledgeModels)
+                .set({ modelJson: ossieDocument, modelYaml: serializeOssieDocument(ossieDocument), businessContextMd: ossieBusinessContext(ossieDocument) })
+                .where(eq(knowledgeModels.id, model.id));
+            const remainingMetricIds = document.definitions.filter(d => d.kind === 'metric').map(d => d.id);
+            await tx.delete(knowledgeMetricRules).where(
+                and(
+                    eq(knowledgeMetricRules.knowledgeModelId, model.id),
+                    remainingMetricIds.length
+                        ? sql`${knowledgeMetricRules.metricId} NOT IN (${sql.join(
+                              remainingMetricIds.map(id => sql`${id}`),
+                              sql`, `,
+                          )})`
+                        : undefined,
+                ),
+            );
+            const definitionIds = document.definitions.map(definition => definition.id);
+            const linkedDefinitions = await tx
+                .select({ sourceId: knowledgeAssetSources.knowledgeSourceId, assetId: knowledgeAssetSources.assetId })
+                .from(knowledgeAssetSources)
+                .where(and(eq(knowledgeAssetSources.knowledgeModelId, model.id), eq(knowledgeAssetSources.assetType, 'definition')));
+            const removedIds = [...new Set(linkedDefinitions.map(link => link.assetId).filter(id => !definitionIds.includes(id)))];
+            if (removedIds.length) {
+                await tx
+                    .delete(knowledgeAssetSources)
+                    .where(
+                        and(
+                            eq(knowledgeAssetSources.knowledgeModelId, model.id),
+                            eq(knowledgeAssetSources.assetType, 'definition'),
+                            inArray(knowledgeAssetSources.assetId, removedIds),
+                        ),
+                    );
+            }
+        });
         return this.getModel(input);
     }
 
     async getGraph(input: { organizationId: string; knowledgeModelId: string }): Promise<KnowledgeGraph> {
         await this.getModel(input);
-        const [queries, sourceAssetEdges] = await Promise.all([
+        const [queries, sourceAssetEdges, metricRuleEdges] = await Promise.all([
             this.listVerifiedQueries(input),
             this.db
                 .select({
@@ -416,8 +482,13 @@ export class PostgresKnowledgeRepository {
                 })
                 .from(knowledgeAssetSources)
                 .where(eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId)),
+            this.db
+                .select({ metricId: knowledgeMetricRules.metricId, ruleId: knowledgeMetricRules.ruleId })
+                .from(knowledgeMetricRules)
+                .where(eq(knowledgeMetricRules.knowledgeModelId, input.knowledgeModelId)),
         ]);
         return {
+            metricRuleEdges,
             queryDefinitionEdges: queries.flatMap(query => query.definitionIds.map(definitionId => ({ queryId: query.id, definitionId }))),
             sourceAssetEdges,
         };
@@ -484,6 +555,18 @@ export class PostgresKnowledgeRepository {
                 modelYaml: serializeOssieDocument(normalized),
             })
             .where(eq(knowledgeModels.id, model.id));
+        const metricIds = projected.definitions.filter(d => d.kind === 'metric').map(d => d.id);
+        await this.db.delete(knowledgeMetricRules).where(
+            and(
+                eq(knowledgeMetricRules.knowledgeModelId, model.id),
+                metricIds.length
+                    ? sql`${knowledgeMetricRules.metricId} NOT IN (${sql.join(
+                          metricIds.map(id => sql`${id}`),
+                          sql`, `,
+                      )})`
+                    : undefined,
+            ),
+        );
         return this.getModel(input);
     }
 
@@ -565,7 +648,7 @@ export class PostgresKnowledgeRepository {
         await this.getModel(input);
         const conditions = [eq(knowledgeSources.organizationId, input.organizationId), eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId)];
         if (input.connectionId) conditions.push(or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId))!);
-        return this.db
+        const rows = await this.db
             .select({
                 id: knowledgeSources.id,
                 organizationId: knowledgeSources.organizationId,
@@ -587,6 +670,7 @@ export class PostgresKnowledgeRepository {
             .leftJoin(knowledgeConnectors, eq(knowledgeConnectors.id, knowledgeConnectorItems.connectorId))
             .where(and(...conditions))
             .orderBy(desc(knowledgeSources.updatedAt));
+        return rows.map(source => ({ ...source, fileName: knowledgeSourceDisplayName(source) }));
     }
 
     async searchKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId?: string; query: string }) {
@@ -596,21 +680,29 @@ export class PostgresKnowledgeRepository {
         const conditions = [eq(knowledgeSources.organizationId, input.organizationId), eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId)];
         if (input.connectionId) conditions.push(or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId))!);
         const rows = await this.db
-            .select({ ...getTableColumns(knowledgeSources), sourceUrl: knowledgeConnectorItems.sourceUrl })
+            .select({
+                ...getTableColumns(knowledgeSources),
+                sourceUrl: knowledgeConnectorItems.sourceUrl,
+                connectorId: knowledgeConnectorItems.connectorId,
+                connectorProvider: knowledgeConnectors.provider,
+                remotePath: knowledgeConnectorItems.remotePath,
+            })
             .from(knowledgeSources)
             .leftJoin(knowledgeConnectorItems, eq(knowledgeSources.id, knowledgeConnectorItems.knowledgeSourceId))
+            .leftJoin(knowledgeConnectors, eq(knowledgeConnectors.id, knowledgeConnectorItems.connectorId))
             .where(and(...conditions))
             .orderBy(desc(knowledgeSources.updatedAt));
         const needle = input.query.trim().toLowerCase();
         return rows
             .map(source => {
-                const haystack = `${source.fileName}\n${source.contentText}`.toLowerCase();
+                const displayName = knowledgeSourceDisplayName(source);
+                const haystack = `${displayName}\n${source.contentText}`.toLowerCase();
                 const matchIndex = haystack.indexOf(needle);
                 if (matchIndex < 0) return null;
                 const contentIndex = source.contentText.toLowerCase().indexOf(needle);
                 const start = Math.max(0, contentIndex < 0 ? 0 : contentIndex - 240);
                 const excerpt = source.contentText.slice(start, start + 800).trim();
-                return { id: source.id, fileName: source.fileName, format: source.format, connectionId: source.connectionId, sourceUrl: source.sourceUrl, excerpt };
+                return { id: source.id, fileName: displayName, format: source.format, connectionId: source.connectionId, sourceUrl: source.sourceUrl, excerpt };
             })
             .filter((source): source is NonNullable<typeof source> => Boolean(source))
             .slice(0, 10);
@@ -642,7 +734,7 @@ export class PostgresKnowledgeRepository {
             .where(and(eq(knowledgeSources.id, input.id), eq(knowledgeSources.organizationId, input.organizationId), eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId)))
             .limit(1);
         if (!source) throw new Error('Knowledge source not found.');
-        return source;
+        return { ...source, fileName: knowledgeSourceDisplayName(source) };
     }
 
     private async assertKnowledgeSourceConnection(model: KnowledgeModelDetail, connectionId?: string | null) {

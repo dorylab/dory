@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 
@@ -7,7 +8,7 @@ const storedSourceName = `Revenue definitions.md · ${'linear-fixture'.slice(-8)
 
 test('Linear project selection confirms sharing, saves scope, displays read-only sources and opens originals', async ({ page, request }) => {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1];
     const action = async (actionId: string, input: Record<string, unknown>, confirmationToken?: string) => {
         const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });

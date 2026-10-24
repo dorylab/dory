@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect, type Locator } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
@@ -35,7 +36,7 @@ test('can create a connection from the connections page', async ({ page, appErro
     await mockWorkbenchApis(page);
 
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
 
     await page.getByRole('button', { name: /add connection/i }).click();
     const dialog = page.getByRole('dialog', { name: /create connection/i });

@@ -1,3 +1,4 @@
+import { openDataSources } from './helpers/navigation';
 import { expect, type Page, type Route } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
@@ -243,7 +244,7 @@ async function mockFolderApis(
 
 async function openSavedQueriesSidebar(page: Page) {
     await page.goto('/');
-    await page.waitForURL(/\/[^/]+\/connections$/);
+    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     expect(organization).toBeTruthy();
 

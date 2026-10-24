@@ -1,20 +1,23 @@
+import { GenerateWorkFromRun } from '@/components/work-documents/generate-from-run';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getFormatter, getTranslations } from 'next-intl/server';
-import { ArrowLeft, ArrowUpRight, BarChart3, BrainCircuit, Database, FileText, ListChecks } from 'lucide-react';
-
+import { Button } from '@/registry/new-york-v4/ui/button';
 import { getDBService } from '@dory/database';
-import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
-import { AgentRunStatusBadge } from '@/components/agent-runs/agent-run-status-badge';
-import { FindingDetails } from '@/components/agent-runs/finding-details';
-import { FindingVerificationButton } from '@/components/agent-runs/finding-verification-button';
-import { AgentRunEvidence } from '@/components/agent-runs/agent-run-evidence';
-import { getSupportingFacts, orderReportFindings, shouldShowHeadlineMetric } from '@/lib/agent-runs/report';
+import { ArrowLeft, ArrowUpRight, BarChart3, BrainCircuit, Database, FileText, ListChecks } from 'lucide-react';
+import { getFormatter, getTranslations } from 'next-intl/server';
+
+import { getChatResponseText } from '@/lib/agent-runs/chat-response';
 import { createAgentRunTextFormatter } from '@/lib/agent-runs/i18n';
+import { getSupportingFacts, orderReportFindings, shouldShowHeadlineMetric } from '@/lib/agent-runs/report';
 import { buildAgentRunTimeline, getAgentRunActivitySummary, getAgentRunStats, getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePathFromSnapshot, resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
-import { Button } from '@/registry/new-york-v4/ui/button';
+import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
+import { AgentRunEvidence } from '@/components/agent-runs/agent-run-evidence';
+import { AgentRunStatusBadge } from '@/components/agent-runs/agent-run-status-badge';
+import { FindingDetails } from '@/components/agent-runs/finding-details';
+import { FindingVerificationButton } from '@/components/agent-runs/finding-verification-button';
+import { MessageResponse } from '@/components/ai-elements/message';
 
 function unique(values: string[]) {
     return [...new Set(values.filter(Boolean))];
@@ -38,13 +41,14 @@ export default async function AgentRunDetailPage({
     if (!userId || !organizationId) redirect('/sign-in');
 
     const db = await getDBService();
-    const [snapshot, events, connections, persistedFindings, artifacts, agentAssetUsage] = await Promise.all([
+    const [snapshot, events, connections, persistedFindings, artifacts, agentAssetUsage, chatResponses] = await Promise.all([
         db.works.getSnapshot({ organizationId, userId, workId }),
         db.works.listEvents({ organizationId, userId, workId }),
         db.connections.list(organizationId),
         db.works.listFindings({ organizationId, userId, workId }),
         db.artifacts.listByWork({ organizationId, workId }),
         db.works.listAgentAssetUsage({ organizationId, userId, workId }),
+        db.works.listChatResponses({ organizationId, userId, workId }),
     ]);
     if (!snapshot) notFound();
 
@@ -122,6 +126,7 @@ export default async function AgentRunDetailPage({
                             </Button>
                         )}
                     </div>
+                    <GenerateWorkFromRun runId={workId} />
                     <p className="text-xs text-muted-foreground">{t(hasWorkspace ? 'Report.WorkspaceHint' : 'Report.WorkspaceUnavailable')}</p>
                 </header>
 
@@ -348,6 +353,40 @@ export default async function AgentRunDetailPage({
                                 </Link>
                             ))}
                         </div>
+                    </section>
+                ) : null}
+
+                {chatResponses.length ? (
+                    <section className="space-y-3">
+                        <h2 className="text-lg font-semibold">{t('Chat.Responses')}</h2>
+                        {chatResponses.map((response, index) => (
+                            <details key={response.id} className="rounded-lg border border-border bg-card p-4">
+                                <summary className="cursor-pointer font-medium">
+                                    {t('Chat.TurnAnswer', { count: index + 1 })} ·{' '}
+                                    {dateFormatter.dateTime(response.createdAt, { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' })}
+                                </summary>
+                                <div className="mt-4 space-y-3">
+                                    {response.metadata?.summarySaved !== true ? <p className="text-sm text-muted-foreground">{t('Chat.Incomplete')}</p> : null}
+                                    {summary?.sections
+                                        ?.filter(section => section.responseMessageId === response.id)
+                                        .map(section => (
+                                            <ul key={section.requestId} className="list-disc space-y-1 pl-5 text-sm">
+                                                {(section.findingIds ?? []).map(id => {
+                                                    const finding = findings.find(item => item.id === id);
+                                                    return finding ? (
+                                                        <li key={id}>
+                                                            <a className="underline underline-offset-4" href={`#finding-${id}`}>
+                                                                {finding.title}
+                                                            </a>
+                                                        </li>
+                                                    ) : null;
+                                                })}
+                                            </ul>
+                                        ))}
+                                    <MessageResponse>{getChatResponseText(response.parts)}</MessageResponse>
+                                </div>
+                            </details>
+                        ))}
                     </section>
                 ) : null}
 

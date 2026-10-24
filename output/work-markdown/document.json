@@ -1,0 +1,320 @@
+{
+  "id": "doc_01a166e1-9c62-72d9-b1cd-000494e08475",
+  "organizationId": "uLOoUJg0oGZBCLjSW0E8SUJYldj9s9Jr",
+  "userId": "k45Ow38o8w3EOvSP4IAiylLwpdePlJFF",
+  "creationKey": "5ded4922-3922-43bd-a4c9-a0ea521035c9:9VKY5s59cPsgrhdW",
+  "chatId": "5ded4922-3922-43bd-a4c9-a0ea521035c9",
+  "title": "双源月度订单 · Markdown 验收",
+  "scope": {
+    "connectionIds": [
+      "01a13308-f333-75e2-a0ae-d6ff3e80606f",
+      "01a1333d-5c50-744c-b69f-22ad3f025410"
+    ],
+    "knowledgeModelId": null
+  },
+  "content": {
+    "visuals": [
+      {
+        "id": "vis_01a166e1-2f4e-72c5-9c1f-8b3c7f4a5e6d",
+        "type": "chart",
+        "chart": {
+          "type": "line",
+          "xKey": "month",
+          "yKey": "order_count"
+        },
+        "title": "Demo Database 月度订单趋势",
+        "evidenceId": "artifact_rs_01a166e1-0ddb-76e9-ae37-64ba7f32253c"
+      },
+      {
+        "id": "vis_01a166e1-3a8c-75b9-b0a2-4d7e9f1b2c8e",
+        "type": "chart",
+        "chart": {
+          "type": "line",
+          "xKey": "month",
+          "yKey": "order_count"
+        },
+        "title": "Commerce Agent Evaluation 月度订单趋势",
+        "evidenceId": "artifact_rs_01a166e1-1e01-77ca-8452-996b2bca670a"
+      },
+      {
+        "id": "demo-orders-table",
+        "type": "table",
+        "title": "Demo Database 订单明细",
+        "evidenceId": "artifact_rs_01a166e1-0ddb-76e9-ae37-64ba7f32253c"
+      },
+      {
+        "id": "commerce-orders-table",
+        "type": "table",
+        "title": "Commerce Agent Evaluation 订单明细",
+        "evidenceId": "artifact_rs_01a166e1-1e01-77ca-8452-996b2bca670a"
+      }
+    ],
+    "evidence": [
+      {
+        "sql": "SELECT SUM(order_count) AS total_orders FROM (SELECT COUNT(*) AS order_count FROM orders)",
+        "rows": [
+          {
+            "total_orders": "1000"
+          }
+        ],
+        "runId": "chat_9fb2a3cefddcdf93f565e614bbc68dcf",
+        "title": "Orders — total orders",
+        "columns": [
+          "total_orders"
+        ],
+        "rowCount": 1,
+        "truncated": false,
+        "artifactId": "artifact_rs_01a166e3-dc5c-70ad-8f06-d94a1be7a0e4",
+        "capturedAt": "2026-10-23T03:52:51.548Z",
+        "connectionId": "01a13308-f333-75e2-a0ae-d6ff3e80606f",
+        "connectionName": "Demo Database"
+      },
+      {
+        "sql": "SELECT SUM(order_count) AS total_orders FROM (SELECT COUNT(*) AS order_count FROM orders)",
+        "rows": [
+          {
+            "total_orders": "8000"
+          }
+        ],
+        "runId": "chat_9fb2a3cefddcdf93f565e614bbc68dcf",
+        "title": "Orders — total orders",
+        "columns": [
+          "total_orders"
+        ],
+        "rowCount": 1,
+        "truncated": false,
+        "artifactId": "artifact_rs_01a166e3-e7a4-74e8-8877-ebfea72cab49",
+        "capturedAt": "2026-10-23T03:52:54.436Z",
+        "connectionId": "01a1333d-5c50-744c-b69f-22ad3f025410",
+        "connectionName": "Commerce Agent Evaluation"
+      },
+      {
+        "sql": "WITH monthly AS (SELECT strftime('%Y-%m', created_at) AS month, COUNT(*) AS order_count FROM orders GROUP BY strftime('%Y-%m', created_at)), ranked AS (SELECT month, order_count, ROW_NUMBER() OVER (ORDER BY month DESC) AS rn FROM monthly) SELECT m1.month AS current_month, m1.order_count AS current_count, m2.month AS prev_month, m2.order_count AS prev_count, ROUND((m1.order_count - m2.order_count) * 100.0 / m2.order_count, 2) AS mom_change_pct FROM ranked m1 JOIN ranked m2 ON m1.rn = 1 AND m2.rn = 2",
+        "rows": [
+          {
+            "prev_count": "54",
+            "prev_month": "2026-02",
+            "current_count": "65",
+            "current_month": "2026-03",
+            "mom_change_pct": "20.37"
+          }
+        ],
+        "runId": "chat_9fb2a3cefddcdf93f565e614bbc68dcf",
+        "title": "Orders — month, order count",
+        "columns": [
+          "current_month",
+          "current_count",
+          "prev_month",
+          "prev_count",
+          "mom_change_pct"
+        ],
+        "rowCount": 1,
+        "truncated": false,
+        "artifactId": "artifact_rs_01a166e4-013f-7664-a178-0b5c058fa1ea",
+        "capturedAt": "2026-10-23T03:53:00.991Z",
+        "connectionId": "01a13308-f333-75e2-a0ae-d6ff3e80606f",
+        "connectionName": "Demo Database"
+      },
+      {
+        "sql": "WITH monthly AS (SELECT strftime('%Y-%m', ordered_at) AS month, COUNT(*) AS order_count FROM orders GROUP BY strftime('%Y-%m', ordered_at)), ranked AS (SELECT month, order_count, ROW_NUMBER() OVER (ORDER BY month DESC) AS rn FROM monthly) SELECT m1.month AS current_month, m1.order_count AS current_count, m2.month AS prev_month, m2.order_count AS prev_count, ROUND((m1.order_count - m2.order_count) * 100.0 / m2.order_count, 2) AS mom_change_pct FROM ranked m1 JOIN ranked m2 ON m1.rn = 1 AND m2.rn = 2",
+        "rows": [
+          {
+            "prev_count": "460",
+            "prev_month": "2026-05",
+            "current_count": "449",
+            "current_month": "2026-06",
+            "mom_change_pct": "-2.39"
+          }
+        ],
+        "runId": "chat_9fb2a3cefddcdf93f565e614bbc68dcf",
+        "title": "Orders — month, order count",
+        "columns": [
+          "current_month",
+          "current_count",
+          "prev_month",
+          "prev_count",
+          "mom_change_pct"
+        ],
+        "rowCount": 1,
+        "truncated": false,
+        "artifactId": "artifact_rs_01a166e4-1600-717d-a8de-ab7d1f1a34c1",
+        "capturedAt": "2026-10-23T03:53:06.304Z",
+        "connectionId": "01a1333d-5c50-744c-b69f-22ad3f025410",
+        "connectionName": "Commerce Agent Evaluation"
+      },
+      {
+        "sql": "SELECT strftime('%Y-%m', created_at) AS month, COUNT(*) AS order_count FROM orders GROUP BY strftime('%Y-%m', created_at) ORDER BY month LIMIT 100",
+        "rows": [
+          {
+            "month": "2025-01",
+            "order_count": "77"
+          },
+          {
+            "month": "2025-02",
+            "order_count": "53"
+          },
+          {
+            "month": "2025-03",
+            "order_count": "73"
+          },
+          {
+            "month": "2025-04",
+            "order_count": "74"
+          },
+          {
+            "month": "2025-05",
+            "order_count": "70"
+          },
+          {
+            "month": "2025-06",
+            "order_count": "62"
+          },
+          {
+            "month": "2025-07",
+            "order_count": "76"
+          },
+          {
+            "month": "2025-08",
+            "order_count": "58"
+          },
+          {
+            "month": "2025-09",
+            "order_count": "85"
+          },
+          {
+            "month": "2025-10",
+            "order_count": "76"
+          },
+          {
+            "month": "2025-11",
+            "order_count": "51"
+          },
+          {
+            "month": "2025-12",
+            "order_count": "57"
+          },
+          {
+            "month": "2026-01",
+            "order_count": "69"
+          },
+          {
+            "month": "2026-02",
+            "order_count": "54"
+          },
+          {
+            "month": "2026-03",
+            "order_count": "65"
+          }
+        ],
+        "runId": "chat_9fb2a3cefddcdf93f565e614bbc68dcf",
+        "title": "Orders — month, order count",
+        "columns": [
+          "month",
+          "order_count"
+        ],
+        "rowCount": 15,
+        "truncated": false,
+        "artifactId": "artifact_rs_01a166e1-0ddb-76e9-ae37-64ba7f32253c",
+        "capturedAt": "2026-10-23T03:49:47.611Z",
+        "connectionId": "01a13308-f333-75e2-a0ae-d6ff3e80606f",
+        "connectionName": "Demo Database"
+      },
+      {
+        "sql": "SELECT strftime('%Y-%m', ordered_at) AS month, COUNT(*) AS order_count FROM orders GROUP BY strftime('%Y-%m', ordered_at) ORDER BY month LIMIT 100",
+        "rows": [
+          {
+            "month": "2025-01",
+            "order_count": "423"
+          },
+          {
+            "month": "2025-02",
+            "order_count": "427"
+          },
+          {
+            "month": "2025-03",
+            "order_count": "494"
+          },
+          {
+            "month": "2025-04",
+            "order_count": "408"
+          },
+          {
+            "month": "2025-05",
+            "order_count": "473"
+          },
+          {
+            "month": "2025-06",
+            "order_count": "449"
+          },
+          {
+            "month": "2025-07",
+            "order_count": "455"
+          },
+          {
+            "month": "2025-08",
+            "order_count": "475"
+          },
+          {
+            "month": "2025-09",
+            "order_count": "422"
+          },
+          {
+            "month": "2025-10",
+            "order_count": "440"
+          },
+          {
+            "month": "2025-11",
+            "order_count": "441"
+          },
+          {
+            "month": "2025-12",
+            "order_count": "435"
+          },
+          {
+            "month": "2026-01",
+            "order_count": "472"
+          },
+          {
+            "month": "2026-02",
+            "order_count": "357"
+          },
+          {
+            "month": "2026-03",
+            "order_count": "475"
+          },
+          {
+            "month": "2026-04",
+            "order_count": "445"
+          },
+          {
+            "month": "2026-05",
+            "order_count": "460"
+          },
+          {
+            "month": "2026-06",
+            "order_count": "449"
+          }
+        ],
+        "runId": "chat_9fb2a3cefddcdf93f565e614bbc68dcf",
+        "title": "Orders — month, order count",
+        "columns": [
+          "month",
+          "order_count"
+        ],
+        "rowCount": 18,
+        "truncated": false,
+        "artifactId": "artifact_rs_01a166e1-1e01-77ca-8452-996b2bca670a",
+        "capturedAt": "2026-10-23T03:49:51.745Z",
+        "connectionId": "01a1333d-5c50-744c-b69f-22ad3f025410",
+        "connectionName": "Commerce Agent Evaluation"
+      }
+    ],
+    "markdown": "## 摘要\n\n本报告对比分析两个独立数据源（Demo Database 和 Commerce Agent Evaluation）的月度订单数量。二者结构与业务语义不同，不可加总或混用。\n\n## Demo Database\n\n- **时间范围**：2025-01 至 2026-03（共 15 个月）\n- **总订单数**：1,000 [来源](dory://evidence/artifact_rs_01a166e3-dc5c-70ad-8f06-d94a1be7a0e4)\n\n## Commerce Agent Evaluation\n\n- **时间范围**：2025-01 至 2026-06（共 18 个月）\n- **总订单数**：8,000 [来源](dory://evidence/artifact_rs_01a166e3-e7a4-74e8-8877-ebfea72cab49)\n\n## 趋势图表\n\n### 人工复核备注：两个数据源独立展示，不可合计；此备注须在后续版本中保留。\n\n\n\n### Demo Database 月度订单趋势\n\n![Demo Database 月度订单趋势](dory://visual/vis_01a166e1-2f4e-72c5-9c1f-8b3c7f4a5e6d)\n\n### Commerce Agent Evaluation 月度订单趋势\n\n![Commerce Agent Evaluation 月度订单趋势](dory://visual/vis_01a166e1-3a8c-75b9-b0a2-4d7e9f1b2c8e)\n\n## 原始结果表\n\n### Demo Database 订单明细\n\n![Demo Database 订单明细](dory://visual/demo-orders-table)\n\n### Commerce Agent Evaluation 订单明细\n\n\n![Commerce 订单明细](dory://visual/commerce-orders-table)\n## 说明\n\n- 两个数据源独立建模：Demo Database 的 `orders` 表含 `created_at` 字段，Commerce Agent Evaluation 的 `orders` 表含 `ordered_at` 字段，字段含义与粒度不一致；\n- 两套数据无主外键关联，不可 JOIN 或合并统计；\n- 所有图表与表格均基于真实查询结果生成，已作为证据存档。\n\n## 补充分析：最新月环比\n\n- **Demo Database**：2026-03 月订单数为 65 单，较 2026-02 月（54 单）环比增长 20.37% [来源](dory://evidence/artifact_rs_01a166e4-013f-7664-a178-0b5c058fa1ea)；\n- **Commerce Agent Evaluation**：2026-06 月订单数为 449 单，较 2026-05 月（460 单）环比下降 2.39% [来源](dory://evidence/artifact_rs_01a166e4-1600-717d-a8de-ab7d1f1a34c1)；\n- 两套数据时间窗口与字段语义不同（`created_at` vs `ordered_at`），不可加总或横向比较。",
+    "knowledge": []
+  },
+  "revision": 9,
+  "status": "ready",
+  "archivedAt": null,
+  "createdAt": "2026-10-23T03:50:24.097Z",
+  "updatedAt": "2026-10-23T04:47:44.184Z"
+}

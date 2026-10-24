@@ -1,10 +1,12 @@
 import { getDBService } from '@dory/database';
+
 import '@/lib/drivers/register-database-drivers';
 
-import type { ConnectionListItem, ConnectionSsh, ConnectionTls } from '@dory/shared/types/connections';
-import { BaseConfig } from '@dory/drivers/types';
-import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
 import { parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
+import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
+import { BaseConfig } from '@dory/drivers/types';
+import type { ConnectionListItem, ConnectionSsh, ConnectionTls } from '@dory/shared/types/connections';
+
 import { buildStoredConnectionConfig } from '@/lib/connection/config';
 import { withCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
 import { createSqlAuditConnectionSnapshot, isSqlAuditConnectionSnapshotCurrent, patchDriverPoolForSqlAudit, type SqlAuditConnectionSnapshot } from '@/lib/server/sql-audit';
@@ -129,7 +131,12 @@ async function ensurePoolWithLatest(config: BaseConfig, auditSnapshot: SqlAuditC
     return patchDriverPoolForSqlAudit(await ensureDriverPool(config), auditSnapshot);
 }
 
-export async function ensureConnectionPoolForUser(userId: string, organizationId: string, connectionId: string, identityId?: string | null) {
+export async function ensureConnectionPoolForUser(_userId: string, organizationId: string, connectionId: string, identityId?: string | null) {
+    return ensureConnectionPoolForOrganization(organizationId, connectionId, identityId);
+}
+
+// Background services use organization-owned credentials, without a browser session.
+export async function ensureConnectionPoolForOrganization(organizationId: string, connectionId: string, identityId?: string | null) {
     const db = await getDBService();
     const record = await db.connections.getById(organizationId, connectionId).then(item => (item ? withLocalFilesSchema(organizationId, item) : item));
 
