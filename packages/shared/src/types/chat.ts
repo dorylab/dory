@@ -100,6 +100,7 @@ export interface ChatSessionPatchById {
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export type ChatMessagePart =
+    | { type: 'file'; filename?: string; mediaType: string; url: string; byteSize?: number }
     | { type: 'text'; text: string }
     | { type: 'code'; lang?: string; text: string }
     | {

@@ -13,16 +13,20 @@ export const emptyWorkContent = (): WorkDocumentContent => ({ markdown: '', visu
 export async function validateAnalysisScope(db: DBService, owner: Owner, raw: unknown): Promise<AnalysisScope> {
     const scope = analysisScopeSchema.parse(raw);
     const access = await resolveOrganizationAccess(owner.organizationId, owner.userId);
-    if (!access?.isMember || !access.permissions.workspace.read || !access.permissions.connection.read) throw new DatabaseError('Analysis access denied.', 403);
-    const available = await db.connections.list(owner.organizationId);
+    if (!access?.isMember || !access.permissions.workspace.read) throw new DatabaseError('Analysis access denied.', 403);
+    const available = access.permissions.connection.read ? await db.connections.list(owner.organizationId) : [];
+    const connectionMode = scope.connectionMode ?? (scope.connectionIds.length ? 'manual' : 'auto');
+    const knowledgeMode = scope.knowledgeMode ?? (scope.knowledgeModelId ? 'manual' : 'auto');
     const allowed = new Set(available.map(item => item.connection.id));
-    const connectionIds = [...new Set(scope.connectionIds)];
+    const connectionIds = connectionMode === 'auto' ? [...allowed] : [...new Set(scope.connectionIds)];
     if (connectionIds.some(id => !allowed.has(id))) throw new DatabaseError('A selected data source is unavailable.', 403);
-    if (scope.knowledgeModelId) {
+    if (knowledgeMode === 'manual' && !scope.knowledgeModelId) throw new DatabaseError('Select a Knowledge model.', 400);
+    if (knowledgeMode === 'manual' && scope.knowledgeModelId) {
         const model = await db.knowledge.getModel({ organizationId: owner.organizationId, knowledgeModelId: scope.knowledgeModelId });
-        if (!model.dataSources.some(source => connectionIds.includes(source.connectionId))) throw new DatabaseError('Select a data source linked to this Knowledge.', 400);
+        if (connectionMode === 'manual' && !model.dataSources.some(source => connectionIds.includes(source.connectionId)))
+            throw new DatabaseError('Select a data source linked to this Knowledge.', 400);
     }
-    return { ...scope, connectionIds, knowledgeModelId: scope.knowledgeModelId ?? null };
+    return { ...scope, connectionMode, knowledgeMode, connectionIds, knowledgeModelId: knowledgeMode === 'manual' ? scope.knowledgeModelId : null };
 }
 
 export async function assertDocumentWrite(owner: Owner) {
@@ -111,7 +115,13 @@ export async function saveWorkDraft(
     }
     const content: WorkDocumentContent = { markdown: draft.markdown, visuals, evidence, knowledge };
     if (JSON.stringify(content).length > 4_000_000) throw new DatabaseError('Report snapshot is too large. Use smaller aggregated results.', 400);
-    return db.workDocuments.update({ ...input, title: draft.title, content, scope, status: draft.status });
+    return db.workDocuments.update({
+        ...input,
+        title: draft.title,
+        content,
+        scope: scope.connectionMode === 'auto' ? { ...scope, connectionIds: [...new Set(evidence.flatMap(item => (item.connectionId ? [item.connectionId] : [])))] } : scope,
+        status: draft.status,
+    });
 }
 
 /** Explicit promotion of a historical run; old runs are never migrated automatically. */

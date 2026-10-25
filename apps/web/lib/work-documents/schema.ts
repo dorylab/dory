@@ -2,9 +2,14 @@ import { z } from 'zod';
 
 export const analysisScopeSchema = z
     .object({
-        connectionIds: z.array(z.string().min(1)).min(1).max(12),
+        connectionIds: z.array(z.string().min(1)),
+        connectionMode: z.enum(['auto', 'manual']).optional(),
+        knowledgeMode: z.enum(['auto', 'manual', 'none']).optional(),
         knowledgeModelId: z.string().min(1).nullable().optional(),
         databasesByConnection: z.record(z.string().min(1), z.string().min(1)).optional(),
+    })
+    .refine(scope => scope.connectionMode === 'auto' || (scope.connectionIds.length <= 12 && (scope.connectionMode !== 'manual' || scope.connectionIds.length > 0)), {
+        message: 'Select between 1 and 12 data sources in manual mode.',
     })
     .refine(scope => Object.keys(scope.databasesByConnection ?? {}).every(id => scope.connectionIds.includes(id)), {
         message: 'Database selections must belong to the selected data sources.',

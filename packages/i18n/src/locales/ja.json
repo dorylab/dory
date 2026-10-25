@@ -4864,6 +4864,9 @@
             "KnowledgeResults": "ナレッジ候補が {count} 件見つかりました",
             "SourceRevision": "ソースの版 · {revision}",
             "Process": "分析の過程",
+            "ProcessCompleted": "実行履歴",
+            "ActionCount": "{count} 件の操作",
+            "OtherActivity": "その他の実行記録",
             "Analyzing": "分析中…",
             "ResultUnavailable": "保存結果を読み込めません。Agent Run または SQL ワークスペースで確認してください。",
             "SearchQuery": "検索語：{query}",
@@ -4871,6 +4874,10 @@
             "RecordedStep": "ツールの実行記録です。",
             "StepInterrupted": "このステップは完了しませんでした。取得済みの結果は保持されています。",
             "Tools": {
+                "ReadResult": "クエリ結果を読む",
+                "ReadFile": "添付ファイルを読む",
+                "SearchFiles": "添付ファイルを検索",
+                "ListSources": "データソースを確認",
                 "SaveConclusions": "結論を保存",
                 "QueryData": "データを照会",
                 "RunTool": "{name} を実行",
@@ -4892,6 +4899,18 @@
                 "Rows": "行数",
                 "Results": "結果数",
                 "Action": "操作"
+            },
+            "WorkedFor": "Worked for {duration}",
+            "Groups": {
+                "ReadKnowledge": "知識ソースを {count} 件参照",
+                "SearchKnowledge": "ナレッジを {count} 回検索",
+                "ExploreSchema": "スキーマを {count} 件調査",
+                "QueryData": "データを {count} 回照会",
+                "ReadResults": "結果を {count} 件参照",
+                "ListSources": "データソースを {count} 回確認",
+                "BuildCharts": "グラフを {count} 件作成",
+                "ReadFiles": "ファイルを {count} 件参照",
+                "SearchFiles": "ファイルを {count} 回検索"
             }
         }
     },
@@ -5490,7 +5509,9 @@
             "Unavailable": "保存済みのデータベースは利用できません。別のものを選択してください。",
             "CheckDatabases": "データベースの選択を確認してください",
             "ChooseSources": "データソースを選択してください",
-            "UnavailableSource": "利用できないデータソース（{id}）"
+            "UnavailableSource": "利用できないデータソース（{id}）",
+            "Auto": "Auto",
+            "KnowledgeSourcesUnavailable": "このナレッジに関連するデータソースを利用できません。関連付けを更新して再試行してください。"
         },
         "Resources": {
             "NoArtifacts": "成果物はまだありません。",
@@ -5533,5 +5554,44 @@
         },
         "GenerateFailed": "レポートを生成できませんでした。",
         "Reports": "レポート"
+    },
+    "ChatComposer": {
+        "Add": "Add",
+        "AddFiles": "Add files",
+        "AddFolder": "Add folder",
+        "ReportMode": "Report · generate and save",
+        "Remove": "Remove {name}",
+        "Question": "質問するか、レポートを依頼してください…",
+        "Placeholder": "Ask a question, @ mention a resource, or describe a report…",
+        "References": "References",
+        "ReferenceLimit": "You can reference up to 20 resources.",
+        "Loading": "Loading…",
+        "SearchFailed": "Unable to load some references.",
+        "Retry": "Retry",
+        "NoReferences": "No matching resources. Select a data source to mention tables.",
+        "Kinds": {
+            "table": "Tables",
+            "report": "Reports",
+            "artifact": "Artifacts"
+        },
+        "CurrentChat": "Current chat",
+        "ReadFailed": "Unable to read the selected files.",
+        "SendFailed": "Unable to send. Your draft is preserved.",
+        "Stop": "Stop",
+        "Send": "Send",
+        "ReportPrompt": "Create and save a new report based on this conversation and the attached context.",
+        "AttachmentPrompt": "Please analyze the attached files and references.",
+        "GenerateReport": "Generate report",
+        "RetryReport": "Retry report",
+        "Generating": "Generating report…",
+        "Saved": "Saved",
+        "Incomplete": "Incomplete",
+        "OpenReport": "Open report",
+        "AttachmentErrors": {
+            "unsupported": "Unsupported file: {filename}. Choose TXT, Markdown, SQL, JSON, CSV, TSV, PNG, JPEG or WebP.",
+            "limit": "Attachment exceeds limits: {filename} ({size} MiB). Up to 20 files, 10 MiB per file, 100 MiB per message.",
+            "imagesUnsupported": "This model channel does not support images ({filename}). Switch to an image-capable model or remove the image.",
+            "invalid": "Unable to read {filename}. Select a valid UTF-8 text file or a supported image."
+        }
     }
 }

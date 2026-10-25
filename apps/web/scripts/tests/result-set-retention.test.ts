@@ -7,6 +7,7 @@ import test from 'node:test';
 import { eq, sql } from 'drizzle-orm';
 
 import {
+    ChatAttachmentStore,
     AgentRunArtifactStore,
     ComparisonArtifactStore,
     ExportRunArtifactStore,
@@ -52,6 +53,7 @@ const db = await getClient();
 const objectStore = new FilesystemObjectStore(artifactDir);
 const artifacts: DoryArtifactStore = {
     objectStore,
+    chatAttachments: new ChatAttachmentStore(objectStore, ''),
     resultSets: new ResultSetArtifactStore(objectStore, ''),
     agentRuns: new AgentRunArtifactStore(objectStore, ''),
     comparisons: new ComparisonArtifactStore(objectStore, ''),
@@ -213,6 +215,10 @@ async function initSchema() {
             "work_id" text NOT NULL,
             "title" text NOT NULL,
             "content" text,
+            "presentation" jsonb,
+            "is_primary" boolean NOT NULL DEFAULT false,
+            "verified_at" timestamp with time zone,
+            "verified_by_user_id" text,
             "created_at" timestamp with time zone NOT NULL
         )
     `);

@@ -15,7 +15,9 @@ import { z } from 'zod';
 
 import { workRequest } from '@/lib/work-documents/client';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
-import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from '@/components/ai-elements/prompt-input';
+import { AgentComposer } from './agent-composer';
+import { AgentMessageReports } from './agent-message-reports';
+import type { ChatSubmission } from '@/lib/chat-context/types';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import { apiFetchSessionDetail } from '@/app/(app)/[organization]/[connectionId]/chatbot/core/api';
 import type { ChatSessionItem } from '@/app/(app)/[organization]/[connectionId]/chatbot/core/types';
@@ -54,6 +56,8 @@ export function DataAgent() {
         resourcePage: parseAsInteger.withDefault(0),
         sources: parseAsArrayOf(parseAsString),
         knowledge: parseAsString,
+        connectionMode: parseAsStringLiteral(['auto', 'manual'] as const),
+        knowledgeMode: parseAsStringLiteral(['auto', 'manual', 'none'] as const),
         databases: parseAsJson(databaseSelections.parse),
     });
     const [newId, setNewId] = useState(() => crypto.randomUUID());
@@ -71,6 +75,13 @@ export function DataAgent() {
         state.sources !== null
             ? { connectionIds: state.sources, knowledgeModelId: state.knowledge, databasesByConnection: state.databases ?? undefined }
             : { ...savedScope, knowledgeModelId: state.knowledge ?? savedScope.knowledgeModelId, databasesByConnection: state.databases ?? savedScope.databasesByConnection };
+    selectedScope.connectionMode =
+        state.connectionMode ??
+        (state.sources !== null ? (state.sources.length ? 'manual' : 'auto') : savedScope.connectionMode) ??
+        (selectedScope.connectionIds.length ? 'manual' : 'auto');
+    selectedScope.knowledgeMode = state.knowledgeMode ?? savedScope.knowledgeMode ?? (selectedScope.knowledgeModelId ? 'manual' : 'auto');
+    if (selectedScope.connectionMode === 'auto') selectedScope.connectionIds = [];
+    if (selectedScope.knowledgeMode !== 'manual') selectedScope.knowledgeModelId = null;
     const databases = useAgentDatabases(organization, options.data?.connections ?? emptyConnections, selectedScope);
     const scope = databases.scope;
     const history = useQuery({ queryKey: ['agent-history', organization, chatId], queryFn: () => apiFetchSessionDetail(chatId), enabled: chatId !== newId });
@@ -79,20 +90,12 @@ export function DataAgent() {
         queryFn: () => workRequest<{ documents: WorkDocumentSummary[] }>(`/api/work-documents?chatId=${encodeURIComponent(chatId)}`),
         refetchInterval: busy ? 1500 : false,
     });
-    const [prompt, setPrompt] = useState<{ id: string; text: string } | null>(null);
+    const [prompt, setPrompt] = useState<ChatSubmission | null>(null);
     const [editingReport, setEditingReport] = useState(false);
     const [liveMessages, setLiveMessages] = useState<UIMessage[]>([]);
     const reportRef = useRef<WorkReportHandle>(null);
     const resourcesButton = useRef<HTMLButtonElement>(null);
     const panel = state.panel ?? (state.document ? 'report' : 'closed');
-    const observedReports = useRef<{ chatId: string; ids: Set<string> } | null>(null);
-    useEffect(() => {
-        if (!reports.data) return;
-        const previous = observedReports.current;
-        const created = previous?.chatId === chatId ? reports.data.documents.find(item => !previous.ids.has(item.id)) : null;
-        observedReports.current = { chatId, ids: new Set(reports.data.documents.map(item => item.id)) };
-        if (created && !editingReport && !state.document) void setState({ chat: chatId, document: created.id, revision: null, panel });
-    }, [reports.data, chatId, editingReport, state.document, panel, setState]);
     const navigatePanel = async (
         next: 'resources' | 'report' | 'query' | 'artifact' | 'closed',
         target: { document?: string; queryRun?: string; querySession?: string; artifact?: string } = {},
@@ -108,13 +111,29 @@ export function DataAgent() {
             ...(target.document ? { chat: chatId, ...(target.document !== state.document ? { revision: null } : {}) } : {}),
         });
     };
-    const scopeState = (value: AnalysisScope) => ({ sources: value.connectionIds, knowledge: value.knowledgeModelId ?? null, databases: value.databasesByConnection ?? {} });
+    const scopeState = (value: AnalysisScope) => ({
+        connectionMode: value.connectionMode ?? (value.connectionIds.length ? ('manual' as const) : ('auto' as const)),
+        knowledgeMode: value.knowledgeMode ?? (value.knowledgeModelId ? ('manual' as const) : ('auto' as const)),
+        sources: value.connectionIds,
+        knowledge: value.knowledgeModelId ?? null,
+        databases: value.databasesByConnection ?? {},
+    });
     const newChat = () => {
         if (busy || editingReport) return;
         setPrompt(null);
         setLiveMessages([]);
         setNewId(crypto.randomUUID());
-        void setState({ chat: null, document: null, revision: null, panel: null, queryRun: null, querySession: null, artifact: null, resourcePage: 0, ...scopeState(scope) });
+        void setState({
+            chat: null,
+            document: null,
+            revision: null,
+            panel: null,
+            queryRun: null,
+            querySession: null,
+            artifact: null,
+            resourcePage: 0,
+            ...scopeState({ connectionIds: [], connectionMode: 'auto', knowledgeMode: 'auto' }),
+        });
     };
     // Opening a newly created draft must not unmount the streaming conversation.
     const loading = (chatId !== newId && history.isPending) || (Boolean(state.document) && !state.chat && openDocument.isPending);
@@ -177,6 +196,7 @@ export function DataAgent() {
                                     chatId={chatId}
                                     initialMessages={history.data?.messages ?? []}
                                     scope={scope}
+                                    sourceNames={Object.fromEntries((options.data?.connections ?? []).map(connection => [connection.id, connection.name]))}
                                     documentId={state.document}
                                     prompt={prompt}
                                     blocked={editingReport}
@@ -185,7 +205,8 @@ export function DataAgent() {
                                     onFinished={() => {
                                         void setState({ chat: chatId });
                                     }}
-                                    onCreateReport={() => setPrompt({ id: crypto.randomUUID(), text: t('CreatePrompt') })}
+                                    reports={reports.data?.documents ?? []}
+                                    onOpenReport={id => void navigatePanel('report', { document: id })}
                                     scopePicker={
                                         <AgentScopePicker
                                             connections={options.data?.connections ?? emptyConnections}
@@ -238,7 +259,7 @@ export function DataAgent() {
                                     documentId={state.document}
                                     busy={busy}
                                     onEditingChange={setEditingReport}
-                                    onContinue={text => setPrompt({ id: crypto.randomUUID(), text })}
+                                    onContinue={text => setPrompt({ id: crypto.randomUUID(), text, files: [] })}
                                 />
                             ) : null}
                         </AgentResources>
@@ -258,23 +279,27 @@ function AgentConversation({
     blocked,
     ready,
     scopePicker,
+    sourceNames,
     onMessages,
     onBusy,
     onFinished,
-    onCreateReport,
+    reports,
+    onOpenReport,
 }: {
     chatId: string;
     initialMessages: UIMessage[];
     scope: AnalysisScope;
     documentId: string | null;
-    prompt: { id: string; text: string } | null;
+    prompt: ChatSubmission | null;
     blocked: boolean;
     ready: boolean;
     scopePicker: ReactNode;
+    sourceNames: Record<string, string>;
     onMessages: (messages: UIMessage[]) => void;
     onBusy: (busy: boolean) => void;
     onFinished: () => void;
-    onCreateReport: () => void;
+    reports: WorkDocumentSummary[];
+    onOpenReport: (id: string) => void;
 }) {
     const t = useTranslations('WorkDocuments');
     const chatT = useTranslations('Chatbot');
@@ -283,9 +308,13 @@ function AgentConversation({
     const [text, setText] = useState('');
     const lastPrompt = useRef<string | null>(null);
     const sendLock = useRef(false);
+    const sendFailed = useRef(false);
     const { messages, sendMessage, status, error, stop } = useChat({
         id: chatId,
         messages: initialMessages,
+        onError: () => {
+            sendFailed.current = true;
+        },
         onFinish: () => {
             onFinished();
             void client.invalidateQueries({ queryKey: ['data-agent', organization] });
@@ -303,24 +332,45 @@ function AgentConversation({
         onBusy(busy);
     }, [busy, onBusy]);
     const submit = useCallback(
-        (value: string) => {
-            if (!value.trim() || busy || blocked || !ready || sendLock.current) return;
+        async (message: ChatSubmission) => {
+            if (busy || blocked || !ready || sendLock.current) return false;
             sendLock.current = true;
+            sendFailed.current = false;
             onBusy(true);
-            void sendMessage({ text: value }, { body: { chatId, analysisScope: scope, documentId } }).finally(() => {
+            try {
+                const metadata = { references: message.references ?? [], outputIntent: message.outputIntent ?? 'answer', sourceMessageId: message.sourceMessageId };
+                await sendMessage(
+                    {
+                        id: message.id ?? crypto.randomUUID(),
+                        messageId: message.id && messages.some(item => item.id === message.id) ? message.id : undefined,
+                        role: 'user',
+                        parts: [{ type: 'text', text: message.text }, ...message.files],
+                        metadata,
+                    },
+                    { body: { chatId, analysisScope: scope, documentId, ...metadata } },
+                );
+                return !sendFailed.current;
+            } finally {
                 sendLock.current = false;
                 onBusy(false);
-            });
-            setText('');
+            }
         },
-        [busy, blocked, ready, scope, sendMessage, chatId, documentId, onBusy],
+        [busy, blocked, ready, scope, sendMessage, chatId, documentId, onBusy, messages],
     );
     useEffect(() => {
         if (prompt && prompt.id !== lastPrompt.current && !busy && !blocked && ready) {
-            lastPrompt.current = prompt.id;
-            submit(prompt.text);
+            lastPrompt.current = prompt.id ?? null;
+            void submit(prompt);
         }
     }, [prompt, busy, blocked, ready, submit]);
+    const runIds = [
+        ...new Set(
+            messages.flatMap(message => {
+                const metadata = message.metadata as { agentRunId?: string } | undefined;
+                return metadata?.agentRunId ? [metadata.agentRunId] : [];
+            }),
+        ),
+    ];
     const empty = !messages.length;
     return (
         <div className={`flex min-h-0 flex-1 flex-col p-4 ${empty ? 'justify-center overflow-y-auto' : ''}`}>
@@ -343,15 +393,17 @@ function AgentConversation({
                 <Conversation className="min-h-0 flex-1">
                     <ConversationContent className="mx-auto w-full max-w-5xl gap-2 px-2 pb-6 pt-2 lg:px-4 lg:pt-4">
                         {messages.map((message, index) => (
-                            <MessageRenderer
-                                key={message.id}
-                                message={message}
-                                messageIndex={index}
-                                messages={messages}
-                                status={status}
-                                showRunLinks={false}
-                                onCopySql={sql => navigator.clipboard.writeText(sql)}
-                            />
+                            <div key={message.id}>
+                                <MessageRenderer
+                                    message={message}
+                                    messageIndex={index}
+                                    messages={messages}
+                                    status={status}
+                                    showRunLinks={false}
+                                    onCopySql={sql => navigator.clipboard.writeText(sql)}
+                                />
+                                <AgentMessageReports message={message} messages={messages} reports={reports} busy={busy} onOpen={onOpenReport} />
+                            </div>
                         ))}
                     </ConversationContent>
                     <ConversationScrollButton aria-label={t('LatestMessages')} />
@@ -363,29 +415,19 @@ function AgentConversation({
                         {error.message}
                     </p>
                 ) : null}
-                <PromptInput onSubmit={message => submit(message.text)}>
-                    <PromptInputBody>
-                        <PromptInputTextarea
-                            aria-label={t('Question')}
-                            placeholder={t('Question')}
-                            value={text}
-                            onChange={event => setText(event.target.value)}
-                            disabled={blocked}
-                            className="min-h-24 w-full resize-none border-0 bg-transparent text-sm focus-visible:ring-0"
-                        />
-                    </PromptInputBody>
-                    <PromptInputFooter className="justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={onCreateReport} disabled={busy || blocked || !ready || empty}>
-                            {t('CreateWork')}
-                        </Button>
-                        <PromptInputSubmit
-                            status={status}
-                            onStop={() => void stop()}
-                            aria-label={busy ? t('Stop') : t('Send')}
-                            disabled={!busy && (!text.trim() || !ready || blocked)}
-                        />
-                    </PromptInputFooter>
-                </PromptInput>
+                <AgentComposer
+                    text={text}
+                    onTextChange={setText}
+                    onSubmit={submit}
+                    onStop={() => void stop()}
+                    scope={scope}
+                    sourceNames={sourceNames}
+                    chatId={chatId}
+                    runIds={runIds}
+                    busy={busy}
+                    disabled={blocked}
+                    ready={ready}
+                />
                 {scopePicker}
             </div>
         </div>

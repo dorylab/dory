@@ -184,10 +184,11 @@ export class PostgresArtifactsRepository {
         return row;
     }
 
-    async list(input: { organizationId: string; query?: string | null; types?: ArtifactType[]; pinnedOnly?: boolean; offset?: number; limit?: number }) {
+    async list(input: { organizationId: string; userId?: string; query?: string | null; types?: ArtifactType[]; pinnedOnly?: boolean; offset?: number; limit?: number }) {
         this.assertInited();
         const query = input.query?.trim();
         const conditions = [eq(artifacts.organizationId, input.organizationId), or(isNull(artifacts.expiresAt), gt(artifacts.expiresAt, new Date()))!];
+        if (input.userId) conditions.push(or(isNull(artifacts.workId), eq(works.userId, input.userId))!);
         if (input.types?.length) conditions.push(inArray(artifacts.type, input.types));
         if (input.pinnedOnly) conditions.push(isNotNull(resultSets.pinnedAt));
         if (query) {

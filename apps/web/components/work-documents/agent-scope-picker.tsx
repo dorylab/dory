@@ -12,13 +12,14 @@ import { useTranslations } from 'next-intl';
 
 import { executeActionClient } from '@/lib/actions/client';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
-import { getInitialDatabase, isHiddenDatabase, normalizeOption } from '@/app/(app)/[organization]/components/sql-console-sidebar/utils';
+import { isHiddenDatabase, normalizeOption } from '@/app/(app)/[organization]/components/sql-console-sidebar/utils';
 
 export type AgentConnection = { id: string; name: string; type: ConnectionType; defaultDatabase?: string | null };
 export type AgentKnowledge = { id: string; name: string; connectionIds: string[] };
 
 export function useAgentDatabases(organization: string, connections: AgentConnection[], scope: AnalysisScope) {
-    const selected = scope.connectionIds.map(id => connections.find(connection => connection.id === id)).filter(connection => connection !== undefined);
+    const automatic = scope.connectionMode === 'auto' || (!scope.connectionMode && !scope.connectionIds.length);
+    const selected = (automatic ? [] : scope.connectionIds).map(id => connections.find(connection => connection.id === id)).filter(connection => connection !== undefined);
     const queries = useQueries({
         queries: selected.map(connection => ({
             queryKey: ['data-agent-databases', organization, connection.id],
@@ -41,12 +42,13 @@ export function useAgentDatabases(organization: string, connections: AgentConnec
     const groups = selected.map((connection, index) => {
         const query = queries[index];
         const databases = query.data ?? [];
-        const value = scope.databasesByConnection?.[connection.id] ?? getInitialDatabase(databases, connection.defaultDatabase) ?? '';
-        return { connection, databases, value, query, valid: databases.some(database => database.value === value) && !query.isError };
+        const value = scope.databasesByConnection?.[connection.id] ?? '';
+        return { connection, databases, value, query, valid: !value || (databases.some(database => database.value === value) && !query.isError) };
     });
     return {
         groups,
-        ready: scope.connectionIds.length > 0 && scope.connectionIds.length <= 12 && groups.length === scope.connectionIds.length && groups.every(group => group.valid),
+        ready:
+            automatic || (scope.connectionIds.length > 0 && scope.connectionIds.length <= 12 && groups.length === scope.connectionIds.length && groups.every(group => group.valid)),
         scope: { ...scope, databasesByConnection: Object.fromEntries(groups.filter(group => group.value).map(group => [group.connection.id, group.value])) },
     };
 }
@@ -68,21 +70,26 @@ export function AgentScopePicker({
 }) {
     const t = useTranslations('WorkDocuments.ScopePicker');
     const [open, setOpen] = useState<string | null>(null);
+    const [knowledgeError, setKnowledgeError] = useState('');
     const sourceOptions = [
         ...connections,
         ...scope.connectionIds.filter(id => !connections.some(connection => connection.id === id)).map(id => ({ id, name: t('UnavailableSource', { id }) })),
     ];
     const sourceLabel =
-        scope.connectionIds.length === 1
-            ? (sourceOptions.find(connection => connection.id === scope.connectionIds[0])?.name ?? t('Sources'))
-            : scope.connectionIds.length
-              ? t('SourceCount', { count: scope.connectionIds.length })
-              : t('Sources');
-    const knowledgeLabel = models.find(model => model.id === scope.knowledgeModelId)?.name ?? t('Knowledge');
-    const databaseLabel = databases.groups.length === 1 ? databases.groups[0].value || t('Databases') : t('Databases');
+        scope.connectionMode === 'auto' || !scope.connectionIds.length
+            ? t('Auto')
+            : scope.connectionIds.length === 1
+              ? (sourceOptions.find(connection => connection.id === scope.connectionIds[0])?.name ?? t('Sources'))
+              : scope.connectionIds.length
+                ? t('SourceCount', { count: scope.connectionIds.length })
+                : t('Sources');
+    const knowledgeLabel = scope.knowledgeMode === 'none' ? t('NoKnowledge') : (models.find(model => model.id === scope.knowledgeModelId)?.name ?? t('Auto'));
+    const databaseLabel = databases.groups.every(group => !group.value) ? t('Auto') : databases.groups.length === 1 ? databases.groups[0].value : t('Databases');
     const changeSources = (ids: string[], knowledgeModelId = scope.knowledgeModelId) => {
         if (disabled || ids.length > 12) return;
         onChange({
+            ...scope,
+            connectionMode: ids.length ? 'manual' : 'auto',
             connectionIds: ids,
             knowledgeModelId,
             databasesByConnection: Object.fromEntries(Object.entries(scope.databasesByConnection ?? {}).filter(([id]) => ids.includes(id))),
@@ -105,6 +112,15 @@ export function AgentScopePicker({
                         <CommandList>
                             <CommandEmpty>{t('NoResults')}</CommandEmpty>
                             <CommandGroup heading={t('Sources')}>
+                                <CommandItem
+                                    onSelect={() => {
+                                        changeSources([]);
+                                        setOpen(null);
+                                    }}
+                                >
+                                    {t('Auto')}
+                                    {!scope.connectionIds.length || scope.connectionMode === 'auto' ? <Check className="ml-auto size-4" /> : null}
+                                </CommandItem>
                                 {sourceOptions.map(connection => {
                                     const checked = scope.connectionIds.includes(connection.id);
                                     return (
@@ -146,14 +162,25 @@ export function AgentScopePicker({
                             <CommandEmpty>{t('NoResults')}</CommandEmpty>
                             <CommandGroup>
                                 <CommandItem
-                                    aria-checked={!scope.knowledgeModelId}
                                     onSelect={() => {
-                                        changeSources(scope.connectionIds, null);
+                                        setKnowledgeError('');
+                                        onChange({ ...scope, knowledgeMode: 'auto', knowledgeModelId: null });
+                                        setOpen(null);
+                                    }}
+                                >
+                                    {t('Auto')}
+                                    {scope.knowledgeMode !== 'none' && !scope.knowledgeModelId ? <Check className="ml-auto size-4" /> : null}
+                                </CommandItem>
+                                <CommandItem
+                                    aria-checked={scope.knowledgeMode === 'none'}
+                                    onSelect={() => {
+                                        setKnowledgeError('');
+                                        onChange({ ...scope, knowledgeMode: 'none', knowledgeModelId: null });
                                         setOpen(null);
                                     }}
                                 >
                                     {t('NoKnowledge')}
-                                    {!scope.knowledgeModelId ? <Check className="ml-auto size-4" /> : null}
+                                    {scope.knowledgeMode === 'none' ? <Check className="ml-auto size-4" /> : null}
                                 </CommandItem>
                                 {models.map(model => (
                                     <CommandItem
@@ -161,9 +188,25 @@ export function AgentScopePicker({
                                         aria-checked={model.id === scope.knowledgeModelId}
                                         value={model.id}
                                         keywords={[model.name]}
-                                        disabled={model.connectionIds.length > 12}
                                         onSelect={() => {
-                                            changeSources([...new Set(model.connectionIds)], model.id);
+                                            const ids = [...new Set(model.connectionIds)];
+                                            if (ids.length > 12) {
+                                                setKnowledgeError(t('SourceLimit'));
+                                                return;
+                                            }
+                                            if (ids.some(id => !connections.some(connection => connection.id === id))) {
+                                                setKnowledgeError(t('KnowledgeSourcesUnavailable'));
+                                                return;
+                                            }
+                                            setKnowledgeError('');
+                                            onChange({
+                                                ...scope,
+                                                knowledgeMode: 'manual',
+                                                knowledgeModelId: model.id,
+                                                connectionMode: ids.length ? 'manual' : 'auto',
+                                                connectionIds: ids,
+                                                databasesByConnection: {},
+                                            });
                                             setOpen(null);
                                         }}
                                     >
@@ -173,6 +216,11 @@ export function AgentScopePicker({
                                 ))}
                             </CommandGroup>
                         </CommandList>
+                        {knowledgeError && (
+                            <p role="alert" className="border-t px-3 py-2 text-xs text-destructive">
+                                {knowledgeError}
+                            </p>
+                        )}
                     </Command>
                 </PopoverContent>
             </Popover>
@@ -198,6 +246,20 @@ export function AgentScopePicker({
                             <CommandEmpty>{t('NoResults')}</CommandEmpty>
                             {databases.groups.map(({ connection, databases: items, query, value, valid }) => (
                                 <CommandGroup key={connection.id} heading={connection.name}>
+                                    <CommandItem
+                                        aria-label={`${connection.name}: ${t('Auto')}`}
+                                        aria-checked={!value}
+                                        value={`${connection.id}:auto`}
+                                        keywords={[connection.name, t('Auto')]}
+                                        onSelect={() => {
+                                            const next = { ...scope.databasesByConnection };
+                                            delete next[connection.id];
+                                            onChange({ ...scope, databasesByConnection: next });
+                                        }}
+                                    >
+                                        <span className="min-w-0 flex-1 truncate">{t('Auto')}</span>
+                                        {!value && <Check className="size-4" />}
+                                    </CommandItem>
                                     {query.isPending ? (
                                         <div role="status" className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
                                             <Loader2 className="size-4 animate-spin" />
@@ -238,9 +300,9 @@ export function AgentScopePicker({
                     </Command>
                 </PopoverContent>
             </Popover>
-            {!databases.ready ? (
+            {!databases.ready && scope.connectionIds.length > 0 ? (
                 <span role="status" className="px-2 text-xs text-muted-foreground">
-                    {scope.connectionIds.length ? t('CheckDatabases') : t('ChooseSources')}
+                    {t('CheckDatabases')}
                 </span>
             ) : null}
         </div>

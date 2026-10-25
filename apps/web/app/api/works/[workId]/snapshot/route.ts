@@ -38,5 +38,5 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ workId: str
         return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: 'Work not found.' }), { status: 404 });
     }
 
-    return NextResponse.json(ResponseUtil.success({ snapshot, events, artifacts }));
+    return NextResponse.json(ResponseUtil.success({ snapshot, events: events.filter(event => !['chat_progress', 'chat_checkpoints'].includes(event.toolName)), artifacts }));
 }

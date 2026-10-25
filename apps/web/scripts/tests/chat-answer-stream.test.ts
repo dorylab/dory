@@ -53,3 +53,14 @@ test('historical terminal tools remain available while interrupted calls are exc
     assert.equal(history[0]?.parts.length, 2);
     assert.equal(history[0]?.parts[1]?.type, 'tool-retiredTool');
 });
+
+test('the plain-text reply after a failed save supersedes its draft answer', () => {
+    assert.equal(
+        getChatResponseText([
+            { type: 'text', text: 'Inspecting the result.' },
+            { type: 'tool-finishAnalysis', state: 'output-error', input: { finalAnswer: 'Draft conclusion' } },
+            { type: 'text', text: '42 orders. The conclusion could not be saved.' },
+        ]),
+        '42 orders. The conclusion could not be saved.',
+    );
+});

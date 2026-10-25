@@ -81,10 +81,10 @@ export async function dataAgentHttp(req: NextRequest) {
         const organizationId = resolveCurrentOrganizationId(session);
         if (!userId || !organizationId) throw new DatabaseError('Unauthorized.', 401);
         const access = await resolveOrganizationAccess(organizationId, userId);
-        if (!canReadWorkspace(access) || !access?.permissions.connection.read) throw new DatabaseError('Forbidden.', 403);
+        if (!canReadWorkspace(access)) throw new DatabaseError('Forbidden.', 403);
         const db = await getDBService();
         const [connections, models, sessions] = await Promise.all([
-            db.connections.list(organizationId),
+            access?.permissions.connection.read ? db.connections.list(organizationId) : Promise.resolve([]),
             db.knowledge.listModels({ organizationId }),
             db.chat.listSessions({ organizationId, userId, type: 'global', includeArchived: false }),
         ]);

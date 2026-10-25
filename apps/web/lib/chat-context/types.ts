@@ -1,0 +1,24 @@
+import type { FileUIPart } from 'ai';
+import { z } from 'zod';
+
+const name = z.string().min(1).max(512);
+export const chatReferenceSchema = z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('table'), connectionId: name, database: name, schema: z.string().max(512).nullable(), table: name, title: name }),
+    z.object({ kind: z.literal('report'), id: name, title: name, revision: z.number().int().positive().optional() }),
+    z.object({ kind: z.literal('artifact'), id: name, title: name }),
+]);
+export const chatContextSchema = z.object({
+    references: z.array(chatReferenceSchema).max(20).default([]),
+    outputIntent: z.enum(['answer', 'report']).default('answer'),
+    sourceMessageId: name.optional(),
+});
+export type ChatReference = z.infer<typeof chatReferenceSchema>;
+export type ChatContext = z.infer<typeof chatContextSchema>;
+export type ChatSubmission = Partial<ChatContext> & { text: string; files: FileUIPart[]; id?: string };
+export type ChatMetadata = Partial<ChatContext> & { userMessageId?: string; reportDocumentId?: string; reportRevision?: number };
+
+export function referenceKey(reference: ChatReference): string {
+    return reference.kind === 'table'
+        ? JSON.stringify([reference.kind, reference.connectionId, reference.database, reference.schema, reference.table])
+        : `${reference.kind}:${reference.id}`;
+}

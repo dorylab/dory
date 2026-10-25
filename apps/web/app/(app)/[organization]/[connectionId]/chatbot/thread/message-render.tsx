@@ -1,6 +1,9 @@
 'use client';
 
 import { ReactNode } from 'react';
+import type { ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
+import Image from 'next/image';
+import { chatReferenceSchema, referenceKey } from '@/lib/chat-context/types';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenuItem } from '@/registry/new-york-v4/ui/dropdown-menu';
 import type { UIMessage } from 'ai';
@@ -14,8 +17,8 @@ import { ChartResultCard, ChartResultPart } from '@/components/@dory/ui/ai/chart
 import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
 import { SqlResultManualExecutionMode, SqlResultPart } from '@/components/@dory/ui/ai/sql-result/type';
 import { buildAutoChartFromSql } from '@/components/@dory/ui/ai/utils/auto-charts';
-import { ChatAnalysisProcess, ChatRunActivity } from '@/components/agent-runs/chat-run-activity';
-import { ChatToolActivityList, type ChatMessageToolRow } from '@/components/agent-runs/chat-tool-activity';
+import { ChatAnalysisProcess, ChatRunActivity, ChatTimeline } from '@/components/agent-runs/chat-run-activity';
+import { type ChatMessageToolRow } from '@/components/agent-runs/chat-tool-activity';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
@@ -65,8 +68,11 @@ type MessageRendererProps = {
 
 const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, onManualExecute, mode = 'global', onExecuteAction, showRunLinks = true }: MessageRendererProps) => {
     const t = useTranslations('Chatbot');
+    const composerT = useTranslations('ChatComposer');
     const runsT = useTranslations('AgentRuns');
-    const metadata = message.metadata as { agentRunId?: string; requestId?: string } | undefined;
+    const metadata = message.metadata as
+        | { agentRunId?: string; requestId?: string; summarySave?: { status: string; error?: string }; responseStatus?: string; analysisDurationMs?: number }
+        | undefined;
     const assistantMessage = message.role === 'assistant';
     const isLatestAssistant = assistantMessage && messageIndex === messages.length - 1;
     const isStreaming = status === 'streaming' || status === 'submitted';
@@ -74,12 +80,15 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
     const sourceParts = assistantMessage ? (message.parts ?? []).filter((part: any) => part?.type === 'source-url') : [];
     const sqlResults: SqlResultPart[] = [];
     const chartResults: ChartResultPart[] = [];
-    const chartItems: ReactNode[] = [];
     const processItems: ReactNode[] = [];
+    const timeline: ChatTimelineItem[] = [];
     const toolRows: ChatMessageToolRow[] = [];
     const finishParts = (message.parts ?? []).filter(part => getToolName(part) === 'finishAnalysis');
     const savedAnswer = finishParts.find(part => getToolOutput(part)?.ok === true);
-    const finalAnswer = savedAnswer ? getChatResponseText([savedAnswer]) : !isLatestAssistant || !isStreaming ? getChatResponseText(finishParts) : '';
+    const hasReplyAfterSave = (message.parts ?? [])
+        .slice((message.parts ?? []).findLastIndex(part => getToolName(part) === 'finishAnalysis') + 1)
+        .some(part => part.type === 'text' && part.text.trim());
+    const finalAnswer = savedAnswer ? getChatResponseText([savedAnswer]) : !hasReplyAfterSave && (!isLatestAssistant || !isStreaming) ? getChatResponseText(finishParts) : '';
     const hasProcess =
         assistantMessage &&
         Boolean(
@@ -248,6 +257,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         const key = `${message.id}-tool-${getToolCallId(part) ?? index}`;
         const toolName = getToolName(part);
         const output = getToolOutput(part);
+        if (toolName === 'publishProgress' || output?.control) return null;
         if (toolName === 'finishAnalysis' && output?.ok === true && typeof output.finalAnswer === 'string') {
             renderToolStateCard({ part, key });
             return <MessageResponse key={key}>{output.finalAnswer}</MessageResponse>;
@@ -267,7 +277,8 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         const chartResult = getChartResultFromPart(part, [...messages.slice(0, messageIndex), { ...message, parts: message.parts.slice(0, index) }]);
         if (chartResult) {
             chartResults.push(chartResult);
-            chartItems.push(<ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />);
+            renderToolStateCard({ part, key, fallbackInput: inferToolArgsFromResult(part) });
+            return <ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />;
         }
         if (!toolName) return null;
         return renderToolStateCard({ part, key, fallbackInput: inferToolArgsFromResult(part) });
@@ -315,7 +326,18 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
             );
         }
 
-        if (part.type === 'source-document' || part.type === 'file' || part.type === 'step-start') {
+        if (part.type === 'file') {
+            const safeImage =
+                /^data:image\/(png|jpeg|webp);base64,/.test(part.url) ||
+                (/^image\/(png|jpeg|webp)$/.test(part.mediaType) && /^\/api\/chat\/attachments\/[a-f0-9-]{36}$/.test(part.url));
+            return (
+                <div key={`${message.id}-file-${index}`} className="my-2 max-w-sm rounded-md border p-2 text-sm">
+                    {safeImage && <Image unoptimized width={384} height={192} src={part.url} alt={part.filename ?? ''} className="mb-2 max-h-48 rounded object-contain" />}
+                    <span className="break-all">{part.filename ?? part.mediaType}</span>
+                </div>
+            );
+        }
+        if (part.type === 'source-document' || part.type === 'step-start') {
             return null;
         }
 
@@ -349,24 +371,52 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         return null;
     };
     const contentItems: ReactNode[] = [];
+    if (message.role === 'user') {
+        if ((message.metadata as { outputIntent?: string } | undefined)?.outputIntent === 'report')
+            contentItems.push(
+                <span key="report-intent" className="mb-2 inline-block rounded-md border px-2 py-1 text-xs">
+                    {composerT('ReportMode')}
+                </span>,
+            );
+        const rawReferences = (message.metadata as { references?: unknown } | undefined)?.references;
+        const references = chatReferenceSchema.array().safeParse(rawReferences);
+        if (references.success && references.data.length)
+            contentItems.push(
+                <div key="references" className="mb-2 flex flex-wrap gap-1">
+                    {references.data.map(reference => (
+                        <span
+                            key={referenceKey(reference)}
+                            title={reference.kind === 'table' ? `${reference.connectionId} / ${reference.database} / ${reference.table}` : reference.kind}
+                            className="rounded-md border px-2 py-1 text-xs"
+                        >
+                            @{reference.title}
+                            {reference.kind === 'report' && reference.revision ? ` · v${reference.revision}` : ''}
+                        </span>
+                    ))}
+                </div>,
+            );
+    }
+    const lastActionIndex = message.parts.findLastIndex(part => isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part));
     (message.parts ?? []).forEach((part, index) => {
+        const before = toolRows.length;
         const item = renderPart(part, index);
+        for (const row of toolRows.slice(before)) timeline.push({ id: `tool:${row.toolCallId}`, kind: 'tool', toolCallId: row.toolCallId });
         if (!item) return;
-        if (hasProcess) {
-            const toolPart = isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part);
-            const completedAnswer = getToolName(part) === 'finishAnalysis' && getToolOutput(part)?.ok === true;
-            if (part.type === 'text' && finalAnswer && part.text.trim() === finalAnswer.trim()) return;
-            if (
-                (toolPart && !completedAnswer) ||
-                part.type === 'reasoning' ||
+        const completedAnswer = getToolName(part) === 'finishAnalysis' && getToolOutput(part)?.ok === true;
+        if (part.type === 'text' && finalAnswer && part.text.trim() === finalAnswer.trim()) return;
+        const intermediate =
+            hasProcess &&
+            !completedAnswer &&
+            (part.type === 'reasoning' ||
                 part.type === 'reasoning-file' ||
-                (part.type === 'text' && (Boolean(finalAnswer) || index !== lastTextIndex || (isLatestAssistant && isStreaming)))
-            ) {
-                processItems.push(item);
-                return;
-            }
-        }
-        contentItems.push(item);
+                (part.type === 'text' && (Boolean(finalAnswer) || index < lastActionIndex || index !== lastTextIndex)) ||
+                isTypedToolPart(part) ||
+                isLegacyToolCallPart(part) ||
+                isLegacyToolResultPart(part));
+        if (intermediate) {
+            processItems.push(item);
+            timeline.push({ id: `part:${index}`, kind: 'content', content: item, relatedToolCallId: getToolCallId(part) ?? undefined });
+        } else contentItems.push(item);
     });
 
     if (!didRenderSources) {
@@ -385,14 +435,14 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         }
     }
 
-    if (assistantMessage && (!isLatestAssistant || !isStreaming) && finishParts.length && !finishParts.some(part => getToolOutput(part)?.ok === true)) {
+    if (assistantMessage && (!isLatestAssistant || !isStreaming) && !hasReplyAfterSave && finishParts.length && !finishParts.some(part => getToolOutput(part)?.ok === true)) {
         const pendingAnswer = getChatResponseText(finishParts);
         if (pendingAnswer) contentItems.push(<MessageResponse key={`${message.id}-unsaved-answer`}>{pendingAnswer}</MessageResponse>);
     }
 
     if (
         assistantMessage &&
-        (getAssistantResponseError(message) || (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0 && chartItems.length === 0)) &&
+        (getAssistantResponseError(message) || (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0)) &&
         (!isLatestAssistant || !isStreaming)
     ) {
         contentItems.push(
@@ -404,7 +454,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         );
     }
 
-    if (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0 && chartItems.length === 0 && !hasProcess) return null;
+    if (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0 && !hasProcess) return null;
 
     const isAssistant = message.role === 'assistant';
 
@@ -415,23 +465,43 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                     {isAssistant && metadata?.agentRunId && metadata.requestId ? (
                         <ChatRunActivity
                             showLinks={showRunLinks}
+                            summarySave={metadata.summarySave}
+                            durationMs={metadata.analysisDurationMs}
                             workId={metadata.agentRunId}
                             requestId={metadata.requestId}
                             streaming={isLatestAssistant && isStreaming}
                             tools={toolRows}
+                            timeline={timeline}
+                            answer={contentItems}
+                            responseError={getAssistantResponseError(message)}
+                            failed={
+                                Boolean(getAssistantResponseError(message)) ||
+                                (isLatestAssistant && status === 'error') ||
+                                metadata.summarySave?.status === 'failed' ||
+                                metadata.responseStatus === 'aborted' ||
+                                metadata.responseStatus === 'failed'
+                            }
                             onCopySql={onCopySql}
                             onManualExecute={onManualExecute}
                         >
                             {processItems}
                         </ChatRunActivity>
                     ) : processItems.length || toolRows.length ? (
-                        <ChatAnalysisProcess streaming={isLatestAssistant && isStreaming}>
-                            {processItems}
-                            <ChatToolActivityList tools={toolRows} ended={!isLatestAssistant || !isStreaming} onCopySql={onCopySql} onManualExecute={onManualExecute} />
+                        <ChatAnalysisProcess
+                            streaming={isLatestAssistant && isStreaming}
+                            failed={Boolean(getAssistantResponseError(message)) || metadata?.responseStatus === 'aborted' || metadata?.responseStatus === 'failed'}
+                        >
+                            <ChatTimeline
+                                items={timeline}
+                                tools={toolRows}
+                                events={[]}
+                                ended={!isLatestAssistant || !isStreaming}
+                                onCopySql={onCopySql}
+                                onManualExecute={onManualExecute}
+                            />
                         </ChatAnalysisProcess>
                     ) : null}
-                    {chartItems}
-                    {contentItems}
+                    {!(isAssistant && metadata?.agentRunId && metadata.requestId) && contentItems}
                 </MessageContent>
             </Message>
         </div>

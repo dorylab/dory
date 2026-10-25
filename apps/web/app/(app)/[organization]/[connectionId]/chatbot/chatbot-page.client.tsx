@@ -6,6 +6,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { X } from 'lucide-react';
 
 import ChatBotComp from './thread/chatbox';
+import type { ChatSubmission } from '@/lib/chat-context/types';
 import ChatWelcome from './components/empty';
 import ChatSessionSidebar from './sessions/chat-session-sidebar';
 import SessionDeleteDialog from './sessions/session-delete-dialog';
@@ -25,7 +26,7 @@ type ChatBotPageContentProps = {
 
 export default function ChatBotPageContent({ variant = 'sidebar', mode = 'global', copilotEnvelope = null, onClose }: ChatBotPageContentProps) {
     const [compactMode, setCompactMode] = useState<boolean>(variant === 'compact');
-    const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+    const [pendingPrompt, setPendingPrompt] = useState<ChatSubmission | null>(null);
     const welcomeSendLockRef = useRef(false);
     useEffect(() => setCompactMode(variant === 'compact'), [variant]);
     const t = useTranslations('Chatbot');
@@ -76,14 +77,16 @@ export default function ChatBotPageContent({ variant = 'sidebar', mode = 'global
         ],
     );
 
-    const handleWelcomeSend = async (text: string) => {
+    const handleWelcomeSend = async (text: ChatSubmission) => {
         if (welcomeSendLockRef.current) return;
         welcomeSendLockRef.current = true;
         try {
             const created = await chat.handleCreateSession();
             if (created?.id) {
                 setPendingPrompt(text);
+                return true;
             }
+            return false;
         } finally {
             welcomeSendLockRef.current = false;
         }

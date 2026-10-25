@@ -1,3 +1,9 @@
+import { CHAT_CHECKPOINT_INSTRUCTIONS, runChatStageAction } from './chat-checkpoints';
+import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { AttachmentError } from '@/lib/chat-context/attachments';
+import { prepareStoredAttachments, bindChatAttachments } from '@/lib/server/chat-attachments';
+import { chatContextSchema, type ChatContext } from '@/lib/chat-context/types';
+import { resolveChatContext } from '@/lib/server/chat-context';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
 
 import { formatChatToolError } from '@/lib/ai/agents/work-tool-input';
@@ -62,6 +68,9 @@ type ChatRequestBody = {
     candidateTables?: DoryAgentSchemaTableRef[] | null;
     analysisScope?: AnalysisScope;
     documentId?: string | null;
+    references?: ChatContext['references'];
+    outputIntent?: ChatContext['outputIntent'];
+    sourceMessageId?: string;
 };
 
 function mergeHeaders(headers: Record<string, string | undefined> | undefined, extraHeaders: Record<string, string> | null): Record<string, string | undefined> | undefined {
@@ -88,7 +97,7 @@ function buildLocalCodexHeaders(options: {
     chatId?: string | null;
     workId?: string | null;
 }): Record<string, string> | null {
-    if (options.providerKey !== 'codex-agent' || options.transport !== 'local') return null;
+    if (!isLocalAiAgentProvider(options.providerKey) || options.transport !== 'local') return null;
 
     const headers: Record<string, string> = {
         [DORY_CODEX_MCP_ENDPOINT_HEADER]: createExternalRequestUrl(options.req, '/api/mcp'),
@@ -98,6 +107,8 @@ function buildLocalCodexHeaders(options: {
     if (options.connectionId) {
         headers[DORY_CODEX_CONNECTION_ID_HEADER] = options.connectionId;
     }
+    if (options.userId) headers['x-dory-local-agent-user-id'] = options.userId;
+    if (options.organizationId) headers['x-dory-local-agent-organization-id'] = options.organizationId;
     if (options.workId) headers[DORY_CODEX_WORK_ID_HEADER] = options.workId;
     if (options.chatId) {
         headers[DORY_CODEX_CHAT_ID_HEADER] = options.chatId;
@@ -139,10 +150,11 @@ export async function handleChatRequest(req: Request) {
         copilotEnvelope,
         candidateTables,
     } = body;
+    const progressCheckpoints = !tabId && !copilotEnvelope;
 
     const uiMessages: UIMessage[] = Array.isArray(rawMessages) ? rawMessages.map(normalizeMessage) : [];
     const modelHistoryMessages = prepareChatHistory(uiMessages.filter(message => message.role === 'user' || message.role === 'assistant'));
-    const historyMessagesForAgent = modelHistoryMessages.length > MAX_HISTORY_MESSAGES ? modelHistoryMessages.slice(-MAX_HISTORY_MESSAGES) : modelHistoryMessages;
+    let historyMessagesForAgent = modelHistoryMessages.length > MAX_HISTORY_MESSAGES ? modelHistoryMessages.slice(-MAX_HISTORY_MESSAGES) : modelHistoryMessages;
     const currentUserMessage =
         uiMessages.find(message => (message as any)?.id === requestMessageId && message.role === 'user') ?? [...uiMessages].reverse().find(message => message.role === 'user');
     const currentUserText = extractMessageText(currentUserMessage);
@@ -167,6 +179,37 @@ export async function handleChatRequest(req: Request) {
         requestedModel,
         includeModel: true,
     });
+    const contextInput = chatContextSchema.parse({ references: body.references, outputIntent: body.outputIntent, sourceMessageId: body.sourceMessageId });
+    if (contextInput.references.length && (!db || !userId || !organizationId)) throw new DatabaseError('Unauthorized.', 401);
+    const referenceScope = analysisScope ?? {
+        connectionIds: connectionId ? [connectionId] : [],
+        databasesByConnection: connectionId && database ? { [connectionId]: database } : {},
+    };
+    const resolvedContext =
+        db && userId && organizationId ? await resolveChatContext(db, { userId, organizationId }, contextInput, referenceScope) : { ...contextInput, instruction: '' };
+    try {
+        if (historyMessagesForAgent.some(message => message.parts.some(part => part.type === 'file'))) {
+            if (!userId || !organizationId) throw new DatabaseError('Unauthorized.', 401);
+            const attachments = await prepareStoredAttachments(
+                { userId, organizationId },
+                chatIdFromBody ?? null,
+                historyMessagesForAgent,
+                !isLocalAiAgentProvider(execution.providerKey),
+            );
+            historyMessagesForAgent = attachments.model;
+            for (const canonical of attachments.canonical) {
+                const original = uiMessages.find(message => message.id === canonical.id);
+                if (original) original.parts = canonical.parts;
+            }
+        }
+    } catch (error) {
+        if (error instanceof AttachmentError)
+            throw new DatabaseError(
+                translateApi(`ChatComposer.AttachmentErrors.${error.reason}`, { filename: error.filename, size: (error.byteSize / 1024 / 1024).toFixed(2) }, locale),
+                400,
+            );
+        throw error;
+    }
     const preset = execution.preset;
     const compiledSystem = compileSystemPrompt(preset.system);
 
@@ -186,7 +229,7 @@ export async function handleChatRequest(req: Request) {
     const sessionMetadata =
         userId && (chatId || tabId)
             ? {
-                  analysisScope: analysisScope ?? null,
+                  analysisScope: body.analysisScope ?? null,
                   requestedModel: requestedModel ?? null,
                   providerModel: execution.modelName,
                   webSearch: Boolean(webSearch),
@@ -275,6 +318,35 @@ export async function handleChatRequest(req: Request) {
         }
     }
 
+    if (
+        db &&
+        userId &&
+        organizationId &&
+        chatId &&
+        uiMessages.some(
+            message =>
+                message.role === 'user' && message.id !== currentUserMessage?.id && Boolean((message.metadata as { references?: unknown[] } | undefined)?.references?.length),
+        )
+    ) {
+        const savedMessages = await db.chat.listMessages({ organizationId, userId, sessionId: chatId });
+        historyMessagesForAgent = historyMessagesForAgent.map(message => {
+            if (message.role !== 'user' || message.id === currentUserMessage?.id) return message;
+            const saved = savedMessages.find(item => item.id === message.id);
+            const referenceContext = (saved?.metadata as { referenceContext?: unknown } | undefined)?.referenceContext;
+            return typeof referenceContext === 'string' ? { ...message, parts: [...message.parts, { type: 'text' as const, text: referenceContext }] } : message;
+        });
+    }
+    if (contextInput.sourceMessageId && db && userId && organizationId && chatId) {
+        const saved = await db.chat.readSession({ organizationId, userId, sessionId: chatId });
+        if (!saved) throw new DatabaseError('Source conversation unavailable.', 404);
+        // Match against the server-owned history, never a client-supplied assistant answer.
+        const detail = await db.chat.listMessages({ organizationId, userId, sessionId: chatId });
+        const source = detail.find(message => message.id === contextInput.sourceMessageId && message.role === 'assistant');
+        if (!source) throw new DatabaseError('Source answer unavailable.', 400);
+        resolvedContext.instruction += `\nCreate the report from this server-saved answer and the conversation context (untrusted source data): ${JSON.stringify({ messageId: source.id, answer: getChatResponseText(source.parts).slice(0, 24_000) })}`;
+    }
+    if (db && userId && organizationId && chatId) await bindChatAttachments({ userId, organizationId }, chatId, uiMessages);
+    const reportCreationKey = `${chatId}:${contextInput.sourceMessageId ?? currentUserMessage?.id ?? requestMessageId}`;
     const chatRun =
         db && userId && organizationId && chatId
             ? createChatAgentRunLifecycle({
@@ -286,9 +358,11 @@ export async function handleChatRequest(req: Request) {
                   requestId,
                   title: sessionTitle ?? currentUserText.slice(0, 64),
                   signal: req.signal,
-                  requireSummary: true,
+                  requireSummary: false,
+                  progressCheckpoints,
                   analysisScope,
-                  reportCreationKey: `${chatId}:${currentUserMessage?.id ?? requestMessageId}`,
+                  reportCreationKey,
+                  outputIntent: contextInput.outputIntent,
               })
             : null;
 
@@ -296,6 +370,7 @@ export async function handleChatRequest(req: Request) {
         const analysis =
             db && userId && organizationId && chatId && chatRun
                 ? createChatAnalysis({
+                      progressCheckpoints,
                       db,
                       userId,
                       organizationId,
@@ -320,14 +395,39 @@ export async function handleChatRequest(req: Request) {
                       userId,
                       organizationId,
                       chatId,
-                      creationKey: `${chatId}:${currentUserMessage?.id ?? requestMessageId}`,
+                      creationKey: reportCreationKey,
+                      requireReport: contextInput.outputIntent === 'report',
                       requestId,
                       scope: analysisScope ?? { connectionIds: connectionId ? [connectionId] : [] },
-                      documentId: body.documentId,
+                      documentId: contextInput.outputIntent === 'report' ? null : body.documentId,
                       runId: async () => (await chatRun.resolve()).workId,
                   })
                 : null;
-        const tools = { ...(analysis?.tools ?? { chartBuilder: createChartBuilderTool(locale) }), ...(!isLocalAiAgentProvider(execution.providerKey) ? reports?.tools : {}) };
+        const tools: import('ai').ToolSet = {
+            ...(analysis?.tools ?? { chartBuilder: createChartBuilderTool(locale) }),
+            ...(!isLocalAiAgentProvider(execution.providerKey) ? reports?.tools : {}),
+        };
+        if (reports && chatRun && db && organizationId && userId && !isLocalAiAgentProvider(execution.providerKey)) {
+            for (const [name, definition] of Object.entries(reports.tools)) {
+                const execute = definition.execute!;
+                tools[name] = {
+                    ...definition,
+                    execute: async (input, call) =>
+                        runChatStageAction(
+                            {
+                                db,
+                                organizationId,
+                                userId,
+                                workId: (await chatRun.resolve()).workId,
+                                requestId,
+                                toolName: name,
+                                toolCallId: call.toolCallId,
+                            },
+                            async () => execute(input as never, call),
+                        ),
+                };
+            }
+        }
         const sqlToolEnabled = Boolean(analysis && (connectionId || analysisScope?.connectionIds.length));
         const work = await chatRun?.resolve();
         const knowledgeDiscovery = await analysis?.prepareKnowledge(currentUserText);
@@ -352,14 +452,20 @@ export async function handleChatRequest(req: Request) {
         const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
         const agentInstructions = [
             agentContext.instructions,
+            analysis && progressCheckpoints ? `${CHAT_CHECKPOINT_INSTRUCTIONS}\nInitial checkpointId: ${requestId}:0` : null,
+            resolvedContext.instruction,
+            contextInput.outputIntent === 'report'
+                ? 'This turn explicitly requests a NEW persistent report. Create and save a ready report before completing. Do not update an open or referenced report. Use the requested source answer and conversation as context; verify any numerical evidence.'
+                : null,
             reports ? await reports.instructions(isLocalAiAgentProvider(execution.providerKey)) : null,
             analysisScope
-                ? `Analysis scope: ${JSON.stringify(analysisScope)}. Explore schema for EACH selected connection before querying. Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
+                ? `Analysis scope: ${JSON.stringify(analysisScope)}. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
                 : null,
             currentTurnExecutionInstruction,
             knowledgeDiscovery,
+            analysisScope?.knowledgeMode === 'none' ? 'Knowledge is disabled. Do not search, read or use Knowledge assets.' : null,
             analysis
-                ? 'Complete analysis with finishAnalysis: include status:"completed" (or "error" for incomplete work), structured findings and finalAnswer in the user language. finalAnswer is the exact answer shown in chat. Only cite actual returned Artifact IDs. Do not stop after charts. Use findings: [] for setup checks. If business definitions conflict, ask for clarification in finalAnswer instead of guessing.'
+                ? 'Answer ordinary analysis, existing query result explanations, Knowledge questions and clarification requests directly in the user language. Do not save Findings unless the user explicitly requests saved conclusions. Reports use their own saving workflow and need no extra Findings. Only for explicitly requested saved conclusions, call finishAnalysis once with structured findings and finalAnswer, citing verified Artifact IDs. On any save failure, do not retry in this turn; provide the analysis and explain that saving failed. Never claim a failed save succeeded. If business definitions conflict, ask for clarification instead of guessing.'
                 : null,
         ]
             .filter(Boolean)
@@ -394,13 +500,19 @@ export async function handleChatRequest(req: Request) {
                         connectionId: connectionId ?? null,
                         role: 'user',
                         parts: ((currentUserMessage as any).parts ?? []) as any,
-                        metadata: (currentUserMessage as any).metadata ?? null,
+                        metadata: {
+                            ...contextInput,
+                            attachments: currentUserMessage.parts.filter(part => part.type === 'file'),
+                            references: resolvedContext.references,
+                            referenceContext: resolvedContext.instruction || undefined,
+                        },
                         createdAt: new Date(),
                     },
                 });
                 existedMessageIds.add(currentUserMessageId);
             } catch (error) {
                 console.error('[chat] persist user message failed', error);
+                if (currentUserMessage.parts.some(part => part.type === 'file')) throw error;
             }
         }
 
@@ -443,8 +555,10 @@ export async function handleChatRequest(req: Request) {
             tools,
             instructions: agentInstructions,
             temperature: preset.temperature,
-            maxSteps: analysisScope || body.documentId ? 24 : 16,
+            maxSteps: analysisScope || body.documentId || contextInput.outputIntent === 'report' ? 24 : 16,
             structuredCompletion: Boolean(analysis && !isLocalAiAgentProvider(execution.providerKey)),
+            onSummaryInputError: analysis?.recordSummaryInputError,
+            checkpoint: analysis && progressCheckpoints ? { inspect: analysis.inspectCheckpoint, invalid: analysis.invalidProgress } : undefined,
             headers,
             context: {
                 organizationId,
@@ -477,13 +591,22 @@ export async function handleChatRequest(req: Request) {
         }
 
         let responseError: string | null = null;
+        let reportCompletionError: string | null = null;
+        let summarySave: { status: string; error?: string } | undefined;
         const stream = await createAgentUIStream({
             agent,
             abortSignal: req.signal,
             uiMessages: historyMessagesForAgent as any,
             originalMessages: historyMessagesForAgent as any,
             generateMessageId: () => `msg_${requestId}`,
-            messageMetadata: () => ({ agentRunId: work?.workId ?? null, requestId }),
+            messageMetadata: () => ({
+                agentRunId: work?.workId ?? null,
+                requestId,
+                userMessageId: currentUserMessage?.id,
+                sourceMessageId: contextInput.sourceMessageId,
+                reportDocumentId: reports?.currentId() ?? undefined,
+                reportRevision: reports?.currentRevision(),
+            }),
             onEnd: async event => {
                 if (!db || !userId || !organizationId || !chatId) return;
 
@@ -491,6 +614,39 @@ export async function handleChatRequest(req: Request) {
                 if (existedMessageIds.has(messageId)) return;
 
                 try {
+                    const persistedRun = work ? await db.works.getById({ organizationId, userId, workId: work.workId }) : null;
+                    const turn = persistedRun?.metadata?.chatTurn as
+                        | { requestId?: string; summarySave?: { status: string; error?: string }; summarySaved?: boolean; progressStopped?: boolean }
+                        | undefined;
+                    summarySave = turn?.requestId === requestId && turn.summarySave ? { status: turn.summarySave.status, error: turn.summarySave.error } : undefined;
+                    if (work && isLocalAiAgentProvider(execution.providerKey)) {
+                        const saved = (await db.works.listChatResponses({ organizationId, userId, workId: work.workId })).find(
+                            response => response.id === messageId && (response.metadata?.summarySaved === true || response.metadata?.reportSaved === true),
+                        );
+                        if (saved) {
+                            const text = getChatResponseText(saved.parts);
+                            const progress = (await db.works.listEvents({ organizationId, userId, workId: work.workId })).find(
+                                item => item.toolName === 'chat_progress' && item.inputSummary?.requestId === requestId,
+                            )?.outputSummary?.entries as import('@dory/shared/types/chat-progress').ChatProgressEntry[] | undefined;
+                            const final = progress?.find(item => item.phase === 'final');
+                            if (text && final && final.text !== text)
+                                await db.works.appendChatProgress({
+                                    organizationId,
+                                    userId,
+                                    workId: work.workId,
+                                    requestId,
+                                    entries: [{ ...final, revision: final.revision + 1, text }],
+                                });
+                        }
+                    }
+                    if (contextInput.outputIntent === 'report') {
+                        try {
+                            await reports?.assertReady();
+                        } catch (error) {
+                            reportCompletionError = error instanceof Error ? error.message : 'Report was not saved.';
+                            await chatRun?.fail();
+                        }
+                    }
                     await db.chat.appendMessage({
                         organizationId,
                         sessionId: chatId,
@@ -508,12 +664,23 @@ export async function handleChatRequest(req: Request) {
                                 ...buildChatResponseMetadata(
                                     event.responseMessage.metadata,
                                     event.finishReason,
-                                    event.finishReason !== 'error' && hasUsableAssistantResponse(event.responseMessage) ? null : responseError,
+                                    reportCompletionError ?? (event.finishReason !== 'error' && hasUsableAssistantResponse(event.responseMessage) ? null : responseError),
                                 ),
+                                userMessageId: currentUserMessage?.id,
+                                sourceMessageId: contextInput.sourceMessageId,
+                                reportDocumentId: reports?.currentId() ?? undefined,
+                                reportRevision: reports?.currentRevision(),
                                 sessionTitle,
                                 agentRunId: work?.workId ?? null,
                                 requestId,
-                                summarySaved: Boolean(analysis?.getFinalAnswer()),
+                                summarySaved: Boolean(analysis?.getFinalAnswer() || (turn?.requestId === requestId && turn.summarySaved)),
+                                summarySave,
+                                responseStatus: event.isAborted
+                                    ? 'aborted'
+                                    : event.finishReason === 'error' || reportCompletionError || turn?.progressStopped
+                                      ? 'failed'
+                                      : 'completed',
+                                ...(isLocalAiAgentProvider(execution.providerKey) ? { timelineVersion: 1, timelineRequestId: requestId } : {}),
                             },
                             createdAt: new Date(),
                         },
@@ -560,13 +727,34 @@ export async function handleChatRequest(req: Request) {
                 ? stream.pipeThrough(
                       alignChatAnswerStream(async () => {
                           const responses = await db.works.listChatResponses({ organizationId, userId, workId: work.workId });
-                          const saved = responses.find(response => response.id === `msg_${requestId}` && response.metadata?.summarySaved === true);
+                          const saved = responses.find(
+                              response => response.id === `msg_${requestId}` && (response.metadata?.summarySaved === true || response.metadata?.reportSaved === true),
+                          );
                           return saved ? getChatResponseText(saved.parts) : null;
                       }),
                   )
                 : stream;
         return createUIMessageStreamResponse({
-            stream: alignedStream,
+            stream: alignedStream.pipeThrough(
+                new TransformStream({
+                    transform(chunk, controller) {
+                        controller.enqueue(chunk);
+                    },
+                    flush(controller) {
+                        if (summarySave) controller.enqueue({ type: 'message-metadata', messageMetadata: { summarySave } });
+                        if (reports?.currentId() || reportCompletionError)
+                            controller.enqueue({
+                                type: 'message-metadata',
+                                messageMetadata: {
+                                    reportDocumentId: reports?.currentId() ?? undefined,
+                                    reportRevision: reports?.currentRevision(),
+                                    ...(reportCompletionError ? { responseError: reportCompletionError, finishReason: 'error' } : {}),
+                                },
+                            });
+                        if (reportCompletionError) controller.enqueue({ type: 'error', errorText: reportCompletionError });
+                    },
+                }),
+            ),
             headers: chatId ? { 'x-chat-id': chatId } : undefined,
             consumeSseStream: ({ stream }) => consumeStream({ stream }),
         });

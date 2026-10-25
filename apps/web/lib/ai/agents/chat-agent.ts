@@ -1,3 +1,4 @@
+import { chatToolStage, MAX_PROGRESS_PUBLICATIONS, type CheckpointResult } from '@dory/shared/types/chat-checkpoints';
 import 'server-only';
 
 import { isStepCount, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
@@ -13,6 +14,8 @@ type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     temperature?: number;
     maxSteps?: number;
     structuredCompletion?: boolean;
+    onSummaryInputError?: (error: unknown) => Promise<void>;
+    checkpoint?: { inspect: () => Promise<CheckpointResult | null>; invalid: () => Promise<unknown> };
     headers?: Record<string, string | undefined> | null;
     context: AiGatewayContext;
     requestId: string;
@@ -48,7 +51,15 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
         model: options.model,
         tools: options.tools,
         toolsContext: {} as never,
-        repairToolCall: async ({ toolCall }) => {
+        repairToolCall: async ({ toolCall, error }) => {
+            if (toolCall.toolName === 'publishProgress') {
+                await options.checkpoint?.invalid();
+                return null;
+            }
+            if (toolCall.toolName === 'finishAnalysis') {
+                await options.onSummaryInputError?.(error);
+                return null;
+            }
             const repaired = repairWorkToolInput(toolCall.toolName, toolCall.input);
             if (!repaired) return null;
             await (options.recordUsage ?? recordAiUsage)({
@@ -64,7 +75,7 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
         instructions: options.instructions,
         temperature: options.temperature,
         stopWhen: [
-            isStepCount((options.maxSteps ?? 12) + 2),
+            isStepCount((options.maxSteps ?? 12) + (options.checkpoint ? MAX_PROGRESS_PUBLICATIONS + 3 : 0) + 1),
             ...(options.structuredCompletion ? [] : [stopAfterManualSqlResult<TOOLS>()]),
             ({ steps }) =>
                 steps.some(step =>
@@ -74,17 +85,34 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                     }),
                 ),
         ],
-        prepareStep: options.structuredCompletion
-            ? ({ stepNumber }) => ({
-                  toolChoice: 'required',
-                  ...(stepNumber >= (options.maxSteps ?? 12)
-                      ? {
-                            activeTools: ['finishAnalysis' as keyof TOOLS & string],
-                            instructions: `${options.instructions}\nAnalysis budget exhausted. Save supported findings and explain any remaining work in finalAnswer. Use status: error if requested analysis remains unfinished. Do not claim unfinished analysis is complete.`,
-                        }
-                      : {}),
-              })
-            : undefined,
+        prepareStep: async ({ stepNumber, steps }) => {
+            const checkpoint = await options.checkpoint?.inspect();
+            const progressSteps = steps.filter(step => step.toolCalls.some(call => call.toolName === 'publishProgress')).length;
+            const businessSteps = options.checkpoint ? steps.filter(step => step.toolCalls.some(call => call.toolName !== 'publishProgress')).length : stepNumber;
+            const saveAttempted = steps.some(step =>
+                step.toolCalls.some(
+                    call =>
+                        call.toolName === 'finishAnalysis' &&
+                        !step.toolResults.some(result => result.toolCallId === call.toolCallId && result.output && typeof result.output === 'object' && 'control' in result.output),
+                ),
+            );
+            if (saveAttempted || checkpoint?.stopped || (options.checkpoint && progressSteps >= MAX_PROGRESS_PUBLICATIONS + 2) || businessSteps >= (options.maxSteps ?? 12)) {
+                return {
+                    toolChoice: 'none' as const,
+                    activeTools: [],
+                    instructions: `${options.instructions}\n${saveAttempted ? 'Conclusion saving was already attempted. Do not retry any saving tool. Answer with the available analysis and explain any save failure; do not claim the conclusions were saved.' : 'Tool budget exhausted. Answer from the available evidence and explain any unfinished work. Do not call more tools or claim unfinished work is complete.'}`,
+                };
+            }
+            if (checkpoint)
+                return {
+                    toolChoice: 'auto' as const,
+                    activeTools: Object.keys(options.tools).filter(
+                        name => name === 'publishProgress' || (checkpoint.stage && (checkpoint.remainingActions ?? 0) > 0 && chatToolStage(name) === checkpoint.stage),
+                    ) as (keyof TOOLS & string)[],
+                    instructions: `${options.instructions}\nCurrent stage checkpoint: ${JSON.stringify({ ...checkpoint, actions: checkpoint.actions.map(({ id, toolName, state }) => ({ id, toolName, state })) })}. If the next action is in another stage, publish progress first. If sufficient evidence is available, directly give the final answer.`,
+                };
+            return { toolChoice: 'auto' as const };
+        },
         headers: options.headers ?? undefined,
         onEnd: async event => {
             await (options.recordUsage ?? recordAiUsage)({

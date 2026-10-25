@@ -12,6 +12,13 @@ export function getChatResponseText(parts: unknown): string {
             if (result.ok === true && typeof result.finalAnswer === 'string') return result.finalAnswer;
         }
     }
+    const failedIndex = parts.reduce((last, part, index) => (part?.type === 'tool-finishAnalysis' || part?.toolName === 'finishAnalysis' ? index : last), -1);
+    const reply = parts
+        .slice(failedIndex + 1)
+        .filter(part => part?.type === 'text' && typeof part.text === 'string')
+        .map(part => part.text)
+        .join('\n\n');
+    if (reply.trim()) return reply;
     // A failed finalization still contains an agent-authored answer in its input.
     for (const part of [...parts].reverse()) {
         if ((part?.type === 'tool-finishAnalysis' || part?.toolName === 'finishAnalysis') && typeof part.input?.finalAnswer === 'string') return part.input.finalAnswer;

@@ -30,6 +30,10 @@ export class PostgresWorkDocumentsRepository {
         return this.db
             .select({
                 id: workDocuments.id,
+                sourceMessageId: sql<
+                    string | null
+                >`case when left(${workDocuments.creationKey}, length(${workDocuments.chatId}) + 1) = ${workDocuments.chatId} || ':' then substring(${workDocuments.creationKey} from length(${workDocuments.chatId}) + 2) else null end`,
+                summary: sql<string>`left(${workDocuments.content}->>'markdown', 280)`,
                 title: workDocuments.title,
                 chatId: workDocuments.chatId,
                 scope: workDocuments.scope,
@@ -43,6 +47,20 @@ export class PostgresWorkDocumentsRepository {
             .where(and(...conditions))
             .orderBy(desc(workDocuments.updatedAt))
             .limit(100);
+    }
+    async findByCreationKey(input: Owner & { creationKey: string }) {
+        const [row] = await this.db
+            .select()
+            .from(workDocuments)
+            .where(
+                and(
+                    eq(workDocuments.organizationId, input.organizationId),
+                    eq(workDocuments.userId, input.userId),
+                    eq(workDocuments.creationKey, input.creationKey),
+                    isNull(workDocuments.archivedAt),
+                ),
+            );
+        return row ?? null;
     }
     async create(input: Owner & { creationKey: string; chatId?: string | null; title: string; scope: AnalysisScope; content: WorkDocumentContent }) {
         return this.db.transaction(async tx => {

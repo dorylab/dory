@@ -17,6 +17,7 @@ test('Chat Run lifecycle persists terminal states and isolates overlapping turns
         metadata jsonb, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
         last_active_at timestamptz NOT NULL, archived_at timestamptz
     )`);
+    await client.exec(`CREATE TABLE chat_messages (id text PRIMARY KEY, organization_id text, role text, metadata jsonb)`);
     const works = new PostgresWorksRepository();
     await works.init(drizzle(client) as unknown as PostgresDBClient);
     const scope = { organizationId: 'org', userId: 'user' };
@@ -147,6 +148,7 @@ test('external Run initialization reuses the authenticated session and supports 
         metadata jsonb, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
         last_active_at timestamptz NOT NULL, archived_at timestamptz
     )`);
+    await client.exec(`CREATE TABLE chat_messages (id text PRIMARY KEY, organization_id text, role text, metadata jsonb)`);
     const works = new PostgresWorksRepository();
     await works.init(drizzle(client) as unknown as PostgresDBClient);
     const scope = { organizationId: 'org', userId: 'user', tokenId: 'token', externalSessionId: 'session', title: 'Same question' };

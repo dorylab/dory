@@ -53,6 +53,7 @@ export async function POST(req: Request) {
                 ResponseUtil.success({
                     job: {
                         id: job.id,
+                        progressSupported: true,
                         provider: job.provider,
                         model: job.model,
                         prompt: job.prompt,

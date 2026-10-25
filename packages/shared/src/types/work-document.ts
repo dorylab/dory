@@ -1,4 +1,6 @@
 export type AnalysisScope = {
+    connectionMode?: 'auto' | 'manual';
+    knowledgeMode?: 'auto' | 'manual' | 'none';
     connectionIds: string[];
     knowledgeModelId?: string | null;
     databasesByConnection?: Record<string, string>;
@@ -42,4 +44,4 @@ export type WorkDocumentView = {
     createdAt: string;
     updatedAt: string;
 };
-export type WorkDocumentSummary = Omit<WorkDocumentView, 'content'>;
+export type WorkDocumentSummary = Omit<WorkDocumentView, 'content'> & { sourceMessageId?: string | null; summary?: string };

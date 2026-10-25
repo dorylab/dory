@@ -8,6 +8,8 @@ import test from 'node:test';
 import type { LanguageModelV4GenerateResult } from '@ai-sdk/provider';
 import { createDoryArtifactStore } from '@dory/artifacts';
 import type { DBService } from '@dory/database';
+import { PostgresArtifactsRepository } from '@dory/database/postgres/impl/artifacts';
+import { PostgresResultSetsRepository } from '@dory/database/postgres/impl/result-sets';
 import { PostgresChatRepository } from '@dory/database/postgres/impl/chat';
 import { PostgresTabStateRepository } from '@dory/database/postgres/impl/sql-console/tabs/tab-states';
 import { PostgresWorksRepository } from '@dory/database/postgres/impl/works';
@@ -16,6 +18,7 @@ import type { PostgresDBClient } from '@dory/shared';
 import { PGlite } from '@electric-sql/pglite';
 import { createAgentUIStream, type ToolExecutionOptions } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
+import { eq } from 'drizzle-orm';
 import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/pglite';
@@ -41,7 +44,7 @@ const { getChatResponseText } = await import('@/lib/agent-runs/chat-response');
 const scope = { organizationId: 'org', userId: 'user' };
 const usage = { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 10, text: 10, reasoning: 0 } };
 
-async function fixture() {
+async function fixture(progressCheckpoints = false) {
     const dir = await mkdtemp(join(tmpdir(), 'dory-chat-analysis-'));
     const previous = process.env.DORY_ARTIFACTS_FILESYSTEM_DIR;
     process.env.DORY_ARTIFACTS_FILESYSTEM_DIR = dir;
@@ -66,7 +69,11 @@ async function fixture() {
     const tabState = new PostgresTabStateRepository();
     Object.defineProperty(chat, 'db', { value: database });
     Object.defineProperty(tabState, 'db', { value: database });
-    const db = { works, chat, tabState } as DBService;
+    const artifacts = new PostgresArtifactsRepository();
+    const resultSets = new PostgresResultSetsRepository(store);
+    Object.defineProperty(artifacts, 'db', { value: database });
+    Object.defineProperty(resultSets, 'db', { value: database });
+    const db = { works, chat, tabState, artifacts, resultSets } as DBService;
     await database.insert(schema.user).values({ id: 'user', name: 'User', email: 'user@example.test' });
     await chat.createGlobalSession({ ...scope, id: 'chat', connectionId: 'connection' });
     const start = (requestId: string, connectionIds?: string[], databasesByConnection?: Record<string, string>) =>
@@ -77,12 +84,14 @@ async function fixture() {
             externalSessionId: 'chat:chat',
             metadata: {
                 source: 'internal_chat',
+                progressCheckpoints,
                 chatId: 'chat',
                 ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
             },
         });
     const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string>) =>
         createChatAnalysis({
+            progressCheckpoints,
             db,
             ...scope,
             chatId: 'chat',
@@ -420,49 +429,70 @@ test('Knowledge failure is distinct from no hits and running activity keeps the 
     }
 });
 
-test('analysis budget reserves a finalization call and one correction', async () => {
+test('ordinary answers, tool budget and failed saves finish with text without forcing or retrying conclusions', async t => {
     const { tool } = await import('ai');
     const { z } = await import('zod');
-    let calls = 0;
-    let finishes = 0;
-    const model = new MockLanguageModelV4({
-        doGenerate: async options => {
-            const index = calls++;
-            if (index >= 12)
-                assert.deepEqual(
-                    options.tools?.map(item => item.name),
-                    ['finishAnalysis'],
-                );
-            const toolName = index < 12 ? 'inspect' : 'finishAnalysis';
-            return {
-                content: [{ type: 'tool-call', toolCallId: String(index), toolName, input: '{}' }],
-                finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
-                usage,
-                warnings: [],
-            };
-        },
-    });
-    const agent = buildDoryChatAgent({
-        model,
-        tools: {
-            inspect: tool({ inputSchema: z.object({}), execute: async () => ({ ok: true }) }),
-            finishAnalysis: tool({
-                inputSchema: z.object({}),
-                execute: async () => {
-                    if (++finishes === 1) throw new Error('Fix invalid evidence');
-                    return { ok: true };
+    for (const scenario of ['ordinary', 'budget', 'failed-save', 'invalid-save'] as const) {
+        await t.test(scenario, async () => {
+            let calls = 0;
+            let finishes = 0;
+            let invalid = 0;
+            const model = new MockLanguageModelV4({
+                doGenerate: async options => {
+                    const index = calls++;
+                    if (scenario === 'ordinary' || (scenario === 'budget' ? index >= 2 : index >= 1)) {
+                        assert.equal(options.toolChoice?.type, scenario === 'ordinary' ? 'auto' : 'none');
+                        return {
+                            content: [{ type: 'text', text: 'Available analysis. Saving was not requested or did not succeed.' }],
+                            finishReason: { unified: 'stop', raw: 'stop' },
+                            usage,
+                            warnings: [],
+                        };
+                    }
+                    return {
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: String(index),
+                                toolName: scenario === 'budget' ? 'inspect' : 'finishAnalysis',
+                                input: scenario === 'invalid-save' ? '{}' : '{"answer":"analysis"}',
+                            },
+                        ],
+                        finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                        usage,
+                        warnings: [],
+                    };
                 },
-            }),
-        },
-        instructions: 'Inspect then finish.',
-        structuredCompletion: true,
-        requestId: 'budget',
-        context: {},
-        recordUsage: async () => {},
-    });
-    const result = await agent.generate({ prompt: 'Analyze' });
-    assert.equal(result.steps.length, 14);
-    assert.equal(finishes, 2);
+            });
+            const agent = buildDoryChatAgent({
+                model,
+                tools: {
+                    inspect: tool({ inputSchema: z.object({}), execute: async () => ({ ok: true }) }),
+                    finishAnalysis: tool({
+                        inputSchema: z.object({ answer: z.string() }),
+                        execute: async (): Promise<{ ok: boolean }> => {
+                            finishes++;
+                            throw new Error('Evidence unavailable');
+                        },
+                    }),
+                },
+                instructions: 'Answer, saving only if explicitly requested.',
+                maxSteps: 2,
+                structuredCompletion: true,
+                onSummaryInputError: async () => {
+                    invalid++;
+                },
+                requestId: scenario,
+                context: {},
+                recordUsage: async () => {},
+            });
+            const result = await agent.generate({ prompt: 'Analyze' });
+            assert.match(result.text, /Available analysis/);
+            assert.equal(finishes, scenario === 'failed-save' ? 1 : 0);
+            assert.equal(invalid, scenario === 'invalid-save' ? 1 : 0);
+            assert.equal(calls, scenario === 'ordinary' ? 1 : scenario === 'budget' ? 3 : 2);
+        });
+    }
 });
 
 test('global analysis queries two selected sources, retains per-source evidence and rejects out-of-scope SQL', async t => {
@@ -568,7 +598,359 @@ test('global analysis queries two selected sources, retains per-source evidence 
         assert.equal((await f.works.getById({ ...scope, workId: work.workId }))?.connectionId, null);
         const narrowed = await f.start('narrowed', ['second']);
         assert.deepEqual(narrowed.metadata?.analysisScope, { connectionIds: ['second'] });
+        const automaticDatabase = f.makeAnalysis('narrowed', undefined, ['second']);
+        await assert.rejects(async () => automaticDatabase.tools.sqlRunner.execute!({ connectionId: 'second', sql: 'select 42' }, call('auto-missing-db')), /explicit database/);
+        await automaticDatabase.tools.sqlRunner.execute!({ connectionId: 'second', database: 'advertising', sql: 'select 42' }, call('auto-db'));
+        await assert.rejects(bridgeSql.execute(bridgeContext, { workId: narrowed.workId, requestId: 'narrowed', connectionId: 'second', sql: 'select 42' }), /explicit database/);
+        await bridgeSql.execute(bridgeContext, { workId: narrowed.workId, requestId: 'narrowed', connectionId: 'second', database: 'advertising', sql: 'select 42' });
+        assert.deepEqual(executed.at(-1), { connectionId: 'second', database: 'advertising' });
+        await assert.rejects(
+            bridgeSql.execute(bridgeContext, { workId: narrowed.workId, requestId: 'narrowed', connectionId: 'connection', database: 'sales', sql: 'select 42' }),
+            /outside the selected/,
+        );
         await assert.rejects(f.works.resolveExisting({ ...scope, workId: work.workId, connectionId: 'connection' }), /outside the selected/);
+    } finally {
+        await f.close();
+    }
+});
+
+test('a failed summary is attempted once across SDK and MCP, including validation and concurrent calls', async () => {
+    const f = await fixture();
+    try {
+        const work = await f.start('once');
+        const analysis = f.makeAnalysis('once');
+        const invalid = {
+            status: 'completed',
+            finalAnswer: 'Available analysis',
+            findings: [{ title: 'Invalid evidence', evidenceArtifactIds: ['missing'] }],
+            steps: ['Read data'],
+        };
+        const results = await Promise.allSettled([analysis.tools.finishAnalysis.execute!(invalid, call('a')), analysis.tools.finishAnalysis.execute!(invalid, call('b'))]);
+        assert.ok(results.every(result => result.status === 'rejected'));
+        await assert.rejects(analysis.tools.finishAnalysis.execute!({ ...invalid, findings: [] }, call('new-id')) as Promise<unknown>, /already attempted/);
+        const events = await f.works.listEvents({ ...scope, workId: work.workId });
+        assert.equal(events.filter(event => event.toolName === 'dory_finish_work').length, 1);
+        assert.equal((await f.works.listFindings({ ...scope, workId: work.workId })).length, 0);
+        await f.works.finishChatTurn({ ...scope, workId: work.workId, requestId: 'once', outcome: 'completed' });
+        assert.equal((await f.works.getById({ ...scope, workId: work.workId }))?.status, 'error');
+        await f.start('next');
+        const next = f.makeAnalysis('next');
+        await next.tools.finishAnalysis.execute!({ ...invalid, findings: [{ title: 'Explicitly saved note' }] }, call('next'));
+        await next.tools.finishAnalysis.execute!({ ...invalid, findings: [{ title: 'Must not duplicate' }] }, call('next-again'));
+        assert.equal((await f.works.listFindings({ ...scope, workId: work.workId })).length, 1);
+        await assert.rejects(analysis.tools.finishAnalysis.execute!(invalid, call('stale')) as Promise<unknown>, /no longer active/);
+        await f.start('bad-input');
+        const malformed = f.makeAnalysis('bad-input');
+        await assert.rejects(malformed.tools.finishAnalysis.execute!({ ...invalid, findings: 'invalid' }, call('bad')) as Promise<unknown>);
+        await assert.rejects(malformed.tools.finishAnalysis.execute!({ ...invalid, findings: [] }, call('corrected')) as Promise<unknown>, /already attempted/);
+        await f.start('plain');
+        await f.works.finishChatTurn({ ...scope, workId: work.workId, requestId: 'plain', outcome: 'completed' });
+        assert.equal((await f.works.getById({ ...scope, workId: work.workId }))?.status, 'completed');
+    } finally {
+        await f.close();
+    }
+});
+
+test('completed turn duration is saved on its answer and survives a subsequent turn', async () => {
+    const f = await fixture();
+    try {
+        const work = await f.start('timed');
+        await f.chat.appendMessage({
+            ...scope,
+            sessionId: 'chat',
+            message: {
+                id: 'timed-answer',
+                ...scope,
+                sessionId: 'chat',
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'Analysis complete.' }],
+                metadata: { requestId: 'timed', agentRunId: work.workId },
+            },
+        });
+        await f.works.finishChatTurn({ ...scope, workId: work.workId, requestId: 'timed', outcome: 'completed' });
+        const [answer] = await f.database.select().from(schema.chatMessages).where(eq(schema.chatMessages.id, 'timed-answer'));
+        const duration = answer.metadata?.analysisDurationMs;
+        assert.equal(typeof duration, 'number');
+        assert.ok(Number(duration) >= 0);
+        assert.equal(answer.metadata?.requestId, 'timed');
+        await f.start('following');
+        assert.equal(await f.works.finishChatTurn({ ...scope, workId: work.workId, requestId: 'timed', outcome: 'completed' }), null);
+        const [restored] = await f.database.select().from(schema.chatMessages).where(eq(schema.chatMessages.id, 'timed-answer'));
+        assert.equal(restored.metadata?.analysisDurationMs, duration);
+        assert.deepEqual(restored.parts, answer.parts);
+    } finally {
+        await f.close();
+    }
+});
+
+test('external Artifact evidence is explicitly read, scoped, retained and revalidated in SDK and MCP saves', async () => {
+    const f = await fixture();
+    try {
+        const source = await f.works.create({ ...scope, connectionId: 'connection', externalSessionId: 'source-query' });
+        const [artifact] = await f.works.saveSqlSnapshot(source.workId, {
+            session: { sessionId: 'source-sql', userId: 'user', connectionId: 'connection', database: 'main', sqlText: 'select 42 as orders', status: 'success' },
+            queryResultSets: [
+                { sessionId: 'source-sql', setIndex: 0, sqlText: 'select 42 as orders', columns: [{ name: 'orders', type: 'integer' }], rowCount: 1, status: 'success' },
+            ],
+            results: [[{ orders: 42 }]],
+        });
+        await f.database.update(schema.resultSets).set({ sourceDatabaseName: null }).where(eq(schema.resultSets.id, artifact.resultSetId));
+        const work = await f.start('unread', ['connection'], { connection: 'main' });
+        const payload = {
+            status: 'completed',
+            finalAnswer: 'The saved query returned 42 orders.',
+            findings: [{ title: '42 orders', evidenceArtifactIds: [artifact.artifactId] }],
+            steps: ['Read saved query'],
+        };
+        await assert.rejects(
+            f.makeAnalysis('unread', undefined, ['connection'], { connection: 'main' }).tools.finishAnalysis.execute!(payload, call('unread')) as Promise<unknown>,
+            /explicitly read/,
+        );
+        await f.start('read', ['connection'], { connection: 'main' });
+        const analysis = f.makeAnalysis('read', undefined, ['connection'], { connection: 'main' });
+        const preview = (await analysis.tools.readArtifact.execute!({ artifactId: artifact.artifactId }, call('read'))) as {
+            evidence: { sourceWorkId: string };
+            preview: { rows: unknown[] };
+        };
+        assert.equal(preview.evidence.sourceWorkId, source.workId);
+        assert.equal(Number((preview.preview.rows[0] as { orders: unknown }).orders), 42);
+        await analysis.tools.finishAnalysis.execute!(payload, call('save'));
+        const findings = await f.works.listFindings({ ...scope, workId: work.workId });
+        assert.equal(findings[0].evidence[0].id, artifact.artifactId);
+        assert.equal((await f.db.artifacts.get({ organizationId: scope.organizationId, artifactId: artifact.artifactId })).workId, source.workId);
+        const ctx = {
+            ...scope,
+            locale: 'en' as const,
+            runtime: 'desktop' as const,
+            currentConnectionId: null,
+            actor: { type: 'agent' as const, id: 'user', scopes: ['connections:read', 'query:read', 'schema:read', 'assets:read'] },
+            access: { source: 'local' as const, ...scope, organization: { id: 'org' }, isMember: true, role: 'owner' as const, permissions: getOrganizationPermissionMap('owner') },
+            services: { db: f.db, requestOrigin: 'https://dory.test' },
+        };
+        const read = getAgentExecutionTools().find(tool => tool.name === 'dory_artifacts')!;
+        const finish = getAgentExecutionTools().find(tool => tool.name === 'dory_finish_work')!;
+        await f.start('mcp', ['connection'], { connection: 'main' });
+        await read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'mcp' });
+        await finish.execute(ctx, { ...payload, workId: work.workId, requestId: 'mcp' });
+        await finish.execute(ctx, { ...payload, workId: work.workId, requestId: 'mcp' });
+        assert.equal((await f.works.listFindings({ ...scope, workId: work.workId })).length, 2);
+        const summary = (await f.works.getById({ ...scope, workId: work.workId }))?.metadata?.agentRunSummary as {
+            sections: Array<{ evidence: Record<string, { sourceWorkId: string }> }>;
+        };
+        assert.equal(summary.sections[0].evidence[artifact.artifactId].sourceWorkId, source.workId);
+        assert.equal(summary.sections[1].evidence[artifact.artifactId].sourceWorkId, source.workId);
+        await f.start('db-mismatch', ['connection'], { connection: 'other-db' });
+        await assert.rejects(read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'db-mismatch' }), /selected database/);
+        await f.start('source-mismatch', ['other']);
+        await assert.rejects(read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'source-mismatch' }), /scope/);
+        await f.start('expired', ['connection']);
+        await read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'expired' });
+        await f.database.update(schema.resultSets).set({ dataAvailability: 'none' }).where(eq(schema.resultSets.id, artifact.resultSetId));
+        await assert.rejects(finish.execute(ctx, { ...payload, workId: work.workId, requestId: 'expired' }), /no longer available/);
+        await assert.rejects(finish.execute(ctx, { ...payload, workId: work.workId, requestId: 'expired' }), /already attempted/);
+        await f.database.update(schema.resultSets).set({ dataAvailability: 'full' }).where(eq(schema.resultSets.id, artifact.resultSetId));
+        await f.start('denied', ['connection']);
+        await f.database.insert(schema.user).values({ id: 'someone-else', name: 'Other user', email: 'other@example.test' });
+        await f.database.update(schema.works).set({ userId: 'someone-else' }).where(eq(schema.works.workId, source.workId));
+        await assert.rejects(read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'denied' }), /unavailable/);
+        await assert.rejects(
+            f.works.inspectChatEvidence({ ...scope, organizationId: 'another-org', workId: work.workId, requestId: 'denied', artifactId: artifact.artifactId }),
+            /no longer active/,
+        );
+    } finally {
+        await f.close();
+    }
+});
+
+test('chat progress persists ordered revisions, isolates requests and validates claimed Bridge ownership', async () => {
+    const f = await fixture();
+    try {
+        const run = await f.start('progress-1');
+        const owner = { ...scope, workId: run.workId, requestId: 'progress-1' };
+        const entry = { id: 'text', sequence: 0, revision: 1, kind: 'text' as const, text: '开始分析', phase: 'commentary' as const };
+        await Promise.all([
+            f.works.appendChatProgress({ ...owner, entries: [entry] }),
+            f.works.appendChatProgress({ ...owner, entries: [{ ...entry, revision: 2, text: '已读取结果' }] }),
+        ]);
+        const events = await f.works.listEvents(owner);
+        assert.equal(events.filter(event => event.toolName === 'chat_progress').length, 1);
+        assert.equal((events[0].outputSummary?.entries as Array<{ text: string }>)[0].text, '已读取结果');
+        await assert.rejects(f.works.appendChatProgress({ ...owner, userId: 'other', entries: [entry] }), /no longer active/);
+        await f.database.insert(schema.localAiBridges).values({ id: 'progress-bridge', ...scope, mcpTokenId: 'token', provider: 'codex-agent', name: 'test' });
+        await f.database.insert(schema.localAiJobs).values({
+            id: 'progress-job',
+            organizationId: scope.organizationId,
+            bridgeId: 'progress-bridge',
+            provider: 'codex-agent',
+            model: 'default',
+            prompt: '',
+            status: 'claimed',
+            expiresAt: new Date(Date.now() + 60_000),
+        });
+        await f.works.bindChatBridgeJob({ ...owner, jobId: 'progress-job' });
+        const bridge = { jobId: 'progress-job', bridgeId: 'progress-bridge', mcpTokenId: 'token' };
+        await f.works.appendChatProgress({ ...owner, bridge, entries: [{ ...entry, revision: 3 }] });
+        await assert.rejects(f.works.appendChatProgress({ ...owner, bridge: { ...bridge, mcpTokenId: 'wrong' }, entries: [entry] }), /no longer accepted/);
+        await f.database.update(schema.localAiJobs).set({ status: 'completed' }).where(eq(schema.localAiJobs.id, bridge.jobId));
+        await assert.rejects(f.works.appendChatProgress({ ...owner, bridge, entries: [entry] }), /no longer accepted/);
+        await f.start('progress-2');
+        await assert.rejects(f.works.appendChatProgress({ ...owner, entries: [entry] }), /no longer active/);
+        assert.equal((await f.works.listEvents(owner)).filter(event => event.inputSummary?.requestId === 'progress-1').length, 1);
+    } finally {
+        await f.close();
+    }
+});
+
+test('stage checkpoints serialize concurrent actions, persist exact order, reject stale turns and close after invalid progress', async () => {
+    const f = await fixture(true);
+    try {
+        const work = await f.start('stages');
+        const owner = { ...scope, workId: work.workId, requestId: 'stages' };
+        const run = (command: import('@dory/shared/types/chat-checkpoints').CheckpointCommand) => f.works.chatCheckpoint({ ...owner, command });
+        assert.equal((await run({ kind: 'reserve', id: 'early', toolName: 'read_asset', stage: 'reference' }))?.control, 'progress_required');
+        assert.equal(
+            (await run({ kind: 'publish', checkpointId: 'stages:0', text: '我先阅读订单的业务定义，再确认可以查询哪些订单字段。', nextStage: 'reference' }))?.published,
+            true,
+        );
+        const reserved = await Promise.all([1, 2, 3, 4].map(i => run({ kind: 'reserve', id: `action-${i}`, toolName: 'read_asset', stage: 'reference' })));
+        assert.equal(reserved.filter(value => value?.accepted).length, 3);
+        assert.equal((await run({ kind: 'reserve', id: 'schema', toolName: 'exploreSchema', stage: 'schema' }))?.control, 'progress_required');
+        for (const i of [3, 1, 2])
+            await run({ kind: 'settle', id: `action-${i}`, failed: i === 2, result: i === 2 ? 'source unavailable' : 'Definition: orders are counted by order_id.' });
+        const next = {
+            kind: 'publish' as const,
+            checkpointId: 'stages:1',
+            text: '已读到按 order_id 统计订单的口径；另一个来源读取失败。接下来检查订单表的日期字段。',
+            nextStage: 'schema',
+        };
+        assert.equal((await run(next))?.published, true);
+        assert.equal((await run(next))?.duplicate, true);
+        await run({ kind: 'reserve', id: 'schema', toolName: 'exploreSchema', stage: 'schema' });
+        await run({ kind: 'settle', id: 'schema', failed: false, result: 'orders(order_id, order_purchase_timestamp)' });
+        const event = (await f.works.listEvents(owner)).find(event => event.toolName === 'chat_checkpoints');
+        const state = event?.outputSummary?.state as import('@dory/shared/types/chat-checkpoints').ChatCheckpoints;
+        assert.deepEqual(
+            state.entries.map(entry => entry.kind),
+            ['text', 'tool', 'tool', 'tool', 'text', 'tool'],
+        );
+        assert.deepEqual(
+            state.entries.filter(entry => entry.kind === 'tool').map(entry => entry.id),
+            ['action-1', 'action-2', 'action-3', 'schema'],
+        );
+        assert.equal(state.entries[2].state, 'failed');
+        await assert.rejects(f.works.chatCheckpoint({ ...owner, userId: 'stranger', command: { kind: 'inspect' } }), /no longer active/);
+        assert.equal((await run({ kind: 'publish', checkpointId: 'wrong', text: 'done', nextStage: 'query' }))?.control, 'progress_required');
+        assert.equal((await run({ kind: 'publish', checkpointId: 'stages:2', text: '已完成 3 个动作', nextStage: 'query' }))?.control, 'answer_required');
+        assert.equal((await run({ kind: 'reserve', id: 'blocked', toolName: 'sqlRunner', stage: 'query' }))?.control, 'answer_required');
+        await f.start('next-stage-turn');
+        await assert.rejects(run(next), /no longer active/);
+    } finally {
+        await f.close();
+    }
+});
+
+test('ordinary SDK checkpoints restrict tools without forcing tools or consuming the business step budget', async () => {
+    const f = await fixture(true);
+    try {
+        const analysis = f.makeAnalysis('sdk-stages');
+        let step = 0;
+        const calls = [
+            { toolName: 'publishProgress', input: { checkpointId: 'sdk-stages:0', text: '我先确认订单数据的来源和字段，再检查最近订单的时间范围。', nextStage: 'schema' } },
+            { toolName: 'publishProgress', input: {} },
+            { toolName: 'publishProgress', input: {} },
+        ];
+        const model = new MockLanguageModelV4({
+            doGenerate: async options => {
+                const current = step++;
+                if (current === 0)
+                    assert.deepEqual(
+                        options.tools?.map(tool => tool.name),
+                        ['publishProgress'],
+                    );
+                if (current === 1) {
+                    assert.ok(options.tools?.some(tool => tool.name === 'exploreSchema'));
+                    assert.ok(!options.tools?.some(tool => tool.name === 'sqlRunner'));
+                }
+                if (current >= calls.length) {
+                    assert.equal(options.toolChoice?.type, 'none');
+                    return {
+                        content: [{ type: 'text', text: '进度说明未能提交，本轮停止查询；尚未核实最近订单的数据。' }],
+                        finishReason: { unified: 'stop', raw: 'stop' },
+                        usage,
+                        warnings: [],
+                    };
+                }
+                return {
+                    content: [{ type: 'tool-call', toolCallId: `call-${current}`, toolName: calls[current].toolName, input: JSON.stringify(calls[current].input) }],
+                    finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                    usage,
+                    warnings: [],
+                };
+            },
+        });
+        const agent = buildDoryChatAgent({
+            model,
+            tools: analysis.tools,
+            instructions: 'Analyze orders',
+            requestId: 'sdk-stages',
+            maxSteps: 1,
+            checkpoint: { inspect: analysis.inspectCheckpoint, invalid: analysis.invalidProgress },
+            context: { feature: 'chat_agent' } as never,
+            recordUsage: async () => {},
+        });
+        const result = await agent.generate({ prompt: '帮我看看最近的订单情况' });
+        assert.match(result.text, /尚未核实/);
+        assert.equal(step, 4);
+        const work = await f.start('sdk-stages');
+        assert.equal((await f.works.listEvents({ ...scope, workId: work.workId })).filter(event => event.toolName !== 'chat_checkpoints').length, 0);
+    } finally {
+        await f.close();
+    }
+});
+
+test('MCP stage admission covers wrapper actions before events and uses the same progress publications', async t => {
+    const f = await fixture(true);
+    let reads = 0;
+    t.mock.method(catalogReadAction, 'handler', async () => {
+        reads++;
+        return {
+            asset,
+            content: { definition: 'One order per order_id' },
+            relatedRefs: [],
+            citation: { ref: asset.ref, title: asset.title, revision: 'v1', deepLink: asset.deepLink },
+        };
+    });
+    try {
+        const work = await f.start('mcp-stages');
+        const ctx = {
+            ...scope,
+            locale: 'en' as const,
+            runtime: 'desktop' as const,
+            currentConnectionId: 'connection',
+            actor: { type: 'agent' as const, id: 'user', scopes: ['connections:read', 'query:read', 'schema:read', 'assets:read', 'knowledge:read'] },
+            access: { source: 'local' as const, ...scope, organization: { id: 'org' }, isMember: true, role: 'owner' as const, permissions: getOrganizationPermissionMap('owner') },
+            services: { db: f.db, requestOrigin: 'https://dory.test' },
+        };
+        const invoke = (name: string, input: Record<string, unknown>) =>
+            getAgentExecutionTools()
+                .find(tool => tool.name === name)!
+                .execute(ctx, { ...input, workId: work.workId, requestId: 'mcp-stages' }) as Promise<Record<string, unknown>>;
+        const wrapper = { operation: 'run', actionId: 'catalog.read', input: { ref: asset.ref } };
+        assert.equal((await invoke('dory_read', wrapper)).control, 'progress_required');
+        assert.equal(reads, 0);
+        assert.equal((await f.works.listEvents({ ...scope, workId: work.workId })).filter(event => event.toolName !== 'chat_checkpoints').length, 0);
+        await invoke('dory_publish_progress', { checkpointId: 'mcp-stages:0', text: '我先阅读订单的统计口径，确认这次分析应使用哪些字段。', nextStage: 'reference' });
+        for (let i = 0; i < 3; i++) await invoke('dory_read', wrapper);
+        assert.equal(reads, 3);
+        assert.equal((await invoke('dory_read', wrapper)).control, 'progress_required');
+        assert.equal((await invoke('dory_explore_schema', { operation: 'list_databases', connectionId: 'connection' })).control, 'progress_required');
+        await invoke('dory_publish_progress', { checkpointId: 'mcp-stages:1', text: '已经读取到按 order_id 计数的定义。接下来检查订单表和日期字段。', nextStage: 'schema' });
+        assert.equal((await invoke('dory_publish_progress', { checkpointId: 'mcp-stages:1', text: '重复提交不应产生第二段', nextStage: 'schema' })).duplicate, true);
+        const state = (await f.works.listEvents({ ...scope, workId: work.workId })).find(event => event.toolName === 'chat_checkpoints')?.outputSummary
+            ?.state as import('@dory/shared/types/chat-checkpoints').ChatCheckpoints;
+        assert.equal(state.entries.length, 5);
+        assert.equal(state.entries[4].coveredActionIds?.length, 3);
+        assert.ok(state.entries.slice(1, 4).every(entry => entry.state === 'completed'));
     } finally {
         await f.close();
     }

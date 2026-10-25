@@ -1,3 +1,4 @@
+import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpAuthContext } from './auth';
 import { getPublicDoryMcpTools, structuredMcpFacadeError, structuredMcpFacadeResult } from './facade-tools';
@@ -28,6 +29,24 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
             },
         );
     }
+
+    // Keep the advertised schemas strict, but reserve a bound summary attempt before
+    // validating its payload. SDK pre-validation would otherwise bypass the turn guard.
+    server.server.setRequestHandler(CallToolRequestSchema, async request => {
+        try {
+            const tool = tools.find(item => item.name === request.params.name);
+            if (!tool) throw new Error('Unknown Dory tool.');
+            const { createMcpActionContext } = await import('@/lib/actions/server/context');
+            const ctx = await createMcpActionContext(context);
+            const input = ['dory_finish_work', 'dory_publish_progress'].includes(tool.name)
+                ? (request.params.arguments ?? {})
+                : tool.inputSchema.parse(request.params.arguments ?? {});
+            const output = await tool.execute(ctx, input);
+            return structuredMcpFacadeResult(tool.outputSchema.parse(output));
+        } catch (error) {
+            return structuredMcpFacadeError(error);
+        }
+    });
 
     const templates = [
         ['dory-artifact', 'dory://artifacts/{artifactId}', 'Dory Artifact'],

@@ -1,29 +1,134 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-
+import type { ChatCheckpoints } from '@dory/shared/types/chat-checkpoints';
+import type { ChatProgressEntry } from '@dory/shared/types/chat-progress';
+import { buildChatTimeline, chatTurnDuration, formatChatDuration, type ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
+import { canonicalChatToolName, chatToolActivityState, type ChatToolActivity } from '@/lib/agent-runs/chat-tool-activity';
 import { type AgentRunEventLike, type AgentRunWorkLike } from '@/lib/agent-runs/summary';
 import type { SqlResultBodyProps } from '@/components/@dory/ui/ai/sql-result/type';
+import { MessageResponse } from '@/components/ai-elements/message';
+import { ChatToolActivityList, getChatToolActivityTitle, type ChatMessageToolRow } from './chat-tool-activity';
 
-import { ChatToolActivityList, type ChatMessageToolRow } from './chat-tool-activity';
+type Activity = {
+    work: AgentRunWorkLike;
+    events: AgentRunEventLike[];
+    progress?: ChatProgressEntry[];
+    checkpoints?: ChatCheckpoints | null;
+    runHref: string;
+    workspaceHref: string | null;
+};
+type Actions = { onCopySql: (sql: string) => Promise<void> | void; onManualExecute?: SqlResultBodyProps['onManualExecute'] };
 
-type Activity = { work: AgentRunWorkLike; events: AgentRunEventLike[]; runHref: string; workspaceHref: string | null };
-
-export function ChatAnalysisProcess({ streaming, children }: { streaming: boolean; children: ReactNode }) {
+export function ChatAnalysisProcess({
+    streaming,
+    failed = false,
+    ended = !streaming,
+    durationMs = null,
+    children,
+}: {
+    streaming: boolean;
+    failed?: boolean;
+    ended?: boolean;
+    durationMs?: number | null;
+    children: ReactNode;
+}) {
     const t = useTranslations('AgentRuns');
+    const [open, setOpen] = useState(streaming || failed);
+    const previous = useRef<string | null>(null);
+    const duration = formatChatDuration(durationMs);
+    const phase = !ended ? 'running' : failed ? 'failed' : 'completed';
+    useEffect(() => {
+        if (previous.current !== phase) setOpen(phase !== 'completed');
+        previous.current = phase;
+    }, [phase]);
     return (
-        <details className="group/analysis my-3 text-sm" open={streaming} data-testid="chat-analysis-process">
+        <details className="group/analysis my-3 text-sm" open={open} onToggle={event => setOpen(event.currentTarget.open)} data-testid="chat-analysis-process">
             <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                {streaming ? <Loader2 className="size-4 animate-spin" /> : <ChevronRight className="size-4 transition-transform group-open/analysis:rotate-90" />}
-                {t(streaming ? 'Chat.Analyzing' : 'Chat.Process')}
+                {phase === 'running' ? <Loader2 className="size-4 animate-spin" /> : <ChevronRight className="size-4 transition-transform group-open/analysis:rotate-90" />}
+                {!ended ? t('Chat.Analyzing') : duration ? t('Chat.WorkedFor', { duration }) : t(failed ? 'Chat.Process' : 'Chat.ProcessCompleted')}
             </summary>
             <div className="mt-3 space-y-3">{children}</div>
         </details>
+    );
+}
+
+function ToolGroup({ activities, ended, ...props }: Actions & { activities: ChatToolActivity<ChatMessageToolRow>[]; ended: boolean; workId?: string }) {
+    const t = useTranslations('AgentRuns');
+    const running = !ended && activities.some(row => ['input-available', 'input-streaming'].includes(chatToolActivityState(row, row.message?.state)));
+    const [expanded, setExpanded] = useState(false);
+    const categoryKeys = {
+        read_asset: 'ReadKnowledge',
+        search_assets: 'SearchKnowledge',
+        semantic_model_context: 'ReadKnowledge',
+        exploreSchema: 'ExploreSchema',
+        getSchemaGraph: 'ExploreSchema',
+        sqlRunner: 'QueryData',
+        readArtifact: 'ReadResults',
+        listConnections: 'ListSources',
+        chartBuilder: 'BuildCharts',
+        readAttachment: 'ReadFiles',
+        dory_read_attachment: 'ReadFiles',
+        searchAttachment: 'SearchFiles',
+        dory_search_attachment: 'SearchFiles',
+    } as const;
+    const groups = new Map<string, { category?: (typeof categoryKeys)[keyof typeof categoryKeys]; count: number }>();
+    for (const activity of activities) {
+        const category = categoryKeys[activity.toolName as keyof typeof categoryKeys];
+        const key = category ?? getChatToolActivityTitle(activity, t);
+        const prior = groups.get(key);
+        groups.set(key, { category, count: (prior?.count ?? 0) + 1 });
+    }
+    const titles = [...groups].map(([title, { category, count }]) => (category ? t(`Chat.Groups.${category}`, { count }) : `${title} × ${count}`)).join(' · ');
+    return (
+        <div>
+            <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} data-testid="chat-tool-group" className="group/actions text-sm">
+                <summary className="flex cursor-pointer list-none items-center gap-2 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                    {running ? <Loader2 className="size-3.5 animate-spin" /> : <ChevronRight className="size-3.5 transition-transform group-open/actions:rotate-90" />}
+                    {titles}
+                </summary>
+                <div className="mt-2">{(expanded || !running) && <ChatToolActivityList activities={activities} tools={[]} ended={ended} {...props} />}</div>
+            </details>
+            {running && !expanded && (
+                <div className="mt-2">
+                    <ChatToolActivityList
+                        activities={activities.filter(row => ['input-available', 'input-streaming'].includes(chatToolActivityState(row, row.message?.state)))}
+                        tools={[]}
+                        ended={ended}
+                        {...props}
+                    />
+                </div>
+            )}
+        </div>
+    );
+}
+
+export function ChatTimeline({
+    items,
+    tools,
+    events,
+    ended,
+    ...actions
+}: Actions & { items: ChatTimelineItem[]; tools: ChatMessageToolRow[]; events: AgentRunEventLike[]; ended: boolean; workId?: string }) {
+    const t = useTranslations('AgentRuns');
+    const { groups, unplaced } = buildChatTimeline(items, tools, events);
+    return (
+        <>
+            {groups.map(group =>
+                group.kind === 'content' ? <div key={group.id}>{group.content}</div> : <ToolGroup key={group.id} activities={group.activities} ended={ended} {...actions} />,
+            )}
+            {unplaced.length > 0 && (
+                <div data-testid="chat-unplaced-activity">
+                    <p className="mb-2 text-xs text-muted-foreground">{t('Chat.OtherActivity')}</p>
+                    <ToolGroup activities={unplaced} ended={ended} {...actions} />
+                </div>
+            )}
+        </>
     );
 }
 
@@ -31,67 +136,117 @@ export function ChatRunActivity({
     workId,
     requestId,
     streaming,
-    children,
     tools,
-    onCopySql,
-    onManualExecute,
+    timeline,
+    answer,
+    failed = false,
+    responseError,
     showLinks = true,
-}: {
-    showLinks?: boolean;
+    summarySave,
+    durationMs,
+    ...actions
+}: Actions & {
     workId: string;
     requestId: string;
     streaming: boolean;
-    children?: ReactNode;
     tools: ChatMessageToolRow[];
-    onCopySql: (sql: string) => Promise<void> | void;
-    onManualExecute?: SqlResultBodyProps['onManualExecute'];
+    timeline: ChatTimelineItem[];
+    answer: ReactNode;
+    children?: ReactNode;
+    failed?: boolean;
+    responseError?: string;
+    showLinks?: boolean;
+    summarySave?: { status: string; error?: string };
+    durationMs?: number;
 }) {
     const t = useTranslations('AgentRuns');
-    const { data, isPending, isError } = useQuery({
-        queryKey: ['chat-run-activity', workId, requestId, streaming],
+    const { data, isError } = useQuery({
+        queryKey: ['chat-run-activity', workId, requestId],
         queryFn: async ({ signal }): Promise<Activity> => {
             const response = await fetch(`/api/chat/run-activity?workId=${encodeURIComponent(workId)}&requestId=${encodeURIComponent(requestId)}`, { signal });
             if (!response.ok) throw new Error('Unable to load analysis activity');
             return response.json();
         },
         refetchInterval: query =>
-            streaming || (query.state.data?.work.status === 'active' && (query.state.data.work.metadata?.chatTurn as { requestId?: string } | undefined)?.requestId === requestId)
-                ? 1500
+            streaming || (query.state.data?.work?.status === 'active' && (query.state.data.work.metadata?.chatTurn as { requestId?: string } | undefined)?.requestId === requestId)
+                ? 750
                 : false,
     });
-    const events = data?.events ?? [];
-    const turn = data?.work.metadata?.chatTurn as { requestId?: string; summarySaved?: boolean; responseSaved?: boolean } | undefined;
-    const ended = !streaming && Boolean(data && (data.work.status !== 'active' || turn?.requestId !== requestId));
-    const incomplete = data?.work.status === 'error' && turn?.requestId === requestId && (!turn.summarySaved || !turn.responseSaved);
+    const events = (data?.events ?? []).filter(event => event.toolName !== 'chat_progress');
+    const turn = data?.work?.metadata?.chatTurn as { requestId?: string; summarySaved?: boolean; responseSaved?: boolean; startedAt?: string; finishedAt?: string } | undefined;
+    const ended = !streaming && Boolean(data?.work && (data.work.status !== 'active' || turn?.requestId !== requestId));
+    const saveFailed = summarySave?.status === 'failed' || events.some(event => event.toolName === 'dory_finish_work' && event.status === 'error' && !event.inputSummary?.report);
+    const incomplete = saveFailed || (data?.work?.status === 'error' && turn?.requestId === requestId && turn.summarySaved === true && !turn.responseSaved);
+    const interrupted = failed || incomplete || (turn?.requestId === requestId && data?.work?.status === 'error');
+    const checkpointEntries = data?.checkpoints?.entries;
+    const progress = checkpointEntries ?? data?.progress ?? [];
+    const localItems: ChatTimelineItem[] = [];
+    const localTools: ChatMessageToolRow[] = [];
+    let finalText = checkpointEntries ? data?.progress?.findLast(entry => entry.phase === 'final')?.text : undefined;
+    for (const entry of progress) {
+        if (entry.kind === 'text') {
+            if (entry.phase === 'final') finalText = entry.text;
+            else if (entry.text) localItems.push({ id: entry.id, kind: 'content', content: <MessageResponse>{entry.text}</MessageResponse> });
+        } else {
+            const name = canonicalChatToolName(entry.toolName ?? '');
+            const sourceId = events.find(event => event.eventId === entry.eventId)?.inputSummary?.toolCallId;
+            const source = tools.find(tool => tool.toolCallId === sourceId);
+            localTools.push({
+                ...source,
+                toolCallId: entry.id,
+                toolName: name,
+                state: entry.state === 'completed' ? 'output-available' : entry.state === 'failed' ? 'output-error' : 'input-available',
+                content: source?.content ?? null,
+            });
+            localItems.push({ id: entry.id, kind: 'tool', toolCallId: entry.id });
+            if (checkpointEntries && typeof sourceId === 'string') localItems.push(...timeline.filter(item => item.kind === 'content' && item.relatedToolCallId === sourceId));
+        }
+    }
+    // Local call IDs are linked by the actual MCP response. Until then the CLI
+    // lifecycle row is authoritative; don't show a second polling copy.
+    const visibleEvents = checkpointEntries
+        ? events.filter(event => checkpointEntries.some(entry => entry.eventId === event.eventId))
+        : progress.length && !ended
+          ? events.filter(
+                event =>
+                    progress.some(entry => entry.eventId === event.eventId) || event.inputSummary?.activitySource === 'automatic' || event.toolName === 'semantic_model_context',
+            )
+          : events;
+    const mappedEvents = visibleEvents.map(event => {
+        const entry = progress.find(entry => entry.eventId === event.eventId && entry.kind === 'tool');
+        return entry ? { ...event, inputSummary: { ...event.inputSummary, toolCallId: entry.id } } : event;
+    });
+    const items = checkpointEntries || progress.length ? localItems : timeline;
+    const rows = checkpointEntries || progress.length ? localTools : tools;
+    const count = buildChatTimeline(items, rows, mappedEvents).count;
+    const hasProcess = checkpointEntries ? ((!ended || interrupted) && items.length > 0) || count > 0 : items.length > 0 || count > 0;
     return (
         <>
-            <ChatAnalysisProcess streaming={streaming}>
-                {isPending ? (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" />
-                        {t('Chat.Loading')}
-                    </div>
-                ) : null}
-                {isError ? <p className="text-destructive">{t('Chat.LoadFailed')}</p> : null}
-                {children}
-                <ChatToolActivityList events={events} tools={tools} workId={workId} onCopySql={onCopySql} onManualExecute={onManualExecute} ended={ended} />
-            </ChatAnalysisProcess>
-            {showLinks && ended && data ? (
+            {hasProcess && (
+                <ChatAnalysisProcess streaming={streaming} ended={ended || (!data && !streaming)} failed={interrupted} durationMs={chatTurnDuration(durationMs, turn, requestId)}>
+                    {isError && <p className="text-destructive">{t('Chat.LoadFailed')}</p>}
+                    <ChatTimeline items={items} tools={rows} events={mappedEvents} ended={ended} workId={workId} {...actions} />
+                </ChatAnalysisProcess>
+            )}
+            {showLinks && ended && data && hasProcess && (
                 <div className="mb-3 flex flex-wrap gap-2">
                     <Button asChild size="sm" variant="outline">
-                        <Link href={data.runHref}>
-                            {t('Chat.ViewRun')}
-                            <ArrowUpRight className="size-3.5" />
-                        </Link>
+                        <Link href={data.runHref}>{t('Chat.ViewRun')}</Link>
                     </Button>
-                    {data.workspaceHref ? (
+                    {data.workspaceHref && (
                         <Button asChild size="sm" variant="ghost">
                             <Link href={data.workspaceHref}>{t('Chat.OpenWorkspace')}</Link>
                         </Button>
-                    ) : null}
+                    )}
                 </div>
-            ) : null}
-            {ended && incomplete ? <p className="mb-3 text-sm text-muted-foreground">{t('Chat.Incomplete')}</p> : null}
+            )}
+            {ended && incomplete && <p className="mb-3 text-sm text-muted-foreground">{t('Chat.Incomplete')}</p>}
+            {finalText ? <MessageResponse>{finalText}</MessageResponse> : answer}
+            {finalText && responseError && (
+                <p role="alert" className="text-sm text-destructive">
+                    {responseError}
+                </p>
+            )}
         </>
     );
 }

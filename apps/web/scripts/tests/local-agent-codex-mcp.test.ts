@@ -150,6 +150,9 @@ for (const target of [undefined, 'bridge:test-bridge']) {
         assert.match(prompt, /Current Dory workId: chat-work-1/);
         assert.match(prompt, /Always pass the current workId/);
         assert.match(prompt, /dory_finish_work/);
+        assert.match(prompt, /Answer ordinary questions directly/);
+        assert.match(prompt, /do not retry in this turn/);
+        assert.doesNotMatch(prompt, /Always finish with findings/);
     });
 }
 
@@ -174,4 +177,57 @@ test('local Codex binds MCP execution to the existing chat turn', () => {
     assert.match(args.join('\n'), /x-dory-agent-request-id.*turn-2/);
     assert.ok(DORY_CODEX_MCP_ENABLED_TOOLS.includes('dory_search_assets'));
     assert.ok(DORY_CODEX_MCP_ENABLED_TOOLS.includes('dory_read_asset'));
+});
+
+test('Desktop subprocess publishes public progress before exit and handles split Chinese output', async () => {
+    const { mkdtemp, writeFile, chmod, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const { runCodexAgent } = await import('@/lib/ai/model/providers/local-agent');
+    const directory = await mkdtemp(join(tmpdir(), 'dory-progress-cli-'));
+    const previousPath = process.env.PATH;
+    const previousRuntime = process.env.DORY_RUNTIME;
+    try {
+        const executable = join(directory, 'codex');
+        await writeFile(
+            executable,
+            `#!/usr/bin/env node
+const fs = require('node:fs');
+if (process.argv.includes('--version')) { console.log('fixture'); process.exit(0); }
+if (!process.argv.includes('--json')) process.exit(2);
+const output = process.argv[process.argv.indexOf('--output-last-message') + 1];
+const text = JSON.stringify({type:'item.completed',item:{id:'message-1',type:'agent_message',text:'开始分析'}})+'\\n';
+const bytes = Buffer.from(text);
+const split = bytes.indexOf(Buffer.from('开')) + 1;
+process.stdout.write(bytes.subarray(0, split));
+setTimeout(() => process.stdout.write(bytes.subarray(split)), 20);
+setTimeout(() => { fs.writeFileSync(output, '结果为 42'); process.exit(0); }, 100);
+`,
+        );
+        await chmod(executable, 0o755);
+        process.env.PATH = `${directory}:${previousPath ?? ''}`;
+        process.env.DORY_RUNTIME = 'desktop';
+        const entries: Array<{ text?: string; phase?: string }> = [];
+        let exited = false;
+        const result = runCodexAgent('default', 'Analyze', undefined, undefined, entry => {
+            if (entry.phase === 'commentary') assert.equal(exited, false);
+            entries.push(entry);
+        }).then(value => {
+            exited = true;
+            return value;
+        });
+        assert.equal((await result).text, '结果为 42');
+        assert.equal(entries[0].text, '开始分析');
+        assert.equal(entries.at(-1)?.phase, 'final');
+        assert.equal(
+            entries.some(entry => entry.text?.includes('�')),
+            false,
+        );
+    } finally {
+        if (previousPath === undefined) delete process.env.PATH;
+        else process.env.PATH = previousPath;
+        if (previousRuntime === undefined) delete process.env.DORY_RUNTIME;
+        else process.env.DORY_RUNTIME = previousRuntime;
+        await rm(directory, { recursive: true, force: true });
+    }
 });

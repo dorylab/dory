@@ -1,3 +1,5 @@
+import { ChatAttachmentStore } from './chat-attachment-store';
+export * from './chat-attachment-store';
 import path from 'node:path';
 
 import { AgentRunArtifactStore } from './agent-run-artifact-store';
@@ -20,6 +22,7 @@ export * from './s3-object-store';
 
 export type DoryArtifactStore = {
     objectStore: ObjectStore;
+    chatAttachments: ChatAttachmentStore;
     resultSets: ResultSetArtifactStore;
     agentRuns: AgentRunArtifactStore;
     comparisons: ComparisonArtifactStore;
@@ -40,6 +43,7 @@ export function createDoryArtifactStore(): DoryArtifactStore {
     const objectStore = createObjectStoreFromEnv();
     return {
         objectStore,
+        chatAttachments: new ChatAttachmentStore(objectStore, prefix),
         resultSets: new ResultSetArtifactStore(objectStore, prefix),
         agentRuns: new AgentRunArtifactStore(objectStore, prefix),
         comparisons: new ComparisonArtifactStore(objectStore, prefix),

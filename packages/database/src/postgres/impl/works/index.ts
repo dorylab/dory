@@ -10,6 +10,8 @@ import {
     chatMessages,
     chatSessions,
     findingArtifacts,
+    localAiJobs,
+    localAiBridges,
     findings,
     queryRuns,
     resultSets as resultSetsTable,
@@ -35,6 +37,8 @@ import {
 } from '@dory/resultset';
 import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { applyCheckpointCommand, initialChatCheckpoints, type ChatCheckpoints, type CheckpointCommand } from '@dory/shared/types/chat-checkpoints';
+import { mergeChatProgress, type ChatProgressEntry } from '@dory/shared/types/chat-progress';
 import { newEntityId } from '@dory/shared/id';
 import { and, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
@@ -258,6 +262,9 @@ function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
                       ...(typeof sectionRecord.requestId === 'string' ? { requestId: sectionRecord.requestId } : {}),
                       ...(typeof sectionRecord.responseMessageId === 'string' ? { responseMessageId: sectionRecord.responseMessageId } : {}),
                       ...(Array.isArray(sectionRecord.findingIds) ? { findingIds: cleanSummaryItems(sectionRecord.findingIds) } : {}),
+                      ...(sectionRecord.evidence && typeof sectionRecord.evidence === 'object' && !Array.isArray(sectionRecord.evidence)
+                          ? { evidence: sectionRecord.evidence }
+                          : {}),
                   };
               })
               .filter((section): section is { summaryTitle: string | null; findings: string[]; steps: string[]; finishedAt: string } => Boolean(section))
@@ -410,7 +417,13 @@ export class PostgresWorksRepository {
                   }));
         if ((work.metadata?.chatTurn as { requestId?: string } | undefined)?.requestId === input.requestId) return work;
         const now = new Date();
-        const chatTurn = { requestId: input.requestId, startedAt: now.toISOString(), reportCreationKey: input.metadata?.reportCreationKey };
+        const chatTurn = {
+            requestId: input.requestId,
+            startedAt: now.toISOString(),
+            reportCreationKey: input.metadata?.reportCreationKey,
+            outputIntent: input.metadata?.outputIntent,
+            progressCheckpoints: input.metadata?.progressCheckpoints === true,
+        };
         const [row] = await this.db
             .update(works)
             .set({
@@ -426,29 +439,104 @@ export class PostgresWorksRepository {
         return row as WorkRecord;
     }
 
-    async finishChatTurn(input: {
-        organizationId: string;
-        userId: string;
-        workId: string;
-        requestId: string;
-        outcome: 'completed' | 'failed' | 'aborted';
-        requireSummary?: boolean;
-    }): Promise<WorkRecord | null> {
-        this.assertInited();
-        const now = new Date();
-        const completion = { outcome: input.outcome, finishedAt: now.toISOString() };
+    /** Reserve exactly one summary attempt per chat turn, before validation or side effects. */
+    async beginChatSummarySave(input: { organizationId: string; userId: string; workId: string; requestId: string }) {
+        const attempt = { status: 'saving', startedAt: new Date().toISOString() };
+        const [claimed] = await this.db
+            .update(works)
+            .set({
+                metadata: sql`jsonb_set(${works.metadata}, '{chatTurn,summarySave}', ${JSON.stringify(attempt)}::jsonb)`,
+            })
+            .where(
+                and(
+                    eq(works.workId, input.workId),
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    eq(works.status, 'active'),
+                    isNull(works.archivedAt),
+                    sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                    sql`${works.metadata}->'chatTurn'->'summarySave' IS NULL`,
+                ),
+            )
+            .returning();
+        if (claimed) return { started: true as const };
+        const work = await this.getById(input);
+        const turn = work?.metadata?.chatTurn as { requestId?: string; summarySave?: { status: string; output?: Record<string, unknown> } } | undefined;
+        if (!work || work.archivedAt || turn?.requestId !== input.requestId) throw new DatabaseError('This analysis turn is no longer active', 409);
+        const save = turn.summarySave;
+        if (save?.status === 'saved') return { started: false as const, output: save.output ?? {} };
+        throw new DatabaseError('Conclusion saving was already attempted in this turn. Do not retry; answer with the available analysis. The user can retry in a new turn.', 409);
+    }
+
+    async endChatSummarySave(input: { organizationId: string; userId: string; workId: string; requestId: string; error?: string; output?: Record<string, unknown> }) {
+        const save = { status: input.error ? 'failed' : 'saved', error: input.error, output: input.output, finishedAt: new Date().toISOString() };
+        await this.db
+            .update(works)
+            .set({
+                metadata: sql`jsonb_set(${works.metadata}, '{chatTurn,summarySave}', ${JSON.stringify(save)}::jsonb)`,
+            })
+            .where(
+                and(
+                    eq(works.workId, input.workId),
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                    sql`${works.metadata}->'chatTurn'->'summarySave'->>'status' = 'saving'`,
+                ),
+            );
+    }
+
+    /** Server-only evidence registration; never accepts provenance supplied by the model. */
+    async inspectChatEvidence(input: { organizationId: string; userId: string; workId: string; requestId: string; artifactId: string }) {
+        const work = await this.assertChatTurn(input);
+        const [row] = await this.db
+            .select({ artifact: artifacts, result: resultSetsTable, legacyDatabase: workQuerySessions.database })
+            .from(artifacts)
+            .leftJoin(resultSetsTable, and(eq(resultSetsTable.id, artifacts.sourceResultSetId), eq(resultSetsTable.organizationId, artifacts.organizationId)))
+            .leftJoin(workQuerySessions, and(eq(workQuerySessions.workId, resultSetsTable.workId), eq(workQuerySessions.sessionId, resultSetsTable.sessionId)))
+            .where(and(eq(artifacts.id, input.artifactId), eq(artifacts.organizationId, input.organizationId)));
+        if (!row) throw new DatabaseError('Evidence is unavailable.', 403);
+        const { artifact, result } = row;
+        const database = result?.sourceDatabaseName ?? row.legacyDatabase;
+        const sourceWorkId = artifact.workId ?? artifact.agentRunId;
+        const sourceWork = sourceWorkId ? await this.getById({ ...input, workId: sourceWorkId }) : null;
+        if (sourceWorkId && (!sourceWork || sourceWork.archivedAt)) throw new DatabaseError('Evidence is unavailable.', 403);
+        const scope = work.metadata?.analysisScope as { connectionIds: string[]; databasesByConnection?: Record<string, string> } | undefined;
+        if (scope && (!artifact.connectionId || !scope.connectionIds.includes(artifact.connectionId)))
+            throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
+        if (!scope && work.connectionId && artifact.connectionId !== work.connectionId) throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
+        const selectedDatabase = artifact.connectionId ? scope?.databasesByConnection?.[artifact.connectionId] : undefined;
+        if (selectedDatabase && database !== selectedDatabase) throw new DatabaseError('Evidence is outside the selected database.', 403);
+        if (
+            artifact.status !== 'ready' ||
+            (artifact.expiresAt && artifact.expiresAt <= new Date()) ||
+            !result ||
+            result.status !== 'success' ||
+            result.dataAvailability === 'none' ||
+            (result.expiresAt && result.expiresAt <= new Date())
+        ) {
+            throw new DatabaseError('Evidence data is no longer available. Re-run the query.', 409);
+        }
+        return {
+            artifactId: artifact.id,
+            sourceWorkId,
+            resultSetId: result.id,
+            connectionId: artifact.connectionId,
+            database,
+            capturedAt: artifact.createdAt.toISOString(),
+            updatedAt: artifact.updatedAt.toISOString(),
+            resultUpdatedAt: result.updatedAt.toISOString(),
+            dataAvailability: result.dataAvailability,
+            rowCount: result.rowCount,
+        };
+    }
+
+    async registerChatEvidence(input: { organizationId: string; userId: string; workId: string; requestId: string; artifactId: string }) {
+        const evidence = await this.inspectChatEvidence(input);
         const [row] = await this.db
             .update(works)
             .set({
-                status:
-                    input.outcome === 'completed'
-                        ? input.requireSummary
-                            ? sql`CASE WHEN ${works.metadata}->'chatTurn'->>'summarySaved' = 'true' AND ${works.metadata}->'chatTurn'->>'responseSaved' = 'true' AND ${works.metadata}->'chatTurn'->>'analysisStatus' = 'completed' THEN 'completed' ELSE 'error' END`
-                            : 'completed'
-                        : 'error',
-                metadata: sql`jsonb_set(${works.metadata}, '{chatTurn}', (${works.metadata}->'chatTurn') || ${JSON.stringify(completion)}::jsonb)`,
-                updatedAt: now,
-                lastActiveAt: now,
+                metadata: sql`jsonb_set(${works.metadata}, '{chatTurn,evidence}', coalesce(${works.metadata}->'chatTurn'->'evidence', '{}'::jsonb) || ${JSON.stringify({ [input.artifactId]: evidence })}::jsonb)`,
             })
             .where(
                 and(
@@ -460,8 +548,64 @@ export class PostgresWorksRepository {
                     sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
                 ),
             )
-            .returning();
-        return (row as WorkRecord | undefined) ?? null;
+            .returning({ id: works.workId });
+        if (!row) throw new DatabaseError('This analysis turn is no longer active', 409);
+        return evidence;
+    }
+
+    async finishChatTurn(input: {
+        organizationId: string;
+        userId: string;
+        workId: string;
+        requestId: string;
+        outcome: 'completed' | 'failed' | 'aborted';
+        requireSummary?: boolean;
+    }): Promise<WorkRecord | null> {
+        this.assertInited();
+        const now = new Date();
+        const completion = { outcome: input.outcome, finishedAt: now.toISOString() };
+        return this.db.transaction(async tx => {
+            const [row] = await tx
+                .update(works)
+                .set({
+                    status:
+                        input.outcome === 'completed'
+                            ? input.requireSummary
+                                ? sql`CASE WHEN ${works.metadata}->'chatTurn'->>'summarySaved' = 'true' AND ${works.metadata}->'chatTurn'->>'responseSaved' = 'true' AND ${works.metadata}->'chatTurn'->>'analysisStatus' = 'completed' THEN 'completed' ELSE 'error' END`
+                                : sql`CASE WHEN ${works.metadata}->'chatTurn'->'summarySave'->>'status' IN ('failed', 'saving') OR ${works.metadata}->'chatTurn'->>'analysisStatus' = 'error' OR ${works.metadata}->'chatTurn'->>'progressStopped' = 'true' THEN 'error' ELSE 'completed' END`
+                            : 'error',
+                    metadata: sql`jsonb_set(${works.metadata}, '{chatTurn}', (${works.metadata}->'chatTurn') || ${JSON.stringify(completion)}::jsonb)`,
+                    updatedAt: now,
+                    lastActiveAt: now,
+                })
+                .where(
+                    and(
+                        eq(works.workId, input.workId),
+                        eq(works.organizationId, input.organizationId),
+                        eq(works.userId, input.userId),
+                        eq(works.status, 'active'),
+                        isNull(works.archivedAt),
+                        sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                    ),
+                )
+                .returning();
+            const turn = row?.metadata?.chatTurn as { startedAt?: string } | undefined;
+            const durationMs = turn?.startedAt ? now.getTime() - Date.parse(turn.startedAt) : NaN;
+            if (row && Number.isFinite(durationMs) && durationMs >= 0) {
+                await tx
+                    .update(chatMessages)
+                    .set({ metadata: sql`coalesce(${chatMessages.metadata}, '{}'::jsonb) || ${JSON.stringify({ analysisDurationMs: durationMs })}::jsonb` })
+                    .where(
+                        and(
+                            eq(chatMessages.organizationId, input.organizationId),
+                            eq(chatMessages.role, 'assistant'),
+                            sql`${chatMessages.metadata}->>'agentRunId' = ${input.workId}`,
+                            sql`${chatMessages.metadata}->>'requestId' = ${input.requestId}`,
+                        ),
+                    );
+            }
+            return (row as WorkRecord | undefined) ?? null;
+        });
     }
 
     private async prepareExistingWork(row: WorkRecord, input: ResolveWorkInput, now: Date): Promise<WorkRecord> {
@@ -824,6 +968,10 @@ export class PostgresWorksRepository {
             const nextFindings = [...existingSummary.findings, ...newFindings];
             const nextSteps = [...existingSummary.steps, ...newSteps];
             const findingIds: string[] = [];
+            const citedIds = new Set(normalizedFindings.flatMap(finding => finding.evidenceArtifactIds));
+            const evidenceSnapshot = input.requestId
+                ? Object.fromEntries(Object.entries((currentMetadata.chatTurn as { evidence?: Record<string, unknown> })?.evidence ?? {}).filter(([id]) => citedIds.has(id)))
+                : {};
             const metadata = {
                 ...currentMetadata,
                 ...(input.requestId
@@ -849,7 +997,7 @@ export class PostgresWorksRepository {
                             finishedAt,
                             requestId: input.requestId ?? null,
                             responseMessageId: input.responseMessageId ?? null,
-                            ...(input.requestId ? { findingIds } : {}),
+                            ...(input.requestId ? { findingIds, evidence: evidenceSnapshot } : {}),
                         },
                     ],
                     updatedAt: finishedAt,
@@ -862,18 +1010,58 @@ export class PostgresWorksRepository {
 
             const evidenceIds = [...new Set(findingsToCreate.flatMap(finding => finding.evidenceArtifactIds))];
             if (evidenceIds.length) {
-                const evidenceRows = await tx
-                    .select({ id: artifacts.id })
+                const registered = input.requestId
+                    ? ((
+                          currentMetadata.chatTurn as {
+                              evidence?: Record<string, { resultSetId: string; updatedAt: string; resultUpdatedAt: string; database: string | null; sourceWorkId: string | null }>;
+                          }
+                      )?.evidence ?? {})
+                    : {};
+                const rows = await tx
+                    .select({ artifact: artifacts, result: resultSetsTable, legacyDatabase: workQuerySessions.database })
                     .from(artifacts)
-                    .where(
-                        and(
-                            eq(artifacts.organizationId, input.organizationId),
-                            or(eq(artifacts.workId, input.workId), eq(artifacts.agentRunId, input.workId)),
-                            inArray(artifacts.id, evidenceIds),
-                        ),
-                    );
-                if (evidenceRows.length !== evidenceIds.length) {
-                    throw new DatabaseError('Finding evidence must be an Artifact produced by this Agent Run', 400);
+                    .leftJoin(resultSetsTable, and(eq(resultSetsTable.id, artifacts.sourceResultSetId), eq(resultSetsTable.organizationId, artifacts.organizationId)))
+                    .leftJoin(workQuerySessions, and(eq(workQuerySessions.workId, resultSetsTable.workId), eq(workQuerySessions.sessionId, resultSetsTable.sessionId)))
+                    .where(and(eq(artifacts.organizationId, input.organizationId), inArray(artifacts.id, evidenceIds)));
+                if (rows.length !== evidenceIds.length) throw new DatabaseError('Finding evidence is unavailable.', 400);
+                for (const { artifact, result, legacyDatabase } of rows) {
+                    const database = result?.sourceDatabaseName ?? legacyDatabase;
+                    const own = artifact.workId === input.workId || artifact.agentRunId === input.workId;
+                    const registeredEvidence = registered[artifact.id];
+                    if (
+                        !own &&
+                        (!registeredEvidence ||
+                            registeredEvidence.resultSetId !== result?.id ||
+                            registeredEvidence.database !== database ||
+                            registeredEvidence.updatedAt !== artifact.updatedAt.toISOString() ||
+                            registeredEvidence.resultUpdatedAt !== result?.updatedAt.toISOString() ||
+                            registeredEvidence.sourceWorkId !== (artifact.workId ?? artifact.agentRunId))
+                    ) {
+                        throw new DatabaseError('Finding evidence must be produced by this Agent Run or explicitly read and verified in this turn.', 400);
+                    }
+                    if (artifact.status !== 'ready' || (artifact.expiresAt && artifact.expiresAt <= now)) throw new DatabaseError('Finding evidence is no longer available.', 409);
+                    if (!own) {
+                        if (!result || result.dataAvailability === 'none' || result.status !== 'success' || (result.expiresAt && result.expiresAt <= now))
+                            throw new DatabaseError('Finding evidence data expired.', 409);
+                        const sourceWorkId = artifact.workId ?? artifact.agentRunId;
+                        if (sourceWorkId) {
+                            const [source] = await tx
+                                .select({ id: works.workId })
+                                .from(works)
+                                .where(
+                                    and(eq(works.workId, sourceWorkId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId), isNull(works.archivedAt)),
+                                );
+                            if (!source) throw new DatabaseError('Finding evidence access denied.', 403);
+                        }
+                    }
+                    const scope = currentMetadata.analysisScope as { connectionIds: string[]; databasesByConnection?: Record<string, string> } | undefined;
+                    if (
+                        scope &&
+                        (!artifact.connectionId ||
+                            !scope.connectionIds.includes(artifact.connectionId) ||
+                            (scope.databasesByConnection?.[artifact.connectionId] && scope.databasesByConnection[artifact.connectionId] !== database))
+                    )
+                        throw new DatabaseError('Finding evidence is outside the selected scope.', 403);
                 }
             }
             if (normalizedFindings.some(finding => finding.isPrimary)) {
@@ -936,6 +1124,104 @@ export class PostgresWorksRepository {
             )
             .returning();
         if (!row) throw new DatabaseError('This analysis turn is no longer active', 409);
+    }
+
+    /** Serialize stage reservations and publications across SDK, MCP and Bridge calls. */
+    async chatCheckpoint(input: { organizationId: string; userId: string; workId: string; requestId: string; command: CheckpointCommand }) {
+        return this.db.transaction(async tx => {
+            const [work] = await tx
+                .select()
+                .from(works)
+                .where(and(eq(works.workId, input.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId)))
+                .for('update');
+            const turn = work?.metadata?.chatTurn as { requestId?: string; progressCheckpoints?: boolean; summarySave?: { status: string } } | undefined;
+            if (!work || work.archivedAt || work.status !== 'active' || turn?.requestId !== input.requestId) throw new DatabaseError('This analysis turn is no longer active', 409);
+            if (!turn.progressCheckpoints) return null;
+            const eventId = `checkpoints_${createHash('sha256').update(`${input.workId}:${input.requestId}`).digest('hex').slice(0, 32)}`;
+            const [prior] = await tx.select().from(workEvents).where(eq(workEvents.eventId, eventId));
+            const state = (prior?.outputSummary?.state as ChatCheckpoints | undefined) ?? initialChatCheckpoints();
+            if (turn.summarySave?.status === 'failed') state.stopped = true;
+            const result = applyCheckpointCommand(state, input.requestId, input.command);
+            if (state.stopped)
+                await tx
+                    .update(works)
+                    .set({ metadata: sql`jsonb_set(${works.metadata}, '{chatTurn,progressStopped}', 'true'::jsonb)` })
+                    .where(eq(works.workId, input.workId));
+            if (input.command.kind !== 'inspect')
+                await tx
+                    .insert(workEvents)
+                    .values({
+                        eventId,
+                        organizationId: input.organizationId,
+                        userId: input.userId,
+                        workId: input.workId,
+                        toolName: 'chat_checkpoints',
+                        status: 'success',
+                        inputSummary: { requestId: input.requestId },
+                        outputSummary: { state },
+                    })
+                    .onConflictDoUpdate({ target: workEvents.eventId, set: { outputSummary: { state } } });
+            return result;
+        });
+    }
+
+    async appendChatProgress(input: {
+        organizationId: string;
+        userId: string;
+        workId: string;
+        requestId: string;
+        entries: ChatProgressEntry[];
+        bridge?: { jobId: string; bridgeId: string; mcpTokenId: string };
+    }) {
+        return this.db.transaction(async tx => {
+            if (input.bridge) {
+                const [job] = await tx
+                    .select()
+                    .from(localAiJobs)
+                    .where(and(eq(localAiJobs.id, input.bridge.jobId), eq(localAiJobs.organizationId, input.organizationId)))
+                    .for('update');
+                const [bridge] = await tx
+                    .select()
+                    .from(localAiBridges)
+                    .where(
+                        and(
+                            eq(localAiBridges.id, input.bridge.bridgeId),
+                            eq(localAiBridges.organizationId, input.organizationId),
+                            eq(localAiBridges.userId, input.userId),
+                            eq(localAiBridges.mcpTokenId, input.bridge.mcpTokenId),
+                            isNull(localAiBridges.revokedAt),
+                        ),
+                    );
+                if (!bridge || !job || job.bridgeId !== bridge.id || job.status !== 'claimed' || job.expiresAt <= new Date())
+                    throw new DatabaseError('Local AI progress is no longer accepted.', 409);
+            }
+            const [work] = await tx
+                .select()
+                .from(works)
+                .where(and(eq(works.workId, input.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId)))
+                .for('update');
+            const turn = work?.metadata?.chatTurn as { requestId?: string; bridgeJobId?: string } | undefined;
+            if (!work || work.archivedAt || work.status !== 'active' || turn?.requestId !== input.requestId || (input.bridge && turn.bridgeJobId !== input.bridge.jobId))
+                throw new DatabaseError('This analysis turn is no longer active', 409);
+            const eventId = `progress_${createHash('sha256').update(`${input.workId}:${input.requestId}`).digest('hex').slice(0, 32)}`;
+            const [prior] = await tx.select().from(workEvents).where(eq(workEvents.eventId, eventId));
+            const entries = mergeChatProgress((prior?.outputSummary?.entries as ChatProgressEntry[] | undefined) ?? [], input.entries);
+            if (entries.length > 2000 || JSON.stringify(entries).length > 2 * 1024 * 1024) throw new DatabaseError('Local AI progress exceeded the maximum size.', 400);
+            await tx
+                .insert(workEvents)
+                .values({
+                    eventId,
+                    organizationId: input.organizationId,
+                    userId: input.userId,
+                    workId: input.workId,
+                    toolName: 'chat_progress',
+                    status: 'success',
+                    inputSummary: { requestId: input.requestId },
+                    outputSummary: { entries },
+                })
+                .onConflictDoUpdate({ target: workEvents.eventId, set: { outputSummary: { entries } } });
+            return entries;
+        });
     }
 
     async bindChatBridgeJob(input: { organizationId: string; userId: string; workId: string; requestId: string; jobId: string }) {
@@ -1200,6 +1486,7 @@ export class PostgresWorksRepository {
                 });
 
                 await this.db.insert(resultSetsTable).values({
+                    sourceDatabaseName: session.database ?? null,
                     id: artifactId,
                     organizationId: work.organizationId,
                     connectionId: session.connectionId ?? work.connectionId ?? null,

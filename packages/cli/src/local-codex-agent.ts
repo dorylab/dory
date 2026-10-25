@@ -1,3 +1,5 @@
+import { createLocalAgentProgressParser } from '@dory/shared/utils/local-agent-progress';
+import type { ChatProgressEntry } from '@dory/shared/types/chat-progress';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -44,6 +46,7 @@ type ClaimResponse = {
         model: string;
         prompt: string;
         agentTurn?: { workId: string; requestId: string };
+        progressSupported?: boolean;
     };
 };
 
@@ -61,12 +64,13 @@ export type CodexDoryMcpConfig = {
     agentTurn?: { workId: string; requestId: string };
 };
 
-type RunCodexAgent = (modelId: string, prompt: string, config: CodexDoryMcpConfig) => Promise<CommandResult>;
+type RunCodexAgent = (modelId: string, prompt: string, config: CodexDoryMcpConfig, onProgress?: (entry: ChatProgressEntry) => void) => Promise<CommandResult>;
 
 export const DORY_CODEX_MCP_TOKEN_ENV = 'DORY_MCP_TOKEN';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
+    'dory_publish_progress',
     'dory_read',
     'dory_write',
     'dory_search_assets',
@@ -79,7 +83,7 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_saved_queries',
 ];
 export const DORY_CODEX_MCP_TOOL_TIMEOUT_SEC = 90;
-const DORY_CODEX_MCP_AUTO_APPROVED_TOOLS = ['dory_create_work', 'dory_finish_work'];
+const DORY_CODEX_MCP_AUTO_APPROVED_TOOLS = ['dory_create_work', 'dory_finish_work', 'dory_publish_progress'];
 
 function toTomlString(value: string) {
     return JSON.stringify(value);
@@ -146,7 +150,12 @@ async function findExecutable(command: string): Promise<string | null> {
     return null;
 }
 
-function runProcess(command: string, args: string[], input: string, options: { cwd: string; env?: Record<string, string> }): Promise<{ stdout: string; stderr: string }> {
+function runProcess(
+    command: string,
+    args: string[],
+    input: string,
+    options: { cwd: string; env?: Record<string, string>; onStdout?: (chunk: string) => void },
+): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
         const child = spawn(command, args, {
             cwd: options.cwd,
@@ -175,8 +184,16 @@ function runProcess(command: string, args: string[], input: string, options: { c
             else resolve({ stdout, stderr });
         };
 
+        child.stdout.setEncoding('utf8');
+        child.stderr.setEncoding('utf8');
         child.stdout.on('data', chunk => {
             stdout += String(chunk);
+            try {
+                options.onStdout?.(String(chunk));
+            } catch (error) {
+                child.kill('SIGTERM');
+                finish(error instanceof Error ? error : new Error(String(error)));
+            }
             if (stdout.length > LOCAL_AGENT_MAX_BUFFER) {
                 child.kill('SIGTERM');
                 finish(new Error('Local Codex agent output exceeded the maximum size.'));
@@ -198,7 +215,7 @@ function runProcess(command: string, args: string[], input: string, options: { c
     });
 }
 
-export async function runCodexAgent(modelId: string, prompt: string, doryMcpConfig: CodexDoryMcpConfig): Promise<CommandResult> {
+export async function runCodexAgent(modelId: string, prompt: string, doryMcpConfig: CodexDoryMcpConfig, onProgress?: (entry: ChatProgressEntry) => void): Promise<CommandResult> {
     const codex = await findExecutable('codex');
     if (!codex) {
         throw new Error('codex CLI was not found on this device.');
@@ -206,8 +223,10 @@ export async function runCodexAgent(modelId: string, prompt: string, doryMcpConf
 
     const cwd = await mkdtemp(join(tmpdir(), 'dory-codex-agent-'));
     const outputPath = join(cwd, 'last-message.txt');
+    const parser = onProgress ? createLocalAgentProgressParser(onProgress) : undefined;
     const args = [
         'exec',
+        ...(parser ? ['--json'] : []),
         '--skip-git-repo-check',
         '--ephemeral',
         '--ignore-user-config',
@@ -226,9 +245,11 @@ export async function runCodexAgent(modelId: string, prompt: string, doryMcpConf
     try {
         const result = await runProcess(codex, args, prompt, {
             cwd,
+            onStdout: parser?.push,
             env: buildCodexDoryMcpEnv(doryMcpConfig),
         });
-        const text = (await readFile(outputPath, 'utf8').catch(() => result.stdout)).trim();
+        const text = (await readFile(outputPath, 'utf8').catch(() => (parser ? '' : result.stdout))).trim();
+        parser?.finish(text);
         return { ...result, text };
     } finally {
         await rm(cwd, { recursive: true, force: true }).catch(() => undefined);
@@ -262,7 +283,9 @@ async function registerBridge(credential: Credential, name: string, fetchFn?: Fe
             capabilities: {
                 providers: ['codex-agent'],
                 doryMcpTools: true,
-                localAiBridgeProtocol: 2,
+                localAiBridgeProtocol: 3,
+                chatProgress: true,
+                chatCheckpoints: 1,
                 pid: process.pid,
                 platform: process.platform,
             },
@@ -385,13 +408,60 @@ export async function startCodexAgentBridge(options: CodexAgentOptions = {}) {
             continue;
         }
 
+        const job = claimed.job;
+        let pending = new Map<string, ChatProgressEntry>();
+        let writes = Promise.resolve();
+        let progressError: unknown;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const flush = () => {
+            if (timer) clearTimeout(timer);
+            timer = undefined;
+            const entries = [...pending.values()];
+            pending = new Map();
+            for (let start = 0; start < entries.length; start += 32) {
+                const batch = entries.slice(start, start + 32);
+                writes = writes
+                    .then(async () => {
+                        for (let attempt = 0; ; attempt++) {
+                            try {
+                                await postAuthorized(
+                                    credential,
+                                    `/api/mcp/local-ai/jobs/${encodeURIComponent(job.id)}/progress`,
+                                    { bridgeId, requestId: job.agentTurn!.requestId, entries: batch },
+                                    options.fetchFn,
+                                );
+                                break;
+                            } catch (error) {
+                                if (attempt >= 2 || (error && typeof error === 'object' && 'status' in error && Number(error.status) < 500)) throw error;
+                                await sleep(200);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        progressError = error;
+                    });
+            }
+        };
+        const onProgress =
+            job.progressSupported && job.agentTurn
+                ? (entry: ChatProgressEntry) => {
+                      pending.set(entry.id, entry);
+                      if (!timer) timer = setTimeout(flush, 100);
+                  }
+                : undefined;
         try {
-            const result = await runCodex(claimed.job.model, claimed.job.prompt, { ...doryMcpConfig, agentTurn: claimed.job.agentTurn });
+            const result = await runCodex(job.model, job.prompt, { ...doryMcpConfig, agentTurn: job.agentTurn }, onProgress);
+            flush();
+            await writes;
+            if (progressError) throw progressError;
             await completeJob(credential, bridgeId, claimed.job.id, result, options.fetchFn);
         } catch (error) {
+            flush();
+            await writes;
             await completeJob(credential, bridgeId, claimed.job.id, error instanceof Error ? error : new Error(String(error)), options.fetchFn);
         }
 
+        if (timer) clearTimeout(timer);
         completedJobs += 1;
         if (options.maxJobs && completedJobs >= options.maxJobs) {
             break;

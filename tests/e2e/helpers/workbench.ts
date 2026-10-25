@@ -128,6 +128,14 @@ async function collectOpenConsoleDiagnostics(page: Page) {
 }
 
 export async function mockWorkbenchApis(page: Page, options: MockWorkbenchOptions = {}) {
+    await page.route('**/api/chat/attachments', async route => {
+        const form = await new Response(route.request().postDataBuffer(), { headers: { 'Content-Type': route.request().headers()['content-type'] } }).formData();
+        const file = form.get('file') as File;
+        const id = crypto.randomUUID();
+        return route.fulfill({
+            json: { file: { type: 'file', filename: String(form.get('filename') || file.name), mediaType: file.type, byteSize: file.size, url: `/api/chat/attachments/${id}` } },
+        });
+    });
     const connections: ConnectionRecord[] = [...(options.initialConnections ?? [])];
     const tabs = new Map<string, any>();
 
@@ -434,11 +442,7 @@ export async function createConnectionAndOpenConsole(page: Page) {
     await expect(connectionCard).toBeVisible();
 }
 
-export async function openMockConnectionConsole(
-    page: Page,
-    connection: ConnectionRecord = createWorkbenchConnection(),
-    options: { requireInteractiveReady?: boolean } = {},
-) {
+export async function openMockConnectionConsole(page: Page, connection: ConnectionRecord = createWorkbenchConnection(), options: { requireInteractiveReady?: boolean } = {}) {
     await page.goto('/');
     await openDataSources(page);
 

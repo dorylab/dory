@@ -1,3 +1,5 @@
+import { createLocalAgentProgressParser } from '@dory/shared/utils/local-agent-progress';
+import type { ChatProgressEntry } from '@dory/shared/types/chat-progress';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,7 +11,6 @@ import type {
     LanguageModelV4GenerateResult,
     LanguageModelV4Prompt,
     LanguageModelV4StreamPart,
-    LanguageModelV4StreamResult,
     LanguageModelV4Usage,
 } from '@ai-sdk/provider';
 import { getDBService } from '@dory/database';
@@ -61,10 +62,13 @@ export const DORY_CODEX_WORK_ID_HEADER = 'x-dory-local-agent-work-id';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
+    'dory_publish_progress',
     'dory_read',
     'dory_write',
     'dory_search_assets',
     'dory_read_asset',
+    'dory_read_attachment',
+    'dory_search_attachment',
     'dory_list_connections',
     'dory_explore_schema',
     'dory_get_schema_graph',
@@ -73,7 +77,7 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_saved_queries',
 ];
 export const DORY_CODEX_MCP_TOOL_TIMEOUT_SEC = 90;
-const DORY_CODEX_MCP_AUTO_APPROVED_TOOLS = ['dory_create_work', 'dory_finish_work'];
+const DORY_CODEX_MCP_AUTO_APPROVED_TOOLS = ['dory_create_work', 'dory_finish_work', 'dory_publish_progress'];
 
 function toTomlString(value: string) {
     return JSON.stringify(value);
@@ -264,7 +268,7 @@ function toolInstructions(options: LanguageModelV4CallOptions, context: LocalAge
         return [
             'Dory MCP tools are available to Codex for this request.',
             context.workId
-                ? 'The host already created the Run and searched Knowledge. Read relevant candidates with dory_read_asset, then use the existing Run for SQL and dory_finish_work. Always finish with findings, steps, and finalAnswer; repeat finalAnswer verbatim as your reply. Use the requestId above. Do not call the host-only finishAnalysis tool. Always pass the current workId.'
+                ? 'The host already created the Run and searched Knowledge. Read relevant candidates with dory_read_asset, then use the existing Run for SQL. Answer ordinary questions directly without dory_finish_work. Call dory_finish_work only when the user explicitly requests saved conclusions or a report. Reports need no extra Findings. If a conclusion save fails, do not retry in this turn: answer with the available analysis and explain that saving failed. After a successful explicit save, repeat finalAnswer verbatim as your reply. Use the requestId above. Do not call the host-only finishAnalysis tool. Always pass the current workId.'
                 : 'For database questions, call dory_create_work once first with the current connectionId, original userQuestion and a stable externalSessionId for this conversation. Reuse that externalSessionId for retries and later turns. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tools and dory_finish_work.',
             'For non-query Dory read operations, use dory_read with the actionId. For create, update, or delete operations such as connection.create, use dory_write with the actionId instead of expecting a separate tool for every action.',
             'When the user asks for query results, write read-only SQL and call dory_run_readonly_sql. Answer from the tool result; do not claim a query was run without tool output.',
@@ -302,7 +306,9 @@ function toolInstructions(options: LanguageModelV4CallOptions, context: LocalAge
 export function buildInstruction(options: LanguageModelV4CallOptions, context: LocalAgentDoryContext = { doryMcpAvailable: false }): string {
     const parts = [
         'You are acting as a local AI provider for Dory.',
-        'Return only the final answer for the user request.',
+        context.chatId
+            ? 'Provide concise public progress updates between tool groups, then a separate final answer. Do not disclose private reasoning.'
+            : 'Return only the final answer for the user request.',
         'Do not modify files, run commands, or perform external side effects.',
         ...toolInstructions(options, context),
     ];
@@ -325,6 +331,7 @@ function runProcess(
         cwd: string;
         env?: Record<string, string>;
         signal?: AbortSignal;
+        onStdout?: (chunk: string) => void;
     },
 ): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
@@ -366,8 +373,16 @@ function runProcess(
 
         options.signal?.addEventListener('abort', onAbort, { once: true });
 
+        child.stdout.setEncoding('utf8');
+        child.stderr.setEncoding('utf8');
         child.stdout.on('data', chunk => {
             stdout += String(chunk);
+            try {
+                options.onStdout?.(String(chunk));
+            } catch (error) {
+                child.kill('SIGTERM');
+                finish(error instanceof Error ? error : new Error(String(error)));
+            }
             if (stdout.length > LOCAL_AGENT_MAX_BUFFER) {
                 child.kill('SIGTERM');
                 finish(new Error('Local AI agent output exceeded the maximum size.'));
@@ -393,15 +408,23 @@ function runProcess(
     });
 }
 
-async function runCodexAgent(modelId: string, prompt: string, signal?: AbortSignal, doryMcpConfig?: CodexDoryMcpConfig | null): Promise<LocalAgentCommandResult> {
+export async function runCodexAgent(
+    modelId: string,
+    prompt: string,
+    signal?: AbortSignal,
+    doryMcpConfig?: CodexDoryMcpConfig | null,
+    onProgress?: (entry: ChatProgressEntry) => void,
+): Promise<LocalAgentCommandResult> {
     const status = await assertLocalAiAgentAvailable('codex-agent');
     if (!('path' in status) || !status.path) {
         throw new Error('codex CLI was not found on this device.');
     }
     const cwd = await mkdtemp(join(tmpdir(), 'dory-codex-agent-'));
     const outputPath = join(cwd, 'last-message.txt');
+    const parser = onProgress ? createLocalAgentProgressParser(onProgress) : undefined;
     const args = [
         'exec',
+        ...(parser ? ['--json'] : []),
         '--skip-git-repo-check',
         '--ephemeral',
         '--ignore-user-config',
@@ -428,30 +451,58 @@ async function runCodexAgent(modelId: string, prompt: string, signal?: AbortSign
         const result = await runProcess(status.path, args, prompt, {
             cwd,
             signal,
+            onStdout: parser?.push,
             env: doryMcpConfig ? buildCodexDoryMcpEnv(doryMcpConfig) : undefined,
         });
-        const text = (await readFile(outputPath, 'utf8').catch(() => result.stdout)).trim();
+        const text = (await readFile(outputPath, 'utf8').catch(() => (parser ? '' : result.stdout))).trim();
+        parser?.finish(text);
         return { ...result, text };
     } finally {
         await rm(cwd, { recursive: true, force: true }).catch(() => undefined);
     }
 }
 
-async function runClaudeCodeAgent(modelId: string, prompt: string, signal?: AbortSignal): Promise<LocalAgentCommandResult> {
+async function runClaudeCodeAgent(modelId: string, prompt: string, signal?: AbortSignal, onProgress?: (entry: ChatProgressEntry) => void): Promise<LocalAgentCommandResult> {
     const status = await assertLocalAiAgentAvailable('claude-code-agent');
     if (!('path' in status) || !status.path) {
         throw new Error('claude CLI was not found on this device.');
     }
     const cwd = await mkdtemp(join(tmpdir(), 'dory-claude-agent-'));
-    const args = ['--print', '--output-format', 'text', '--input-format', 'text', '--no-session-persistence', '--bare', '--tools', ''];
+    const parser = onProgress ? createLocalAgentProgressParser(onProgress) : undefined;
+    const args = [
+        '--print',
+        '--output-format',
+        parser ? 'stream-json' : 'text',
+        ...(parser ? ['--verbose'] : []),
+        '--input-format',
+        'text',
+        '--no-session-persistence',
+        '--bare',
+        '--tools',
+        '',
+    ];
 
     if (modelId && modelId !== 'default') {
         args.push('--model', modelId);
     }
 
     try {
-        const result = await runProcess(status.path, args, prompt, { cwd, signal });
-        return { ...result, text: result.stdout.trim() };
+        const result = await runProcess(status.path, args, prompt, { cwd, signal, onStdout: parser?.push });
+        const terminal = parser
+            ? (result.stdout
+                  .split('\n')
+                  .flatMap(line => {
+                      try {
+                          const event = JSON.parse(line);
+                          return event.type === 'result' && typeof event.result === 'string' ? [event.result] : [];
+                      } catch {
+                          return [];
+                      }
+                  })
+                  .at(-1) ?? '')
+            : result.stdout.trim();
+        parser?.finish(terminal);
+        return { ...result, text: terminal };
     } finally {
         await rm(cwd, { recursive: true, force: true }).catch(() => undefined);
     }
@@ -462,13 +513,14 @@ async function runLocalAgent(
     modelId: string,
     options: LanguageModelV4CallOptions,
     context: LocalAgentDoryContext,
+    onProgress?: (entry: ChatProgressEntry) => void,
 ): Promise<LocalAgentCommandResult> {
     const prompt = buildInstruction(options, context);
     if (providerKey === 'codex-agent') {
-        return runCodexAgent(modelId, prompt, options.abortSignal, context.doryMcpConfig);
+        return runCodexAgent(modelId, prompt, options.abortSignal, context.doryMcpConfig, onProgress);
     }
 
-    return runClaudeCodeAgent(modelId, prompt, options.abortSignal);
+    return runClaudeCodeAgent(modelId, prompt, options.abortSignal, onProgress);
 }
 
 async function runLocalAgentViaBridge(
@@ -492,6 +544,11 @@ async function runLocalAgentViaBridge(
 
     const prompt = buildInstruction(options, context);
     const ownedRun = context.workId ? await db.works.getById({ organizationId, workId: context.workId, userId: bridge?.userId ?? '' }) : null;
+    if (
+        (ownedRun?.metadata?.chatTurn as { progressCheckpoints?: boolean } | undefined)?.progressCheckpoints &&
+        (bridge?.capabilities as { chatCheckpoints?: number } | undefined)?.chatCheckpoints !== 1
+    )
+        throw new Error('This local Bridge does not support analysis progress checkpoints. Update and restart the Dory CLI Bridge, or select another model.');
     const result = await createAndWaitForLocalAiBridgeJob({
         agentTurn: ownedRun && context.requestId ? { workId: ownedRun.workId, requestId: context.requestId, userId: ownedRun.userId } : undefined,
         db,
@@ -535,32 +592,6 @@ function toGenerateResult(commandResult: LocalAgentCommandResult, prompt: string
     };
 }
 
-function toStreamResult(commandResult: LocalAgentCommandResult, prompt: string): LanguageModelV4StreamResult {
-    const usage = usageFromText(prompt, commandResult.text);
-    const stream = new ReadableStream<LanguageModelV4StreamPart>({
-        start(controller) {
-            const textId = 'local-agent-text';
-            controller.enqueue({ type: 'stream-start', warnings: [] });
-            controller.enqueue({ type: 'text-start', id: textId });
-            if (commandResult.text) {
-                controller.enqueue({ type: 'text-delta', id: textId, delta: commandResult.text });
-            }
-            controller.enqueue({ type: 'text-end', id: textId });
-            controller.enqueue({
-                type: 'finish',
-                usage,
-                finishReason: {
-                    unified: 'stop',
-                    raw: 'stop',
-                },
-            });
-            controller.close();
-        },
-    });
-
-    return { stream };
-}
-
 export function createLocalAgentProvider(options: LocalAgentProviderOptions) {
     return {
         chatModel: (modelName: string): LanguageModelV4 => {
@@ -580,11 +611,57 @@ export function createLocalAgentProvider(options: LocalAgentProviderOptions) {
                 },
                 async doStream(callOptions) {
                     const context = resolveLocalAgentDoryContext(options.providerKey, options.target, callOptions);
-                    const commandResult = shouldUseBridge(options.target)
-                        ? await runLocalAgentViaBridge(options.providerKey, modelId, options.target!, options.organizationId, callOptions, context)
-                        : await runLocalAgent(options.providerKey, modelId, callOptions, context);
                     const prompt = buildInstruction(callOptions, context);
-                    return toStreamResult(commandResult, prompt);
+                    const stream = new ReadableStream<LanguageModelV4StreamPart>({
+                        async start(controller) {
+                            controller.enqueue({ type: 'stream-start', warnings: [] });
+                            const userId = getHeader(callOptions.headers, 'x-dory-local-agent-user-id');
+                            const organizationId = options.organizationId ?? getHeader(callOptions.headers, 'x-dory-local-agent-organization-id');
+                            let pending = new Map<string, ChatProgressEntry>();
+                            let writes = Promise.resolve();
+                            let timer: ReturnType<typeof setTimeout> | undefined;
+                            let progressError: unknown;
+                            const flush = () => {
+                                if (timer) clearTimeout(timer);
+                                timer = undefined;
+                                if (!pending.size || !userId || !organizationId || !context.workId || !context.requestId) return;
+                                const entries = [...pending.values()];
+                                pending = new Map();
+                                writes = writes
+                                    .then(async () => {
+                                        const db = await getDBService();
+                                        await db.works.appendChatProgress({ organizationId, userId, workId: context.workId!, requestId: context.requestId!, entries });
+                                    })
+                                    .catch(error => {
+                                        progressError = error;
+                                    });
+                            };
+                            const onProgress = (entry: ChatProgressEntry) => {
+                                pending.set(entry.id, entry);
+                                if (!timer) timer = setTimeout(flush, 100);
+                            };
+                            try {
+                                const result = shouldUseBridge(options.target)
+                                    ? await runLocalAgentViaBridge(options.providerKey, modelId, options.target!, options.organizationId, callOptions, context)
+                                    : await runLocalAgent(options.providerKey, modelId, callOptions, context, context.chatId ? onProgress : undefined);
+                                flush();
+                                await writes;
+                                if (progressError) throw progressError;
+                                controller.enqueue({ type: 'text-start', id: 'local-agent-final' });
+                                controller.enqueue({ type: 'text-delta', id: 'local-agent-final', delta: result.text });
+                                controller.enqueue({ type: 'text-end', id: 'local-agent-final' });
+                                controller.enqueue({ type: 'finish', usage: usageFromText(prompt, result.text), finishReason: { unified: 'stop', raw: 'stop' } });
+                                controller.close();
+                            } catch (error) {
+                                flush();
+                                await writes;
+                                controller.error(error);
+                            } finally {
+                                if (timer) clearTimeout(timer);
+                            }
+                        },
+                    });
+                    return { stream };
                 },
             };
         },

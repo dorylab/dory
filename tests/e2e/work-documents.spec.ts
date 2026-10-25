@@ -1,3 +1,7 @@
+import type { UIMessage } from 'ai';
+import type { AnalysisScope } from '@dory/shared/types/work-document';
+import type { ChatContext } from '../../apps/web/lib/chat-context/types';
+
 import { expect, type Page } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
@@ -195,7 +199,7 @@ test('Work has explicit multi-source scope without creating an unsolicited repor
     await page.getByPlaceholder('Search Knowledge…').fill('Commerce');
     await page.getByRole('option', { name: 'Commerce', exact: true }).click();
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
-    await expect(page.getByRole('option', { name: /Orders/ }).getByText('Selected', { exact: true })).toBeAttached();
+    await expect(page.getByRole('option', { name: /Orders/ })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('option', { name: /Advertising/ })).toHaveAttribute('aria-checked', 'true');
     await page.getByPlaceholder('Search data sources…').fill('Advertising');
     await expect(page.getByRole('option', { name: /Orders/ })).toHaveCount(0);
@@ -465,7 +469,7 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     await page.keyboard.press('Escape');
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Compare the selected databases');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(() => submitted?.analysisScope).toEqual(scope);
+    await expect.poll(() => submitted?.analysisScope).toEqual({ ...scope, connectionMode: 'manual', knowledgeMode: 'auto' });
     await expect(page.getByText('Both databases received.', { exact: true })).toBeVisible();
     // Search and select the persisted conversation, then reload its URL state.
     await page.getByPlaceholder('Search sessions').fill('Monthly');
@@ -485,7 +489,7 @@ test('global Agent restores per-source databases, manages sessions and adapts to
         document.documentElement.classList.remove('light');
     });
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-conversation-dark.png') });
-    // New conversations preserve the scope; legacy sessions restore activeDatabase.
+    // New conversations default to automatic; legacy sessions restore activeDatabase.
     await page.getByRole('button', { name: 'New session', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Ask anything about your data/ })).toBeVisible();
     await expect(page).toHaveURL(/databases=/);
@@ -513,7 +517,7 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     await expectAppHealthy(appErrors);
 });
 
-test('database loading failures block send and can be retried', async ({ page, appErrors }) => {
+test('automatic databases allow send during loading failures and explicit selections can be retried', async ({ page, appErrors }) => {
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     let failed = true;
     await page.route('**/api/actions/execute', async route => {
@@ -527,13 +531,24 @@ test('database loading failures block send and can be retried', async ({ page, a
     await page.goto(`/${organization}/work?sources=conn-1,missing`);
     await toggleSource(page, 'Unavailable source');
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Inspect data');
-    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Databases', exact: true }).click();
     await expect(page.getByText('Could not load databases')).toBeVisible();
     failed = false;
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Orders: main' })).toBeVisible();
+    await page.getByRole('option', { name: 'Orders: main' }).click();
     await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+    failed = true;
+    await page.reload();
+    await page.getByRole('textbox', { name: /Ask a question/ }).fill('Inspect data');
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Databases', exact: true }).click();
+    await expect(page.getByText('Could not load databases')).toBeVisible();
+    await page.getByRole('option', { name: 'Orders: Auto', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Databases', exact: true })).toHaveText('Auto');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
     await expectAppHealthy(appErrors);
 });
@@ -766,7 +781,8 @@ test('global SQL tools show saved rows and Queries restore the exact source and 
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/work?chat=query-chat`);
-    await page.getByText('Analysis process', { exact: true }).click();
+    await page.getByTestId('chat-analysis-process').locator('summary').first().click();
+    await page.getByTestId('chat-tool-group').locator('summary').first().click();
     const tool = page.getByTestId('chat-tool-activity');
     await tool.getByRole('button', { name: /Query data/ }).click();
     await expect(tool.getByRole('cell', { name: '42', exact: true })).toBeVisible();
@@ -1083,4 +1099,381 @@ test('selecting a different report clears the previous historical revision', asy
     await expect(page.getByRole('heading', { name: 'Another report' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v3');
     await expect(page).not.toHaveURL(/revision=/);
+});
+
+test('Agent references, attachments and per-turn reports survive history without consuming a reply draft', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const session = {
+        id: 'composer-chat',
+        title: 'Composer',
+        type: 'global',
+        connectionId: null,
+        scope: { connectionIds: [connection.connection.id], databasesByConnection: { [connection.connection.id]: 'main' } },
+    };
+    const existingReport = { ...makeDocument(), id: 'existing-report', title: 'Existing report', chatId: 'other-chat', summary: 'Historical context' };
+    let documents: Array<ReturnType<typeof makeDocument> & { sourceMessageId?: string; summary?: string }> = [];
+    let messages: Array<{ id: string; role: string; parts: unknown[]; metadata?: Record<string, unknown> }> = [
+        { id: 'first-question', role: 'user', parts: [{ type: 'text', text: 'Analyze orders' }] },
+        { id: 'first-answer', role: 'assistant', parts: [{ type: 'text', text: 'The initial analysis is complete.' }] },
+    ];
+    const requests: Array<ChatContext & { messages: UIMessage[]; analysisScope: AnalysisScope }> = [];
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({ json: { connections: [{ id: connection.connection.id, name: 'Orders', type: 'postgres' }], models: [], sessions: [session] } }),
+    );
+    await page.route('**/api/chat/session/composer-chat', route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
+    await page.route('**/api/work-documents?*', route =>
+        route.fulfill({ json: { documents: new URL(route.request().url()).searchParams.has('q') ? [existingReport] : documents } }),
+    );
+    await page.route('**/api/work-documents/doc-report*', route =>
+        route.fulfill({ json: { document: documents[0], versions: [{ revision: 1, source: 'agent', createdAt: now }] } }),
+    );
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId } = route.request().postDataJSON();
+        if (actionId === 'schema.listTables')
+            return route.fulfill({
+                json: {
+                    ok: true,
+                    data: {
+                        tables: [
+                            { name: 'public.orders', schema: 'public', label: '订单' },
+                            { name: 'archive.orders', schema: 'archive', label: '订单' },
+                        ],
+                    },
+                },
+            });
+        if (actionId === 'schema.listViews') return route.fulfill({ json: { ok: true, data: { views: [] } } });
+        if (actionId === 'artifact.list')
+            return route.fulfill({
+                json: {
+                    ok: true,
+                    data: { rows: [{ id: 'artifact-reference', title: 'Saved query', type: 'result_set', status: 'ready', connectionName: 'Other source' }], total: 1 },
+                },
+            });
+        return route.fallback();
+    });
+    await page.route('**/api/chat', async route => {
+        const body = route.request().postDataJSON();
+        requests.push(body);
+        const user = body.messages.at(-1);
+        const id = `answer-${requests.length}`;
+        const text = body.outputIntent === 'report' ? 'Your new report is saved.' : 'The follow-up analysis is complete.';
+        if (body.outputIntent === 'report')
+            documents = [{ ...makeDocument(), chatId: session.id, sourceMessageId: body.sourceMessageId ?? user.id, summary: 'Revenue analysis summary.' }];
+        messages = [...body.messages, { id, role: 'assistant', parts: [{ type: 'text', text }], metadata: { userMessageId: user.id } }];
+        const chunks = [
+            { type: 'start', messageId: id, messageMetadata: { userMessageId: user.id } },
+            { type: 'text-start', id: 'text' },
+            { type: 'text-delta', id: 'text', delta: text },
+            { type: 'text-end', id: 'text' },
+            { type: 'finish', finishReason: 'stop' },
+        ];
+        return route.fulfill({
+            contentType: 'text/event-stream',
+            headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
+            body: chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n',
+        });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=${session.id}`);
+    const composer = page.getByTestId('agent-composer');
+    const input = composer.getByRole('textbox');
+    await expect(page.getByRole('button', { name: 'Generate report', exact: true })).toHaveCount(0);
+    await expect(composer.getByRole('button', { name: 'Generate report', exact: true })).toHaveCount(0);
+    await input.fill('@订单');
+    await expect(composer.getByRole('option')).toHaveCount(2);
+    await expect(composer.getByRole('option').first()).toContainText('Orders / main / public');
+    await input.press('Enter');
+    await expect(composer.getByRole('button', { name: 'Remove 订单', exact: true })).toBeVisible();
+    await input.fill('@report');
+    await composer.getByRole('option', { name: /Existing report/ }).click();
+    await input.fill('@artifact');
+    await composer.getByRole('option', { name: /Saved query/ }).click();
+    await input.fill('Summarize the selected context.');
+    await composer
+        .locator('input[type=file]')
+        .first()
+        .setInputFiles({ name: 'context.csv', mimeType: 'text/csv', buffer: Buffer.from('month,revenue\nOctober,42') });
+    await expect(composer.getByText('context.csv', { exact: true })).toBeVisible();
+    await composer.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Report · generate and save' }).click();
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText('Your new report is saved.', { exact: true })).toBeVisible();
+    expect(requests[0].outputIntent).toBe('report');
+    expect(requests[0].references.map((item: { kind: string }) => item.kind)).toEqual(['table', 'report', 'artifact']);
+    expect(requests[0].references[0]).toMatchObject({ connectionId: connection.connection.id, database: 'main', schema: 'public', table: 'public.orders' });
+    expect(requests[0].analysisScope.connectionIds).toEqual([connection.connection.id]);
+    expect(requests[0].messages.at(-1)?.parts.find(part => part.type === 'file')?.url).toMatch(/^\/api\/chat\/attachments\//);
+    await expect(composer.getByRole('button', { name: 'Remove Report' })).toHaveCount(0);
+    const card = page.getByTestId('message-reports').getByRole('button', { name: /Revenue analysis.*Saved/ });
+    await expect(card).toBeVisible();
+    await card.click();
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
+    await page.reload();
+    await expect(card).toBeVisible();
+    await expect(page.getByText('context.csv', { exact: true })).toBeVisible();
+    await input.fill('Ask a follow-up question');
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText('The follow-up analysis is complete.', { exact: true })).toBeVisible();
+    expect(requests[1].outputIntent).toBe('answer');
+    await input.fill('Keep this unsent draft');
+    await expect(page.getByRole('button', { name: 'Generate report', exact: true })).toHaveCount(0);
+    expect(requests.length).toBe(2);
+    await expect(input).toHaveValue('Keep this unsent draft');
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('composer-reports.png'), animations: 'disabled' });
+    await expectAppHealthy(appErrors);
+});
+
+test('automatic sources and knowledge allow attachment-only messages, preserve failed uploads and reset new chats', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [] });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({ json: { connections: [], models: [{ id: 'k', name: 'Shared definitions', connectionIds: [] }], sessions: [] } }),
+    );
+    await page.route('**/api/work-documents**', route => route.fulfill({ json: { documents: [] } }));
+    let uploadFailed = true;
+    let uploads = 0;
+    await page.route('**/api/chat/attachments', route => {
+        uploads += 1;
+        return uploadFailed ? route.fulfill({ status: 400, json: { error: 'Upload interrupted; retry' } }) : route.fallback();
+    });
+    let submitted: { analysisScope: AnalysisScope; messages: UIMessage[] } | undefined;
+    await page.route('**/api/chat', async route => {
+        submitted = route.request().postDataJSON();
+        return route.fulfill({ status: 400, body: 'Model unavailable; draft kept' });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work`);
+    const composer = page.getByTestId('agent-composer');
+    const sources = page.getByRole('button', { name: 'Data sources', exact: true });
+    const knowledge = page.getByRole('button', { name: 'Knowledge', exact: true });
+    await expect(sources).toHaveText('Auto');
+    await expect(knowledge).toHaveText('Auto');
+    await expect(page.getByText('Select at least one data source')).toHaveCount(0);
+    await knowledge.click();
+    await page.getByRole('option', { name: 'Shared definitions', exact: true }).click();
+    await expect(sources).toHaveText('Auto');
+    await knowledge.click();
+    await page.getByRole('option', { name: 'Auto', exact: true }).click();
+    await composer
+        .locator('input[type=file]')
+        .first()
+        .setInputFiles({ name: 'large.csv', mimeType: 'text/csv', buffer: Buffer.from('中文数据\n'.repeat(100000)) });
+    await expect(composer.getByText('large.csv', { exact: true })).toBeVisible();
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(composer.getByText('Upload interrupted; retry')).toBeVisible();
+    expect(submitted).toBeUndefined();
+    uploadFailed = false;
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => submitted?.analysisScope).toMatchObject({ connectionIds: [], connectionMode: 'auto', knowledgeMode: 'auto' });
+    const file = submitted!.messages.at(-1)!.parts.find(part => part.type === 'file')!;
+    expect(file.url).toMatch(/^\/api\/chat\/attachments\//);
+    expect(JSON.stringify(submitted).length).toBeLessThan(10000);
+    await expect(page.getByText('Model unavailable; draft kept')).toBeVisible();
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => uploads).toBe(2);
+    await expect(composer.getByText('large.csv', { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('auto-large-attachment.png'), animations: 'disabled' });
+    await expectAppHealthy(appErrors);
+});
+
+test('automatic table references keep source identity and Knowledge replaces sources with automatic databases', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({
+            json: {
+                connections: [
+                    { id: 'conn-1', name: 'Orders', type: 'postgres' },
+                    { id: 'ads', name: 'Advertising', type: 'postgres' },
+                ],
+                models: [{ id: 'commerce', name: 'Commerce', connectionIds: ['ads'] }],
+                sessions: [],
+            },
+        }),
+    );
+    await page.route('**/api/work-documents**', route => route.fulfill({ json: { documents: [] } }));
+    await page.route('**/api/actions/execute', route => {
+        const { actionId, input } = route.request().postDataJSON();
+        if (actionId === 'schema.listTables')
+            return route.fulfill({
+                json: { ok: true, data: { tables: input.database === 'main' ? [{ name: 'orders', value: 'public.orders', schema: 'public', label: '订单' }] : [] } },
+            });
+        if (actionId === 'schema.listViews') return route.fulfill({ json: { ok: true, data: { views: [] } } });
+        if (actionId === 'artifact.list') return route.fulfill({ json: { ok: true, data: { rows: [] } } });
+        return route.fallback();
+    });
+    let request: { analysisScope: AnalysisScope; references: Array<{ connectionId: string; database: string }> } | undefined;
+    await page.route('**/api/chat', route => {
+        request = route.request().postDataJSON();
+        return route.fulfill({ status: 400, body: 'Test model unavailable' });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work`);
+    const composer = page.getByTestId('agent-composer');
+    await composer.getByRole('textbox').fill('@订单');
+    await expect(composer.getByRole('option')).toHaveCount(2);
+    await composer.getByRole('option', { name: /Advertising/ }).click();
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => request?.references[0]).toMatchObject({ connectionId: 'ads', database: 'main' });
+    expect(request?.analysisScope).toMatchObject({ connectionMode: 'auto', connectionIds: [] });
+    await expect(page.getByText('Test model unavailable')).toBeVisible();
+    await toggleSource(page, 'Orders');
+    await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+    await page.getByRole('option', { name: 'Commerce', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Data sources', exact: true })).toHaveText('Advertising');
+    await expect(page.getByRole('button', { name: 'Databases', exact: true })).toHaveText('Auto');
+    await expectAppHealthy(appErrors);
+});
+
+test('Knowledge linkage resets databases, preserves manual additions, and limits table references', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({
+            json: {
+                connections: [
+                    { id: 'conn-1', name: 'Orders', type: 'postgres', defaultDatabase: 'main' },
+                    { id: 'ads', name: 'Advertising', type: 'postgres' },
+                ],
+                models: [
+                    { id: 'commerce', name: 'Commerce', connectionIds: ['conn-1', 'ads'] },
+                    { id: 'ads-model', name: 'Campaigns', connectionIds: ['ads'] },
+                    { id: 'empty', name: 'General definitions', connectionIds: [] },
+                    { id: 'missing', name: 'Unavailable Knowledge', connectionIds: ['missing'] },
+                    { id: 'excess', name: 'Excess sources', connectionIds: Array.from({ length: 13 }, (_, i) => `source-${i}`) },
+                ],
+                sessions: [],
+            },
+        }),
+    );
+    await page.route('**/api/work-documents**', route => route.fulfill({ json: { documents: [] } }));
+    await page.route('**/api/actions/execute', route => {
+        const { actionId } = route.request().postDataJSON();
+        if (actionId === 'schema.listTables')
+            return route.fulfill({ json: { ok: true, data: { tables: [{ name: 'orders', value: 'public.orders', schema: 'public', label: '订单' }] } } });
+        if (actionId === 'schema.listViews') return route.fulfill({ json: { ok: true, data: { views: [] } } });
+        return route.fallback();
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work`);
+    const sources = page.getByRole('button', { name: 'Data sources', exact: true });
+    const databases = page.getByRole('button', { name: 'Databases', exact: true });
+    const chooseKnowledge = async (name: string) => {
+        await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+        await page.getByRole('option', { name, exact: true }).click();
+    };
+    await toggleSource(page, 'Orders');
+    await expect(databases).toHaveText('Auto');
+    const composer = page.getByTestId('agent-composer');
+    await composer.getByRole('textbox').fill('@table 订单');
+    await expect(composer.getByRole('option')).toHaveCount(2);
+    await composer.getByRole('option', { name: /Orders.*analytics/ }).click();
+    await expect(composer.getByRole('button', { name: 'Remove 订单' })).toBeVisible();
+    await databases.click();
+    await page.getByRole('option', { name: 'Orders: main', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(composer.getByRole('button', { name: 'Remove 订单' })).toHaveCount(0);
+    await composer.getByRole('textbox').fill('@table 订单');
+    await expect(composer.getByRole('option')).toHaveCount(1);
+    await composer.getByRole('textbox').fill('Analyze');
+    await toggleSource(page, 'Advertising');
+    await databases.click();
+    await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Advertising: Auto', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await databases.click();
+    await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Advertising: Auto', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await chooseKnowledge('Commerce');
+    await expect(databases).toHaveText('Auto');
+    await chooseKnowledge('Campaigns');
+    await expect(sources).toHaveText('Advertising');
+    await chooseKnowledge('Auto');
+    await expect(sources).toHaveText('Advertising');
+    await chooseKnowledge('No Knowledge');
+    await expect(sources).toHaveText('Advertising');
+    await chooseKnowledge('General definitions');
+    await expect(sources).toHaveText('Auto');
+    await chooseKnowledge('Unavailable Knowledge');
+    await expect(page.getByRole('alert').filter({ hasText: 'unavailable' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sources).toHaveText('Auto');
+    await chooseKnowledge('Excess sources');
+    await expect(page.getByRole('alert').filter({ hasText: '12' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expectAppHealthy(appErrors);
+});
+
+test('an existing Artifact can be analyzed in chat without saving conclusions, including after reload', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const session = { id: 'artifact-analysis', title: 'Analyze saved orders', type: 'global', connectionId: null, scope: { connectionMode: 'auto', connectionIds: [] } };
+    let messages: Array<{ id: string; role: string; parts: unknown[]; metadata?: Record<string, unknown> }> = [];
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [session] } }));
+    await page.route('**/api/chat/session/artifact-analysis', route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
+    await page.route('**/api/work-documents**', route => route.fulfill({ json: { documents: [] } }));
+    await page.route('**/api/actions/execute', route =>
+        route.request().postDataJSON().actionId === 'artifact.list'
+            ? route.fulfill({
+                  json: { ok: true, data: { rows: [{ id: 'existing-orders', title: 'Orders — total orders', type: 'result_set', status: 'ready', connectionName: 'Orders' }] } },
+              })
+            : route.fallback(),
+    );
+    const metadata = { agentRunId: 'run-orders', requestId: 'orders-turn', summarySaved: false };
+    await page.route('**/api/chat/run-activity?*', route =>
+        route.fulfill({
+            json: {
+                work: { workId: 'run-orders', status: 'completed', metadata: { chatTurn: { requestId: 'orders-turn', outcome: 'completed' } } },
+                events: [{ eventId: 'read-orders', toolName: 'dory_artifacts', status: 'success', inputSummary: { requestId: 'orders-turn', artifactId: 'existing-orders' } }],
+                runHref: '/agent-runs/run-orders',
+                workspaceHref: null,
+            },
+        }),
+    );
+    const answer = '已有查询结果显示订单总数为 42；这是原查询的历史结果。';
+    await page.route('**/api/chat', route => {
+        const body = route.request().postDataJSON();
+        expect(body.outputIntent).toBe('answer');
+        expect(body.references).toEqual([{ kind: 'artifact', id: 'existing-orders', title: 'Orders — total orders' }]);
+        messages = [
+            ...body.messages.slice(0, -1),
+            { ...body.messages.at(-1), metadata: { references: body.references } },
+            { id: 'orders-answer', role: 'assistant', parts: [{ type: 'text', text: answer }], metadata },
+        ];
+        const chunks = [
+            { type: 'start', messageId: 'orders-answer', messageMetadata: metadata },
+            { type: 'text-start', id: 'answer' },
+            { type: 'text-delta', id: 'answer', delta: answer },
+            { type: 'text-end', id: 'answer' },
+            { type: 'finish', finishReason: 'stop' },
+        ];
+        return route.fulfill({
+            contentType: 'text/event-stream',
+            headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
+            body: chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n',
+        });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=${session.id}`);
+    const composer = page.getByTestId('agent-composer');
+    await composer.getByRole('textbox').fill('@artifact');
+    await composer.getByRole('option', { name: /Orders — total orders/ }).click();
+    await composer.getByRole('textbox').fill('帮我分析这个查询结果');
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText(answer, { exact: true })).toBeVisible();
+    await page.getByTestId('chat-analysis-process').locator('summary').first().click();
+    await expect(page.locator('[data-tool-name="readArtifact"]')).toHaveCount(1);
+    await expect(page.locator('[data-tool-name="finishAnalysis"]')).toHaveCount(0);
+    await expect(page.getByText('Conclusions are not fully saved.', { exact: false })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText(answer, { exact: true })).toBeVisible();
+    await expect(page.getByText('@Orders — total orders', { exact: true })).toBeVisible();
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('artifact-analysis-without-saving.png') });
+    await expect(page.locator('[data-tool-name="finishAnalysis"]')).toHaveCount(0);
+    await expectAppHealthy(appErrors);
 });

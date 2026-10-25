@@ -4866,6 +4866,9 @@
             "KnowledgeResults": "Found {count} Knowledge candidates",
             "SourceRevision": "Source revision · {revision}",
             "Process": "Analysis process",
+            "ProcessCompleted": "Worked",
+            "ActionCount": "{count, plural, one {# action} other {# actions}}",
+            "OtherActivity": "Other activity",
             "Analyzing": "Analyzing…",
             "ResultUnavailable": "The saved result is unavailable. Open the Agent Run or SQL workspace to inspect it.",
             "SearchQuery": "Search: {query}",
@@ -4873,6 +4876,10 @@
             "RecordedStep": "Recorded tool activity.",
             "StepInterrupted": "This step did not finish. Available results are retained.",
             "Tools": {
+                "ReadResult": "Read query result",
+                "ReadFile": "Read attachment",
+                "SearchFiles": "Search attachments",
+                "ListSources": "List data sources",
                 "SaveConclusions": "Save conclusions",
                 "QueryData": "Query data",
                 "RunTool": "Run {name}",
@@ -4894,6 +4901,18 @@
                 "Rows": "Rows",
                 "Results": "Results",
                 "Action": "Action"
+            },
+            "WorkedFor": "Worked for {duration}",
+            "Groups": {
+                "ReadKnowledge": "Read {count, plural, one {# knowledge source} other {# knowledge sources}}",
+                "SearchKnowledge": "Searched knowledge {count} times",
+                "ExploreSchema": "Explored {count, plural, one {# schema} other {# schemas}}",
+                "QueryData": "Queried data {count} times",
+                "ReadResults": "Read {count, plural, one {# result} other {# results}}",
+                "ListSources": "Checked data sources {count} times",
+                "BuildCharts": "Created {count, plural, one {# chart} other {# charts}}",
+                "ReadFiles": "Read {count, plural, one {# file} other {# files}}",
+                "SearchFiles": "Searched files {count} times"
             }
         }
     },
@@ -5492,7 +5511,9 @@
             "Unavailable": "The saved database is unavailable. Select another database.",
             "CheckDatabases": "Check database selections",
             "ChooseSources": "Select at least one data source",
-            "UnavailableSource": "Unavailable source ({id})"
+            "UnavailableSource": "Unavailable source ({id})",
+            "Auto": "Auto",
+            "KnowledgeSourcesUnavailable": "A data source linked to this Knowledge is unavailable. Update its sources and try again."
         },
         "Resources": {
             "NoArtifacts": "No artifacts yet.",
@@ -5535,5 +5556,44 @@
         },
         "GenerateFailed": "Unable to generate report.",
         "Reports": "Reports"
+    },
+    "ChatComposer": {
+        "Add": "Add",
+        "AddFiles": "Add files",
+        "AddFolder": "Add folder",
+        "ReportMode": "Report · generate and save",
+        "Remove": "Remove {name}",
+        "Question": "Ask a question or request a report…",
+        "Placeholder": "Ask a question, @ mention a resource, or describe a report…",
+        "References": "References",
+        "ReferenceLimit": "You can reference up to 20 resources.",
+        "Loading": "Loading…",
+        "SearchFailed": "Unable to load some references.",
+        "Retry": "Retry",
+        "NoReferences": "No matching resources. Select a data source to mention tables.",
+        "Kinds": {
+            "table": "Tables",
+            "report": "Reports",
+            "artifact": "Artifacts"
+        },
+        "CurrentChat": "Current chat",
+        "ReadFailed": "Unable to read the selected files.",
+        "SendFailed": "Unable to send. Your draft is preserved.",
+        "Stop": "Stop",
+        "Send": "Send",
+        "ReportPrompt": "Create and save a new report based on this conversation and the attached context.",
+        "AttachmentPrompt": "Please analyze the attached files and references.",
+        "GenerateReport": "Generate report",
+        "RetryReport": "Retry report",
+        "Generating": "Generating report…",
+        "Saved": "Saved",
+        "Incomplete": "Incomplete",
+        "OpenReport": "Open report",
+        "AttachmentErrors": {
+            "unsupported": "Unsupported file: {filename}. Choose TXT, Markdown, SQL, JSON, CSV, TSV, PNG, JPEG or WebP.",
+            "limit": "Attachment exceeds limits: {filename} ({size} MiB). Up to 20 files, 10 MiB per file, 100 MiB per message.",
+            "imagesUnsupported": "This model channel does not support images ({filename}). Switch to an image-capable model or remove the image.",
+            "invalid": "Unable to read {filename}. Select a valid UTF-8 text file or a supported image."
+        }
     }
 }

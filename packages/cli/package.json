@@ -55,6 +55,7 @@
     },
     "devDependencies": {
         "@dory/server-core": "0.1.0",
+        "@dory/shared": "0.1.0",
         "@types/node": "^25.5.2",
         "@types/pg": "^8.20.0",
         "esbuild": "^0.28.1",

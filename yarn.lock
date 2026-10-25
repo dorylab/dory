@@ -3989,6 +3989,7 @@ __metadata:
   resolution: "@getdory/cli@workspace:packages/cli"
   dependencies:
     "@dory/server-core": "npm:0.1.0"
+    "@dory/shared": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
     "@modelcontextprotocol/sdk": "npm:^1.29.0"

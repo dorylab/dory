@@ -13,7 +13,11 @@ export const GET = withUserAndOrganizationHandler(async ({ req, db, userId, orga
     return Response.json(
         {
             work,
-            events: events.filter(event => !requestId || event.inputSummary?.requestId === requestId).reverse(),
+            checkpoints: events.find(event => event.toolName === 'chat_checkpoints' && event.inputSummary?.requestId === requestId)?.outputSummary?.state ?? null,
+            progress: events.find(event => event.toolName === 'chat_progress' && event.inputSummary?.requestId === requestId)?.outputSummary?.entries ?? [],
+            events: events
+                .filter(event => !['chat_progress', 'chat_checkpoints'].includes(event.toolName) && (!requestId || event.inputSummary?.requestId === requestId))
+                .reverse(),
             runHref: `/${encodeURIComponent(organizationId)}/agent-runs/${encodeURIComponent(workId)}`,
             workspaceHref: work.connectionId ? buildAgentWorkspacePath({ organization: organizationId, workId, connectionId: work.connectionId }) : null,
         },

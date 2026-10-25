@@ -94,8 +94,18 @@ test('Codex Agent bridge runs claimed jobs with Dory MCP config', async () => {
             return jsonResponse({ bridge: { id: 'bridge-1', provider: 'codex-agent', name: 'Test Bridge' } });
         }
         if (String(url).endsWith('/api/mcp/local-ai/jobs/claim')) {
-            return jsonResponse({ job: { id: 'job-1', provider: 'codex-agent', model: 'default', prompt: 'query users' } });
+            return jsonResponse({
+                job: {
+                    id: 'job-1',
+                    provider: 'codex-agent',
+                    model: 'default',
+                    prompt: 'query users',
+                    agentTurn: { workId: 'work-1', requestId: 'turn-1' },
+                    progressSupported: true,
+                },
+            });
         }
+        if (String(url).endsWith('/api/mcp/local-ai/jobs/job-1/progress')) return jsonResponse({ ok: true });
         if (String(url).endsWith('/api/mcp/local-ai/jobs/job-1/complete')) {
             return jsonResponse({ ok: true });
         }
@@ -109,7 +119,8 @@ test('Codex Agent bridge runs claimed jobs with Dory MCP config', async () => {
         configPath,
         fetchFn,
         maxJobs: 1,
-        runCodexAgentFn: async (model, prompt, config) => {
+        runCodexAgentFn: async (model, prompt, config, onProgress) => {
+            onProgress?.({ id: 'message-1', sequence: 0, revision: 1, kind: 'text', text: 'Checking sources', phase: 'commentary' });
             runCalls.push({ model, prompt, config });
             return {
                 text: 'done',
@@ -119,18 +130,25 @@ test('Codex Agent bridge runs claimed jobs with Dory MCP config', async () => {
         },
     });
 
+    const progress = requests.findIndex(request => request.url.endsWith('/progress'));
+    const completion = requests.findIndex(request => request.url.endsWith('/complete'));
+    assert.ok(progress >= 0 && progress < completion);
+    assert.equal(requests[progress].body.requestId, 'turn-1');
+    assert.equal(requests[progress].body.entries[0].text, 'Checking sources');
     assert.equal(runCalls.length, 1);
     assert.equal(runCalls[0].model, 'default');
     assert.equal(runCalls[0].prompt, 'query users');
     assert.equal(runCalls[0].config.endpoint, 'https://dory.test/api/mcp');
     assert.equal(runCalls[0].config.auth.token, 'dory_mcp_secret_token');
     assert.ok(runCalls[0].config.enabledTools.includes('dory_run_readonly_sql'));
+    assert.ok(runCalls[0].config.enabledTools.includes('dory_publish_progress'));
 
     const register = requests.find(request => request.url.endsWith('/api/mcp/local-ai/bridges/register'));
     assert.ok(register);
     assert.equal(register.authorization, 'Bearer dory_mcp_secret_token');
     assert.equal(register.body.capabilities.doryMcpTools, true);
-    assert.equal(register.body.capabilities.localAiBridgeProtocol, 2);
+    assert.equal(register.body.capabilities.localAiBridgeProtocol, 3);
+    assert.equal(register.body.capabilities.chatCheckpoints, 1);
 
     const complete = requests.find(request => request.url.endsWith('/api/mcp/local-ai/jobs/job-1/complete'));
     assert.ok(complete);

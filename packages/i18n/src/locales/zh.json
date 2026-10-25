@@ -4870,6 +4870,9 @@
             "KnowledgeResults": "找到 {count} 个候选知识来源",
             "SourceRevision": "来源版本 · {revision}",
             "Process": "分析过程",
+            "ProcessCompleted": "执行过程",
+            "ActionCount": "{count} 个动作",
+            "OtherActivity": "其他执行记录",
             "Analyzing": "正在分析…",
             "ResultUnavailable": "已保存的结果暂不可用，可在 Agent Run 或 SQL 工作区中查看。",
             "SearchQuery": "检索词：{query}",
@@ -4877,6 +4880,10 @@
             "RecordedStep": "已记录此次工具调用。",
             "StepInterrupted": "此步骤未完成，已有结果已保留。",
             "Tools": {
+                "ReadResult": "读取查询结果",
+                "ReadFile": "读取附件",
+                "SearchFiles": "搜索附件",
+                "ListSources": "查看数据源",
                 "SaveConclusions": "保存结论",
                 "QueryData": "查询数据",
                 "RunTool": "调用 {name}",
@@ -4898,6 +4905,18 @@
                 "Rows": "结果行数",
                 "Results": "结果数",
                 "Action": "操作"
+            },
+            "WorkedFor": "Worked for {duration}",
+            "Groups": {
+                "ReadKnowledge": "阅读 {count} 个知识来源",
+                "SearchKnowledge": "检索 {count} 次知识",
+                "ExploreSchema": "已探索 {count} 个 schema",
+                "QueryData": "查询 {count} 次数据",
+                "ReadResults": "阅读 {count} 个结果",
+                "ListSources": "查看 {count} 次数据源",
+                "BuildCharts": "生成 {count} 个图表",
+                "ReadFiles": "阅读 {count} 个文件",
+                "SearchFiles": "搜索 {count} 次文件"
             }
         }
     },
@@ -5496,7 +5515,9 @@
             "Unavailable": "已保存的数据库不可用，请重新选择。",
             "CheckDatabases": "请检查数据库选择",
             "ChooseSources": "请至少选择一个数据源",
-            "UnavailableSource": "不可用的数据源（{id}）"
+            "UnavailableSource": "不可用的数据源（{id}）",
+            "Auto": "自动",
+            "KnowledgeSourcesUnavailable": "此知识关联的数据源已失效或不可访问，请更新知识关联后重试。"
         },
         "Resources": {
             "NoArtifacts": "暂无查询产物。",
@@ -5539,5 +5560,44 @@
         },
         "GenerateFailed": "生成报告失败。",
         "Reports": "报告"
+    },
+    "ChatComposer": {
+        "Add": "添加",
+        "AddFiles": "添加文件",
+        "AddFolder": "添加文件夹",
+        "ReportMode": "Report · 生成并保存",
+        "Remove": "移除 {name}",
+        "Question": "提出问题，或描述你需要的报告…",
+        "Placeholder": "提出问题，@ 引用资源，或描述需要的报告…",
+        "References": "引用资源",
+        "ReferenceLimit": "最多引用 20 个资源。",
+        "Loading": "加载中…",
+        "SearchFailed": "部分引用资源加载失败。",
+        "Retry": "重试",
+        "NoReferences": "没有匹配的资源。选择数据源后可引用表。",
+        "Kinds": {
+            "table": "数据表",
+            "report": "报告",
+            "artifact": "产物"
+        },
+        "CurrentChat": "当前对话",
+        "ReadFailed": "无法读取所选文件。",
+        "SendFailed": "发送失败，草稿已保留。",
+        "Stop": "停止",
+        "Send": "发送",
+        "ReportPrompt": "根据当前对话和附加上下文，生成并保存一份新报告。",
+        "AttachmentPrompt": "请分析附加的文件和引用资源。",
+        "GenerateReport": "生成报告",
+        "RetryReport": "重试生成报告",
+        "Generating": "正在生成报告…",
+        "Saved": "已保存",
+        "Incomplete": "未完成",
+        "OpenReport": "打开报告",
+        "AttachmentErrors": {
+            "unsupported": "不支持文件 {filename}。请选择 TXT、Markdown、SQL、JSON、CSV、TSV、PNG、JPEG 或 WebP。",
+            "limit": "附件超出限制：{filename}（{size} MiB）。最多 20 个文件，单文件 10 MiB，每轮合计 100 MiB。",
+            "imagesUnsupported": "当前模型通道不支持图片（{filename}）。请切换支持图片的模型或移除图片。",
+            "invalid": "无法读取 {filename}。请选择有效的 UTF-8 文本文件或支持的图片。"
+        }
     }
 }

@@ -13,7 +13,7 @@ import type { SqlResultBodyProps } from '@/components/@dory/ui/ai/sql-result/typ
 import { Tool, ToolContent, ToolHeader } from '@/components/ai-elements/tool';
 
 export type ChatMessageToolRow = ChatMessageTool & {
-    title: string;
+    title?: string;
     state: ChatToolState;
     content: ReactNode;
     input?: unknown;
@@ -148,7 +148,7 @@ function RecordedToolDetail({ activity, open, workId, ...actions }: SqlActions &
             </div>
         );
     }
-    if (activity.toolName === 'finishAnalysis' && event?.status === 'success') return <p>{t('Chat.ConclusionsSaved')}</p>;
+    if (activity.toolName === 'finishAnalysis' && event?.status === 'success' && !input.report) return <p>{t('Chat.ConclusionsSaved')}</p>;
     const fields = [
         ['Database', input.database],
         ['Table', input.table],
@@ -174,6 +174,37 @@ function RecordedToolDetail({ activity, open, workId, ...actions }: SqlActions &
     );
 }
 
+export function getChatToolActivityTitle(activity: ChatToolActivity<ChatMessageToolRow>, t: ReturnType<typeof useTranslations<'AgentRuns'>>) {
+    const key = getAgentActivityTitleKey(activity.toolName);
+    const mcpReport = activity.toolName === 'finishAnalysis' ? (activity.events.at(-1)?.inputSummary?.report as { read?: boolean; documentId?: string } | undefined) : undefined;
+    const directTitles = {
+        readArtifact: 'ReadResult',
+        readAttachment: 'ReadFile',
+        searchAttachment: 'SearchFiles',
+        dory_read_attachment: 'ReadFile',
+        dory_search_attachment: 'SearchFiles',
+        listConnections: 'ListSources',
+    } as const;
+    const directTitle = directTitles[activity.toolName as keyof typeof directTitles];
+    if (directTitle) return t(`Chat.Tools.${directTitle}`);
+    const reportTitle = mcpReport
+        ? mcpReport.read
+            ? 'ReadWork'
+            : mcpReport.documentId
+              ? 'UpdateWork'
+              : 'CreateWork'
+        : ({ createWorkReport: 'CreateWork', readWorkReport: 'ReadWork', updateWorkReport: 'UpdateWork' } as const)[
+              activity.toolName as 'createWorkReport' | 'readWorkReport' | 'updateWorkReport'
+          ];
+    return reportTitle
+        ? t(`Chat.Tools.${reportTitle}`)
+        : activity.toolName === 'finishAnalysis'
+          ? t('Chat.Tools.SaveConclusions')
+          : activity.toolName === 'sqlRunner'
+            ? t('Chat.Tools.QueryData')
+            : (activity.message?.title ?? (key ? t(`Timeline.Titles.${key}`) : t('Chat.Tools.RunTool', { name: activity.toolName.replace(/^dory_/, '').replaceAll('_', ' ') })));
+}
+
 function ChatToolActivityRow({ activity, workId, ended, ...actions }: SqlActions & { activity: ChatToolActivity<ChatMessageToolRow>; workId?: string; ended: boolean }) {
     const t = useTranslations('AgentRuns');
     const [open, setOpen] = useState(false);
@@ -181,18 +212,8 @@ function ChatToolActivityRow({ activity, workId, ended, ...actions }: SqlActions
     const state = chatToolActivityState(activity, message?.state);
     const interrupted = ended && (state === 'input-available' || state === 'input-streaming');
     const noResults = state === 'output-available' && activity.toolName === 'search_assets' && (message?.noResults || activity.events.at(-1)?.outputSummary?.resultCount === 0);
-    const key = getAgentActivityTitleKey(activity.toolName);
-    const reportTitle = ({ createWorkReport: 'CreateWork', readWorkReport: 'ReadWork', updateWorkReport: 'UpdateWork' } as const)[
-        activity.toolName as 'createWorkReport' | 'readWorkReport' | 'updateWorkReport'
-    ];
-    const title = reportTitle
-        ? t(`Chat.Tools.${reportTitle}`)
-        : activity.toolName === 'finishAnalysis'
-          ? t('Chat.Tools.SaveConclusions')
-          : activity.toolName === 'sqlRunner'
-            ? t('Chat.Tools.QueryData')
-            : (message?.title ?? (key ? t(`Timeline.Titles.${key}`) : t('Chat.Tools.RunTool', { name: activity.toolName.replace(/^dory_/, '').replaceAll('_', ' ') })));
-    const messageHasDetails = message && (state === message.state || ['output-available', 'output-error', 'output-denied'].includes(message.state));
+    const title = getChatToolActivityTitle(activity, t);
+    const messageHasDetails = message && message.content != null && (state === message.state || ['output-available', 'output-error', 'output-denied'].includes(message.state));
     const label = interrupted
         ? 'Interrupted'
         : noResults
@@ -235,12 +256,13 @@ function ChatToolActivityRow({ activity, workId, ended, ...actions }: SqlActions
 
 export function ChatToolActivityList({
     events = [],
+    activities,
     tools,
     workId,
     ended = false,
     ...actions
-}: SqlActions & { events?: AgentRunEventLike[]; tools: ChatMessageToolRow[]; workId?: string; ended?: boolean }) {
-    const rows = mergeChatToolActivities(events, tools);
+}: SqlActions & { activities?: ChatToolActivity<ChatMessageToolRow>[]; events?: AgentRunEventLike[]; tools: ChatMessageToolRow[]; workId?: string; ended?: boolean }) {
+    const rows = activities ?? mergeChatToolActivities(events, tools);
     return (
         <div className="space-y-1">
             {rows.map(activity => (

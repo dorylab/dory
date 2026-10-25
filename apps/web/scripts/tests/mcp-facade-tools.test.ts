@@ -329,11 +329,14 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
             'dory_finish_work',
             'dory_get_schema_graph',
             'dory_list_connections',
+            'dory_publish_progress',
             'dory_read',
             'dory_read_asset',
+            'dory_read_attachment',
             'dory_run_readonly_sql',
             'dory_saved_queries',
             'dory_search_assets',
+            'dory_search_attachment',
             'dory_workspace_tabs',
             'dory_write',
         ],
@@ -1791,4 +1794,10 @@ test('MCP Artifact previews read persisted rows within the authorized organizati
     assert.deepEqual(readInputs, [{ organizationId: 'org-1', resultSetId: 'rs-1', offset: 0, limit: 20 }]);
     await assert.rejects(() => getTool('dory_artifacts').execute(createContext(services, []), { artifactId: 'artifact-1' }));
     assert.equal(readInputs.length, 1, 'Missing query scope must fail before reading rows.');
+});
+
+test('MCP cannot create server-owned chat evidence or save state through metadata', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({ db: { works } as any });
+    await assertRejectsCode(() => getTool('dory_create_work').execute(ctx, { metadata: { source: 'internal_chat', chatTurn: { evidence: { forged: {} } } } }), 'RESERVED_METADATA');
 });

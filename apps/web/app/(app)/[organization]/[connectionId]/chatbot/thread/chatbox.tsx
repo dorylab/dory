@@ -1,6 +1,11 @@
 'use client';
 
-import { ChatWorkLinks } from '@/components/work-documents/chat-work-links';
+import { AgentComposer } from '@/components/work-documents/agent-composer';
+import { AgentMessageReports, useChatReports } from '@/components/work-documents/agent-message-reports';
+import { WorkReport, type WorkReportHandle } from '@/components/work-documents/work-report';
+import type { ChatSubmission } from '@/lib/chat-context/types';
+import { Sheet, SheetContent, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
+import { parseAsString, useQueryState } from 'nuqs';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -17,18 +22,17 @@ import type { SqlResultManualExecutionMode } from '@/components/@dory/ui/ai/sql-
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Loader } from '@/components/ai-elements/loader';
 
-import { PromptInput, PromptInputBody, PromptInputSubmit, PromptInputTextarea, PromptInputFooter, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
+import { PromptInput, PromptInputBody, PromptInputSubmit, PromptInputTextarea, PromptInputFooter } from '@/components/ai-elements/prompt-input';
 
 import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
 
 import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/shared/stores/app.store';
-import { useTables } from '@/hooks/use-tables';
 
 import MessageRenderer from './message-render';
-import { TableMentionTextarea } from './table-mention-textarea';
+
 import { getSqlResultFromPart, getChartResultFromPart } from '../core/utils';
 import { getSidebarConfig } from '../../../components/sql-console-sidebar/sidebar-config';
-import { getSchemaName } from '../../../components/sql-console-sidebar/utils';
+
 import { CopilotActionExecutor } from '../copilot/action-bridge';
 import { apiGetOrCreateCopilotSession } from '../core/api';
 import { DatabaseSchemaSelect } from '../components/database-schema-select';
@@ -38,7 +42,7 @@ type ChatBotCompProps = {
     initialMessages: UIMessage[];
     onConversationActivity?: () => void;
     onSessionCreated?: (sessionId: string) => void;
-    initialPrompt?: string | null;
+    initialPrompt?: string | ChatSubmission | null;
     onInitialPromptConsumed?: () => void;
 
     mode?: 'global' | 'copilot';
@@ -90,7 +94,8 @@ const ChatBotComp = ({
     const t = useTranslations('Chatbot');
 
     const [input, setInput] = useState('');
-    const [webSearch, setWebSearch] = useState(false);
+    const [failedInitialDraft, setFailedInitialDraft] = useState<ChatSubmission | null>(null);
+    const [webSearch] = useState(false);
     const restoredSessionRef = useRef<string | null>(null);
     const scrollPositionsRef = useRef<Map<string, number>>(new Map());
     const stickToBottomContextRef = useRef<StickToBottomContext | null>(null);
@@ -100,17 +105,25 @@ const ChatBotComp = ({
     const currentConnection = useAtomValue(currentConnectionAtom);
     const sidebarConfig = useMemo(() => getSidebarConfig(currentConnection?.connection?.type), [currentConnection?.connection?.type]);
 
-    const { tables } = useTables(activeDatabase);
+    const [reportId, setReportId] = useQueryState('report', parseAsString);
+    const [editingReport, setEditingReport] = useState(false);
+    const reportRef = useRef<WorkReportHandle>(null);
+    const sendFailed = useRef(false);
 
     const [selectedTable, setSelectedTable] = useState<string>('');
 
     const tabId = mode === 'copilot' ? (copilotEnvelope?.meta?.tabId ?? 'unknown') : null;
     const chatStateId = mode === 'copilot' ? `copilot:${tabId}` : (sessionId ?? 'global');
 
-    const { messages, sendMessage, status, error, setMessages } = useChat({
+    const { messages, sendMessage, status, error, setMessages, stop } = useChat({
         id: chatStateId,
+        onError: () => {
+            sendFailed.current = true;
+        },
     });
 
+    const busy = status === 'submitted' || status === 'streaming';
+    const reports = useChatReports(params.organization, sessionId ?? null, busy);
     const appliedInitialRef = useRef<string | null>(null);
     const sessionRef = useRef<string>(chatStateId);
     const activityRef = useRef(false);
@@ -276,22 +289,6 @@ const ChatBotComp = ({
         initialPromptSubmittedRef.current = false;
     }, [chatStateId, initialPrompt]);
 
-    useEffect(() => {
-        if (initialPrompt && !initialPromptSubmittedRef.current && status === 'ready') {
-            const promptKey = `${mode}:${chatStateId}:${initialPrompt}`;
-            if (submittedInitialPromptKeys.has(promptKey)) {
-                initialPromptSubmittedRef.current = true;
-                onInitialPromptConsumed?.();
-                return;
-            }
-
-            initialPromptSubmittedRef.current = true;
-            submittedInitialPromptKeys.add(promptKey);
-            onInitialPromptConsumed?.();
-            handleSubmit({ text: initialPrompt, files: [] });
-        }
-    }, [chatStateId, initialPrompt, mode, onInitialPromptConsumed, status]);
-
     const handleCopySql = useCallback(
         async (sql: string) => {
             try {
@@ -331,112 +328,175 @@ const ChatBotComp = ({
         [router, t, params, currentConnection],
     );
 
-    const mentionTables = useMemo(() => {
-        return (tables ?? []).filter(table => {
-            if (!sidebarConfig.supportsSchemas || !activeSchema) {
-                return true;
-            }
-
-            const tableName = (table as any).name ?? (table as any).value ?? (table as any).label ?? '';
-            return getSchemaName(tableName, sidebarConfig) === activeSchema;
-        });
-    }, [activeSchema, sidebarConfig, tables]);
-
     const resolvedActiveDatabase = activeDatabase || currentConnection?.connection?.database || null;
     const resolvedActiveSchema = sidebarConfig.supportsSchemas ? activeSchema || (resolvedActiveDatabase ? (sidebarConfig.defaultSchemaName ?? null) : null) : null;
 
-    const submitPrompt = async (message: PromptInputMessage) => {
-        const hasText = Boolean(message.text);
-        const hasAttachments = Boolean(message.files?.length);
-        if (!(hasText || hasAttachments)) return;
-        if (submitInFlightRef.current || status === 'submitted' || status === 'streaming') return;
-        submitInFlightRef.current = true;
-        let didSend = false;
+    const submitPrompt = useCallback(
+        async (message: ChatSubmission) => {
+            const hasText = Boolean(message.text);
+            const hasAttachments = Boolean(message.files?.length);
+            if (!(hasText || hasAttachments) || editingReport) return false;
+            if (submitInFlightRef.current || status === 'submitted' || status === 'streaming') return false;
+            submitInFlightRef.current = true;
+            let didSend = false;
+            sendFailed.current = false;
 
-        try {
-            const tabId = mode === 'copilot' ? (copilotEnvelope?.meta?.tabId ?? null) : null;
-            if (mode === 'copilot' && !tabId) return;
-            const connectionId = copilotEnvelope?.meta?.connectionId ?? params?.connectionId ?? currentConnection?.connection?.id ?? null;
+            try {
+                const tabId = mode === 'copilot' ? (copilotEnvelope?.meta?.tabId ?? null) : null;
+                if (mode === 'copilot' && !tabId) return;
+                const connectionId = copilotEnvelope?.meta?.connectionId ?? params?.connectionId ?? currentConnection?.connection?.id ?? null;
 
-            const databaseForContext =
-                mode === 'copilot'
-                    ? copilotEnvelope?.surface === 'sql'
-                        ? (copilotEnvelope.context.baseline.database ?? resolvedActiveDatabase)
-                        : (copilotEnvelope?.context?.database ?? resolvedActiveDatabase)
-                    : resolvedActiveDatabase;
-            const schemaForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.schema ?? null) : null) : resolvedActiveSchema;
+                const databaseForContext =
+                    mode === 'copilot'
+                        ? copilotEnvelope?.surface === 'sql'
+                            ? (copilotEnvelope.context.baseline.database ?? resolvedActiveDatabase)
+                            : (copilotEnvelope?.context?.database ?? resolvedActiveDatabase)
+                        : resolvedActiveDatabase;
+                const schemaForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.schema ?? null) : null) : resolvedActiveSchema;
 
-            const tableForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.name ?? null) : null) : selectedTable || null;
+                const tableForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.name ?? null) : null) : selectedTable || null;
 
-            let chatIdForRequest = sessionId ?? null;
-            if (mode === 'copilot' && !chatIdForRequest) {
-                try {
-                    const session = await apiGetOrCreateCopilotSession({
-                        envelope: copilotEnvelope ?? null,
-                        errorMessage: t('Errors.FetchCopilotSession'),
-                    });
-                    chatIdForRequest = session.id;
-                    onSessionCreated?.(session.id);
-                } catch (err: any) {
-                    console.error('[chat] create copilot session failed', err);
-                    toast.error(err?.message || t('Errors.CreateCopilotSession'));
-                    return;
+                let chatIdForRequest = sessionId ?? null;
+                if (mode === 'copilot' && !chatIdForRequest) {
+                    try {
+                        const session = await apiGetOrCreateCopilotSession({
+                            envelope: copilotEnvelope ?? null,
+                            errorMessage: t('Errors.FetchCopilotSession'),
+                        });
+                        chatIdForRequest = session.id;
+                        onSessionCreated?.(session.id);
+                    } catch (err: any) {
+                        console.error('[chat] create copilot session failed', err);
+                        toast.error(err?.message || t('Errors.CreateCopilotSession'));
+                        return;
+                    }
+                }
+
+                posthog.capture('chat_message_sent', {
+                    mode,
+                    has_attachments: Boolean(message.files?.length),
+                    has_table_context: Boolean(tableForContext),
+                    connection_id: connectionId,
+                });
+
+                const requestOptions = {
+                    body: {
+                        webSearch,
+                        database: databaseForContext,
+                        activeSchema: schemaForContext,
+                        table: tableForContext,
+                        connectionId,
+                        connectionType: currentConnection?.connection?.type ?? null,
+                        mode,
+                        tabId,
+                        copilotEnvelope,
+                        chatId: chatIdForRequest,
+                        references: message.references,
+                        outputIntent: message.outputIntent,
+                        sourceMessageId: message.sourceMessageId,
+                    },
+                };
+
+                await sendMessage(
+                    {
+                        id: message.id ?? crypto.randomUUID(),
+                        messageId: message.id && messages.some(item => item.id === message.id) ? message.id : undefined,
+                        role: 'user',
+                        parts: [{ type: 'text', text: message.text || t('Input.SentWithAttachments') }, ...message.files],
+                        metadata: { references: message.references, outputIntent: message.outputIntent, sourceMessageId: message.sourceMessageId },
+                    },
+                    requestOptions,
+                );
+                didSend = true;
+
+                if (mode === 'copilot') setInput('');
+                return !sendFailed.current;
+            } finally {
+                if (!didSend) {
+                    submitInFlightRef.current = false;
                 }
             }
+        },
+        [
+            editingReport,
+            status,
+            mode,
+            copilotEnvelope,
+            params?.connectionId,
+            currentConnection,
+            resolvedActiveDatabase,
+            resolvedActiveSchema,
+            selectedTable,
+            sessionId,
+            onSessionCreated,
+            t,
+            webSearch,
+            sendMessage,
+            messages,
+        ],
+    );
 
-            posthog.capture('chat_message_sent', {
-                mode,
-                has_attachments: Boolean(message.files?.length),
-                has_table_context: Boolean(tableForContext),
-                connection_id: connectionId,
-            });
-
-            const requestOptions = {
-                body: {
-                    webSearch,
-                    database: databaseForContext,
-                    activeSchema: schemaForContext,
-                    table: tableForContext,
-                    connectionId,
-                    connectionType: currentConnection?.connection?.type ?? null,
-                    mode,
-                    tabId,
-                    copilotEnvelope,
-                    chatId: chatIdForRequest,
-                },
-            };
-
-            sendMessage({ text: message.text || t('Input.SentWithAttachments'), files: message.files }, requestOptions);
-            didSend = true;
-
-            setInput('');
-        } finally {
-            if (!didSend) {
-                submitInFlightRef.current = false;
+    const handleSubmit = useCallback(async (message: ChatSubmission) => submitPrompt(message), [submitPrompt]);
+    useEffect(() => {
+        if (initialPrompt && !initialPromptSubmittedRef.current && status === 'ready') {
+            const promptKey = `${mode}:${chatStateId}:${typeof initialPrompt === 'string' ? initialPrompt : initialPrompt.id}`;
+            if (submittedInitialPromptKeys.has(promptKey)) {
+                initialPromptSubmittedRef.current = true;
+                onInitialPromptConsumed?.();
+                return;
             }
-        }
-    };
 
-    const handleSubmit = async (message: PromptInputMessage) => {
-        await submitPrompt(message);
+            initialPromptSubmittedRef.current = true;
+            submittedInitialPromptKeys.add(promptKey);
+            onInitialPromptConsumed?.();
+            const submission = typeof initialPrompt === 'string' ? { text: initialPrompt, files: [] } : initialPrompt;
+            void handleSubmit(submission).then(sent => {
+                if (sent === false && mode === 'global') setFailedInitialDraft(submission);
+            });
+        }
+    }, [chatStateId, initialPrompt, mode, onInitialPromptConsumed, status, handleSubmit]);
+
+    const reportT = useTranslations('WorkDocuments');
+    const scopeConnection = params.connectionId ?? currentConnection?.connection?.id;
+    const composerScope = {
+        connectionIds: scopeConnection ? [scopeConnection] : [],
+        databasesByConnection: scopeConnection && resolvedActiveDatabase ? { [scopeConnection]: resolvedActiveDatabase } : {},
     };
+    const runIds = [
+        ...new Set(
+            messages.flatMap(message => {
+                const metadata = message.metadata as { agentRunId?: string } | undefined;
+                return metadata?.agentRunId ? [metadata.agentRunId] : [];
+            }),
+        ),
+    ];
 
     return (
         <div className="relative flex h-full w-full flex-col p-4">
             <Conversation className="min-h-0 flex-1" contextRef={handleStickToBottomContextRef}>
                 <ConversationContent className="mx-auto w-full max-w-5xl gap-2 px-2 pb-6 pt-2 lg:px-4 lg:pt-4">
                     {renderedMessages.map((message, messageIndex) => (
-                        <MessageRenderer
-                            key={message.id}
-                            message={message as any}
-                            messageIndex={messageIndex}
-                            messages={renderedMessages as any}
-                            status={status}
-                            mode={mode}
-                            onCopySql={handleCopySql}
-                            onManualExecute={handleManualExecute}
-                            onExecuteAction={onExecuteAction}
-                        />
+                        <div key={message.id}>
+                            <MessageRenderer
+                                message={message as any}
+                                messageIndex={messageIndex}
+                                messages={renderedMessages as any}
+                                status={status}
+                                mode={mode}
+                                onCopySql={handleCopySql}
+                                onManualExecute={handleManualExecute}
+                                onExecuteAction={onExecuteAction}
+                            />
+                            {mode === 'global' && (
+                                <AgentMessageReports
+                                    message={message}
+                                    messages={renderedMessages}
+                                    reports={reports.data?.documents ?? []}
+                                    busy={busy}
+                                    onOpen={id => void setReportId(id)}
+                                />
+                            )}
+                        </div>
                     ))}
 
                     {error && <AssistantFallbackCard key="global-error" reason={error.message} />}
@@ -446,56 +506,74 @@ const ChatBotComp = ({
                 <ConversationScrollButton />
             </Conversation>
 
-            {sessionId ? <ChatWorkLinks chatId={sessionId} busy={status === 'streaming' || status === 'submitted'} /> : null}
+            <Sheet
+                open={Boolean(reportId)}
+                onOpenChange={async open => {
+                    if (!open && (!reportRef.current || (await reportRef.current.requestLeave()))) void setReportId(null);
+                }}
+            >
+                <SheetContent className="w-full p-0 sm:max-w-3xl">
+                    <SheetTitle className="sr-only">{reportT('Reports')}</SheetTitle>
+                    {reportId && (
+                        <WorkReport
+                            ref={reportRef}
+                            key={reportId}
+                            documentId={reportId}
+                            busy={busy}
+                            onEditingChange={setEditingReport}
+                            onContinue={text =>
+                                void sendMessage({ text }, { body: { chatId: sessionId, connectionId: scopeConnection, database: resolvedActiveDatabase, documentId: reportId } })
+                            }
+                        />
+                    )}
+                </SheetContent>
+            </Sheet>
             <div className="mt-4">
-                <PromptInput onSubmit={handleSubmit} className="mt-1" globalDrop multiple>
-                    <PromptInputBody>
-                        <div className="flex flex-col gap-2 w-full">
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="flex flex-1 items-center gap-2">
-                                    {mode === 'global' && (
-                                        <DatabaseSchemaSelect
-                                            onDatabaseChange={() => {
-                                                setSelectedTable('');
-                                            }}
-                                            onSchemaChange={() => {
-                                                setSelectedTable('');
-                                            }}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flex items-start gap-2 w-full">
-                                {mode === 'global' ? (
-                                    <TableMentionTextarea
-                                        value={input}
-                                        onChange={setInput}
-                                        tables={mentionTables.map(table => (table as any).name ?? (table as any).value ?? (table as any).label ?? table)}
-                                    >
-                                        <PromptInputTextarea
-                                            placeholder={t('Input.GlobalPlaceholder')}
-                                            value={input}
-                                            onChange={e => setInput(e.target.value)}
-                                            className="min-h-18 w-full resize-none border-0 bg-transparent text-sm focus-visible:outline-none focus-visible:ring-0"
-                                        />
-                                    </TableMentionTextarea>
-                                ) : (
+                {mode === 'global' ? (
+                    <AgentComposer
+                        text={input}
+                        restoreDraft={failedInitialDraft}
+                        onTextChange={setInput}
+                        onSubmit={submitPrompt}
+                        onStop={() => void stop()}
+                        scope={composerScope}
+                        sourceNames={scopeConnection ? { [scopeConnection]: currentConnection?.connection?.name ?? scopeConnection } : {}}
+                        chatId={sessionId}
+                        runIds={runIds}
+                        busy={busy}
+                        disabled={editingReport}
+                    >
+                        <div className="px-3 pt-2">
+                            <DatabaseSchemaSelect onDatabaseChange={() => setSelectedTable('')} onSchemaChange={() => setSelectedTable('')} />
+                        </div>
+                    </AgentComposer>
+                ) : (
+                    <PromptInput
+                        onSubmit={async message => {
+                            await handleSubmit(message);
+                        }}
+                        className="mt-1"
+                        globalDrop
+                        multiple
+                    >
+                        <PromptInputBody>
+                            <div className="flex flex-col gap-2 w-full">
+                                <div className="flex items-start gap-2 w-full">
                                     <PromptInputTextarea
                                         placeholder={t('Input.CopilotPlaceholder')}
                                         value={input}
                                         onChange={e => setInput(e.target.value)}
                                         className="min-h-18 w-full resize-none border-0 bg-transparent text-sm focus-visible:outline-none focus-visible:ring-0"
                                     />
-                                )}
+                                </div>
                             </div>
-                        </div>
-                    </PromptInputBody>
+                        </PromptInputBody>
 
-                    <PromptInputFooter className="justify-end">
-                        <PromptInputSubmit status={status} disabled={!input || status === 'submitted' || status === 'streaming'} />
-                    </PromptInputFooter>
-                </PromptInput>
+                        <PromptInputFooter className="justify-end">
+                            <PromptInputSubmit status={status} disabled={!input || status === 'submitted' || status === 'streaming'} />
+                        </PromptInputFooter>
+                    </PromptInput>
+                )}
             </div>
         </div>
     );

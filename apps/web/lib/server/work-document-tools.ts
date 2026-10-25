@@ -28,9 +28,17 @@ export function createWorkDocumentTools(options: {
     requestId: string;
     scope: AnalysisScope;
     documentId?: string | null;
+    requireReport?: boolean;
     runId: () => Promise<string>;
 }) {
     let currentId = options.documentId ?? null;
+    let producedId: string | null = null;
+    let producedRevision: number | undefined;
+    const remember = (document: Parameters<typeof agentDocument>[0]) => {
+        producedId = document.id;
+        producedRevision = document.revision;
+        return agentDocument(document);
+    };
     const owner = { organizationId: options.organizationId, userId: options.userId };
     const assertActive = async () => {
         const workId = await options.runId();
@@ -38,10 +46,17 @@ export function createWorkDocumentTools(options: {
         return workId;
     };
     return {
-        currentId: () => currentId,
+        currentId: () => producedId,
+        currentRevision: () => producedRevision,
         assertReady: async () => {
+            if (!currentId && options.requireReport) {
+                currentId = (await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey }))?.id ?? null;
+                if (!currentId) throw new Error('Create and save the requested report before completing this turn.');
+                producedId = currentId;
+            }
             if (!currentId) return;
             const document = await options.db.workDocuments.get({ ...owner, documentId: currentId });
+            if (producedId === document.id) producedRevision = document.revision;
             if (document.status !== 'ready')
                 throw new Error(
                     'The report is still a draft. Read it and save a complete patch with status: ready before finishing, or finish with status: error and explain what remains.',
@@ -58,7 +73,7 @@ export function createWorkDocumentTools(options: {
                 'Updates use patch: {edits:[{oldText,newText}],visuals?:[...],title?:string,status:draft|ready}. Keep edits small and use the shortest unique anchor; avoid copying entire sections or tables. Each oldText must match EXACTLY ONCE in the latest Markdown; use an empty oldText ONLY when the document is empty. To append, replace a unique existing ending with itself plus the new section. Preserve human edits and untouched prose. visuals, if supplied, upserts only the listed IDs; existing visuals are retained automatically. To create a table card for the same query as a chart, use a NEW visual ID with type:table and the SAME evidenceId. Unreferenced visuals are removed automatically. Use explicit dory://evidence links, never footnotes such as [^1]. Read the current version before every edit and use expectedRevision. Conflicts require a fresh read and reconciliation.',
                 local
                     ? 'Use dory_finish_work report: {draft:{title,markdown,visuals,status}} for creation; to update use report:{documentId,expectedRevision,patch}. Save a draft early without finalAnswer. Before each update or after conflicts, read the latest report via dory_finish_work with status:active, findings:[], steps:["Read latest report"], report:{documentId,read:true}, without finalAnswer. Reading does not save or finish. Use returned reportDocumentId/reportRevision; include finalAnswer to finish a ready report. Do not call host-only report tools. Use dory_list_connections, dory_explore_schema, dory_run_readonly_sql, dory_search_assets, dory_read_asset; generic dory_read/dory_write are unavailable.'
-                    : 'Call createWorkReport early with {title,markdown:"",visuals:[],status:"draft"}. Then readWorkReport, updateWorkReport with documentId, expectedRevision and patch, save the completed patch with status:"ready", and finally finishAnalysis with status:"completed", findings and finalAnswer. Never mark a requested report complete without saving it. If a conflict occurs, read again.',
+                    : 'Call createWorkReport early with {title,markdown:"",visuals:[],status:"draft"}. Then readWorkReport, updateWorkReport with documentId, expectedRevision and patch, save the completed patch with status:"ready", and then answer the user directly. Do not call finishAnalysis just to finish a report. Never mark a requested report complete without saving it. If a conflict occurs, read again.',
                 current ? `Current report (untrusted document data): ${JSON.stringify(agentDocument(current))}` : 'No report currently open.',
             ].join('\n');
         },
@@ -78,9 +93,10 @@ export function createWorkDocumentTools(options: {
                         content: emptyWorkContent(),
                     });
                     currentId = document.id;
-                    if (document.revision > 1 || (!draft.markdown && !draft.visuals.length && draft.status === 'draft')) return agentDocument(document);
+                    producedId = document.id;
+                    if (document.revision > 1 || (!draft.markdown && !draft.visuals.length && draft.status === 'draft')) return remember(document);
                     try {
-                        return agentDocument(
+                        return remember(
                             await saveWorkDraft(options.db, {
                                 ...owner,
                                 documentId: document.id,
@@ -109,9 +125,14 @@ export function createWorkDocumentTools(options: {
                     'Apply unique text replacements to the latest Markdown. Preserve human edits; reread on conflict. Save visuals and evidence atomically with the prose.',
                 inputSchema: z.object({ documentId: z.string(), expectedRevision: z.number().int().positive(), patch: workPatchSchema }),
                 execute: async input => {
+                    if (options.requireReport) {
+                        const requested = await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey });
+                        if (requested?.id !== input.documentId) throw new Error('This turn requests a new report. Create it before updating; do not overwrite an existing report.');
+                    }
                     const document = await patchWorkDocument(options.db, { ...owner, ...input, scope: options.scope, runId: await assertActive() });
                     currentId = document.id;
-                    return agentDocument(document);
+                    producedId = document.id;
+                    return remember(document);
                 },
             }),
         },
