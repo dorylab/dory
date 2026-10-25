@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createAgentUIStreamResponse, ToolLoopAgent, type UIMessage } from 'ai';
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 
-import { buildChatResponseMetadata, getAssistantResponseError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
+import { buildChatResponseMetadata, getAssistantResponseError, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
 const failed: UIMessage = { id: 'failed', role: 'assistant', parts: [] };
 const user: UIMessage = { id: 'user', role: 'user', parts: [{ type: 'text', text: 'Retry' }] };
@@ -80,4 +80,16 @@ test('successful responses preserve metadata without an error', () => {
     const metadata = buildChatResponseMetadata({ sessionTitle: 'Keep title' }, 'stop', null);
     assert.deepEqual(metadata, { sessionTitle: 'Keep title', finishReason: 'stop' });
     assert.equal(getAssistantResponseError({ ...answer, metadata }), undefined);
+});
+
+test('report saving failure is distinct from an empty or failed answer and recognizes old history', () => {
+    const partial = { ...answer, metadata: { finishReason: 'stop', reportSave: { status: 'failed', error: 'Storage unavailable' } } };
+    assert.equal(getReportSaveError(partial), 'Storage unavailable');
+    assert.equal(getAssistantResponseError(partial), undefined);
+    assert.equal(getReportSaveError({ ...answer, metadata: { reportSave: { status: 'saved' } } }), undefined);
+    assert.equal(
+        getReportSaveError({ ...answer, metadata: { responseError: 'Create and save the requested report before completing this turn.' } }),
+        'Create and save the requested report before completing this turn.',
+    );
+    assert.equal(getReportSaveError({ ...answer, metadata: { responseError: 'Connection closed' } }), undefined);
 });

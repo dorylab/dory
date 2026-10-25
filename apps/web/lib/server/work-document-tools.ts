@@ -48,6 +48,12 @@ export function createWorkDocumentTools(options: {
     return {
         currentId: () => producedId,
         currentRevision: () => producedRevision,
+        completionStatus: async (): Promise<'missing' | 'draft' | 'ready'> => {
+            const id = currentId ?? (await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey }))?.id;
+            if (!id) return 'missing';
+            const document = await options.db.workDocuments.get({ ...owner, documentId: id });
+            return document.status === 'ready' ? 'ready' : 'draft';
+        },
         assertReady: async () => {
             if (!currentId && options.requireReport) {
                 currentId = (await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey }))?.id ?? null;

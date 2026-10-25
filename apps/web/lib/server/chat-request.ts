@@ -559,6 +559,7 @@ export async function handleChatRequest(req: Request) {
             structuredCompletion: Boolean(analysis && !isLocalAiAgentProvider(execution.providerKey)),
             onSummaryInputError: analysis?.recordSummaryInputError,
             checkpoint: analysis && progressCheckpoints ? { inspect: analysis.inspectCheckpoint, invalid: analysis.invalidProgress } : undefined,
+            requiredReport: reports && contextInput.outputIntent === 'report' && !isLocalAiAgentProvider(execution.providerKey) ? { status: reports.completionStatus } : undefined,
             headers,
             context: {
                 organizationId,
@@ -664,22 +665,21 @@ export async function handleChatRequest(req: Request) {
                                 ...buildChatResponseMetadata(
                                     event.responseMessage.metadata,
                                     event.finishReason,
-                                    reportCompletionError ?? (event.finishReason !== 'error' && hasUsableAssistantResponse(event.responseMessage) ? null : responseError),
+                                    event.finishReason !== 'error' && hasUsableAssistantResponse(event.responseMessage) ? null : responseError,
                                 ),
                                 userMessageId: currentUserMessage?.id,
                                 sourceMessageId: contextInput.sourceMessageId,
                                 reportDocumentId: reports?.currentId() ?? undefined,
                                 reportRevision: reports?.currentRevision(),
+                                ...(contextInput.outputIntent === 'report'
+                                    ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
+                                    : {}),
                                 sessionTitle,
                                 agentRunId: work?.workId ?? null,
                                 requestId,
                                 summarySaved: Boolean(analysis?.getFinalAnswer() || (turn?.requestId === requestId && turn.summarySaved)),
                                 summarySave,
-                                responseStatus: event.isAborted
-                                    ? 'aborted'
-                                    : event.finishReason === 'error' || reportCompletionError || turn?.progressStopped
-                                      ? 'failed'
-                                      : 'completed',
+                                responseStatus: event.isAborted ? 'aborted' : event.finishReason === 'error' || turn?.progressStopped ? 'failed' : 'completed',
                                 ...(isLocalAiAgentProvider(execution.providerKey) ? { timelineVersion: 1, timelineRequestId: requestId } : {}),
                             },
                             createdAt: new Date(),
@@ -748,10 +748,11 @@ export async function handleChatRequest(req: Request) {
                                 messageMetadata: {
                                     reportDocumentId: reports?.currentId() ?? undefined,
                                     reportRevision: reports?.currentRevision(),
-                                    ...(reportCompletionError ? { responseError: reportCompletionError, finishReason: 'error' } : {}),
+                                    ...(contextInput.outputIntent === 'report'
+                                        ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
+                                        : {}),
                                 },
                             });
-                        if (reportCompletionError) controller.enqueue({ type: 'error', errorText: reportCompletionError });
                     },
                 }),
             ),

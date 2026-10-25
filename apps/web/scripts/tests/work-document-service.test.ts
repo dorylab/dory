@@ -166,6 +166,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         assert.ok('id' in created && 'id' in retry);
         assert.equal(created.id, retry.id);
         assert.equal(created.status, 'draft');
+        assert.equal(await reports.completionStatus(), 'draft');
         await assert.rejects(reports.assertReady(), /still a draft/);
         // The SDK validates tool outputs as JSON before sending the next model step.
         assert.deepEqual(created, JSON.parse(JSON.stringify(created)));
@@ -380,6 +381,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             requireReport: true,
             runId: async () => localTurn.workId,
         });
+        assert.equal(await required.completionStatus(), 'missing');
         await assert.rejects(required.assertReady(), /requested report/);
         await assert.rejects(required.tools.updateWorkReport.execute!({ documentId: created.id, expectedRevision: 1, patch }, call) as Promise<unknown>, /new report/);
 

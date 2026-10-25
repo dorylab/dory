@@ -3102,7 +3102,10 @@
             "Title": "响应异常",
             "Description": "工作暂未返回可用内容，请稍后重试或调整提问。",
             "MissingAiEnvTitle": "缺少 AI 配置",
-            "MissingAiEnvDescription": "请设置 DORY_AI_API_KEY 和 DORY_AI_URL 以启用 AI 功能。"
+            "MissingAiEnvDescription": "请设置 DORY_AI_API_KEY 和 DORY_AI_URL 以启用 AI 功能。",
+            "ReportNotSavedTitle": "报告未保存",
+            "ReportNotSavedDescription": "本次报告尚未保存，已有回答已保留。你可以再次要求生成并保存报告。",
+            "FailureDetails": "失败详情"
         },
         "CodeReview": {
             "Header": "SQL 预览",

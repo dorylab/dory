@@ -15,7 +15,12 @@ export const chatContextSchema = z.object({
 export type ChatReference = z.infer<typeof chatReferenceSchema>;
 export type ChatContext = z.infer<typeof chatContextSchema>;
 export type ChatSubmission = Partial<ChatContext> & { text: string; files: FileUIPart[]; id?: string };
-export type ChatMetadata = Partial<ChatContext> & { userMessageId?: string; reportDocumentId?: string; reportRevision?: number };
+export type ChatMetadata = Partial<ChatContext> & {
+    userMessageId?: string;
+    reportDocumentId?: string;
+    reportRevision?: number;
+    reportSave?: { status: 'saved' | 'failed'; error?: string };
+};
 
 export function referenceKey(reference: ChatReference): string {
     return reference.kind === 'table'

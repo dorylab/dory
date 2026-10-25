@@ -8,7 +8,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenuItem } from '@/registry/new-york-v4/ui/dropdown-menu';
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
-import { getAssistantResponseError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
+import { getAssistantResponseError, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
 import { getChatResponseText } from '@/lib/agent-runs/chat-response';
 import { getAgentActivityTitleKey } from '@/lib/agent-runs/summary';
@@ -442,13 +442,14 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
     if (
         assistantMessage &&
-        (getAssistantResponseError(message) || (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0)) &&
+        (getReportSaveError(message) || getAssistantResponseError(message) || (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0)) &&
         (!isLatestAssistant || !isStreaming)
     ) {
         contentItems.push(
             <AssistantFallbackCard
                 key={`${message.id}-fallback`}
-                reason={getAssistantResponseError(message)}
+                reason={getReportSaveError(message) ?? getAssistantResponseError(message)}
+                reportSaveFailed={Boolean(getReportSaveError(message))}
                 historical={hasLaterAssistantResponse(messages, messageIndex, status)}
             />,
         );

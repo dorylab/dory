@@ -6,9 +6,10 @@ import { USE_CLOUD_AI } from '@/app/config/app';
 type AssistantFallbackCardProps = {
     reason?: string;
     historical?: boolean;
+    reportSaveFailed?: boolean;
 };
 
-export function AssistantFallbackCard({ reason, historical = false }: AssistantFallbackCardProps) {
+export function AssistantFallbackCard({ reason, historical = false, reportSaveFailed = false }: AssistantFallbackCardProps) {
     const t = useTranslations('DoryUI');
     const isDesktopCloud = USE_CLOUD_AI;
     const isMissingEnvReason = typeof reason === 'string' && (reason.includes('DORY_AI_API_KEY') || reason.includes('DORY_AI_URL') || reason.includes('MISSING_AI_ENV'));
@@ -24,16 +25,28 @@ export function AssistantFallbackCard({ reason, historical = false }: AssistantF
         );
     }
     return (
-        <Card className="mt-3 border-destructive/40 bg-destructive/5">
+        <Card className="mt-3 border-destructive/40 bg-destructive/5" data-testid={reportSaveFailed ? 'report-save-error' : undefined}>
             <CardHeader className="space-y-1.5">
                 <CardTitle className="text-base font-semibold flex items-center gap-2 text-destructive">
                     <AlertCircle className="h-4 w-4" />
-                    {missingAiEnv ? t('AssistantFallback.MissingAiEnvTitle') : t('AssistantFallback.Title')}
+                    {reportSaveFailed ? t('AssistantFallback.ReportNotSavedTitle') : missingAiEnv ? t('AssistantFallback.MissingAiEnvTitle') : t('AssistantFallback.Title')}
                 </CardTitle>
-                {showReason && !missingAiEnv && <p className="text-xs text-destructive/80">{reason}</p>}
+                {showReason && !missingAiEnv && !reportSaveFailed && <p className="text-xs text-destructive/80">{reason}</p>}
             </CardHeader>
             <CardContent>
-                <p className="text-sm text-foreground">{missingAiEnv ? t('AssistantFallback.MissingAiEnvDescription') : t('AssistantFallback.Description')}</p>
+                <p className="text-sm text-foreground">
+                    {reportSaveFailed
+                        ? t('AssistantFallback.ReportNotSavedDescription')
+                        : missingAiEnv
+                          ? t('AssistantFallback.MissingAiEnvDescription')
+                          : t('AssistantFallback.Description')}
+                </p>
+                {reportSaveFailed && showReason && (
+                    <details className="mt-2 text-xs text-muted-foreground">
+                        <summary className="cursor-pointer">{t('AssistantFallback.FailureDetails')}</summary>
+                        <p className="mt-2 whitespace-pre-wrap break-words">{reason}</p>
+                    </details>
+                )}
             </CardContent>
         </Card>
     );

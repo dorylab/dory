@@ -955,3 +955,87 @@ test('MCP stage admission covers wrapper actions before events and uses the same
         await f.close();
     }
 });
+
+test('requested reports pass the stage gate and save before the final answer, with bounded failure', async t => {
+    const { tool } = await import('ai');
+    const { z } = await import('zod');
+    const { initialChatCheckpoints, applyCheckpointCommand } = await import('@dory/shared/types/chat-checkpoints');
+    for (const scenario of ['saved', 'failed'] as const) {
+        await t.test(scenario, async () => {
+            const state = initialChatCheckpoints();
+            let reportStatus: 'missing' | 'draft' | 'ready' = 'missing';
+            let calls = 0;
+            let saves = 0;
+            const model = new MockLanguageModelV4({
+                doGenerate: async options => {
+                    const step = calls++;
+                    const names = options.tools?.map(tool => tool.name) ?? [];
+                    if (step === 3) {
+                        assert.equal(options.toolChoice?.type, scenario === 'saved' ? 'auto' : 'none');
+                        assert.equal(reportStatus, scenario === 'saved' ? 'ready' : 'draft');
+                        return {
+                            content: [{ type: 'text', text: scenario === 'saved' ? '报告已保存。' : '已有分析已保留，但报告保存失败。' }],
+                            finishReason: { unified: 'stop', raw: 'stop' },
+                            usage,
+                            warnings: [],
+                        };
+                    }
+                    assert.equal(options.toolChoice?.type, 'required');
+                    assert.ok(!names.includes('finishAnalysis'));
+                    if (step === 0) assert.deepEqual(names, ['publishProgress']);
+                    if (step === 1) assert.deepEqual(names, ['publishProgress', 'createWorkReport']);
+                    const call = [
+                        { toolName: 'publishProgress', input: { checkpointId: 'report:0', text: '我会根据已有分析整理报告，先创建草稿，再保存完整正文。', nextStage: 'output' } },
+                        { toolName: 'createWorkReport', input: {} },
+                        { toolName: 'updateWorkReport', input: {} },
+                    ][step];
+                    assert.ok(names.includes(call.toolName));
+                    return {
+                        content: [{ type: 'tool-call', toolCallId: `report-${step}`, toolName: call.toolName, input: JSON.stringify(call.input) }],
+                        finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                        usage,
+                        warnings: [],
+                    };
+                },
+            });
+            const agent = buildDoryChatAgent({
+                model,
+                tools: {
+                    publishProgress: tool({
+                        inputSchema: z.object({ checkpointId: z.string(), text: z.string(), nextStage: z.literal('output') }),
+                        execute: async input => applyCheckpointCommand(state, 'report', { kind: 'publish', ...input }),
+                    }),
+                    createWorkReport: tool({
+                        inputSchema: z.object({}),
+                        execute: async () => {
+                            reportStatus = 'draft';
+                            return { id: 'report-document', status: 'draft' };
+                        },
+                    }),
+                    updateWorkReport: tool({
+                        inputSchema: z.object({}),
+                        execute: async () => {
+                            saves++;
+                            if (scenario === 'failed') throw new Error('Storage unavailable');
+                            reportStatus = 'ready';
+                            return { id: 'report-document', status: 'ready' };
+                        },
+                    }),
+                    finishAnalysis: tool({ inputSchema: z.object({}), execute: async (): Promise<{ ok: boolean }> => assert.fail('Report saving must not save Findings') }),
+                },
+                requiredReport: { status: async () => reportStatus },
+                checkpoint: { inspect: async () => applyCheckpointCommand(state, 'report', { kind: 'inspect' }), invalid: async () => {} },
+                maxSteps: scenario === 'saved' ? 4 : 2,
+                structuredCompletion: true,
+                instructions: 'Save the requested report, then answer.',
+                requestId: 'report',
+                context: {},
+                recordUsage: async () => {},
+            });
+            const result = await agent.generate({ prompt: '生成并保存报告' });
+            assert.match(result.text, scenario === 'saved' ? /报告已保存/ : /保存失败/);
+            assert.equal(saves, 1);
+            assert.equal(calls, 4);
+        });
+    }
+});

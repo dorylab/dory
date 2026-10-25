@@ -3096,7 +3096,10 @@
             "Title": "応答エラー",
             "Description": "作業が利用可能な内容を返しませんでした。後でもう一度試すか、プロンプトを調整してください。",
             "MissingAiEnvTitle": "AI 設定が不足しています",
-            "MissingAiEnvDescription": "AI 機能を有効にするには DORY_AI_API_KEY と DORY_AI_URL を設定してください。"
+            "MissingAiEnvDescription": "AI 機能を有効にするには DORY_AI_API_KEY と DORY_AI_URL を設定してください。",
+            "ReportNotSavedTitle": "レポートは保存されていません",
+            "ReportNotSavedDescription": "依頼されたレポートは保存されませんでした。上記の回答は保持されています。再度保存を依頼できます。",
+            "FailureDetails": "エラーの詳細"
         },
         "CodeReview": {
             "Header": "SQL プレビュー",

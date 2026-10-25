@@ -16,6 +16,7 @@ type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     structuredCompletion?: boolean;
     onSummaryInputError?: (error: unknown) => Promise<void>;
     checkpoint?: { inspect: () => Promise<CheckpointResult | null>; invalid: () => Promise<unknown> };
+    requiredReport?: { status: () => Promise<'missing' | 'draft' | 'ready'> };
     headers?: Record<string, string | undefined> | null;
     context: AiGatewayContext;
     requestId: string;
@@ -103,15 +104,34 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                     instructions: `${options.instructions}\n${saveAttempted ? 'Conclusion saving was already attempted. Do not retry any saving tool. Answer with the available analysis and explain any save failure; do not claim the conclusions were saved.' : 'Tool budget exhausted. Answer from the available evidence and explain any unfinished work. Do not call more tools or claim unfinished work is complete.'}`,
                 };
             }
-            if (checkpoint)
+            const reportStatus = await options.requiredReport?.status();
+            const reportPending = Boolean(reportStatus && reportStatus !== 'ready');
+            const reportInstruction = reportPending
+                ? `\nThe requested report is ${reportStatus === 'missing' ? 'not created: first publish progress with nextStage: output, then call createWorkReport to save its draft' : 'still a draft: gather any necessary verified evidence, readWorkReport and updateWorkReport with status: ready'}. Report tools are available in the output stage; temporary stage restrictions are NOT missing capabilities. Do not substitute a Markdown chat response for saving the report. Use only the current checkpointId below, never one from conversation history.`
+                : '';
+            if (checkpoint) {
+                const mustPublish = reportPending && (!checkpoint.stage || !checkpoint.remainingActions || (reportStatus === 'missing' && checkpoint.stage !== 'output'));
+                const activeTools = Object.keys(options.tools).filter(
+                    name =>
+                        name === 'publishProgress' ||
+                        (!mustPublish &&
+                            (!options.requiredReport || name !== 'finishAnalysis') &&
+                            (reportStatus !== 'missing' || name === 'createWorkReport') &&
+                            checkpoint.stage &&
+                            (checkpoint.remainingActions ?? 0) > 0 &&
+                            chatToolStage(name) === checkpoint.stage),
+                ) as (keyof TOOLS & string)[];
                 return {
-                    toolChoice: 'auto' as const,
-                    activeTools: Object.keys(options.tools).filter(
-                        name => name === 'publishProgress' || (checkpoint.stage && (checkpoint.remainingActions ?? 0) > 0 && chatToolStage(name) === checkpoint.stage),
-                    ) as (keyof TOOLS & string)[],
-                    instructions: `${options.instructions}\nCurrent stage checkpoint: ${JSON.stringify({ ...checkpoint, actions: checkpoint.actions.map(({ id, toolName, state }) => ({ id, toolName, state })) })}. If the next action is in another stage, publish progress first. If sufficient evidence is available, directly give the final answer.`,
+                    toolChoice: reportPending ? ('required' as const) : ('auto' as const),
+                    activeTools,
+                    instructions: `${options.instructions}${reportInstruction}\nCurrent stage checkpoint: ${JSON.stringify({ ...checkpoint, actions: checkpoint.actions.map(({ id, toolName, state }) => ({ id, toolName, state })) })}. If the next action is in another stage, publish progress first. ${reportPending ? 'Finish only after the report is saved as ready.' : 'If sufficient evidence is available, directly give the final answer.'}`,
                 };
-            return { toolChoice: 'auto' as const };
+            }
+            return {
+                toolChoice: reportPending ? ('required' as const) : ('auto' as const),
+                ...(reportStatus === 'missing' ? { activeTools: ['createWorkReport'] as (keyof TOOLS & string)[] } : {}),
+                instructions: `${options.instructions}${reportInstruction}`,
+            };
         },
         headers: options.headers ?? undefined,
         onEnd: async event => {

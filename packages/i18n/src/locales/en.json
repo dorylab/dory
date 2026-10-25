@@ -3098,7 +3098,10 @@
             "Title": "Response error",
             "Description": "Work did not return usable content. Please try again later or refine your prompt.",
             "MissingAiEnvTitle": "Missing AI configuration",
-            "MissingAiEnvDescription": "Please set DORY_AI_API_KEY and DORY_AI_URL to enable AI features."
+            "MissingAiEnvDescription": "Please set DORY_AI_API_KEY and DORY_AI_URL to enable AI features.",
+            "ReportNotSavedTitle": "Report not saved",
+            "ReportNotSavedDescription": "The requested report was not saved. Any answer above has been retained. You can ask to save the report again.",
+            "FailureDetails": "Failure details"
         },
         "CodeReview": {
             "Header": "SQL Preview",

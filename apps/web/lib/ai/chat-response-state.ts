@@ -9,6 +9,14 @@ export function getAssistantResponseError(message: UIMessage): string | undefine
     return typeof error === 'string' && error.trim() ? error : undefined;
 }
 
+export function getReportSaveError(message: UIMessage): string | undefined {
+    const save = asRecord(asRecord(message.metadata)?.reportSave);
+    if (save?.status === 'failed') return typeof save.error === 'string' && save.error.trim() ? save.error : 'The report was not saved.';
+    // Older report failures were stored as response errors even when the answer exists.
+    const reason = getAssistantResponseError(message);
+    return reason && /^(Create and save the requested report before completing|The report is still a draft\.)/.test(reason) ? reason : undefined;
+}
+
 export function buildChatResponseMetadata(metadata: unknown, finishReason: string | undefined, responseError: string | null) {
     return {
         ...asRecord(metadata),

@@ -3096,7 +3096,10 @@
             "Title": "Error de respuesta",
             "Description": "Trabajo no devolvió contenido utilizable. Inténtalo de nuevo más tarde o ajusta tu prompt.",
             "MissingAiEnvTitle": "Falta la configuración de IA",
-            "MissingAiEnvDescription": "Define DORY_AI_API_KEY y DORY_AI_URL para habilitar las funciones de IA."
+            "MissingAiEnvDescription": "Define DORY_AI_API_KEY y DORY_AI_URL para habilitar las funciones de IA.",
+            "ReportNotSavedTitle": "Informe sin guardar",
+            "ReportNotSavedDescription": "El informe solicitado no se guardó. Se ha conservado la respuesta anterior. Puedes solicitar que se guarde de nuevo.",
+            "FailureDetails": "Detalles del error"
         },
         "CodeReview": {
             "Header": "Vista previa de SQL",

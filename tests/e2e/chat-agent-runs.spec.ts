@@ -21,7 +21,7 @@ async function openAnalysis(
     page: Page,
     failed = false,
     legacy = false,
-    options: { serverOnly?: boolean; noMatches?: boolean; replyAfterFailure?: boolean; interleaved?: boolean } = {},
+    options: { serverOnly?: boolean; noMatches?: boolean; replyAfterFailure?: boolean; interleaved?: boolean; reportFailure?: 'legacy' | 'current' } = {},
 ) {
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.route('**/api/actions/execute', async route => {
@@ -50,7 +50,19 @@ async function openAnalysis(
                         {
                             id: 'msg_turn-1',
                             role: 'assistant',
-                            ...(legacy ? {} : { metadata: { agentRunId: 'run-1', requestId: 'turn-1' } }),
+                            ...(legacy
+                                ? {}
+                                : {
+                                      metadata: {
+                                          agentRunId: 'run-1',
+                                          requestId: 'turn-1',
+                                          ...(options.reportFailure === 'legacy'
+                                              ? { responseError: 'Create and save the requested report before completing this turn.', finishReason: 'error' }
+                                              : options.reportFailure === 'current'
+                                                ? { reportSave: { status: 'failed', error: 'Storage unavailable' }, finishReason: 'stop' }
+                                                : {}),
+                                      },
+                                  }),
                             parts: options.serverOnly
                                 ? [{ type: 'text', text: answer }]
                                 : [
@@ -675,5 +687,23 @@ for (const outcome of ['completed', 'failed', 'aborted'] as const) {
             await expect(process).toHaveJSProperty('open', true);
             await expect(page.getByText('已保留分析结果。', { exact: true })).toHaveCount(1);
         }
+    });
+}
+
+for (const version of ['legacy', 'current'] as const) {
+    test(`report save failure retains the answer without an empty response warning (${version})`, async ({ page }) => {
+        await openAnalysis(page, false, false, { serverOnly: true, reportFailure: version });
+        await expect(page.getByText(answer, { exact: true })).toBeVisible();
+        await expect(page.getByTestId('report-save-error')).toBeVisible();
+        await expect(page.getByText(/Report not saved|报告未保存/, { exact: true })).toBeVisible();
+        await expect(page.getByText(/has not returned usable content|暂未返回可用内容/)).toHaveCount(0);
+        await page.reload();
+        await expect(page.getByTestId('report-save-error')).toBeVisible();
+        await expect(page.getByText(answer, { exact: true })).toBeVisible();
+        const organization = new URL(page.url()).pathname.split('/')[1];
+        await page.route('**/api/data-agent', route => route.fulfill({ json: { sessions: [session], connections: [connection], models: [] } }));
+        await page.goto(`/${organization}/work?chat=analysis-chat`);
+        await expect(page.getByTestId('report-save-error')).toBeVisible();
+        await expect(page.getByText(answer, { exact: true })).toBeVisible();
     });
 }
