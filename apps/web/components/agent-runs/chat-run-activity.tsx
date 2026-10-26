@@ -30,19 +30,29 @@ export function ChatAnalysisProcess({
     failed = false,
     ended = !streaming,
     durationMs = null,
+    startedAt,
     children,
 }: {
     streaming: boolean;
     failed?: boolean;
     ended?: boolean;
     durationMs?: number | null;
+    startedAt?: number;
     children: ReactNode;
 }) {
     const t = useTranslations('AgentRuns');
     const [open, setOpen] = useState(streaming || failed);
+    const [mountedAt] = useState(Date.now);
+    const [now, setNow] = useState(mountedAt);
     const previous = useRef<string | null>(null);
-    const duration = formatChatDuration(durationMs);
+    const start = typeof startedAt === 'number' && Number.isFinite(startedAt) ? startedAt : mountedAt;
+    const duration = formatChatDuration(ended ? durationMs : Math.max(0, now - start));
     const phase = !ended ? 'running' : failed ? 'failed' : 'completed';
+    useEffect(() => {
+        if (ended) return;
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [ended]);
     useEffect(() => {
         if (previous.current !== phase) setOpen(phase !== 'completed');
         previous.current = phase;
@@ -51,7 +61,11 @@ export function ChatAnalysisProcess({
         <details className="group/analysis my-3 text-sm" open={open} onToggle={event => setOpen(event.currentTarget.open)} data-testid="chat-analysis-process">
             <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
                 {phase === 'running' ? <Loader2 className="size-4 animate-spin" /> : <ChevronRight className="size-4 transition-transform group-open/analysis:rotate-90" />}
-                {!ended ? t('Chat.Analyzing') : duration ? t('Chat.WorkedFor', { duration }) : t(failed ? 'Chat.Process' : 'Chat.ProcessCompleted')}
+                {!ended
+                    ? t('Chat.WorkingFor', { duration: duration ?? '<1s' })
+                    : duration
+                      ? t('Chat.WorkedFor', { duration })
+                      : t(failed ? 'Chat.Process' : 'Chat.ProcessCompleted')}
             </summary>
             <div className="mt-3 space-y-3">{children}</div>
         </details>
@@ -115,19 +129,13 @@ export function ChatTimeline({
     ended,
     ...actions
 }: Actions & { items: ChatTimelineItem[]; tools: ChatMessageToolRow[]; events: AgentRunEventLike[]; ended: boolean; workId?: string }) {
-    const t = useTranslations('AgentRuns');
     const { groups, unplaced } = buildChatTimeline(items, tools, events);
     return (
         <>
             {groups.map(group =>
                 group.kind === 'content' ? <div key={group.id}>{group.content}</div> : <ToolGroup key={group.id} activities={group.activities} ended={ended} {...actions} />,
             )}
-            {unplaced.length > 0 && (
-                <div data-testid="chat-unplaced-activity">
-                    <p className="mb-2 text-xs text-muted-foreground">{t('Chat.OtherActivity')}</p>
-                    <ToolGroup activities={unplaced} ended={ended} {...actions} />
-                </div>
-            )}
+            {unplaced.length > 0 && <ToolGroup activities={unplaced} ended={ended} {...actions} />}
         </>
     );
 }
@@ -223,7 +231,13 @@ export function ChatRunActivity({
     return (
         <>
             {hasProcess && (
-                <ChatAnalysisProcess streaming={streaming} ended={ended || (!data && !streaming)} failed={interrupted} durationMs={chatTurnDuration(durationMs, turn, requestId)}>
+                <ChatAnalysisProcess
+                    streaming={streaming}
+                    ended={ended || (!data && !streaming)}
+                    failed={interrupted}
+                    durationMs={chatTurnDuration(durationMs, turn, requestId)}
+                    startedAt={turn?.requestId === requestId && turn.startedAt ? Date.parse(turn.startedAt) : undefined}
+                >
                     {isError && <p className="text-destructive">{t('Chat.LoadFailed')}</p>}
                     <ChatTimeline items={items} tools={rows} events={mappedEvents} ended={ended} workId={workId} {...actions} />
                 </ChatAnalysisProcess>

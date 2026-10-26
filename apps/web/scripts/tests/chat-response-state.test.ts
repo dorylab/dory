@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createAgentUIStreamResponse, ToolLoopAgent, type UIMessage } from 'ai';
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 
-import { buildChatResponseMetadata, getAssistantResponseError, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
+import { buildChatCompletionMetadata, buildChatResponseMetadata, getAssistantResponseError, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
 const failed: UIMessage = { id: 'failed', role: 'assistant', parts: [] };
 const user: UIMessage = { id: 'user', role: 'user', parts: [{ type: 'text', text: 'Retry' }] };
@@ -80,6 +80,23 @@ test('successful responses preserve metadata without an error', () => {
     const metadata = buildChatResponseMetadata({ sessionTitle: 'Keep title' }, 'stop', null);
     assert.deepEqual(metadata, { sessionTitle: 'Keep title', finishReason: 'stop' });
     assert.equal(getAssistantResponseError({ ...answer, metadata }), undefined);
+});
+
+test('progress interruption remains a visible failure even when the model ends with SQL text', () => {
+    const message: UIMessage = { ...answer, parts: [{ type: 'text', text: 'SELECT COUNT(order_id) FROM orders;' }] };
+    const reason = 'Analysis stopped before the query executed. Please retry.';
+    const metadata = buildChatCompletionMetadata({ message, finishReason: 'stop', responseError: null, progressError: reason, isAborted: false });
+    const restored: UIMessage = JSON.parse(JSON.stringify({ ...message, metadata }));
+    assert.equal(metadata.responseStatus, 'failed');
+    assert.equal(metadata.finishReason, 'error');
+    assert.equal(getAssistantResponseError(restored), reason);
+    assert.equal(hasLaterAssistantResponse([failed, user, restored], 0, 'ready'), false);
+});
+
+test('recovered tool errors do not turn a successful answer into a failure', () => {
+    const options = { message: answer, finishReason: 'stop', responseError: 'Temporary tool error', progressError: null, isAborted: false };
+    assert.deepEqual(buildChatCompletionMetadata(options), { finishReason: 'stop', responseStatus: 'completed' });
+    assert.equal(buildChatCompletionMetadata({ ...options, isAborted: true }).responseStatus, 'aborted');
 });
 
 test('report saving failure is distinct from an empty or failed answer and recognizes old history', () => {

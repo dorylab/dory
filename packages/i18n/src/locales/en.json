@@ -2664,6 +2664,7 @@
         "Chat": {
             "Errors": {
                 "MissingSessionId": "Missing session ID",
+                "AnalysisInterrupted": "Analysis stopped because its progress updates could not be validated or the progress limit was reached. Some steps remain unfinished. Rely only on returned query results; generated SQL alone does not mean it was executed. Please retry to complete the analysis.",
                 "SessionNotFound": "Session not found",
                 "FetchSessionFailed": "Failed to fetch session details",
                 "InvalidTitle": "Invalid title",
@@ -4906,6 +4907,7 @@
                 "Action": "Action"
             },
             "WorkedFor": "Worked for {duration}",
+            "WorkingFor": "Working for {duration}",
             "Groups": {
                 "ReadKnowledge": "Read {count, plural, one {# knowledge source} other {# knowledge sources}}",
                 "SearchKnowledge": "Searched knowledge {count} times",

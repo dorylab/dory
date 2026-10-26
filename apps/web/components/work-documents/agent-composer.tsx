@@ -31,6 +31,7 @@ export function AgentComposer({
     sourceNames = {},
     restoreDraft,
     children,
+    toolbar,
 }: {
     text: string;
     onTextChange: (text: string) => void;
@@ -45,6 +46,7 @@ export function AgentComposer({
     sourceNames?: Record<string, string>;
     restoreDraft?: ChatSubmission | null;
     children?: ReactNode;
+    toolbar?: ReactNode;
 }) {
     const t = useTranslations('ChatComposer');
     const { organization } = useParams<{ organization: string }>();
@@ -212,7 +214,7 @@ export function AgentComposer({
                 event.preventDefault();
                 void submit();
             }}
-            className="relative rounded-xl border bg-background shadow-sm"
+            className="relative rounded-2xl border bg-background shadow-sm transition-[border-color,box-shadow] focus-within:border-ring dark:bg-muted"
             data-testid="agent-composer"
         >
             {children}
@@ -375,47 +377,56 @@ export function AgentComposer({
                         void submit();
                     }
                 }}
-                className="min-h-24 resize-none border-0 bg-transparent p-3 shadow-none focus-visible:ring-0"
+                className="min-h-24 resize-none rounded-none border-0 bg-transparent px-4 pt-4 pb-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
             />
             {error && (
                 <p role="alert" className="px-3 pb-2 text-sm text-destructive">
                     {error}
                 </p>
             )}
-            <div className="flex items-center justify-between px-2 pb-2">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon" aria-label={t('Add')} disabled={locked}>
-                            <Plus className="size-5" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" side="top">
-                        <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
-                            <Paperclip className="size-4" />
-                            {t('AddFiles')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => folderInput.current?.click()}>
-                            <Folder className="size-4" />
-                            {t('AddFolder')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onSelect={() => {
-                                attemptId.current = null;
-                                setReport(true);
-                                textarea.current?.focus();
-                            }}
-                        >
-                            <FileText className="size-4" />
-                            {t('ReportMode')}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+            <div className="flex items-end gap-2 px-3 pb-3">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon" className="rounded-full" aria-label={t('Add')} disabled={locked}>
+                                <Plus className="size-5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" side="top">
+                            <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
+                                <Paperclip className="size-4" />
+                                {t('AddFiles')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => folderInput.current?.click()}>
+                                <Folder className="size-4" />
+                                {t('AddFolder')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => {
+                                    attemptId.current = null;
+                                    setReport(true);
+                                    textarea.current?.focus();
+                                }}
+                            >
+                                <FileText className="size-4" />
+                                {t('ReportMode')}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    {toolbar}
+                </div>
                 {busy && onStop ? (
-                    <Button type="button" size="icon" variant="secondary" aria-label={t('Stop')} onClick={onStop}>
+                    <Button type="button" size="icon" className="rounded-full" variant="secondary" aria-label={t('Stop')} onClick={onStop}>
                         <Square className="size-4" />
                     </Button>
                 ) : (
-                    <Button type="submit" size="icon" aria-label={t('Send')} disabled={locked || !ready || (!text.trim() && !files.length && !references.length && !report)}>
+                    <Button
+                        type="submit"
+                        size="icon"
+                        className="rounded-full"
+                        aria-label={t('Send')}
+                        disabled={locked || !ready || (!text.trim() && !files.length && !references.length && !report)}
+                    >
                         {reading || upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                     </Button>
                 )}

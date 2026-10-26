@@ -266,9 +266,22 @@ export function createChatAnalysis(options: {
     if (options.progressCheckpoints) {
         tools.publishProgress = tool({
             description:
-                'Publish a factual public stage update before tools, stage changes, or more than 3 actions. Use the current checkpointId. Prefer a final answer when evidence is sufficient.',
-            inputSchema: publishProgressSchema,
-            execute: async input => (await checkpoint()).publish(input),
+                'Publish a factual public stage update before tools, stage changes, or more than 3 actions. Supply text and nextStage; the host manages the checkpointId. Prefer a final answer when evidence is sufficient.',
+            inputSchema: publishProgressSchema.omit({ checkpointId: true }),
+            execute: (input, { toolCallId }) => {
+                let pending = executions.get(toolCallId);
+                if (!pending) {
+                    pending = (async () => {
+                        options.signal.throwIfAborted();
+                        const current = await checkpoint();
+                        const state = await current.inspect();
+                        if (!state) throw new Error('Analysis progress checkpoint is unavailable.');
+                        return current.publish({ ...input, checkpointId: state.checkpointId });
+                    })();
+                    executions.set(toolCallId, pending);
+                }
+                return pending;
+            },
         });
         const original = tools.chartBuilder.execute!;
         tools.chartBuilder = {

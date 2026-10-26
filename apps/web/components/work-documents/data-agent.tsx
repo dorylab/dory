@@ -427,8 +427,8 @@ function AgentConversation({
                     busy={busy}
                     disabled={blocked}
                     ready={ready}
+                    toolbar={scopePicker}
                 />
-                {scopePicker}
             </div>
         </div>
     );

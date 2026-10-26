@@ -38,6 +38,8 @@ const [{ createChatAnalysis }, { buildDoryChatAgent }, { catalogSearchAction, ca
     ]);
 const { schemaGetGraphAction } = await import('@/lib/actions/server/domains/schema/graph');
 const { schemaListTablesAction } = await import('@/lib/actions/server/domains/schema/list-tables');
+const { schemaListDatabasesAction } = await import('@/lib/actions/server/domains/schema/list-databases');
+const { schemaDescribeTableAction } = await import('@/lib/actions/server/domains/schema/describe-table');
 const { getAgentExecutionTools } = await import('@/lib/server/agent-execution');
 const { getChatResponseText } = await import('@/lib/agent-runs/chat-response');
 
@@ -89,8 +91,10 @@ async function fixture(progressCheckpoints = false) {
                 ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
             },
         });
-    const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string>) =>
-        createChatAnalysis({
+    const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string>) => {
+        // Match the request-local lifecycle: resolving an old Run must not restart its turn.
+        let work: ReturnType<typeof start> | undefined;
+        return createChatAnalysis({
             progressCheckpoints,
             db,
             ...scope,
@@ -110,8 +114,9 @@ async function fixture(progressCheckpoints = false) {
                 role: 'owner',
                 permissions: getOrganizationPermissionMap('owner'),
             },
-            resolveWork: () => start(requestId, connectionIds, databasesByConnection),
+            resolveWork: () => (work ??= start(requestId, connectionIds, databasesByConnection)),
         });
+    };
     return {
         db,
         client,
@@ -849,6 +854,109 @@ test('stage checkpoints serialize concurrent actions, persist exact order, rejec
     }
 });
 
+test('SDK monthly analysis advances from three schema actions to SQL with host-owned checkpoint IDs', async t => {
+    const f = await fixture(true);
+    t.mock.method(schemaListDatabasesAction, 'handler', async () => ({ databases: [{ label: 'main', value: 'main' }] }));
+    t.mock.method(schemaListTablesAction, 'handler', async () => ({ tables: [{ name: 'orders' }] }));
+    t.mock.method(schemaDescribeTableAction, 'handler', async () => ({ columns: [{ columnName: 'ordered_at', columnType: 'TEXT' }] }));
+    let sqlCalls = 0;
+    t.mock.method(queryReadOnlyExecuteAction, 'handler', async () => {
+        sqlCalls++;
+        return {
+            session: {
+                sessionId: 'monthly-sql',
+                userId: 'user',
+                connectionId: 'connection',
+                sqlText: 'SELECT COUNT(order_id) AS orders FROM orders',
+                status: 'success',
+                source: 'ai',
+                durationMs: 10,
+            },
+            queryResultSets: [
+                {
+                    sessionId: 'monthly-sql',
+                    setIndex: 0,
+                    sqlText: 'SELECT COUNT(order_id) AS orders FROM orders',
+                    columns: [{ name: 'orders', type: 'integer' }],
+                    rowCount: 1,
+                    status: 'success',
+                },
+            ],
+            results: [[{ orders: 42 }]],
+            meta: {},
+        };
+    });
+    try {
+        const work = await f.start('monthly');
+        const analysis = f.makeAnalysis('monthly');
+        const progress = { text: '已确认 orders 表的 ordered_at 字段，接下来执行月度订单聚合查询。', nextStage: 'query' };
+        const calls = [
+            { toolName: 'publishProgress', input: { text: '我先检查订单表和日期字段，再按月统计订单数。', nextStage: 'schema' } },
+            { toolName: 'exploreSchema', input: { operation: 'list_databases' } },
+            { toolName: 'exploreSchema', input: { operation: 'list_tables', database: 'main' } },
+            { toolName: 'exploreSchema', input: { operation: 'describe_table', database: 'main', table: 'orders' } },
+            // Reproduce the erroneous ID from the original session. It is no longer
+            // part of the SDK schema and cannot override the host's current ID.
+            { toolName: 'publishProgress', input: { ...progress, checkpointId: 'monthly:2' } },
+            { toolName: 'sqlRunner', input: { connectionId: 'connection', database: 'main', sql: 'SELECT COUNT(order_id) AS orders FROM orders' } },
+        ];
+        let step = 0;
+        const agent = buildDoryChatAgent({
+            model: new MockLanguageModelV4({
+                doGenerate: async options => {
+                    const current = step++;
+                    const progressTool = options.tools?.find(tool => tool.name === 'publishProgress');
+                    if (progressTool?.type === 'function') {
+                        const properties = progressTool.inputSchema.properties as Record<string, unknown>;
+                        assert.deepEqual(Object.keys(properties).sort(), ['nextStage', 'text']);
+                    }
+                    if (current === 4)
+                        assert.deepEqual(
+                            options.tools?.map(tool => tool.name),
+                            ['publishProgress'],
+                        );
+                    if (current === 5) assert.ok(options.tools?.some(tool => tool.name === 'sqlRunner'));
+                    if (current === calls.length) {
+                        assert.equal(sqlCalls, 1);
+                        assert.match(JSON.stringify(options.prompt), /"orders":42/);
+                        return { content: [{ type: 'text', text: '实际查询得到 42 个订单。' }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] };
+                    }
+                    const action = calls[current];
+                    return {
+                        content: [{ type: 'tool-call', toolCallId: `monthly-${current}`, toolName: action.toolName, input: JSON.stringify(action.input) }],
+                        finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                        usage,
+                        warnings: [],
+                    };
+                },
+            }),
+            tools: analysis.tools,
+            instructions: 'Analyze monthly orders using query results.',
+            requestId: 'monthly',
+            checkpoint: { inspect: analysis.inspectCheckpoint, invalid: analysis.invalidProgress },
+            context: {},
+            recordUsage: async () => {},
+        });
+        const result = await agent.generate({ prompt: '帮我做月度订单分析' });
+        assert.match(result.text, /42/);
+        assert.equal(sqlCalls, 1);
+        const state = await analysis.inspectCheckpoint();
+        assert.equal(state?.stopped, false);
+        assert.equal(state?.checkpointId, 'monthly:2');
+        assert.equal(state?.stage, 'query');
+        assert.equal((await f.database.select().from(schema.artifacts)).length, 1);
+
+        // Replaying the same SDK call must not consume another checkpoint.
+        await analysis.tools.publishProgress.execute!(progress, call('monthly-4'));
+        assert.equal((await analysis.inspectCheckpoint())?.checkpointId, 'monthly:2');
+        await f.start('later-turn');
+        await assert.rejects(analysis.tools.publishProgress.execute!(progress, call('stale-progress')) as Promise<unknown>, /no longer active/);
+        assert.equal((await f.works.getById({ ...scope, workId: work.workId }))?.status, 'active');
+    } finally {
+        await f.close();
+    }
+});
+
 test('ordinary SDK checkpoints restrict tools without forcing tools or consuming the business step budget', async () => {
     const f = await fixture(true);
     try {
@@ -873,6 +981,13 @@ test('ordinary SDK checkpoints restrict tools without forcing tools or consuming
                 }
                 if (current >= calls.length) {
                     assert.equal(options.toolChoice?.type, 'none');
+                    assert.match(
+                        options.prompt
+                            .filter(message => message.role === 'system')
+                            .map(message => message.content)
+                            .join('\n'),
+                        /progress validation failed/,
+                    );
                     return {
                         content: [{ type: 'text', text: '进度说明未能提交，本轮停止查询；尚未核实最近订单的数据。' }],
                         finishReason: { unified: 'stop', raw: 'stop' },

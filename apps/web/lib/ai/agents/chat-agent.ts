@@ -101,7 +101,7 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                 return {
                     toolChoice: 'none' as const,
                     activeTools: [],
-                    instructions: `${options.instructions}\n${saveAttempted ? 'Conclusion saving was already attempted. Do not retry any saving tool. Answer with the available analysis and explain any save failure; do not claim the conclusions were saved.' : 'Tool budget exhausted. Answer from the available evidence and explain any unfinished work. Do not call more tools or claim unfinished work is complete.'}`,
+                    instructions: `${options.instructions}\n${saveAttempted ? 'Conclusion saving was already attempted. Do not retry any saving tool. Answer with the available analysis and explain any save failure; do not claim the conclusions were saved.' : checkpoint?.stopped ? 'Analysis stopped because progress validation failed or the progress budget was exhausted. Explain the interruption and which steps remain unfinished. Any SQL without a successful query result is unexecuted; do not present it as completed analysis. Do not call more tools.' : 'Tool budget exhausted. Answer from the available evidence and explain any unfinished work. Do not call more tools or claim unfinished work is complete.'}`,
                 };
             }
             const reportStatus = await options.requiredReport?.status();

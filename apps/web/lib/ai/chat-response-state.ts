@@ -25,6 +25,22 @@ export function buildChatResponseMetadata(metadata: unknown, finishReason: strin
     };
 }
 
+export function buildChatCompletionMetadata(options: {
+    message: UIMessage;
+    finishReason?: string;
+    responseError: string | null;
+    progressError: string | null;
+    isAborted: boolean;
+}) {
+    const { message, finishReason, isAborted } = options;
+    // A text fallback does not recover a turn whose tools were forcibly stopped.
+    const error = options.progressError ?? (finishReason !== 'error' && hasUsableAssistantResponse(message) ? null : options.responseError);
+    return {
+        ...buildChatResponseMetadata(message.metadata, finishReason, error),
+        responseStatus: isAborted ? 'aborted' : finishReason === 'error' || error ? 'failed' : 'completed',
+    };
+}
+
 export function hasUsableAssistantResponse(message: UIMessage): boolean {
     if (message.role !== 'assistant' || getAssistantResponseError(message) || asRecord(message.metadata)?.finishReason === 'error') return false;
     return (message.parts ?? []).some(part => {

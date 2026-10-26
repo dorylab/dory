@@ -4904,6 +4904,7 @@
                 "Action": "操作"
             },
             "WorkedFor": "Worked for {duration}",
+            "WorkingFor": "Working for {duration}",
             "Groups": {
                 "ReadKnowledge": "知識ソースを {count} 件参照",
                 "SearchKnowledge": "ナレッジを {count} 回検索",

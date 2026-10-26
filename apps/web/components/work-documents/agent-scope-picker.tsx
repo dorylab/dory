@@ -97,7 +97,7 @@ export function AgentScopePicker({
     };
     const triggerClass = 'h-8 max-w-full gap-2 px-2 text-xs text-muted-foreground hover:text-foreground';
     return (
-        <div className="flex flex-wrap items-center gap-1 rounded-b-xl border border-t-0 bg-muted/40 px-2 py-1.5" aria-label={t('Label')} data-testid="agent-scope-picker">
+        <div className="flex min-w-0 flex-wrap items-center gap-1" aria-label={t('Label')} data-testid="agent-scope-picker">
             <Popover open={!disabled && open === 'sources'} onOpenChange={value => setOpen(value ? 'sources' : null)}>
                 <PopoverTrigger asChild>
                     <Button type="button" variant="ghost" className={triggerClass} disabled={disabled} aria-label={t('Sources')} title={sourceLabel}>

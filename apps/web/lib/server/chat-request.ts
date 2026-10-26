@@ -26,7 +26,7 @@ import { buildDoryAgentContext, type DoryAgentSchemaTableRef } from '@/lib/ai/ag
 import { resolveDoryAgentModel } from '@/lib/ai/agents/model';
 import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
-import { buildChatResponseMetadata, hasUsableAssistantResponse } from '@/lib/ai/chat-response-state';
+import { buildChatCompletionMetadata } from '@/lib/ai/chat-response-state';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import {
     DORY_CODEX_CHAT_ID_HEADER,
@@ -452,7 +452,9 @@ export async function handleChatRequest(req: Request) {
         const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
         const agentInstructions = [
             agentContext.instructions,
-            analysis && progressCheckpoints ? `${CHAT_CHECKPOINT_INSTRUCTIONS}\nInitial checkpointId: ${requestId}:0` : null,
+            analysis && progressCheckpoints
+                ? `${CHAT_CHECKPOINT_INSTRUCTIONS}${isLocalAiAgentProvider(execution.providerKey) ? `\nInitial MCP checkpointId: ${requestId}:0` : ''}`
+                : null,
             resolvedContext.instruction,
             contextInput.outputIntent === 'report'
                 ? 'This turn explicitly requests a NEW persistent report. Create and save a ready report before completing. Do not update an open or referenced report. Use the requested source answer and conversation as context; verify any numerical evidence.'
@@ -592,6 +594,7 @@ export async function handleChatRequest(req: Request) {
         }
 
         let responseError: string | null = null;
+        let completionMetadata: ReturnType<typeof buildChatCompletionMetadata> | undefined;
         let reportCompletionError: string | null = null;
         let summarySave: { status: string; error?: string } | undefined;
         const stream = await createAgentUIStream({
@@ -620,6 +623,14 @@ export async function handleChatRequest(req: Request) {
                         | { requestId?: string; summarySave?: { status: string; error?: string }; summarySaved?: boolean; progressStopped?: boolean }
                         | undefined;
                     summarySave = turn?.requestId === requestId && turn.summarySave ? { status: turn.summarySave.status, error: turn.summarySave.error } : undefined;
+                    const progressStopped = turn?.requestId === requestId && turn.progressStopped === true;
+                    completionMetadata = buildChatCompletionMetadata({
+                        message: event.responseMessage,
+                        finishReason: event.finishReason,
+                        responseError,
+                        progressError: progressStopped ? translateApi('Api.Chat.Errors.AnalysisInterrupted', undefined, locale) : null,
+                        isAborted: event.isAborted,
+                    });
                     if (work && isLocalAiAgentProvider(execution.providerKey)) {
                         const saved = (await db.works.listChatResponses({ organizationId, userId, workId: work.workId })).find(
                             response => response.id === messageId && (response.metadata?.summarySaved === true || response.metadata?.reportSaved === true),
@@ -662,11 +673,7 @@ export async function handleChatRequest(req: Request) {
                             role: 'assistant',
                             parts: ((event.responseMessage as any).parts ?? []) as any,
                             metadata: {
-                                ...buildChatResponseMetadata(
-                                    event.responseMessage.metadata,
-                                    event.finishReason,
-                                    event.finishReason !== 'error' && hasUsableAssistantResponse(event.responseMessage) ? null : responseError,
-                                ),
+                                ...completionMetadata,
                                 userMessageId: currentUserMessage?.id,
                                 sourceMessageId: contextInput.sourceMessageId,
                                 reportDocumentId: reports?.currentId() ?? undefined,
@@ -679,7 +686,6 @@ export async function handleChatRequest(req: Request) {
                                 requestId,
                                 summarySaved: Boolean(analysis?.getFinalAnswer() || (turn?.requestId === requestId && turn.summarySaved)),
                                 summarySave,
-                                responseStatus: event.isAborted ? 'aborted' : event.finishReason === 'error' || turn?.progressStopped ? 'failed' : 'completed',
                                 ...(isLocalAiAgentProvider(execution.providerKey) ? { timelineVersion: 1, timelineRequestId: requestId } : {}),
                             },
                             createdAt: new Date(),
@@ -741,6 +747,7 @@ export async function handleChatRequest(req: Request) {
                         controller.enqueue(chunk);
                     },
                     flush(controller) {
+                        if (completionMetadata) controller.enqueue({ type: 'message-metadata', messageMetadata: completionMetadata });
                         if (summarySave) controller.enqueue({ type: 'message-metadata', messageMetadata: { summarySave } });
                         if (reports?.currentId() || reportCompletionError)
                             controller.enqueue({

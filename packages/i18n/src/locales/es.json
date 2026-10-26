@@ -4898,6 +4898,7 @@
                 "Action": "Acción"
             },
             "WorkedFor": "Worked for {duration}",
+            "WorkingFor": "Working for {duration}",
             "Groups": {
                 "ReadKnowledge": "Leídas {count} fuentes de conocimiento",
                 "SearchKnowledge": "Conocimiento buscado {count} veces",

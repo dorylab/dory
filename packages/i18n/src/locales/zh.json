@@ -2668,6 +2668,7 @@
         "Chat": {
             "Errors": {
                 "MissingSessionId": "缺少会话 ID",
+                "AnalysisInterrupted": "分析因进度校验失败或达到进度上限而中断，部分步骤尚未完成。请以已返回的查询结果为准，不能将仅生成的 SQL 当作已执行的分析。请重试以完成分析。",
                 "SessionNotFound": "会话不存在",
                 "FetchSessionFailed": "获取会话详情失败",
                 "InvalidTitle": "无效的标题",
@@ -4910,6 +4911,7 @@
                 "Action": "操作"
             },
             "WorkedFor": "Worked for {duration}",
+            "WorkingFor": "Working for {duration}",
             "Groups": {
                 "ReadKnowledge": "阅读 {count} 个知识来源",
                 "SearchKnowledge": "检索 {count} 次知识",
