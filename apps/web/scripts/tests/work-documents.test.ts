@@ -163,6 +163,41 @@ test('partial edits reject ambiguous or missing anchors without losing untouched
     assert.throws(() => applyMarkdownEdits('Human note', [{ oldText: 'absent', newText: '' }]), /exactly once/);
 });
 
+test('multi-metric report charts validate and export every labeled series without losing the legacy single metric', () => {
+    const chart = {
+        type: 'line',
+        xKey: 'month',
+        yKeys: [
+            { key: 'revenue', label: '净收入 <USD>' },
+            { key: 'orders', label: '订单数' },
+        ],
+    };
+    const visual = { id: 'trend', title: '收入与订单', type: 'chart', evidenceId: 'art-1', chart };
+    const draft = { title: 'Report', markdown: '![Trend](dory://visual/trend)', visuals: [visual], status: 'ready' };
+    const parsed = workDraftSchema.parse(draft);
+    assert.deepEqual(parsed.visuals[0].chart, chart);
+    const svg = workChartSvg(parsed.visuals[0], {
+        ...content.evidence[0],
+        columns: ['month', 'revenue', 'orders'],
+        rows: [
+            { month: 'October', revenue: 200000, orders: 400 },
+            { month: 'November', revenue: 180000, orders: 350 },
+        ],
+    });
+    assert.equal((svg.match(/<polyline/g) ?? []).length, 2);
+    assert.match(svg, /净收入 &lt;USD&gt;/);
+    assert.match(svg, /订单数/);
+    assert.ok(!svg.includes('NaN'));
+    for (const invalid of [
+        { type: 'line', xKey: 'month' },
+        { ...chart, yKeys: [] },
+        { ...chart, yKeys: [{ label: 'Missing column' }] },
+        { ...chart, yKey: 'revenue' },
+    ]) {
+        assert.equal(workDraftSchema.safeParse({ ...draft, visuals: [{ ...visual, chart: invalid }] }).success, false);
+    }
+});
+
 test('Markdown export contains offline visuals and result tables without SQL or internal URLs', () => {
     const chart = { id: 'chart', title: 'Revenue', type: 'chart' as const, evidenceId: 'art-1', chart: { type: 'bar' as const, xKey: 'month', yKey: 'revenue' } };
     const document: WorkDocumentView = {

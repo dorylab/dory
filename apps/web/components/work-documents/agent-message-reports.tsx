@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import type { UIMessage } from 'ai';
 import type { WorkDocumentSummary } from '@dory/shared/types/work-document';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Loader2 } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { ChatMetadata } from '@/lib/chat-context/types';
@@ -69,10 +69,7 @@ export function AgentMessageReports({
     const t = useTranslations('ChatComposer');
     if (message.role !== 'assistant') return null;
     const documents = reportsForMessage(message, messages, reports);
-    const latestUser = messages.findLast(item => item.role === 'user');
-    const request = latestUser?.metadata as ChatMetadata | undefined;
-    const generating = busy && request?.outputIntent === 'report' && (request.sourceMessageId === message.id || (!request.sourceMessageId && message.id === messages.at(-1)?.id));
-    if (!documents.length && !generating) return null;
+    if (!documents.length) return null;
     return (
         <div className="mb-4 space-y-2" data-testid="message-reports">
             {documents.map(document => (
@@ -91,17 +88,12 @@ export function AgentMessageReports({
                             </span>
                         )}
                         <span className="mt-2 block text-xs text-muted-foreground">
-                            {t(document.status === 'ready' ? 'Saved' : busy ? 'Generating' : 'Incomplete')} · {t('OpenReport')}
+                            {document.status === 'ready' ? `${t('Saved')} · ` : !busy ? `${t('Incomplete')} · ` : ''}
+                            {t('OpenReport')}
                         </span>
                     </span>
                 </button>
             ))}
-            {generating && !documents.length && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    {t('Generating')}
-                </div>
-            )}
         </div>
     );
 }

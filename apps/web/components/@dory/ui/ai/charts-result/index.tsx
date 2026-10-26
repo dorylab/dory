@@ -125,7 +125,9 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 pb-3 pt-0">
-                    <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">{t(result.dataState === 'empty' ? 'ChartResult.EmptyQuery' : result.dataState === 'invalid-fields' ? 'ChartResult.InvalidFields' : 'ChartResult.NoData')}</div>
+                    <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">
+                        {t(result.dataState === 'empty' ? 'ChartResult.EmptyQuery' : result.dataState === 'invalid-fields' ? 'ChartResult.InvalidFields' : 'ChartResult.NoData')}
+                    </div>
                 </CardContent>
             </Card>
         );
@@ -158,7 +160,17 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                 >
                     <PieChart accessibilityLayer margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
                         <ChartTooltip content={<ChartTooltipContent nameKey={String(pieCategoryKey)} />} />
-                        <Pie data={data} dataKey={String(pieValueKey)} nameKey={String(pieCategoryKey)} cx="50%" cy="50%" innerRadius={44} outerRadius="75%" stroke="transparent">
+                        <Pie
+                            data={data}
+                            dataKey={String(pieValueKey)}
+                            nameKey={String(pieCategoryKey)}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={44}
+                            outerRadius="75%"
+                            stroke="transparent"
+                            isAnimationActive={false}
+                        >
                             {data.map((_, index) => (
                                 <Cell key={index} fill={DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length]} />
                             ))}
@@ -191,6 +203,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                                 radius={4}
                                 stackId={options?.stacked ? 'stack' : undefined}
                                 activeBar={false}
+                                isAnimationActive={false}
                             />
                         ))}
                     </BarChart>
@@ -214,7 +227,16 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                         <YAxis tickLine={false} axisLine={false} width={48} />
                         <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
                         {effectiveSeries.map(series => (
-                            <Line key={series.key} type="monotone" dataKey={series.key} stroke={`var(--color-${series.key})`} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                            <Line
+                                key={series.key}
+                                type="monotone"
+                                dataKey={series.key}
+                                stroke={`var(--color-${series.key})`}
+                                strokeWidth={2}
+                                dot={false}
+                                activeDot={{ r: 4 }}
+                                isAnimationActive={false}
+                            />
                         ))}
                     </LineChart>
                 </ChartContainer>
@@ -237,6 +259,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                             fill={`var(--color-${series.key})`}
                             fillOpacity={0.18}
                             stackId={options?.stacked ? 'stack' : undefined}
+                            isAnimationActive={false}
                         />
                     ))}
                 </AreaChart>

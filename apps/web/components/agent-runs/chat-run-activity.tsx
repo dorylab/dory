@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useQuery } from '@tanstack/react-query';
@@ -32,15 +32,18 @@ export function ChatAnalysisProcess({
     durationMs = null,
     startedAt,
     children,
+    renderTimeline,
 }: {
     streaming: boolean;
     failed?: boolean;
     ended?: boolean;
     durationMs?: number | null;
     startedAt?: number;
-    children: ReactNode;
+    children?: ReactNode;
+    renderTimeline?: (expanded: boolean) => ReactNode;
 }) {
     const t = useTranslations('AgentRuns');
+    const timelineId = useId();
     const [open, setOpen] = useState(streaming || failed);
     const [mountedAt] = useState(Date.now);
     const [now, setNow] = useState(mountedAt);
@@ -58,17 +61,27 @@ export function ChatAnalysisProcess({
         previous.current = phase;
     }, [phase]);
     return (
-        <details className="group/analysis my-3 text-sm" open={open} onToggle={event => setOpen(event.currentTarget.open)} data-testid="chat-analysis-process">
-            <summary className="flex cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                {phase === 'running' ? <Loader2 className="size-4 animate-spin" /> : <ChevronRight className="size-4 transition-transform group-open/analysis:rotate-90" />}
-                {!ended
-                    ? t('Chat.WorkingFor', { duration: duration ?? '<1s' })
-                    : duration
-                      ? t('Chat.WorkedFor', { duration })
-                      : t(failed ? 'Chat.Process' : 'Chat.ProcessCompleted')}
-            </summary>
-            <div className="mt-3 space-y-3">{children}</div>
-        </details>
+        <>
+            <details className="group/analysis my-3 text-sm" open={open} onToggle={event => setOpen(event.currentTarget.open)} data-testid="chat-analysis-process">
+                <summary
+                    aria-controls={renderTimeline ? timelineId : undefined}
+                    className="flex cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+                >
+                    {phase === 'running' ? <Loader2 className="size-4 animate-spin" /> : <ChevronRight className="size-4 transition-transform group-open/analysis:rotate-90" />}
+                    {!ended
+                        ? t('Chat.WorkingFor', { duration: duration ?? '<1s' })
+                        : duration
+                          ? t('Chat.WorkedFor', { duration })
+                          : t(failed ? 'Chat.Process' : 'Chat.ProcessCompleted')}
+                </summary>
+                {!renderTimeline && <div className="mt-3 space-y-3">{children}</div>}
+            </details>
+            {renderTimeline && (
+                <div id={timelineId} className="space-y-3" data-testid="chat-response-timeline">
+                    {renderTimeline(open)}
+                </div>
+            )}
+        </>
     );
 }
 
@@ -119,15 +132,22 @@ export function ChatTimeline({
     tools,
     events,
     ended,
+    collapsed = false,
     ...actions
-}: Actions & { items: ChatTimelineItem[]; tools: ChatMessageToolRow[]; events: AgentRunEventLike[]; ended: boolean; workId?: string }) {
+}: Actions & { items: ChatTimelineItem[]; tools: ChatMessageToolRow[]; events: AgentRunEventLike[]; ended: boolean; collapsed?: boolean; workId?: string }) {
     const { groups, unplaced } = buildChatTimeline(items, tools, events);
     return (
         <>
-            {groups.map(group =>
-                group.kind === 'content' ? <div key={group.id}>{group.content}</div> : <ToolGroup key={group.id} activities={group.activities} ended={ended} {...actions} />,
+            {groups.map(group => (
+                <div key={group.id} data-timeline-id={group.id} hidden={collapsed && !(group.kind === 'content' && group.persistent)}>
+                    {group.kind === 'content' ? group.content : <ToolGroup activities={group.activities} ended={ended} {...actions} />}
+                </div>
+            ))}
+            {unplaced.length > 0 && (
+                <div hidden={collapsed}>
+                    <ToolGroup activities={unplaced} ended={ended} {...actions} />
+                </div>
             )}
-            {unplaced.length > 0 && <ToolGroup activities={unplaced} ended={ended} {...actions} />}
         </>
     );
 }
@@ -139,6 +159,7 @@ export function ChatRunActivity({
     tools,
     timeline,
     answer,
+    inlineResults = false,
     failed = false,
     responseError,
     showLinks = true,
@@ -152,6 +173,7 @@ export function ChatRunActivity({
     tools: ChatMessageToolRow[];
     timeline: ChatTimelineItem[];
     answer: ReactNode;
+    inlineResults?: boolean;
     children?: ReactNode;
     failed?: boolean;
     responseError?: string;
@@ -230,6 +252,11 @@ export function ChatRunActivity({
                     failed={interrupted}
                     durationMs={chatTurnDuration(durationMs, turn, requestId)}
                     startedAt={turn?.requestId === requestId && turn.startedAt ? Date.parse(turn.startedAt) : undefined}
+                    renderTimeline={
+                        inlineResults
+                            ? expanded => <ChatTimeline items={items} tools={rows} events={mappedEvents} ended={ended} collapsed={!expanded} workId={workId} {...actions} />
+                            : undefined
+                    }
                 >
                     {isError && <p className="text-destructive">{t('Chat.LoadFailed')}</p>}
                     <ChatTimeline items={items} tools={rows} events={mappedEvents} ended={ended} workId={workId} {...actions} />
@@ -248,7 +275,7 @@ export function ChatRunActivity({
                 </div>
             )}
             {ended && incomplete && <p className="mb-3 text-sm text-muted-foreground">{t('Chat.Incomplete')}</p>}
-            {finalText ? <MessageResponse>{finalText}</MessageResponse> : answer}
+            {finalText && !(inlineResults && fromMessages) ? <MessageResponse>{finalText}</MessageResponse> : answer}
             {finalText && responseError && (
                 <p role="alert" className="text-sm text-destructive">
                     {responseError}

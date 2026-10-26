@@ -252,14 +252,15 @@ test('chat replays Knowledge activities and the saved final answer after refresh
     await openAnalysis(page);
     await expect(page.getByText(answer, { exact: true })).toBeVisible();
     const process = page.getByTestId('chat-analysis-process');
+    const response = page.getByTestId('chat-response-timeline');
     await expect(process).toHaveJSProperty('open', false);
     await expect(page.getByRole('link', { name: 'View Agent Run' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Continue in SQL workspace' })).toBeVisible();
     await expect(process.getByRole('link')).toHaveCount(0);
-    await expect(page.getByRole('application')).not.toBeVisible();
+    await expect(response.locator('.recharts-wrapper')).toBeVisible();
     await expect(page.getByText(answer, { exact: true })).toHaveCount(1);
     await expect(page.getByText('Read Knowledge source', { exact: true })).not.toBeVisible();
-    await expect(page.getByText('I will read the business definition before analyzing the results.', { exact: true })).not.toBeVisible();
+    await expect(page.getByText('I will read the business definition before analyzing the results.', { exact: true })).toBeVisible();
     const beforeAnswer = await page
         .getByText(answer, { exact: true })
         .evaluate(element => Boolean(document.querySelector('[data-testid="chat-analysis-process"]')!.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING));
@@ -271,12 +272,12 @@ test('chat replays Knowledge activities and the saved final answer after refresh
     await expect(page.getByText('Searched Knowledge', { exact: true })).toHaveCount(1);
     await expect(page.getByText('Loaded business definitions', { exact: true })).toHaveCount(1);
     await expect(process.locator('article')).toHaveCount(0);
-    await expect(process.locator('[data-tool-name="sqlRunner"]')).toHaveCount(1);
-    await expect(process.locator('[data-tool-name="read_asset"]')).toHaveCount(1);
-    await expect(process.locator('[data-tool-name="finishAnalysis"]')).toHaveCount(1);
-    await process.getByRole('button', { name: /Loaded business definitions/ }).click();
-    await expect(process.getByText('Commerce', { exact: true })).toBeVisible();
-    await expect(process.getByText('Operations', { exact: true })).toBeVisible();
+    await expect(response.locator('[data-tool-name="sqlRunner"]')).toHaveCount(1);
+    await expect(response.locator('[data-tool-name="read_asset"]')).toHaveCount(1);
+    await expect(response.locator('[data-tool-name="finishAnalysis"]')).toHaveCount(1);
+    await response.getByRole('button', { name: /Loaded business definitions/ }).click();
+    await expect(response.getByText('Commerce', { exact: true })).toBeVisible();
+    await expect(response.getByText('Operations', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'View Agent Run' })).toHaveAttribute('href', /\/agent-runs\/run-1$/);
     await expect(page.getByRole('link', { name: 'Continue in SQL workspace' })).toBeVisible();
     expect(
@@ -284,7 +285,7 @@ test('chat replays Knowledge activities and the saved final answer after refresh
             .getByRole('link', { name: 'View Agent Run' })
             .evaluate(element => Boolean(element.compareDocumentPosition(document.querySelector('[data-tool-name="finishAnalysis"]')!) & Node.DOCUMENT_POSITION_PRECEDING)),
     ).toBe(true);
-    await process.getByRole('button', { name: /Read Knowledge source/ }).click();
+    await response.getByRole('button', { name: /Read Knowledge source/ }).click();
     await expect(page.getByText('Net revenue definition', { exact: true })).toBeVisible();
     await expect(page.getByText('Source revision · revision-1', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('tool-activity-expanded.png'), fullPage: true });
@@ -309,7 +310,7 @@ test('failed finalization preserves the answer and clearly marks incomplete conc
     await expect(page.getByText('No matching Knowledge', { exact: true })).toHaveCount(0);
     await expect(page.getByTestId('chat-analysis-process')).toHaveJSProperty('open', true);
     await expandActionGroups(page);
-    const search = page.getByTestId('chat-analysis-process').locator('[data-tool-name="search_assets"]');
+    const search = page.getByTestId('chat-response-timeline').locator('[data-tool-name="search_assets"]');
     await expect(search.getByText('Failed', { exact: true })).toBeVisible();
     await search.getByRole('button').click();
     await expect(search.getByText('Knowledge temporarily unavailable', { exact: true })).toBeVisible();
@@ -410,7 +411,7 @@ test('Knowledge no matches and search failure use distinct tool statuses', async
     const process = page.getByTestId('chat-analysis-process');
     await process.locator('summary').first().click();
     await expandActionGroups(page);
-    const search = process.locator('[data-tool-name="search_assets"]');
+    const search = page.getByTestId('chat-response-timeline').locator('[data-tool-name="search_assets"]');
     await expect(search.getByText('No matches', { exact: true })).toBeVisible();
     await search.getByRole('button').click();
     await expect(search.getByText('No matching Knowledge', { exact: true })).toBeVisible();
@@ -587,15 +588,16 @@ test('a failed conclusion save keeps the later reply visible without repeating t
     await expect(page.getByText(answer, { exact: true })).toHaveCount(0);
 });
 
-test('SDK messages interleave action groups with updates and keep the final answer outside', async ({ page }, testInfo) => {
+test('SDK charts stay between their original prose and answer when activity collapses and after refresh', async ({ page }, testInfo) => {
     await openAnalysis(page, false, false, { interleaved: true });
     const process = page.getByTestId('chat-analysis-process');
     await expect(process).toHaveJSProperty('open', false);
     await process.locator('summary').first().click();
-    const intro = process.getByText('I will read the business definition before analyzing the results.', { exact: true });
-    const update = process.getByText('The definition is confirmed. I will query the data next.', { exact: true });
+    const response = page.getByTestId('chat-response-timeline');
+    const intro = response.getByText('I will read the business definition before analyzing the results.', { exact: true });
+    const update = response.getByText('The definition is confirmed. I will query the data next.', { exact: true });
     await expect(update).toBeVisible();
-    const order = await process.evaluate(element => {
+    const order = await response.evaluate(element => {
         const children = [...element.querySelectorAll('[data-testid="chat-tool-group"], p')];
         return children.map(node => node.textContent ?? '');
     });
@@ -604,10 +606,26 @@ test('SDK messages interleave action groups with updates and keep the final answ
     expect(order.findIndex(text => text.includes('The definition is confirmed'))).toBeLessThan(order.findIndex(text => text.includes('Query data')));
     await expect(intro).toBeVisible();
     await expect(process.getByText(answer, { exact: true })).toHaveCount(0);
+    const chart = response.locator('.recharts-wrapper');
+    await expect(chart).toBeVisible();
+    const chartNode = await chart.elementHandle();
+    const visibleOrder = () =>
+        response
+            .locator(':scope > [data-timeline-id]')
+            .evaluateAll(nodes => nodes.filter(node => !node.hasAttribute('hidden')).map(node => (node.querySelector('.recharts-wrapper') ? 'chart' : (node.textContent ?? ''))));
+    await process.locator('summary').first().click();
+    await expect(process).toHaveJSProperty('open', false);
+    await expect(chart).toBeVisible();
+    expect(await chartNode!.evaluate(node => node.isConnected)).toBe(true);
+    const collapsedOrder = await visibleOrder();
+    expect(collapsedOrder.findIndex(text => text.includes('The definition is confirmed'))).toBeLessThan(collapsedOrder.indexOf('chart'));
+    expect(collapsedOrder.indexOf('chart')).toBeLessThan(collapsedOrder.findIndex(text => text.includes(answer)));
     await page.screenshot({ path: testInfo.outputPath('ordered-sdk-process.png'), fullPage: true });
     await page.reload();
     await expect(page.getByTestId('chat-analysis-process')).toHaveJSProperty('open', false);
     await expect(page.getByText(answer, { exact: true })).toBeVisible();
+    await expect(chart).toBeVisible();
+    expect(await visibleOrder()).toEqual(collapsedOrder);
 });
 
 for (const outcome of ['completed', 'failed', 'aborted'] as const) {

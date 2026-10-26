@@ -210,6 +210,58 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         assert.equal(ready.content.evidence.length, 2);
         assert.equal(ready.content.evidence[0].truncated, true);
         assert.deepEqual(ready.content.evidence[0].rows, [{ revenue: 42 }]);
+        await t.test('report creation saves all chart series and rejects an invalid secondary evidence column', async t => {
+            t.mock.method(db.resultSets, 'readRows', async () => ({
+                columns: [{ name: 'month' }, { name: 'net_revenue' }, { name: 'order_count' }],
+                rows: [{ month: '2026-06', net_revenue: 181273.27, order_count: 421 }],
+                rowCount: 1,
+                dataAvailability: 'full',
+            }));
+            const tools = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:multi-metric',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            const { workDraftSchema } = await import('@/lib/work-documents/schema');
+            const input = workDraftSchema.parse({
+                title: 'Monthly trends',
+                markdown: '![Trends](dory://visual/revenue_trend)',
+                status: 'ready',
+                visuals: [
+                    {
+                        id: 'revenue_trend',
+                        type: 'chart',
+                        title: 'Monthly trends',
+                        evidenceId: 'orders',
+                        chart: {
+                            type: 'line',
+                            xKey: 'month',
+                            yKeys: [
+                                { key: 'net_revenue', label: '净收入' },
+                                { key: 'order_count', label: '订单数' },
+                            ],
+                        },
+                    },
+                ],
+            });
+            const invalid = structuredClone(input);
+            const invalidChart = invalid.visuals[0].chart;
+            assert.ok(invalidChart && 'yKeys' in invalidChart);
+            invalidChart.yKeys[1].key = 'invented';
+            await assert.rejects(tools.tools.createWorkReport.execute!(invalid, call) as Promise<unknown>, /Chart columns do not match/);
+            const saved = await tools.tools.createWorkReport.execute!(input, call);
+            assert.ok('id' in saved);
+            assert.equal(saved.status, 'ready');
+            assert.deepEqual(saved.content.visuals, input.visuals);
+            assert.equal(saved.content.evidence[0].rows[0].order_count, 421);
+            assert.equal(await tools.completionStatus(), 'ready');
+            assert.deepEqual((await db.workDocuments.get({ ...owner, documentId: saved.id })).content.visuals, input.visuals);
+            await db.workDocuments.archive({ ...owner, documentId: saved.id, archived: true });
+        });
         expired = true;
         const human = await saveWorkDraft(db, {
             ...owner,

@@ -1013,7 +1013,7 @@ test('SDK monthly analysis advances from three schema actions to SQL with host-o
     }
 });
 
-test('calling an existing chart tool in the wrong stage forces a progress transition before retrying', async () => {
+test('a blocked chart stays pending across progress publication and must execute before the final answer', async () => {
     const { tool } = await import('ai');
     const { z } = await import('zod');
     const { initialChatCheckpoints, applyCheckpointCommand } = await import('@dory/shared/types/chat-checkpoints');
@@ -1038,7 +1038,18 @@ test('calling an existing chart tool in the wrong stage forces a progress transi
                     assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'publishProgress' });
                     assert.match(JSON.stringify(options.prompt), /NOT an unavailable capability/);
                 }
-                if (current === calls.length) return { content: [{ type: 'text', text: '图表已生成。' }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] };
+                if (current === 2) {
+                    // This provider would otherwise answer "chart created" right
+                    // after publishing progress, without executing chartBuilder.
+                    assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'chartBuilder' });
+                    assert.match(JSON.stringify(options.prompt), /publishing progress did not complete this action/);
+                    assert.equal(executed, 0);
+                }
+                if (current === calls.length) {
+                    assert.equal(options.toolChoice?.type, 'auto');
+                    assert.equal(executed, 1);
+                    return { content: [{ type: 'text', text: '图表已生成。' }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] };
+                }
                 return {
                     content: [{ type: 'tool-call', toolCallId: `stage-chart-${current}`, toolName: calls[current].toolName, input: JSON.stringify(calls[current].input) }],
                     finishReason: { unified: 'tool-calls', raw: 'tool_calls' },

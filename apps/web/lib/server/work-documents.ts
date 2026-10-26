@@ -91,7 +91,8 @@ export async function saveWorkDraft(
     for (const visual of visuals) {
         if (visual.chart) {
             const source = evidence.find(item => item.artifactId === visual.evidenceId);
-            if (!source?.columns.includes(visual.chart.xKey) || !source.columns.includes(visual.chart.yKey))
+            const yKeys = visual.chart.yKeys ? visual.chart.yKeys.map(series => series.key) : [visual.chart.yKey];
+            if (!source?.columns.includes(visual.chart.xKey) || yKeys.some(key => !source.columns.includes(key)))
                 throw new DatabaseError('Chart columns do not match its evidence.', 400);
         }
     }

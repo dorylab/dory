@@ -10,6 +10,16 @@ export function formatWorkValue(value: unknown) {
 /** Same snapshot and SVG are used on screen, in HTML and when printing to PDF. */
 export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string {
     if (!visual.chart) return '';
+    if (visual.chart.yKeys) {
+        // Separate scales keep differently sized metrics (e.g. revenue and order
+        // counts) readable without implying that they share the same units.
+        const { type, xKey, yKeys } = visual.chart;
+        const panels = yKeys.map(({ key, label }, index) => {
+            const svg = workChartSvg({ ...visual, title: label ?? key, chart: { type, xKey, yKey: key } }, evidence);
+            return `<g transform="translate(0,${index * 314})"><text x="65" y="20" fill="currentColor" font-size="14">${escapeHtml(label ?? key)}</text>${svg.replace('<svg ', '<svg y="24" width="660" height="290" ')}</g>`;
+        });
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 ${314 * yKeys.length}" data-multiple-series="true" role="img" aria-label="${escapeHtml(visual.title)}">${panels.join('')}</svg>`;
+    }
     const { xKey, yKey, type } = visual.chart;
     const points = evidence.rows
         .filter(row => row[yKey] !== null && row[yKey] !== undefined && String(row[yKey]).trim() !== '')
@@ -74,7 +84,7 @@ export function renderWorkMarkdown(content: WorkDocumentView['content']): string
     });
     return parser.parse(content.markdown, { async: false });
 }
-export const workPrintStyles = `body{font:16px/1.6 system-ui,sans-serif;color:#171717;background:white;max-width:960px;margin:40px auto;padding:24px}h1{line-height:1.2}h2{font-size:22px;margin-top:32px}.source,header p{font-size:12px;color:#666}.metric{font-size:36px}figure{margin:32px 0}figcaption{font-weight:600}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left;overflow-wrap:anywhere}svg{max-height:400px;width:100%;color:#333}blockquote{border-left:3px solid #888;margin-left:0;padding-left:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:inherit}@media print{body{margin:0;padding:0}svg,tr{break-inside:avoid}h1,h2,h3,h4,figcaption{break-after:avoid}figure[data-visual-type="chart"],figure[data-visual-type="metric"],li{break-inside:avoid}thead{display:table-header-group}@page{margin:18mm}}`;
+export const workPrintStyles = `body{font:16px/1.6 system-ui,sans-serif;color:#171717;background:white;max-width:960px;margin:40px auto;padding:24px}h1{line-height:1.2}h2{font-size:22px;margin-top:32px}.source,header p{font-size:12px;color:#666}.metric{font-size:36px}figure{margin:32px 0}figcaption{font-weight:600}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left;overflow-wrap:anywhere}svg{max-height:400px;width:100%;color:#333}svg[data-multiple-series]{max-height:none}blockquote{border-left:3px solid #888;margin-left:0;padding-left:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:inherit}@media print{body{margin:0;padding:0}svg,tr{break-inside:avoid}h1,h2,h3,h4,figcaption{break-after:avoid}figure[data-visual-type="chart"],figure[data-visual-type="metric"],li{break-inside:avoid}thead{display:table-header-group}@page{margin:18mm}}`;
 export function renderWorkHtml(document: WorkDocumentView): string {
     const sources = document.content.evidence
         .map(

@@ -27,6 +27,36 @@ test('timeline keeps source order when tool completion and server events arrive 
     assert.equal(result.unplaced.length, 1);
 });
 
+test('inline charts keep their original positions as later text and charts arrive and progress collapses', () => {
+    const tools = ['chart-1', 'chart-2'].map(toolCallId => ({ toolCallId, toolName: 'chartBuilder' }));
+    const first: ChatTimelineItem[] = [
+        { id: 'progress', kind: 'content', content: 'Building the revenue chart.' },
+        { id: 'intro', kind: 'content', content: 'Monthly revenue:', persistent: true },
+        { id: 'tool-1', kind: 'tool', toolCallId: 'chart-1' },
+        { id: 'chart-1', kind: 'content', content: 'revenue chart', relatedToolCallId: 'chart-1', persistent: true },
+    ];
+    const later: ChatTimelineItem[] = [
+        ...first,
+        { id: 'second-intro', kind: 'content', content: 'Monthly orders:', persistent: true },
+        { id: 'tool-2', kind: 'tool', toolCallId: 'chart-2' },
+        { id: 'chart-2', kind: 'content', content: 'orders chart', relatedToolCallId: 'chart-2', persistent: true },
+        { id: 'answer', kind: 'content', content: 'Revenue and orders rose together.', persistent: true },
+    ];
+    const initial = buildChatTimeline(first, tools.slice(0, 1), []);
+    const resolved = resolveChatTimeline(later, tools, [{ id: 'poll', kind: 'content', content: 'Charts completed.' }], []);
+    const completed = buildChatTimeline(resolved.items, resolved.tools, []);
+    assert.deepEqual(completed.groups.slice(0, initial.groups.length), initial.groups);
+    assert.deepEqual(
+        completed.groups.filter(group => group.kind === 'content' && group.persistent).map(group => group.id),
+        ['intro', 'chart-1', 'second-intro', 'chart-2', 'answer'],
+    );
+    assert.equal(
+        completed.groups.find(group => group.id === 'chart-1'),
+        first[3],
+    );
+    assert.deepEqual(completed.unplaced, []);
+});
+
 test('public JSONL events preserve message/tool order, final identity and ignore private reasoning', () => {
     let entries: ChatProgressEntry[] = [];
     const parser = createLocalAgentProgressParser(entry => {

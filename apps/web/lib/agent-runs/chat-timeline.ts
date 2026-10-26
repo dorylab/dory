@@ -2,8 +2,12 @@ import type { ReactNode } from 'react';
 import { mergeChatToolActivities, type ChatMessageTool, type ChatToolActivity } from './chat-tool-activity';
 import type { AgentRunEventLike } from './summary';
 
-export type ChatTimelineItem = { id: string; kind: 'content'; content: ReactNode; relatedToolCallId?: string } | { id: string; kind: 'tool'; toolCallId: string };
-export type ChatTimelineGroup<T extends ChatMessageTool> = { id: string; kind: 'content'; content: ReactNode } | { id: string; kind: 'tools'; activities: ChatToolActivity<T>[] };
+export type ChatTimelineItem =
+    | { id: string; kind: 'content'; content: ReactNode; relatedToolCallId?: string; persistent?: boolean }
+    | { id: string; kind: 'tool'; toolCallId: string };
+export type ChatTimelineGroup<T extends ChatMessageTool> =
+    | { id: string; kind: 'content'; content: ReactNode; persistent?: boolean }
+    | { id: string; kind: 'tools'; activities: ChatToolActivity<T>[] };
 
 /** SDK messages own their streamed prose; polling must not replace it with checkpoint summaries. */
 export function resolveChatTimeline<T extends ChatMessageTool>(items: ChatTimelineItem[], tools: T[], progressItems: ChatTimelineItem[], progressTools: T[]) {

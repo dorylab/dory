@@ -103,6 +103,10 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
     let didRenderSources = false;
     const { toolResultById, toolCallLocationById } = buildToolCompatibilityIndex(messages);
     const typedToolPreferredIndexById = buildTypedToolPreferredIndex((message.parts ?? []) as any[]);
+    const hasInlineCharts = message.parts.some(part => {
+        const callId = getToolCallId(part);
+        return Boolean(getChartResultFromPart(mergeLegacyToolResult(part, callId ? toolResultById.get(callId) : undefined)));
+    });
 
     const getToolStepSummary = (part: any) => {
         const toolName = getToolName(part);
@@ -404,11 +408,25 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
     const lastActionIndex = message.parts.findLastIndex(part => isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part));
     (message.parts ?? []).forEach((part, index) => {
         const before = toolRows.length;
+        const chartsBefore = chartResults.length;
         const item = renderPart(part, index);
         for (const row of toolRows.slice(before)) timeline.push({ id: `tool:${row.toolCallId}`, kind: 'tool', toolCallId: row.toolCallId });
         if (!item) return;
         const completedAnswer = getToolName(part) === 'finishAnalysis' && getToolOutput(part)?.ok === true;
         if (part.type === 'text' && finalAnswer && part.text.trim() === finalAnswer.trim()) return;
+        if (hasInlineCharts) {
+            // Keep prose and charts under stable, ordered parents throughout the
+            // stream. Only explicit progress, reasoning and tool rows collapse.
+            processItems.push(item);
+            timeline.push({
+                id: `part:${index}`,
+                kind: 'content',
+                content: item,
+                relatedToolCallId: getToolCallId(part) ?? undefined,
+                persistent: part.type === 'text' || completedAnswer || chartResults.length > chartsBefore || part.type === 'source-url' || part.type === 'file',
+            });
+            return;
+        }
         const intermediate =
             hasProcess &&
             !completedAnswer &&
@@ -429,7 +447,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         if (sources) contentItems.unshift(sources);
     }
 
-    if (didUserRequestChart(messages, messageIndex) && chartResults.length === 0 && sqlResults.length > 0) {
+    if ((!isLatestAssistant || !isStreaming) && didUserRequestChart(messages, messageIndex) && chartResults.length === 0 && sqlResults.length > 0) {
         const autoChart = buildAutoChartFromSql(sqlResults[0]);
         if (autoChart) {
             contentItems.push(
@@ -479,6 +497,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                             tools={toolRows}
                             timeline={timeline}
                             answer={contentItems}
+                            inlineResults={hasInlineCharts}
                             responseError={getAssistantResponseError(message)}
                             failed={
                                 Boolean(getAssistantResponseError(message)) ||
@@ -496,6 +515,21 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                         <ChatAnalysisProcess
                             streaming={isLatestAssistant && isStreaming}
                             failed={Boolean(getAssistantResponseError(message)) || metadata?.responseStatus === 'aborted' || metadata?.responseStatus === 'failed'}
+                            renderTimeline={
+                                hasInlineCharts
+                                    ? expanded => (
+                                          <ChatTimeline
+                                              items={timeline}
+                                              tools={toolRows}
+                                              events={[]}
+                                              ended={!isLatestAssistant || !isStreaming}
+                                              collapsed={!expanded}
+                                              onCopySql={onCopySql}
+                                              onManualExecute={onManualExecute}
+                                          />
+                                      )
+                                    : undefined
+                            }
                         >
                             <ChatTimeline
                                 items={timeline}

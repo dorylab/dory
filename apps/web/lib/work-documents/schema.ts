@@ -15,6 +15,20 @@ export const analysisScopeSchema = z
         message: 'Database selections must belong to the selected data sources.',
         path: ['databasesByConnection'],
     });
+const chartAxes = { type: z.enum(['bar', 'line']), xKey: z.string().min(1) };
+const workChartSchema = z.union([
+    z.object({ ...chartAxes, yKey: z.string().min(1) }).strict(),
+    z
+        .object({
+            ...chartAxes,
+            yKeys: z
+                .array(z.object({ key: z.string().min(1), label: z.string().max(300).optional() }).strict())
+                .min(1)
+                .max(10),
+        })
+        .strict(),
+]);
+
 export const workVisualSchema = z
     .object({
         id: z
@@ -24,10 +38,11 @@ export const workVisualSchema = z
         type: z.enum(['metric', 'chart', 'table']),
         title: z.string().max(300),
         evidenceId: z.string().min(1),
-        chart: z
-            .object({ type: z.enum(['bar', 'line']), xKey: z.string(), yKey: z.string() })
+        chart: workChartSchema
             .optional()
-            .describe('Required when type is chart. xKey and yKey must be exact columns from the referenced evidence. Omit for table.'),
+            .describe(
+                'Required for chart. Use xKey and either yKey for one metric or yKeys:[{key,label?}] for multiple metrics. Every key must be an exact evidence column. Multiple metrics have separately labeled scales. Omit for table.',
+            ),
         metric: z.object({ column: z.string(), rowIndex: z.number().int().min(0).max(499) }).optional(),
     })
     .superRefine((value, ctx) => {

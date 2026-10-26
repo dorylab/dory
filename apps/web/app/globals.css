@@ -669,5 +669,6 @@ body {
 .work-prose figure { margin: 1.5rem 0; }
 .work-prose figcaption { font-weight: 600; }
 .work-prose svg { width: 100%; max-height: 400px; }
+.work-prose svg[data-multiple-series] { max-height: none; }
 .work-prose .metric { font-size: 2rem; }
 .work-prose .source { color: var(--muted-foreground); font-size: .75rem; }

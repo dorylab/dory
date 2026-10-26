@@ -428,7 +428,9 @@ export async function handleChatRequest(req: Request) {
                 };
             }
         }
-        const sqlToolEnabled = Boolean(analysis && (connectionId || analysisScope?.connectionIds.length));
+        // Automatic source selection still exposes query/chart tools before a
+        // connection is selected. Their instructions must be present as well.
+        const sqlToolEnabled = Boolean(tools.sqlRunner);
         const work = await chatRun?.resolve();
         const knowledgeDiscovery = await analysis?.prepareKnowledge(currentUserText);
 
