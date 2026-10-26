@@ -10,6 +10,7 @@ import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
 import { getAssistantResponseError, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
+import { buildChatChartLayout } from '@/lib/agent-runs/chat-chart-layout';
 import { getChatResponseText } from '@/lib/agent-runs/chat-response';
 import { getAgentActivityTitleKey } from '@/lib/agent-runs/summary';
 import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
@@ -89,6 +90,8 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         .slice((message.parts ?? []).findLastIndex(part => getToolName(part) === 'finishAnalysis') + 1)
         .some(part => part.type === 'text' && part.text.trim());
     const finalAnswer = savedAnswer ? getChatResponseText([savedAnswer]) : !hasReplyAfterSave && (!isLatestAssistant || !isStreaming) ? getChatResponseText(finishParts) : '';
+    const unsavedAnswer = !savedAnswer && !hasReplyAfterSave && (!isLatestAssistant || !isStreaming) ? getChatResponseText(finishParts) : '';
+    const unsavedAnswerKey = `${message.id}-unsaved-answer`;
     const hasProcess =
         assistantMessage &&
         Boolean(
@@ -103,10 +106,41 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
     let didRenderSources = false;
     const { toolResultById, toolCallLocationById } = buildToolCompatibilityIndex(messages);
     const typedToolPreferredIndexById = buildTypedToolPreferredIndex((message.parts ?? []) as any[]);
-    const hasInlineCharts = message.parts.some(part => {
+    const inlineCharts = new Map<string, ChartResultPart>();
+    const chartByPartIndex = new Map<number, { id: string; result: ChartResultPart }>();
+    message.parts.forEach((part, index) => {
         const callId = getToolCallId(part);
-        return Boolean(getChartResultFromPart(mergeLegacyToolResult(part, callId ? toolResultById.get(callId) : undefined)));
+        const merged = mergeLegacyToolResult(part, callId ? toolResultById.get(callId) : undefined);
+        let result = getChartResultFromPart(merged);
+        if (!result) return;
+        if (!result.data.length && !result.dataState) {
+            result = getChartResultFromPart(merged, [...messages.slice(0, messageIndex), { ...message, parts: message.parts.slice(0, index) }])!;
+        }
+        const id = callId ?? `part-${index}`;
+        inlineCharts.set(id, result);
+        chartByPartIndex.set(index, { id, result });
     });
+    const hasInlineCharts = inlineCharts.size > 0;
+    const lastActionIndex = message.parts.findLastIndex(part => isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part));
+    const chartTexts =
+        assistantMessage && hasInlineCharts
+            ? message.parts.flatMap((part, index) => {
+                  if (part.type === 'text' && !(finalAnswer && part.text.trim() === finalAnswer.trim())) return [{ id: `${message.id}-text-${index}`, text: part.text }];
+                  if (getToolName(part) === 'finishAnalysis' && getToolOutput(part)?.ok === true && typeof getToolOutput(part).finalAnswer === 'string') {
+                      return [{ id: `${message.id}-tool-${getToolCallId(part) ?? index}`, text: getToolOutput(part).finalAnswer as string }];
+                  }
+                  return [];
+              })
+            : [];
+    if (unsavedAnswer) chartTexts.push({ id: unsavedAnswerKey, text: unsavedAnswer });
+    const fallbackChartTextId = savedAnswer
+        ? `${message.id}-tool-${getToolCallId(savedAnswer) ?? message.parts.indexOf(savedAnswer)}`
+        : lastTextIndex > lastActionIndex
+          ? `${message.id}-text-${lastTextIndex}`
+          : unsavedAnswer
+            ? unsavedAnswerKey
+            : undefined;
+    const chartLayout = buildChatChartLayout([...inlineCharts.keys()], chartTexts, isLatestAssistant && isStreaming ? undefined : fallbackChartTextId);
 
     const getToolStepSummary = (part: any) => {
         const toolName = getToolName(part);
@@ -136,7 +170,27 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         return summary === toolLabel ? summary : `${summary} · ${toolLabel}`;
     };
 
-    const renderTextPart = (text: string, key: string) => {
+    const renderTextPart = (text: string, key: string, resolveCharts = true): ReactNode => {
+        const layout = resolveCharts ? chartLayout.layouts.get(key) : undefined;
+        if (layout?.some(part => part.type === 'chart')) {
+            return (
+                <div key={key} className="space-y-3" data-testid="chat-answer-body">
+                    {layout.map((part, index) =>
+                        part.type === 'text' ? (
+                            renderTextPart(part.text, `${key}-prose-${index}`, false)
+                        ) : (
+                            <ChartResultCard key={`${key}-chart-${part.chartId}`} result={inlineCharts.get(part.chartId)!} source="tool" />
+                        ),
+                    )}
+                </div>
+            );
+        }
+        // The layout also removes duplicate or unavailable chart references.
+        if (layout)
+            text = layout
+                .filter(part => part.type === 'text')
+                .map(part => part.text)
+                .join('\n');
         const displayText = assistantMessage ? removeUnavailableImageMarkdown(text) : text;
         if (!displayText.trim()) return null;
 
@@ -269,7 +323,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         }
         if (toolName === 'finishAnalysis' && output?.ok === true && typeof output.finalAnswer === 'string') {
             renderToolStateCard({ part, key });
-            return <MessageResponse key={key}>{output.finalAnswer}</MessageResponse>;
+            return renderTextPart(output.finalAnswer, key);
         }
         const sqlResult = getSqlResultFromPart(part, t('Errors.SqlExecutionFailed'));
 
@@ -283,10 +337,12 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 resultContent: renderSqlResultBody(sqlResult, `${key}-result`),
             });
         }
-        const chartResult = getChartResultFromPart(part, [...messages.slice(0, messageIndex), { ...message, parts: message.parts.slice(0, index) }]);
-        if (chartResult) {
+        const chart = chartByPartIndex.get(index);
+        if (chart) {
+            const chartResult = chart.result;
             chartResults.push(chartResult);
             renderToolStateCard({ part, key, fallbackInput: inferToolArgsFromResult(part) });
+            if (chartLayout.placed.has(chart.id) || (isLatestAssistant && isStreaming)) return null;
             return <ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />;
         }
         if (!toolName) return null;
@@ -405,7 +461,6 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 </div>,
             );
     }
-    const lastActionIndex = message.parts.findLastIndex(part => isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part));
     (message.parts ?? []).forEach((part, index) => {
         const before = toolRows.length;
         const chartsBefore = chartResults.length;
@@ -458,9 +513,8 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         }
     }
 
-    if (assistantMessage && (!isLatestAssistant || !isStreaming) && !hasReplyAfterSave && finishParts.length && !finishParts.some(part => getToolOutput(part)?.ok === true)) {
-        const pendingAnswer = getChatResponseText(finishParts);
-        if (pendingAnswer) contentItems.push(<MessageResponse key={`${message.id}-unsaved-answer`}>{pendingAnswer}</MessageResponse>);
+    if (assistantMessage && unsavedAnswer) {
+        contentItems.push(renderTextPart(unsavedAnswer, unsavedAnswerKey));
     }
 
     if (

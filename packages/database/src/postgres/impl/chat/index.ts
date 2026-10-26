@@ -15,6 +15,7 @@ import type {
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { readWorkSources } from './work-sources';
 
 type DBLike = PostgresDBClient;
 
@@ -61,6 +62,7 @@ export class PostgresChatRepository implements ChatRepository {
                 archivedAt: chatSessions.archivedAt,
                 type: chatSessions.type,
                 title: chatSessions.title,
+                metadata: chatSessions.metadata,
             })
             .from(chatSessions)
             .where(and(eq(chatSessions.id, params.sessionId), eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)));
@@ -192,6 +194,51 @@ export class PostgresChatRepository implements ChatRepository {
         return (record as ChatSessionRecord | undefined) ?? null;
     }
 
+    async listWorkSources(owner: { organizationId: string; userId: string }, chatIds: string[]) {
+        this.assertInited();
+        return readWorkSources(this.db, owner, chatIds);
+    }
+
+    async claimWorkTitle(owner: { organizationId: string; userId: string; sessionId: string }) {
+        this.assertInited();
+        const [row] = await this.db
+            .update(chatSessions)
+            .set({
+                metadata: sql`coalesce(${chatSessions.metadata}, '{}'::jsonb) || '{"workTitleSource":"generating"}'::jsonb`,
+            })
+            .where(
+                and(
+                    eq(chatSessions.id, owner.sessionId),
+                    eq(chatSessions.organizationId, owner.organizationId),
+                    eq(chatSessions.userId, owner.userId),
+                    isNull(chatSessions.archivedAt),
+                    sql`${chatSessions.metadata}->>'workTitleSource' = 'pending'`,
+                ),
+            )
+            .returning({ id: chatSessions.id });
+        return Boolean(row);
+    }
+
+    async finishWorkTitle(owner: { organizationId: string; userId: string; sessionId: string }, title: string | null) {
+        this.assertInited();
+        await this.db
+            .update(chatSessions)
+            .set({
+                title,
+                updatedAt: new Date(),
+                metadata: sql`coalesce(${chatSessions.metadata}, '{}'::jsonb) || ${JSON.stringify({ workTitleSource: title ? 'agent' : 'failed' })}::jsonb`,
+            })
+            .where(
+                and(
+                    eq(chatSessions.id, owner.sessionId),
+                    eq(chatSessions.organizationId, owner.organizationId),
+                    eq(chatSessions.userId, owner.userId),
+                    isNull(chatSessions.archivedAt),
+                    sql`${chatSessions.metadata}->>'workTitleSource' = 'generating'`,
+                ),
+            );
+    }
+
     async updateSession(params: { organizationId: string; sessionId: string; userId: string; patch: ChatSessionUpdate }) {
         this.assertInited();
         await this.getScopedSessionOn(this.db, params);
@@ -206,7 +253,20 @@ export class PostgresChatRepository implements ChatRepository {
         };
 
         if (data.title !== undefined) assign('title', data.title);
-        if (data.metadata !== undefined) assign('metadata', data.metadata);
+        if (data.metadata !== undefined) {
+            const metadata = data.metadata === null ? null : JSON.stringify(data.metadata);
+            // Preserve the title claim atomically while retaining metadata replacement semantics.
+            assign(
+                'metadata',
+                sql`case when ${chatSessions.metadata} ? 'workTitleSource'
+                then coalesce(${metadata}::jsonb, '{}'::jsonb) || jsonb_build_object('workTitleSource', ${chatSessions.metadata}->'workTitleSource')
+                else ${metadata}::jsonb end`,
+            );
+        }
+        if (data.title !== undefined) {
+            const metadata = data.metadata === undefined ? sql`coalesce(${chatSessions.metadata}, '{}'::jsonb)` : sql`${JSON.stringify(data.metadata ?? {})}::jsonb`;
+            assign('metadata', sql`${metadata} || '{"workTitleSource":"user"}'::jsonb`);
+        }
         if ((data as any).settings !== undefined) assign('settings', (data as any).settings);
         if ((data as any).connectionId !== undefined) assign('connectionId', (data as any).connectionId);
         if ((data as any).activeDatabase !== undefined) assign('activeDatabase', (data as any).activeDatabase);
@@ -292,7 +352,7 @@ export class PostgresChatRepository implements ChatRepository {
 
             const normalizedUserId = params.message.role === 'user' ? params.userId : (params.message.userId ?? null);
 
-            const shouldAutoTitle = session.type === 'global' && params.message.role === 'user' && (!session.title || !session.title.trim());
+            const shouldAutoTitle = session.type === 'global' && !session.metadata?.workTitleSource && params.message.role === 'user' && (!session.title || !session.title.trim());
             const autoTitle = shouldAutoTitle ? this.deriveTitleFromParts(params.message.parts) : null;
 
             const [inserted] = await (tx as any)

@@ -46,6 +46,7 @@ type ChartsProps = {
     initialState?: Partial<ChartState>;
     onStateChange?: (state: ChartState) => void;
     stateSyncEnabled?: boolean;
+    presentationOnly?: boolean;
     onSaveArtifact?: (state: ChartState) => void;
     saveArtifactLabel?: string;
     saveArtifactPending?: boolean;
@@ -120,6 +121,7 @@ export function Charts({
     initialState,
     onStateChange,
     stateSyncEnabled = true,
+    presentationOnly = false,
     onSaveArtifact,
     saveArtifactLabel,
     saveArtifactPending,
@@ -377,6 +379,7 @@ export function Charts({
         <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
             <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
                 <ChartView
+                    presentationOnly={presentationOnly}
                     chartState={{ chartType, xKey, yKey, groupKey }}
                     chartStateIsAuto={chartStateIsAuto}
                     columnNames={columnNames}

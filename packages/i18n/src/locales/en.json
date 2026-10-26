@@ -5523,7 +5523,7 @@
         "Resources": {
             "NoArtifacts": "No artifacts yet.",
             "NoQueries": "No queries yet.",
-            "Title": "Session resources",
+            "Title": "Work outputs",
             "Description": "Agent Runs and reports for this conversation",
             "Back": "Back to resources",
             "Close": "Close resources",
@@ -5560,7 +5560,59 @@
             "RestoreFailed": "Restore failed. Review the latest version before retrying."
         },
         "GenerateFailed": "Unable to generate report.",
-        "Reports": "Reports"
+        "Reports": "Reports",
+        "Works": {
+            "Heading": "Works",
+            "New": "New Work",
+            "Untitled": "Untitled work",
+            "Search": "Search works and outputs…",
+            "Loading": "Loading…",
+            "Empty": "Your work will appear here.",
+            "NoMatches": "No matching works.",
+            "Updated": "Updated {time}",
+            "Actions": "Work actions",
+            "Rename": "Rename work",
+            "Delete": "Delete work",
+            "RenameDescription": "Give this work a clear task title.",
+            "DeleteDescription": "Remove this work from your list.",
+            "Title": "Work title",
+            "Cancel": "Cancel",
+            "Save": "Save",
+            "Outputs": "Outputs",
+            "Share": "Share",
+            "ShareDescription": "Choose one output, preview its contents, then export a file. Chat history and source configuration are not attached.",
+            "ChooseOutput": "Choose an output",
+            "Unavailable": "Unavailable",
+            "UnavailableDescription": "This output is a draft, or its saved data is missing or expired. Export is unavailable.",
+            "NoShareableOutputs": "This work has no outputs to share yet.",
+            "PreviewFailed": "Unable to load this saved output. Check its availability and try again.",
+            "Retry": "Retry",
+            "PreviewRows": "Preview data · {count, plural, one {# saved row} other {# saved rows}}",
+            "FullRows": "Full saved data · {count, plural, one {# row} other {# rows}}",
+            "TablePreview": "Showing the first {count} rows; the file includes all loaded rows.",
+            "ExportFailed": "Export failed. Please try again once the preview has loaded.",
+            "Exporting": "Exporting…",
+            "ExportPreview": "Export preview data",
+            "Export": "Export file",
+            "Status": {
+                "running": "Running",
+                "completed": "Completed",
+                "failed": "Failed",
+                "stopped": "Stopped",
+                "idle": "Ready to continue"
+            },
+            "Types": {
+                "report": "Report",
+                "chart": "Chart",
+                "result": "Result table"
+            },
+            "Counts": {
+                "report": "{count, plural, one {# Report} other {# Reports}}",
+                "chart": "{count, plural, one {# Chart} other {# Charts}}",
+                "result": "{count, plural, one {# Result} other {# Results}}"
+            },
+            "ChartNotReady": "The chart is still loading or has no saved data to export."
+        }
     },
     "ChatComposer": {
         "Add": "Add",

@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { useChat } from '@ai-sdk/react';
 import type { AnalysisScope, WorkDocumentSummary, WorkDocumentView } from '@dory/shared/types/work-document';
+import type { AgentWorkSummary } from '@dory/shared/types/agent-work';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { ListTree, Sparkles } from 'lucide-react';
@@ -26,11 +28,13 @@ import MessageRenderer from '@/app/(app)/[organization]/[connectionId]/chatbot/t
 import { AgentArtifactPreview, AgentQueryPreview } from './agent-resource-preview';
 import { AgentResources } from './agent-resources';
 import { AgentScopePicker, useAgentDatabases, type AgentConnection, type AgentKnowledge } from './agent-scope-picker';
-import { AgentSessionSidebar } from './agent-session-sidebar';
+import { AgentSessionSidebar, useAgentWorkActions, WorkActionDialog, WorkMenu, WorkMetadata, WorkTitle } from './agent-session-sidebar';
 import { WorkReport, type WorkReportHandle } from './work-report';
 
+const WorkShareDialog = dynamic(() => import('./work-share-dialog').then(module => module.WorkShareDialog), { ssr: false });
+
 type AgentSession = ChatSessionItem & { connectionId: string | null; activeDatabase?: string | null; scope: AnalysisScope | null };
-type Options = { connections: AgentConnection[]; models: AgentKnowledge[]; sessions: AgentSession[] };
+type Options = { connections: AgentConnection[]; models: AgentKnowledge[]; sessions: AgentSession[]; works?: AgentWorkSummary[] };
 const databaseSelections = z.record(z.string(), z.string().min(1));
 const emptyConnections: AgentConnection[] = [];
 
@@ -62,7 +66,12 @@ export function DataAgent() {
     });
     const [newId, setNewId] = useState(() => crypto.randomUUID());
     const [busy, setBusy] = useState(false);
-    const options = useQuery({ queryKey: ['data-agent', organization], queryFn: () => workRequest<Options>('/api/data-agent') });
+    const [sharing, setSharing] = useState(false);
+    const options = useQuery({
+        queryKey: ['data-agent', organization],
+        queryFn: () => workRequest<Options>('/api/data-agent'),
+        refetchInterval: query => (busy || query.state.data?.works?.some(work => work.status === 'running' || work.titlePending) ? 1500 : false),
+    });
     const openDocument = useQuery({
         queryKey: ['work-document', organization, state.document],
         enabled: Boolean(state.document),
@@ -100,7 +109,7 @@ export function DataAgent() {
         next: 'resources' | 'report' | 'query' | 'artifact' | 'closed',
         target: { document?: string; queryRun?: string; querySession?: string; artifact?: string } = {},
     ) => {
-        if (reportRef.current && !(await reportRef.current.requestLeave())) return;
+        if (reportRef.current && !(await reportRef.current.requestLeave())) return false;
         await setState({
             panel: next,
             queryRun: null,
@@ -110,6 +119,7 @@ export function DataAgent() {
             ...target,
             ...(target.document ? { chat: chatId, ...(target.document !== state.document ? { revision: null } : {}) } : {}),
         });
+        return true;
     };
     const scopeState = (value: AnalysisScope) => ({
         connectionMode: value.connectionMode ?? (value.connectionIds.length ? ('manual' as const) : ('auto' as const)),
@@ -135,19 +145,33 @@ export function DataAgent() {
             ...scopeState({ connectionIds: [], connectionMode: 'auto', knowledgeMode: 'auto' }),
         });
     };
+    const works: AgentWorkSummary[] =
+        options.data?.works ??
+        (options.data?.sessions ?? []).map(item => ({
+            id: item.id,
+            title: item.title ?? null,
+            titlePending: false,
+            status: 'idle',
+            updatedAt: item.updatedAt ?? item.createdAt ?? new Date().toISOString(),
+            counts: { report: 0, chart: 0, result: 0 },
+            outputs: [],
+        }));
+    const savedWork = works.find(item => item.id === chatId);
+    const currentWork = savedWork ? { ...savedWork, ...(busy ? { status: 'running' as const } : {}) } : undefined;
+    const actions = useAgentWorkActions(organization, chatId, newChat);
+    const workT = useTranslations('WorkDocuments.Works');
     // Opening a newly created draft must not unmount the streaming conversation.
     const loading = (chatId !== newId && history.isPending) || (Boolean(state.document) && !state.chat && openDocument.isPending);
     const error = options.error ?? history.error ?? openDocument.error;
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground md:flex-row md:rounded-xl" data-testid="data-agent">
             <AgentSessionSidebar
-                organization={organization}
-                sessions={options.data?.sessions ?? []}
+                works={works.map(item => (item.id === chatId && busy ? { ...item, status: 'running' as const } : item))}
                 loading={options.isPending}
                 chatId={chatId}
                 disabled={busy || editingReport}
                 onCreate={newChat}
-                onRefresh={() => void options.refetch()}
+                actions={actions}
                 onSelect={id => {
                     if (busy || editingReport) return;
                     setPrompt(null);
@@ -167,20 +191,44 @@ export function DataAgent() {
             />
             <Popover open={panel !== 'closed'} onOpenChange={open => void navigatePanel(open ? 'resources' : 'closed')}>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                    <div className="flex shrink-0 justify-end px-3 py-2">
-                        <PopoverTrigger asChild>
+                    <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3" data-testid="work-header">
+                        <div className="min-w-0">
+                            <h1 className="truncate text-base font-semibold">
+                                <WorkTitle work={currentWork} />
+                            </h1>
+                            {currentWork ? (
+                                <p className="mt-1 text-xs text-muted-foreground" role="status">
+                                    <WorkMetadata work={currentWork} />
+                                </p>
+                            ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                            <PopoverTrigger asChild>
+                                <Button
+                                    ref={resourcesButton}
+                                    variant="ghost"
+                                    size="sm"
+                                    title={t('Resources.Title')}
+                                    aria-label={t('Resources.Title')}
+                                    aria-expanded={panel !== 'closed'}
+                                >
+                                    <ListTree className="size-5" />
+                                    <span className="hidden sm:inline">{workT('Outputs')}</span>
+                                </Button>
+                            </PopoverTrigger>
                             <Button
-                                ref={resourcesButton}
-                                variant="ghost"
-                                size="icon"
-                                title={t('Resources.Title')}
-                                aria-label={t('Resources.Title')}
-                                aria-expanded={panel !== 'closed'}
+                                variant="outline"
+                                size="sm"
+                                disabled={!currentWork || busy}
+                                onClick={async () => {
+                                    if (await navigatePanel('closed')) setSharing(true);
+                                }}
                             >
-                                <ListTree className="size-5" />
+                                {workT('Share')}
                             </Button>
-                        </PopoverTrigger>
-                    </div>
+                            {currentWork ? <WorkMenu work={currentWork} actions={actions} disabled={busy || editingReport || actions.mutation.isPending} /> : null}
+                        </div>
+                    </header>
                     <div className="flex min-h-0 min-w-0 flex-1">
                         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
                             {error ? (
@@ -266,6 +314,8 @@ export function DataAgent() {
                     </div>
                 </div>
             </Popover>
+            <WorkActionDialog actions={actions} disabled={busy || editingReport} />
+            {sharing && currentWork ? <WorkShareDialog key={chatId} work={currentWork} onClose={() => setSharing(false)} /> : null}
         </div>
     );
 }

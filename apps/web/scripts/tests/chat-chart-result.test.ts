@@ -25,6 +25,7 @@ test('chart builder consumes single and multi-source query results and persists 
         const result = await tool.execute!(config, { toolCallId: 'chart-1', context: {}, messages: messages(output, true) as ModelMessage[] });
         assert.ok('data' in result);
         assert.equal(result.dataState, 'ready');
+        assert.equal(result.embed, '![Chart](dory://chart/chart-1)');
         assert.deepEqual(result.source, { toolCallId: 'sql-1', artifactId: 'payments' });
         assert.ok(JSON.stringify(result.data).includes('7829'));
         assert.ok(JSON.stringify(result.data).includes('375'));

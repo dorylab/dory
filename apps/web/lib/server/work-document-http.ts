@@ -10,6 +10,7 @@ import { parseWorkRevision } from '@/lib/work-documents/revision';
 import { workDraftSchema } from '@/lib/work-documents/schema';
 
 import { assertDocumentWrite, createWorkFromRun, saveWorkDraft } from './work-documents';
+import { listAgentWorks } from './agent-works';
 
 export async function documentHttp(req: NextRequest, documentId?: string) {
     try {
@@ -89,6 +90,7 @@ export async function dataAgentHttp(req: NextRequest) {
             db.chat.listSessions({ organizationId, userId, type: 'global', includeArchived: false }),
         ]);
         return Response.json({
+            works: await listAgentWorks(db, { organizationId, userId }, sessions),
             connections: connections.map(item => ({ id: item.connection.id, name: item.connection.name, type: item.connection.type, defaultDatabase: item.connection.database })),
             models: models.map(model => ({ id: model.id, name: model.name, connectionIds: model.dataSources.map(source => source.connectionId) })),
             sessions: sessions.map(item => ({

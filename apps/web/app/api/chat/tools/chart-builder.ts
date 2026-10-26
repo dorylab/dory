@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { translateApi } from '@/app/api/utils/i18n';
 import { buildChartFromQuery, buildQueryChart, type ChartQuery } from '@/lib/agent-runs/chart-result';
+import { chatChartEmbed } from '@/lib/agent-runs/chat-chart-layout';
 import { Locale } from '@dory/i18n/routing';
 
 function createChartInputSchema(locale: Locale) {
@@ -44,7 +45,7 @@ export function createChartBuilderTool(locale: Locale, resolveArtifact?: (artifa
     const chartInputSchema = createChartInputSchema(locale);
 
     return tool({
-        description: `${t('Api.Chat.ChartBuilder.Description')} For an earlier query, pass its returned artifactId. Never supply data rows. Without artifactId, only the latest SQL result in this turn is used. Missing data is an error; rerun SQL or select a real query Artifact instead of repeating the same call.`,
+        description: `${t('Api.Chat.ChartBuilder.Description')} For an earlier query, pass its returned artifactId. Never supply data rows. Without artifactId, only the latest SQL result in this turn is used. Missing data is an error; rerun SQL or select a real query Artifact instead of repeating the same call. Insert the returned embed on its own line in your answer at the relevant discussion, with prose before and after it.`,
         inputSchema: chartInputSchema,
         execute: async (input, options) => {
             const { artifactId, ...config } = input;
@@ -56,7 +57,7 @@ export function createChartBuilderTool(locale: Locale, resolveArtifact?: (artifa
                 );
             if (chart.dataState === 'invalid-fields')
                 throw new Error('Chart fields do not match the query result. Use real column names and numeric value fields from the selected query.');
-            return chart;
+            return { ...chart, embed: chatChartEmbed(options.toolCallId) };
         },
     });
 }

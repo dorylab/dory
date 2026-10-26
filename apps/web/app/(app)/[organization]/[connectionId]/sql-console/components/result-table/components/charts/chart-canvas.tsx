@@ -22,6 +22,7 @@ function toFiniteNumber(value: unknown) {
 }
 
 export function ChartCanvas(props: {
+    presentationOnly?: boolean;
     chartType: ChartType;
     chartConfig: ChartConfig;
     aggregated: AggregatedChartData;
@@ -37,10 +38,22 @@ export function ChartCanvas(props: {
         mode?: { append?: boolean },
     ) => void;
 }) {
-    const { chartType, chartConfig, aggregated, effectiveGroupKey, chartColors, xAxisLabel, yAxisLabel, emptyMessage, timelineSliderEnabled, chartRootRef, onApplyChartFilter } =
-        props;
+    const {
+        presentationOnly = false,
+        chartType,
+        chartConfig,
+        aggregated,
+        effectiveGroupKey,
+        chartColors,
+        xAxisLabel,
+        yAxisLabel,
+        emptyMessage,
+        timelineSliderEnabled,
+        chartRootRef,
+        onApplyChartFilter,
+    } = props;
     const primaryChartColor = chartColors[0] ?? 'var(--primary)';
-    const clickFilterEnabled = chartType !== 'line';
+    const clickFilterEnabled = !presentationOnly && chartType !== 'line';
     const supportsTimeline = chartType === 'line' || chartType === 'bar' || chartType === 'histogram';
     const [brushSelection, setBrushSelection] = React.useState<{ startIndex: number; endIndex: number } | null>(null);
     const lastBrushIndex = Math.max(aggregated.data.length - 1, 0);
@@ -464,6 +477,7 @@ export function ChartCanvas(props: {
                                                 <button
                                                     key={`${String(datum.xLabel)}-${series.key}`}
                                                     type="button"
+                                                    disabled={presentationOnly}
                                                     className="h-8 rounded-sm border border-border/40 text-[11px] tabular-nums text-foreground"
                                                     style={{ backgroundColor: `color-mix(in oklab, ${primaryChartColor} ${Math.round(alpha * 100)}%, transparent)` }}
                                                     onClick={event => handleDatumClick(datum as Record<string, unknown>, series.key, series.label, event.shiftKey)}

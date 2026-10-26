@@ -5514,7 +5514,7 @@
         "Resources": {
             "NoArtifacts": "Aún no hay artefactos.",
             "NoQueries": "Aún no hay consultas.",
-            "Title": "Recursos de la conversación",
+            "Title": "Resultados del trabajo",
             "Description": "Agent Runs e informes de esta conversación",
             "Back": "Volver a recursos",
             "Close": "Cerrar recursos",
@@ -5551,7 +5551,59 @@
             "RestoreFailed": "No se pudo restaurar. Revisa la última versión antes de intentarlo de nuevo."
         },
         "GenerateFailed": "No se pudo generar el informe.",
-        "Reports": "Informes"
+        "Reports": "Informes",
+        "Works": {
+            "Heading": "Trabajos",
+            "New": "Nuevo trabajo",
+            "Untitled": "Trabajo sin título",
+            "Search": "Buscar trabajos y resultados…",
+            "Loading": "Cargando…",
+            "Empty": "Tus trabajos aparecerán aquí.",
+            "NoMatches": "No hay trabajos coincidentes.",
+            "Updated": "Actualizado {time}",
+            "Actions": "Acciones del trabajo",
+            "Rename": "Renombrar trabajo",
+            "Delete": "Eliminar trabajo",
+            "RenameDescription": "Asigna un título claro a este trabajo.",
+            "DeleteDescription": "Quitar este trabajo de tu lista.",
+            "Title": "Título del trabajo",
+            "Cancel": "Cancelar",
+            "Save": "Guardar",
+            "Outputs": "Resultados",
+            "Share": "Compartir",
+            "ShareDescription": "Elige un resultado, revisa su contenido y exporta un archivo. No se adjuntan el historial del chat ni la configuración de las fuentes.",
+            "ChooseOutput": "Elegir un resultado",
+            "Unavailable": "No disponible",
+            "UnavailableDescription": "Este resultado es un borrador o sus datos guardados faltan o han caducado. No se puede exportar.",
+            "NoShareableOutputs": "Este trabajo aún no tiene resultados para compartir.",
+            "PreviewFailed": "No se pudo cargar el resultado guardado. Comprueba su disponibilidad e inténtalo de nuevo.",
+            "Retry": "Reintentar",
+            "PreviewRows": "Vista previa · {count} filas guardadas",
+            "FullRows": "Todos los datos guardados · {count} filas",
+            "TablePreview": "Se muestran las primeras {count} filas; el archivo incluye todas las filas cargadas.",
+            "ExportFailed": "Error al exportar. Inténtalo de nuevo cuando se cargue la vista previa.",
+            "Exporting": "Exportando…",
+            "ExportPreview": "Exportar datos de vista previa",
+            "Export": "Exportar archivo",
+            "Status": {
+                "running": "En ejecución",
+                "completed": "Completado",
+                "failed": "Error",
+                "stopped": "Detenido",
+                "idle": "Listo para continuar"
+            },
+            "Types": {
+                "report": "Informe",
+                "chart": "Gráfico",
+                "result": "Tabla de resultados"
+            },
+            "Counts": {
+                "report": "{count, plural, one {# informe} other {# informes}}",
+                "chart": "{count, plural, one {# gráfico} other {# gráficos}}",
+                "result": "{count, plural, one {# resultado} other {# resultados}}"
+            },
+            "ChartNotReady": "El gráfico aún se está cargando o no tiene datos guardados para exportar."
+        }
     },
     "ChatComposer": {
         "Add": "Add",

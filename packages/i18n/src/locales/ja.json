@@ -5520,7 +5520,7 @@
         "Resources": {
             "NoArtifacts": "成果物はまだありません。",
             "NoQueries": "クエリはまだありません。",
-            "Title": "会話のリソース",
+            "Title": "作業の成果物",
             "Description": "この会話の Agent Runs とレポート",
             "Back": "リソースに戻る",
             "Close": "リソースを閉じる",
@@ -5557,7 +5557,59 @@
             "RestoreFailed": "復元に失敗しました。最新版を確認してから再試行してください。"
         },
         "GenerateFailed": "レポートを生成できませんでした。",
-        "Reports": "レポート"
+        "Reports": "レポート",
+        "Works": {
+            "Heading": "作業",
+            "New": "新しい作業",
+            "Untitled": "無題の作業",
+            "Search": "作業と成果物を検索…",
+            "Loading": "読み込み中…",
+            "Empty": "作業がここに表示されます。",
+            "NoMatches": "一致する作業はありません。",
+            "Updated": "更新: {time}",
+            "Actions": "作業の操作",
+            "Rename": "作業名を変更",
+            "Delete": "作業を削除",
+            "RenameDescription": "作業に分かりやすい名前を付けます。",
+            "DeleteDescription": "この作業を一覧から削除します。",
+            "Title": "作業名",
+            "Cancel": "キャンセル",
+            "Save": "保存",
+            "Outputs": "成果物",
+            "Share": "共有",
+            "ShareDescription": "成果物を1つ選択し、内容を確認してファイルに書き出します。会話履歴とデータソース設定は添付されません。",
+            "ChooseOutput": "成果物を選択",
+            "Unavailable": "利用不可",
+            "UnavailableDescription": "下書き、または保存データが存在しないか期限切れのため、書き出せません。",
+            "NoShareableOutputs": "共有できる成果物はまだありません。",
+            "PreviewFailed": "保存された成果物を読み込めません。確認して再試行してください。",
+            "Retry": "再試行",
+            "PreviewRows": "プレビューデータ · 保存済み {count} 行",
+            "FullRows": "保存済み全データ · {count} 行",
+            "TablePreview": "最初の {count} 行を表示。ファイルには読み込んだ全行が含まれます。",
+            "ExportFailed": "書き出しに失敗しました。プレビューの読み込み後に再試行してください。",
+            "Exporting": "書き出し中…",
+            "ExportPreview": "プレビューデータを書き出す",
+            "Export": "ファイルを書き出す",
+            "Status": {
+                "running": "実行中",
+                "completed": "完了",
+                "failed": "失敗",
+                "stopped": "停止",
+                "idle": "続行可能"
+            },
+            "Types": {
+                "report": "レポート",
+                "chart": "グラフ",
+                "result": "結果表"
+            },
+            "Counts": {
+                "report": "レポート {count} 件",
+                "chart": "グラフ {count} 件",
+                "result": "結果 {count} 件"
+            },
+            "ChartNotReady": "グラフを読み込み中か、書き出せる保存済みデータがありません。"
+        }
     },
     "ChatComposer": {
         "Add": "Add",

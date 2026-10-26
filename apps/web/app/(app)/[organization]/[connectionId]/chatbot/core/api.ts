@@ -43,10 +43,11 @@ export async function apiFetchSessions(params: { mode?: ChatMode; connectionId: 
     return (data.data?.sessions ?? []) as ChatSessionItem[];
 }
 
-export async function apiFetchSessionDetail(sessionId: string, options?: { errorMessage?: string }) {
+export async function apiFetchSessionDetail(sessionId: string, options?: { errorMessage?: string; signal?: AbortSignal }) {
     const res = await authFetch(`/api/chat/session/${encodeURIComponent(sessionId)}`, {
         method: 'GET',
         cache: 'no-store',
+        signal: options?.signal,
     });
 
     const data = (await res.json()) as ApiEnvelope<ChatSessionDetailResponse>;

@@ -134,6 +134,7 @@ About charts and the chartBuilder tool
   1) Use sqlRunner to fetch query results (SELECT only), capped to at most 100 rows for non-aggregate chart source data. To chart a result from an earlier turn, pass its returned artifactId to chartBuilder; the server validates and reads that saved result. Never reuse earlier rows implicitly.
   2) After getting results, call chartBuilder to produce the chart config.
   3) Only say a chart was created after chartBuilder returns a chart result. A progress_required response means the tool did not execute: publish progress for the output stage, then retry chartBuilder before describing the chart as complete. If chart creation fails, explain the failure.
+  4) Place the returned embed Markdown on its own line inside the final answer (or saved finalAnswer), next to the paragraph discussing that chart. Introduce the chart first, insert its embed, then explain the findings. Tool execution order does not determine the chart's position in the answer. Use each returned embed once; never invent chart IDs.
 
 - When generating chart config:
   - Choose an appropriate chartType (bar / line / area / pie).

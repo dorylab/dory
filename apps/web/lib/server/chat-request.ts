@@ -11,6 +11,8 @@ import { createWorkDocumentTools } from '@/lib/server/work-document-tools';
 import { validateAnalysisScope } from '@/lib/server/work-documents';
 
 import 'server-only';
+import { after } from 'next/server';
+import { generateAgentWorkTitle } from './agent-work-title';
 
 import { getDBService } from '@dory/database';
 import { isLocalAiAgentProvider } from '@dory/ee/ai/provider-options';
@@ -297,7 +299,7 @@ export async function handleChatRequest(req: Request) {
                     activeSchema: activeSchema ?? null,
                     title: null,
                     settings: requestedModel ? { model: requestedModel } : null,
-                    metadata: sessionMetadata ?? null,
+                    metadata: { ...sessionMetadata, ...(analysisScope ? { workTitleSource: 'pending' } : {}) },
                 });
                 chatId = sessionRecord.id;
                 sessionTitle = sessionRecord.title ?? null;
@@ -311,11 +313,17 @@ export async function handleChatRequest(req: Request) {
                 activeSchema: activeSchema ?? null,
                 title: null,
                 settings: requestedModel ? { model: requestedModel } : null,
-                metadata: sessionMetadata ?? null,
+                metadata: { ...sessionMetadata, ...(analysisScope ? { workTitleSource: 'pending' } : {}) },
             });
             chatId = sessionRecord.id;
             sessionTitle = sessionRecord.title ?? null;
         }
+    }
+
+    if (db && userId && organizationId && chatId && analysisScope && currentUserText) {
+        const titleDb = db;
+        const titleInput = { organizationId, userId, sessionId: chatId, prompt: currentUserText, req };
+        after(() => generateAgentWorkTitle(titleDb, titleInput));
     }
 
     if (

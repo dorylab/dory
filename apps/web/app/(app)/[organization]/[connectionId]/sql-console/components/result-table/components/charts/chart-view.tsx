@@ -10,6 +10,7 @@ import { ChartControlBar } from './chart-control-bar';
 import { AggregatedChartData, ChartState, MetricOption } from './chart-shared';
 
 export function ChartView(props: {
+    presentationOnly?: boolean;
     chartState: ChartState;
     chartStateIsAuto: boolean;
     columnNames: string[];
@@ -42,6 +43,7 @@ export function ChartView(props: {
     saveArtifactPlacement?: 'menu' | 'inline';
 }) {
     const {
+        presentationOnly = false,
         chartState,
         chartStateIsAuto,
         columnNames,
@@ -244,38 +246,41 @@ export function ChartView(props: {
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-muted/10">
-            <ChartControlBar
-                chartState={chartState}
-                chartStateIsAuto={chartStateIsAuto}
-                columnNames={columnNames}
-                metricOptions={metricOptions}
-                effectiveXKey={effectiveXKey}
-                bucketHint={aggregated.bucketHint}
-                chartColorPreset={chartColorPreset}
-                chartColorPresetOptions={chartColorPresetOptions}
-                timelineSliderEnabled={timelineSliderEnabled}
-                onChartTypeChange={onChartTypeChange}
-                onXKeyChange={onXKeyChange}
-                onYKeyChange={onYKeyChange}
-                onGroupKeyChange={onGroupKeyChange}
-                onChartColorPresetChange={onChartColorPresetChange}
-                onTimelineSliderEnabledChange={onTimelineSliderEnabledChange}
-                onResetAuto={onResetAuto}
-                canExportChart={canExportChart}
-                onExportPng={() => {
-                    void handleExportPng();
-                }}
-                onCopyPng={() => {
-                    void handleCopyPng();
-                }}
-                onExportSvg={handleExportSvg}
-                onSaveArtifact={onSaveArtifact}
-                saveArtifactLabel={saveArtifactLabel}
-                saveArtifactPending={saveArtifactPending}
-                saveArtifactDisabled={saveArtifactDisabled}
-                saveArtifactPlacement={saveArtifactPlacement}
-            />
+            {!presentationOnly ? (
+                <ChartControlBar
+                    chartState={chartState}
+                    chartStateIsAuto={chartStateIsAuto}
+                    columnNames={columnNames}
+                    metricOptions={metricOptions}
+                    effectiveXKey={effectiveXKey}
+                    bucketHint={aggregated.bucketHint}
+                    chartColorPreset={chartColorPreset}
+                    chartColorPresetOptions={chartColorPresetOptions}
+                    timelineSliderEnabled={timelineSliderEnabled}
+                    onChartTypeChange={onChartTypeChange}
+                    onXKeyChange={onXKeyChange}
+                    onYKeyChange={onYKeyChange}
+                    onGroupKeyChange={onGroupKeyChange}
+                    onChartColorPresetChange={onChartColorPresetChange}
+                    onTimelineSliderEnabledChange={onTimelineSliderEnabledChange}
+                    onResetAuto={onResetAuto}
+                    canExportChart={canExportChart}
+                    onExportPng={() => {
+                        void handleExportPng();
+                    }}
+                    onCopyPng={() => {
+                        void handleCopyPng();
+                    }}
+                    onExportSvg={handleExportSvg}
+                    onSaveArtifact={onSaveArtifact}
+                    saveArtifactLabel={saveArtifactLabel}
+                    saveArtifactPending={saveArtifactPending}
+                    saveArtifactDisabled={saveArtifactDisabled}
+                    saveArtifactPlacement={saveArtifactPlacement}
+                />
+            ) : null}
             <ChartCanvas
+                presentationOnly={presentationOnly}
                 chartType={chartState.chartType}
                 chartConfig={chartConfig}
                 aggregated={aggregated}

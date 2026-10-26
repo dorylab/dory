@@ -62,7 +62,11 @@ export function WorkReport({
             client.setQueryData<Detail>(key, previous => (previous ? { ...previous, document: data.document } : undefined));
             setRestoreOpen(false);
             await setSelectedRevision(null);
-            await Promise.all([client.invalidateQueries({ queryKey: key }), client.invalidateQueries({ queryKey: ['work-documents', organization] })]);
+            await Promise.all([
+                client.invalidateQueries({ queryKey: key }),
+                client.invalidateQueries({ queryKey: ['work-documents', organization] }),
+                client.invalidateQueries({ queryKey: ['data-agent', organization] }),
+            ]);
         },
         onError: error => {
             toast.error(error.message);
@@ -99,7 +103,11 @@ export function WorkReport({
                 if (!wasChangedDuringSave && leaveAfterSave.current) resolveLeave(true);
             }
             setSaveError(false);
-            await Promise.all([client.invalidateQueries({ queryKey: key }), client.invalidateQueries({ queryKey: ['work-documents', organization] })]);
+            await Promise.all([
+                client.invalidateQueries({ queryKey: key }),
+                client.invalidateQueries({ queryKey: ['work-documents', organization] }),
+                client.invalidateQueries({ queryKey: ['data-agent', organization] }),
+            ]);
         },
         onError: error => {
             leaveAfterSave.current = false;

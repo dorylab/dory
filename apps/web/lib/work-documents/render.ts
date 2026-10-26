@@ -50,16 +50,16 @@ export function workTableHtml(evidence: WorkEvidence) {
     return `<table><thead><tr>${evidence.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${evidence.rows.map(row => `<tr>${evidence.columns.map(column => `<td>${escapeHtml(formatWorkValue(row[column]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 }
 
-export function workVisualHtml(visual: WorkVisual, evidence: WorkEvidence): string {
+export function workVisualHtml(visual: WorkVisual, evidence: WorkEvidence, includeSources = true): string {
     const body =
         visual.type === 'chart'
             ? workChartSvg(visual, evidence)
             : visual.type === 'table'
               ? workTableHtml(evidence)
               : `<strong class="metric">${escapeHtml(evidence.rows[visual.metric?.rowIndex ?? 0]?.[visual.metric?.column ?? ''])}</strong>`;
-    return `<figure data-visual="${escapeHtml(visual.id)}" data-visual-type="${visual.type}"><figcaption>${escapeHtml(visual.title)}</figcaption>${body}<p class="source"><a href="dory://evidence/${escapeHtml(evidence.artifactId)}" data-evidence="${escapeHtml(evidence.artifactId)}">${escapeHtml(evidence.connectionName ?? evidence.connectionId)} · ${escapeHtml(evidence.capturedAt)}${evidence.truncated ? ' · Preview / 数据预览' : ''}</a></p></figure>`;
+    return `<figure data-visual="${escapeHtml(visual.id)}" data-visual-type="${visual.type}"><figcaption>${escapeHtml(visual.title)}</figcaption>${body}${includeSources ? `<p class="source"><a href="dory://evidence/${escapeHtml(evidence.artifactId)}" data-evidence="${escapeHtml(evidence.artifactId)}">${escapeHtml(evidence.connectionName ?? evidence.connectionId)} · ${escapeHtml(evidence.capturedAt)}${evidence.truncated ? ' · Preview / 数据预览' : ''}</a></p>` : evidence.truncated ? '<p class="source">Preview / 数据预览</p>' : ''}</figure>`;
 }
-export function renderWorkMarkdown(content: WorkDocumentView['content']): string {
+export function renderWorkMarkdown(content: WorkDocumentView['content'], includeSources = true): string {
     const parser = new Marked({ gfm: true });
     parser.use({
         renderer: {
@@ -72,12 +72,14 @@ export function renderWorkMarkdown(content: WorkDocumentView['content']): string
                 const id = href.startsWith('dory://visual/') ? href.slice('dory://visual/'.length) : null;
                 const visual = content.visuals.find(item => item.id === id);
                 const evidence = visual && content.evidence.find(item => item.artifactId === visual.evidenceId);
-                return visual && evidence ? workVisualHtml(visual, evidence) : `<span class="source">${escapeHtml(text)} (${escapeHtml(href)})</span>`;
+                return visual && evidence
+                    ? workVisualHtml(visual, evidence, includeSources)
+                    : `<span class="source">${escapeHtml(text)}${includeSources ? ` (${escapeHtml(href)})` : ''}</span>`;
             },
             link({ href, tokens }) {
                 const label = this.parser.parseInline(tokens);
                 const id = /^dory:\/\/evidence\/([a-zA-Z0-9_-]+)$/.exec(href)?.[1];
-                if (id) return `<a href="#evidence-${escapeHtml(id)}" data-evidence="${escapeHtml(id)}">${label}</a>`;
+                if (id) return includeSources ? `<a href="#evidence-${escapeHtml(id)}" data-evidence="${escapeHtml(id)}">${label}</a>` : label;
                 return /^(https?:\/\/|mailto:|#)/i.test(href) ? `<a href="${escapeHtml(href)}" rel="noopener noreferrer">${label}</a>` : label;
             },
         },

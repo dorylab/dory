@@ -5527,7 +5527,7 @@
         "Resources": {
             "NoArtifacts": "暂无查询产物。",
             "NoQueries": "暂无查询。",
-            "Title": "会话资源",
+            "Title": "工作成果",
             "Description": "当前会话的 Agent Runs 和报告",
             "Back": "返回资源列表",
             "Close": "关闭资源浮层",
@@ -5564,7 +5564,59 @@
             "RestoreFailed": "恢复失败。请确认最新版本后重试。"
         },
         "GenerateFailed": "生成报告失败。",
-        "Reports": "报告"
+        "Reports": "报告",
+        "Works": {
+            "Heading": "工作",
+            "New": "新建工作",
+            "Untitled": "未命名工作",
+            "Search": "搜索工作和成果…",
+            "Loading": "加载中…",
+            "Empty": "你的工作将显示在这里。",
+            "NoMatches": "没有匹配的工作。",
+            "Updated": "更新于{time}",
+            "Actions": "工作操作",
+            "Rename": "重命名工作",
+            "Delete": "删除工作",
+            "RenameDescription": "为这项工作设置清晰的任务标题。",
+            "DeleteDescription": "从列表中移除此项工作。",
+            "Title": "工作标题",
+            "Cancel": "取消",
+            "Save": "保存",
+            "Outputs": "成果",
+            "Share": "分享",
+            "ShareDescription": "选择一个成果，预览内容后导出文件。不会附带聊天记录和数据源配置。",
+            "ChooseOutput": "选择成果",
+            "Unavailable": "不可用",
+            "UnavailableDescription": "此成果尚为草稿，或保存的数据缺失、已过期，暂时无法导出。",
+            "NoShareableOutputs": "这项工作还没有可分享的成果。",
+            "PreviewFailed": "无法加载已保存的成果，请检查其可用性后重试。",
+            "Retry": "重试",
+            "PreviewRows": "预览数据 · 已保存 {count} 行",
+            "FullRows": "完整已保存数据 · {count} 行",
+            "TablePreview": "此处显示前 {count} 行，文件包含全部已加载行。",
+            "ExportFailed": "导出失败，请等待预览加载完成后重试。",
+            "Exporting": "导出中…",
+            "ExportPreview": "导出预览数据",
+            "Export": "导出文件",
+            "Status": {
+                "running": "运行中",
+                "completed": "已完成",
+                "failed": "失败",
+                "stopped": "已停止",
+                "idle": "待继续"
+            },
+            "Types": {
+                "report": "报告",
+                "chart": "图表",
+                "result": "结果表"
+            },
+            "Counts": {
+                "report": "{count} 份报告",
+                "chart": "{count} 张图表",
+                "result": "{count} 个结果"
+            },
+            "ChartNotReady": "图表尚未加载完成，或没有可导出的已保存数据。"
+        }
     },
     "ChatComposer": {
         "Add": "添加",
