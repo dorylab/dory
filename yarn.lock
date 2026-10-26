@@ -3076,6 +3076,7 @@ __metadata:
   dependencies:
     "@clickhouse/client": "npm:^1.18.2"
     "@dory/data-plane": "npm:0.1.0"
+    "@dory/files": "npm:0.1.0"
     "@dory/import": "npm:0.1.0"
     "@dory/schema-compare": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"

@@ -1,3 +1,4 @@
+import { attachmentReadAccess } from '../../attachment-access';
 import { z } from 'zod';
 
 import { defineWebAction } from '../../define-web-action';
@@ -42,9 +43,10 @@ export const resultSetChartReadAction = defineWebAction({
         },
         allowInputFields: ['resultSetId', 'xKey', 'yKey', 'groupKey', 'chartType', 'filters', 'search'],
     },
-    handler: (ctx, input) =>
+    handler: async (ctx, input) =>
         ctx.services.db.resultSets.readChart({
             organizationId: ctx.organizationId,
+            ...(await attachmentReadAccess(ctx)),
             resultSetId: input.resultSetId,
             xKey: input.xKey,
             yKey: input.yKey,

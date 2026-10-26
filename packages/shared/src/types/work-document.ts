@@ -1,3 +1,4 @@
+import type { ChatAttachmentSource } from './chat-attachment';
 export type AnalysisScope = {
     connectionMode?: 'auto' | 'manual';
     knowledgeMode?: 'auto' | 'manual' | 'none';
@@ -6,6 +7,7 @@ export type AnalysisScope = {
     databasesByConnection?: Record<string, string>;
 };
 export type WorkEvidence = {
+    attachmentSource?: ChatAttachmentSource;
     artifactId: string;
     title: string;
     connectionId: string | null;

@@ -1,3 +1,4 @@
+import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
@@ -76,6 +77,7 @@ export type ArtifactWorkspaceTarget =
 export type ArtifactDetail = ArtifactSummary & {
     chartState: ArtifactChartState | null;
     resultSet: {
+        attachmentSource?: ChatAttachmentSource | null;
         id: string;
         columns: unknown[];
         dataAvailability: string;
@@ -188,6 +190,7 @@ export class PostgresArtifactsRepository {
         this.assertInited();
         const query = input.query?.trim();
         const conditions = [eq(artifacts.organizationId, input.organizationId), or(isNull(artifacts.expiresAt), gt(artifacts.expiresAt, new Date()))!];
+        conditions.push(or(isNull(resultSets.attachmentSource), input.userId ? eq(artifacts.createdByActorId, input.userId) : isNull(artifacts.id))!);
         if (input.userId) conditions.push(or(isNull(artifacts.workId), eq(works.userId, input.userId))!);
         if (input.types?.length) conditions.push(inArray(artifacts.type, input.types));
         if (input.pinnedOnly) conditions.push(isNotNull(resultSets.pinnedAt));
@@ -241,7 +244,7 @@ export class PostgresArtifactsRepository {
         return { rows: rows.map(row => this.toSummary(row)), total: Number(totals[0]?.total ?? 0) };
     }
 
-    async listByWork(input: { organizationId: string; workId: string }) {
+    async listByWork(input: { userId?: string; organizationId: string; workId: string }) {
         this.assertInited();
         const rows = await this.db
             .select({
@@ -261,12 +264,18 @@ export class PostgresArtifactsRepository {
             .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
             .leftJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
             .leftJoin(user, eq(user.id, artifacts.createdByActorId))
-            .where(and(eq(artifacts.organizationId, input.organizationId), or(eq(artifacts.workId, input.workId), eq(artifacts.agentRunId, input.workId))))
+            .where(
+                and(
+                    eq(artifacts.organizationId, input.organizationId),
+                    or(eq(artifacts.workId, input.workId), eq(artifacts.agentRunId, input.workId)),
+                    or(isNull(resultSets.attachmentSource), input.userId ? eq(artifacts.createdByActorId, input.userId) : isNull(artifacts.id)),
+                ),
+            )
             .orderBy(desc(artifacts.createdAt));
         return rows.map(row => this.toSummary(row));
     }
 
-    async get(input: { organizationId: string; artifactId: string }): Promise<ArtifactDetail> {
+    async get(input: { organizationId: string; artifactId: string; userId?: string; chatId?: string | null }): Promise<ArtifactDetail> {
         this.assertInited();
         const [row] = await this.db
             .select({
@@ -286,6 +295,7 @@ export class PostgresArtifactsRepository {
             .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
             .limit(1);
         if (!row) throw new DatabaseError('Artifact not found', 404);
+        if (!canReadAttachmentSource(row.resultSet?.attachmentSource, input.userId, input.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
         if (row.artifact.expiresAt && row.artifact.expiresAt.getTime() <= Date.now()) throw new DatabaseError('Artifact is no longer available', 404);
         const workspaceTarget = resolveArtifactWorkspaceTarget({
             type: row.artifact.type,
@@ -311,6 +321,7 @@ export class PostgresArtifactsRepository {
             chartState: row.artifact.chartState,
             resultSet: row.resultSet
                 ? {
+                      attachmentSource: row.resultSet.attachmentSource,
                       id: row.resultSet.id,
                       columns: row.resultSet.schemaJson,
                       dataAvailability: row.resultSet.dataAvailability,
@@ -324,8 +335,9 @@ export class PostgresArtifactsRepository {
         };
     }
 
-    async rename(input: { organizationId: string; artifactId: string; title: string }) {
+    async rename(input: { userId?: string; organizationId: string; artifactId: string; title: string }) {
         this.assertInited();
+        await this.get(input);
         const title = input.title.trim();
         if (!title) throw new DatabaseError('Artifact title is required', 400);
         const [row] = await this.db
@@ -337,8 +349,9 @@ export class PostgresArtifactsRepository {
         return row;
     }
 
-    async delete(input: { organizationId: string; artifactId: string }) {
+    async delete(input: { userId?: string; organizationId: string; artifactId: string }) {
         this.assertInited();
+        await this.get(input);
         const [row] = await this.db
             .delete(artifacts)
             .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
@@ -347,7 +360,7 @@ export class PostgresArtifactsRepository {
         return row;
     }
 
-    async pin(input: { organizationId: string; artifactId: string; pinnedByActorId: string | null }) {
+    async pin(input: { userId?: string; organizationId: string; artifactId: string; pinnedByActorId: string | null }) {
         const artifact = await this.get({ organizationId: input.organizationId, artifactId: input.artifactId });
         if (!artifact.sourceResultSetId) throw new DatabaseError('Artifact cannot be pinned because its result set is unavailable', 409);
 
@@ -370,7 +383,7 @@ export class PostgresArtifactsRepository {
         return { id: artifact.id, title: artifact.title };
     }
 
-    async unpin(input: { organizationId: string; artifactId: string }) {
+    async unpin(input: { userId?: string; organizationId: string; artifactId: string }) {
         const artifact = await this.get({ organizationId: input.organizationId, artifactId: input.artifactId });
         if (!artifact.sourceResultSetId) throw new DatabaseError('Artifact cannot be unpinned because its result set is unavailable', 409);
 
@@ -396,6 +409,7 @@ export class PostgresArtifactsRepository {
     }
 
     async createChart(input: {
+        userId?: string;
         organizationId: string;
         sourceArtifactId: string;
         title?: string | null;
@@ -403,7 +417,7 @@ export class PostgresArtifactsRepository {
         createdByActorType: string;
         createdByActorId?: string | null;
     }) {
-        const source = await this.get({ organizationId: input.organizationId, artifactId: input.sourceArtifactId });
+        const source = await this.get({ organizationId: input.organizationId, artifactId: input.sourceArtifactId, userId: input.userId });
         if (!source.sourceResultSetId) throw new DatabaseError('Chart source result set is unavailable', 409);
         const resourceId = `chart_${newEntityId()}`;
         return this.register({
@@ -426,8 +440,9 @@ export class PostgresArtifactsRepository {
         });
     }
 
-    async updateChart(input: { organizationId: string; artifactId: string; chartState: ArtifactChartState }) {
+    async updateChart(input: { userId?: string; organizationId: string; artifactId: string; chartState: ArtifactChartState }) {
         this.assertInited();
+        await this.get(input);
         const [row] = await this.db
             .update(artifacts)
             .set({ chartState: input.chartState, updatedAt: new Date() })

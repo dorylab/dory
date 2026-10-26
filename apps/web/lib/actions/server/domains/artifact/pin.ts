@@ -18,6 +18,7 @@ export const artifactPinAction = defineWebAction({
     handler: async (ctx, input) => {
         const row = await ctx.services.db.artifacts.pin({
             organizationId: ctx.organizationId,
+            userId: ctx.userId,
             artifactId: input.artifactId,
             pinnedByActorId: ctx.actor.id ?? ctx.userId,
         });

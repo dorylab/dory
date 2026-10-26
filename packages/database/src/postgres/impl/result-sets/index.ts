@@ -1,3 +1,4 @@
+import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -66,6 +67,7 @@ type QueryResultSetInput = Record<string, unknown> & {
 };
 
 export type PersistQueryResultSetInput = {
+    attachmentSource?: ChatAttachmentSource;
     organizationId: string;
     userId: string;
     connectionId?: string | null;
@@ -169,6 +171,8 @@ export type ResultSetSearch = {
 };
 
 export type ResultSetQueryOperations = {
+    userId?: string;
+    chatId?: string | null;
     sorts?: ResultSetSort[];
     filters?: ResultSetFilter[];
     search?: ResultSetSearch | null;
@@ -1029,7 +1033,8 @@ export class PostgresResultSetsRepository {
             kind: 'sql-result-set',
             status,
             source: {
-                type: 'query-run',
+                type: input.attachmentSource ? 'chat-attachment' : 'query-run',
+                attachmentSource: input.attachmentSource,
                 queryRunId,
                 connectionId: input.connectionId ?? null,
                 connectionType: sourceConnectionType,
@@ -1124,7 +1129,8 @@ export class PostgresResultSetsRepository {
                 sessionId: input.sessionId,
                 setIndex: resultSet.setIndex,
                 sourceQueryRunId: queryRunId,
-                sourceType: 'query-run',
+                attachmentSource: input.attachmentSource,
+                sourceType: input.attachmentSource ? 'chat-attachment' : 'query-run',
                 kind: 'sql-result-set',
                 status,
                 rowCount,
@@ -1154,7 +1160,7 @@ export class PostgresResultSetsRepository {
                 agentRunId: input.agentRunId ?? null,
                 comparisonId: null,
                 comparisonRunId: null,
-                sourceType: 'query-run',
+                sourceType: input.attachmentSource ? 'chat-attachment' : 'query-run',
                 actorType,
                 actorId: input.userId,
                 byteSize: persistedManifest.byteSize ?? 0,
@@ -1247,7 +1253,8 @@ export class PostgresResultSetsRepository {
             kind: 'sql-result-set',
             status: previewStatus,
             source: {
-                type: 'query-run',
+                type: input.attachmentSource ? 'chat-attachment' : 'query-run',
+                attachmentSource: input.attachmentSource,
                 queryRunId,
                 connectionId: input.connectionId ?? null,
                 connectionType: sourceConnectionType,
@@ -1330,7 +1337,8 @@ export class PostgresResultSetsRepository {
                 sessionId: input.sessionId,
                 setIndex: resultSet.setIndex,
                 sourceQueryRunId: queryRunId,
-                sourceType: 'query-run',
+                attachmentSource: input.attachmentSource,
+                sourceType: input.attachmentSource ? 'chat-attachment' : 'query-run',
                 kind: 'sql-result-set',
                 status: previewStatus,
                 rowCount: initialRowCount,
@@ -1359,7 +1367,7 @@ export class PostgresResultSetsRepository {
                 agentRunId: input.agentRunId ?? null,
                 comparisonId: null,
                 comparisonRunId: null,
-                sourceType: 'query-run',
+                sourceType: input.attachmentSource ? 'chat-attachment' : 'query-run',
                 actorType,
                 actorId: input.userId,
                 byteSize: previewManifest.byteSize ?? 0,
@@ -1775,7 +1783,7 @@ export class PostgresResultSetsRepository {
         return this.cleanupWorkspaceStorage(params);
     }
 
-    async getQuerySession(params: { organizationId: string; sessionId: string }): Promise<QuerySessionReadOutput | null> {
+    async getQuerySession(params: { userId?: string; chatId?: string | null; organizationId: string; sessionId: string }): Promise<QuerySessionReadOutput | null> {
         this.assertInited();
 
         const [runs, sets] = await Promise.all([
@@ -1791,6 +1799,7 @@ export class PostgresResultSetsRepository {
                 .orderBy(asc(resultSetsTable.setIndex), asc(resultSetsTable.createdAt)),
         ]);
 
+        if (sets.some(row => !canReadAttachmentSource(row.attachmentSource, params.userId, params.chatId))) throw new DatabaseError('Private attachment result unavailable.', 403);
         if (!runs.length && !sets.length) return null;
 
         const statuses = [...runs.map(row => row.status), ...sets.map(row => row.status)].filter(Boolean);
@@ -1820,7 +1829,7 @@ export class PostgresResultSetsRepository {
         };
     }
 
-    async listSessionResultSets(params: { organizationId: string; sessionId: string }): Promise<SessionResultSetMeta[]> {
+    async listSessionResultSets(params: { userId?: string; chatId?: string | null; organizationId: string; sessionId: string }): Promise<SessionResultSetMeta[]> {
         this.assertInited();
 
         const [rows, runs] = await Promise.all([
@@ -1839,6 +1848,8 @@ export class PostgresResultSetsRepository {
                 .where(and(eq(queryRuns.organizationId, params.organizationId), eq(queryRuns.sessionId, params.sessionId)))
                 .orderBy(asc(queryRuns.setIndex), asc(queryRuns.createdAt)),
         ]);
+        if (rows.some(row => !canReadAttachmentSource(row.resultSet.attachmentSource, params.userId, params.chatId)))
+            throw new DatabaseError('Private attachment result unavailable.', 403);
         const runsByResultSetId = new Map(runs.map(row => [row.resultSetId, row]));
         const runsBySetIndex = new Map(runs.map(row => [row.setIndex, row]));
 
@@ -1847,6 +1858,7 @@ export class PostgresResultSetsRepository {
                 const row = joinedRow.resultSet;
                 const [stats, legacySourceDatabaseName] = await Promise.all([
                     this.readProfile({
+                        userId: params.userId,
                         organizationId: params.organizationId,
                         resultSetId: row.id,
                         sampleRows: 200,
@@ -1941,8 +1953,9 @@ export class PostgresResultSetsRepository {
         return [...persistedResultSets, ...errorRuns].sort((a, b) => a.setIndex - b.setIndex);
     }
 
-    async updateResultSetViewState(params: { organizationId: string; sessionId: string; setIndex: number; viewState: unknown | null }) {
+    async updateResultSetViewState(params: { userId?: string; chatId?: string | null; organizationId: string; sessionId: string; setIndex: number; viewState: unknown | null }) {
         this.assertInited();
+        await this.getQuerySession(params);
 
         await this.db
             .update(resultSetsTable)
@@ -1960,6 +1973,7 @@ export class PostgresResultSetsRepository {
         this.assertInited();
 
         const record = await this.getRecord(params.organizationId, params.resultSetId);
+        if (!canReadAttachmentSource(record.attachmentSource, params.userId, params.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
 
         const offset = normalizeOffset(params.offset);
         const limit = normalizeLimit(params.limit);
@@ -2038,6 +2052,7 @@ export class PostgresResultSetsRepository {
         this.assertInited();
 
         const record = await this.getRecord(params.organizationId, params.resultSetId);
+        if (!canReadAttachmentSource(record.attachmentSource, params.userId, params.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
         const artifactRef = record.artifactRefJson as ResultSetArtifactRef;
         const manifest = await this.artifacts.resultSets.readManifest(artifactRef);
         const columns = manifest.schema ?? record.schemaJson ?? [];
@@ -2144,7 +2159,7 @@ export class PostgresResultSetsRepository {
         };
     }
 
-    async openExport(params: { organizationId: string; exportId: string }): Promise<ResultSetExportObject> {
+    async openExport(params: { userId?: string; chatId?: string | null; organizationId: string; exportId: string }): Promise<ResultSetExportObject> {
         this.assertInited();
 
         const [record] = await this.db
@@ -2152,6 +2167,10 @@ export class PostgresResultSetsRepository {
             .from(resultSetExports)
             .where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)))
             .limit(1);
+        if (record?.resultSetId) {
+            const source = await this.getRecord(params.organizationId, record.resultSetId);
+            if (!canReadAttachmentSource(source.attachmentSource, params.userId, params.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
+        }
         if (record?.expiresAt && record.expiresAt.getTime() <= Date.now()) {
             try {
                 await this.artifacts.objectStore.delete(record.objectPath);
@@ -2236,6 +2255,7 @@ export class PostgresResultSetsRepository {
         this.assertInited();
 
         const record = await this.getRecord(params.organizationId, params.resultSetId);
+        if (!canReadAttachmentSource(record.attachmentSource, params.userId, params.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
         const artifactRef = record.artifactRefJson as ResultSetArtifactRef;
         const manifest = await this.artifacts.resultSets.readManifest(artifactRef);
         const columns = manifest.schema ?? record.schemaJson ?? [];
@@ -2372,10 +2392,17 @@ export class PostgresResultSetsRepository {
         });
     }
 
-    async readProfile(params: { organizationId: string; resultSetId: string; sampleRows?: number | null }): Promise<ResultSetProfileReadOutput> {
+    async readProfile(params: {
+        userId?: string;
+        chatId?: string | null;
+        organizationId: string;
+        resultSetId: string;
+        sampleRows?: number | null;
+    }): Promise<ResultSetProfileReadOutput> {
         this.assertInited();
 
         const record = await this.getRecord(params.organizationId, params.resultSetId);
+        if (!canReadAttachmentSource(record.attachmentSource, params.userId, params.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
         const artifactRef = record.artifactRefJson as ResultSetArtifactRef;
         const manifest = await this.artifacts.resultSets.readManifest(artifactRef);
         const columns = manifest.schema ?? record.schemaJson ?? [];

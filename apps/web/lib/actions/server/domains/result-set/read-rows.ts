@@ -1,3 +1,4 @@
+import { attachmentReadAccess } from '../../attachment-access';
 import { z } from 'zod';
 
 import { defineWebAction } from '../../define-web-action';
@@ -83,9 +84,10 @@ export const resultSetRowsReadAction = defineWebAction({
             dataAvailability: output.dataAvailability,
         }),
     },
-    handler: (ctx, input) =>
+    handler: async (ctx, input) =>
         ctx.services.db.resultSets.readRows({
             organizationId: ctx.organizationId,
+            ...(await attachmentReadAccess(ctx)),
             resultSetId: input.resultSetId,
             offset: input.offset ?? 0,
             limit: input.limit ?? 1000,

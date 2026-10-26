@@ -1,3 +1,4 @@
+import type { ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { createReadStream } from 'node:fs';
 import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
@@ -22,7 +23,7 @@ export type ResultSetColumn = {
 export type ResultSetOperation = 'select' | 'insert' | 'update' | 'delete' | 'ddl' | 'unknown' | (string & {});
 export type ResultSetStatus = 'success' | 'error' | 'canceled' | (string & {});
 export type ResultSetKind = 'sql-result-set' | 'schema-diff';
-export type ResultSetSourceType = 'query-run' | 'comparison' | 'derived' | 'imported' | 'manual';
+export type ResultSetSourceType = 'query-run' | 'comparison' | 'derived' | 'imported' | 'manual' | 'chat-attachment';
 export type ResultSetActorType = 'user' | 'agent' | 'mcp' | 'automation' | (string & {});
 export type ResultSetDataAvailability = 'none' | 'preview-only' | 'full';
 
@@ -59,6 +60,7 @@ export type ResultSetManifest = {
     kind: ResultSetKind;
     status: ResultSetStatus;
     source: {
+        attachmentSource?: ChatAttachmentSource;
         type: ResultSetSourceType;
         queryRunId?: string | null;
         connectionId?: string | null;

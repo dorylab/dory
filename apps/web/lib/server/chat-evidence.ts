@@ -7,7 +7,7 @@ type Turn = { organizationId: string; userId: string; workId: string; requestId:
 export async function readChatEvidence(db: DBService, turn: Turn, artifactId: string, limit = 100, register = true) {
     const input = { ...turn, artifactId };
     const provenance = await db.works.inspectChatEvidence(input);
-    const result = await db.resultSets.readRows({ organizationId: turn.organizationId, resultSetId: provenance.resultSetId, limit });
+    const result = await db.resultSets.readRows({ organizationId: turn.organizationId, userId: turn.userId, resultSetId: provenance.resultSetId, limit });
     if (result.dataAvailability === 'none' || ((result.rowCount ?? 0) > 0 && !result.rows.length)) {
         throw new DatabaseError('Evidence data is no longer available. Re-run the query.', 409);
     }

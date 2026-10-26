@@ -1,3 +1,4 @@
+import { attachmentReadAccess } from '../../attachment-access';
 import { z } from 'zod';
 
 import { defineWebAction } from '../../define-web-action';
@@ -70,6 +71,7 @@ export const queryResultSetsListAction = defineWebAction({
     handler: async (ctx, input) => ({
         resultSets: await ctx.services.db.resultSets.listSessionResultSets({
             organizationId: ctx.organizationId,
+            ...(await attachmentReadAccess(ctx)),
             sessionId: input.sessionId,
         }),
     }),

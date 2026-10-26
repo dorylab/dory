@@ -15,7 +15,7 @@ export const artifactChartUpdateAction = defineWebAction({
     scopes: ['query:read'],
     actors: ['user'],
     handler: async (ctx, input) => {
-        const row = await ctx.services.db.artifacts.updateChart({ organizationId: ctx.organizationId, ...input });
+        const row = await ctx.services.db.artifacts.updateChart({ organizationId: ctx.organizationId, userId: ctx.userId, ...input });
         return { id: row.id, title: row.title };
     },
 });

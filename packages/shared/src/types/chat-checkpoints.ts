@@ -29,6 +29,7 @@ export function initialChatCheckpoints(): ChatCheckpoints {
 export function chatToolStage(name: string, actionId?: string): ChatStage {
     const tool = actionId || name;
     if (/schema|Schema|connections|Connections|connection\.|database\.|table\./.test(tool)) return 'schema';
+    if (tool === 'queryAttachment' || tool === 'dory_query_attachment') return 'query';
     if (/sql|Sql|query\./.test(tool)) return 'query';
     if (/asset|Artifact|artifacts|Attachment|attachment|knowledge|catalog\.|search_assets|read_asset/.test(tool)) return 'reference';
     return 'output';

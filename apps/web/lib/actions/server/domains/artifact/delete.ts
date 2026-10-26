@@ -16,7 +16,7 @@ export const artifactDeleteAction = defineWebAction({
     actors: ['user'],
     audit: { allowInputFields: ['artifactId'], resource: (_ctx, input) => ({ type: 'artifact', id: input.artifactId }) },
     handler: async (ctx, input) => {
-        const row = await ctx.services.db.artifacts.delete({ organizationId: ctx.organizationId, ...input });
+        const row = await ctx.services.db.artifacts.delete({ organizationId: ctx.organizationId, userId: ctx.userId, ...input });
         return row;
     },
 });

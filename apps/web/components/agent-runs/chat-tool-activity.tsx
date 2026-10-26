@@ -179,6 +179,8 @@ export function getChatToolActivityTitle(activity: ChatToolActivity<ChatMessageT
     const mcpReport = activity.toolName === 'finishAnalysis' ? (activity.events.at(-1)?.inputSummary?.report as { read?: boolean; documentId?: string } | undefined) : undefined;
     const directTitles = {
         readArtifact: 'ReadResult',
+        queryAttachment: 'QueryData',
+        dory_query_attachment: 'QueryData',
         readAttachment: 'ReadFile',
         searchAttachment: 'SearchFiles',
         dory_read_attachment: 'ReadFile',

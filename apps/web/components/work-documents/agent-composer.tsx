@@ -11,7 +11,7 @@ import { ArrowUp, FileText, Folder, Loader2, Paperclip, Plus, Square, X } from '
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { attachmentAccept, attachmentLimits, attachmentMediaType, AttachmentError, validateAttachments } from '@/lib/chat-context/attachments';
+import { attachmentAccept, validateAttachmentSizes, validateAttachmentHeader, attachmentLimits, attachmentMediaType, AttachmentError } from '@/lib/chat-context/attachments';
 import { referenceKey, type ChatReference, type ChatSubmission } from '@/lib/chat-context/types';
 import { useMutation } from '@tanstack/react-query';
 import { storedAttachmentId } from '@/lib/chat-context/attachments';
@@ -62,6 +62,16 @@ export function AgentComposer({
     const fileInput = useRef<HTMLInputElement>(null);
     const folderInput = useRef<HTMLInputElement>(null);
     const sending = useRef(false);
+    const localFiles = useRef(new Map<string, File>());
+    const uploadController = useRef<AbortController | null>(null);
+    useEffect(
+        () => () => {
+            uploadController.current?.abort();
+            for (const url of localFiles.current.keys()) URL.revokeObjectURL(url);
+            localFiles.current.clear();
+        },
+        [],
+    );
     const attemptId = useRef<string | null>(null);
     const restoredDraft = useRef<ChatSubmission | null>(null);
     useEffect(() => {
@@ -79,13 +89,21 @@ export function AgentComposer({
         },
     });
     const upload = useMutation({
-        mutationFn: async (file: FileUIPart) => {
-            if (storedAttachmentId(file)) return file;
-            const blob = await (await fetch(file.url)).blob();
-            const form = new FormData();
-            form.set('file', blob, file.filename);
-            form.set('filename', file.filename ?? 'attachment');
-            const response = await fetch('/api/chat/attachments', { method: 'POST', body: form });
+        mutationFn: async (file: FileUIPart | File) => {
+            if (!(file instanceof File)) {
+                if (storedAttachmentId(file)) return file;
+                // Legacy restored drafts may still contain inline file parts.
+                const original = localFiles.current.get(file.url);
+                file = original ?? new File([await (await fetch(file.url)).blob()], file.filename ?? 'attachment');
+            }
+            const controller = new AbortController();
+            uploadController.current = controller;
+            const response = await fetch('/api/chat/attachments', {
+                signal: controller.signal,
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream', 'X-Dory-Filename': encodeURIComponent(file.webkitRelativePath || file.name) },
+                body: file,
+            });
             const body = await response.json();
             if (!response.ok) throw new Error(body.error || t('SendFailed'));
             return body.file as FileUIPart;
@@ -142,22 +160,28 @@ export function AgentComposer({
         setError('');
         try {
             if (files.length + selected.length > attachmentLimits.count) throw new AttachmentError('limit');
+            validateAttachmentSizes([
+                ...files.map(file => ({ filename: file.filename, byteSize: (file as FileUIPart & { byteSize: number }).byteSize })),
+                ...Array.from(selected, file => ({ filename: file.name, byteSize: file.size })),
+            ]);
             const added: FileUIPart[] = [];
-            for (const file of Array.from(selected)) {
-                const filename = file.webkitRelativePath || file.name;
-                const mediaType = attachmentMediaType(filename);
-                const limit = mediaType.startsWith('image/') ? attachmentLimits.imageBytes : attachmentLimits.textBytes;
-                if (file.size > limit) throw new AttachmentError('limit', filename, file.size);
-                const url = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onerror = () => reject(new AttachmentError('invalid', filename));
-                    reader.onload = () => resolve(String(reader.result).replace(/^data:[^;]*;/, `data:${mediaType};`));
-                    reader.readAsDataURL(file);
-                });
-                added.push({ type: 'file', filename, mediaType, url });
+            try {
+                for (const file of Array.from(selected)) {
+                    const filename = file.webkitRelativePath || file.name;
+                    const mediaType = attachmentMediaType(filename);
+                    validateAttachmentHeader(filename, new Uint8Array(await file.slice(0, 16).arrayBuffer()));
+                    const url = URL.createObjectURL(file);
+                    localFiles.current.set(url, file);
+                    added.push({ type: 'file', filename, mediaType, url, byteSize: file.size } as FileUIPart);
+                }
+            } catch (error) {
+                for (const file of added) {
+                    URL.revokeObjectURL(file.url);
+                    localFiles.current.delete(file.url);
+                }
+                throw error;
             }
             const next = [...files, ...added];
-            validateAttachments(next);
             attemptId.current = null;
             setFiles(next);
         } catch (cause) {
@@ -188,7 +212,9 @@ export function AgentComposer({
         try {
             const uploaded = [...files];
             for (let index = 0; index < uploaded.length; index++) {
-                uploaded[index] = await upload.mutateAsync(uploaded[index]);
+                const previous = uploaded[index];
+                uploaded[index] = await upload.mutateAsync(previous);
+                if (localFiles.current.delete(previous.url)) URL.revokeObjectURL(previous.url);
                 setFiles([...uploaded]);
             }
             const result = await onSubmit({ ...draft, files: uploaded });
@@ -282,6 +308,7 @@ export function AgentComposer({
                                 disabled={locked}
                                 onClick={() => {
                                     attemptId.current = null;
+                                    if (localFiles.current.delete(file.url)) URL.revokeObjectURL(file.url);
                                     discard.mutate(file);
                                     setFiles(previous => previous.filter((_, i) => i !== index));
                                 }}
@@ -415,7 +442,11 @@ export function AgentComposer({
                     </DropdownMenu>
                     {toolbar}
                 </div>
-                {busy && onStop ? (
+                {upload.isPending ? (
+                    <Button type="button" size="icon" className="rounded-full" variant="secondary" aria-label={t('Stop')} onClick={() => uploadController.current?.abort()}>
+                        <Square className="size-4" />
+                    </Button>
+                ) : busy && onStop ? (
                     <Button type="button" size="icon" className="rounded-full" variant="secondary" aria-label={t('Stop')} onClick={onStop}>
                         <Square className="size-4" />
                     </Button>

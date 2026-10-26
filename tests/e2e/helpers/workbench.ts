@@ -1,3 +1,4 @@
+import { attachmentMediaType } from '../../../apps/web/lib/chat-context/attachments';
 import { openDataSources } from './navigation';
 import { expect, type Page, type Route } from '@playwright/test';
 
@@ -129,11 +130,11 @@ async function collectOpenConsoleDiagnostics(page: Page) {
 
 export async function mockWorkbenchApis(page: Page, options: MockWorkbenchOptions = {}) {
     await page.route('**/api/chat/attachments', async route => {
-        const form = await new Response(route.request().postDataBuffer(), { headers: { 'Content-Type': route.request().headers()['content-type'] } }).formData();
-        const file = form.get('file') as File;
+        const filename = decodeURIComponent(route.request().headers()['x-dory-filename']);
+        const bytes = route.request().postDataBuffer()!;
         const id = crypto.randomUUID();
         return route.fulfill({
-            json: { file: { type: 'file', filename: String(form.get('filename') || file.name), mediaType: file.type, byteSize: file.size, url: `/api/chat/attachments/${id}` } },
+            json: { file: { type: 'file', filename, mediaType: attachmentMediaType(filename), byteSize: bytes.length, url: `/api/chat/attachments/${id}` } },
         });
     });
     const connections: ConnectionRecord[] = [...(options.initialConnections ?? [])];

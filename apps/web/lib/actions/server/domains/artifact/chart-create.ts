@@ -17,6 +17,7 @@ export const artifactChartCreateAction = defineWebAction({
     handler: async (ctx, input) => {
         const row = await ctx.services.db.artifacts.createChart({
             organizationId: ctx.organizationId,
+            userId: ctx.userId,
             ...input,
             createdByActorType: ctx.actor.type,
             createdByActorId: ctx.actor.id ?? ctx.userId,

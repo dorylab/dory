@@ -1,3 +1,4 @@
+import { attachmentReadAccess } from '../../attachment-access';
 import { z } from 'zod';
 
 import { defineWebAction } from '../../define-web-action';
@@ -41,9 +42,10 @@ export const querySessionGetAction = defineWebAction({
             id: input.sessionId,
         }),
     },
-    handler: (ctx, input) =>
+    handler: async (ctx, input) =>
         ctx.services.db.resultSets.getQuerySession({
             organizationId: ctx.organizationId,
+            ...(await attachmentReadAccess(ctx)),
             sessionId: input.sessionId,
         }),
 });

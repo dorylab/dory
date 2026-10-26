@@ -5651,10 +5651,10 @@
         "Incomplete": "未完成",
         "OpenReport": "打开报告",
         "AttachmentErrors": {
-            "unsupported": "不支持文件 {filename}。请选择 TXT、Markdown、SQL、JSON、CSV、TSV、PNG、JPEG 或 WebP。",
-            "limit": "附件超出限制：{filename}（{size} MiB）。最多 20 个文件，单文件 10 MiB，每轮合计 100 MiB。",
+            "unsupported": "不支持的文件：{filename}。请选择 TXT、Markdown、SQL、CSV、TSV、JSON/JSONL、Parquet、XLSX、PNG、JPEG 或 WebP。",
+            "limit": "附件超出限制：{filename}（{size} MiB）。最多 20 个文件，每个 100 MiB，每条消息共 500 MiB。",
             "imagesUnsupported": "当前模型通道不支持图片（{filename}）。请切换支持图片的模型或移除图片。",
-            "invalid": "无法读取 {filename}。请选择有效的 UTF-8 文本文件或支持的图片。"
+            "invalid": "无法读取 {filename}。请选择有效的数据文件、UTF-8 文本文件或支持的图片。"
         }
     }
 }

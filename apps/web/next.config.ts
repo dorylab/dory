@@ -70,6 +70,8 @@ const nextConfig = {
             './registry/**/*',
             './public/resources/demo.sqlite',
             './public/resources/demo.duckdb',
+            './public/resources/duckdb/**/*',
+            '../../node_modules/@duckdb/node-bindings-*/**/*',
             '../../packages/database/src/pglite/migrations.json',
             '../../packages/database/src/postgres/migrations/**/*',
             '../../packages/database/src/pglite/migrations/**/*',

@@ -1284,3 +1284,244 @@ test('requested reports pass the stage gate and save before the final answer, wi
         });
     }
 });
+
+test('ordinary chat can discover report tools and must complete a started draft after stage recovery', async () => {
+    const { tool } = await import('ai');
+    const { z } = await import('zod');
+    const { initialChatCheckpoints, applyCheckpointCommand } = await import('@dory/shared/types/chat-checkpoints');
+    const state = initialChatCheckpoints();
+    let reportStatus: 'draft' | 'ready' | null = null;
+    let step = 0;
+    let creations = 0;
+    let saves = 0;
+    const actions = ['createWorkReport', 'publishProgress', 'createWorkReport', 'updateWorkReport'];
+    const agent = buildDoryChatAgent({
+        model: new MockLanguageModelV4({
+            doGenerate: async options => {
+                const current = step++;
+                const names = options.tools?.map(tool => tool.name) ?? [];
+                if (current === 0) {
+                    assert.equal(options.toolChoice?.type, 'auto');
+                    assert.ok(names.includes('createWorkReport'));
+                    assert.ok(names.includes('updateWorkReport'));
+                }
+                if (current === 1) assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'publishProgress' });
+                if (current === 2) assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'createWorkReport' });
+                if (current === 3) {
+                    assert.equal(reportStatus, 'draft');
+                    assert.equal(options.toolChoice?.type, 'required');
+                    assert.ok(!names.includes('finishAnalysis'));
+                }
+                if (current === actions.length) {
+                    assert.equal(reportStatus, 'ready');
+                    assert.equal(options.toolChoice?.type, 'auto');
+                    return { content: [{ type: 'text', text: '报告已保存。' }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] };
+                }
+                return {
+                    content: [{ type: 'tool-call', toolCallId: `discovered-${current}`, toolName: actions[current], input: '{}' }],
+                    finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                    usage,
+                    warnings: [],
+                };
+            },
+        }),
+        tools: {
+            publishProgress: tool({
+                inputSchema: z.object({}),
+                execute: async () =>
+                    applyCheckpointCommand(state, 'discovered', {
+                        kind: 'publish',
+                        checkpointId: `discovered:${state.revision}`,
+                        text: '我会把已有的分析整理为报告，保存草稿后补全内容。',
+                        nextStage: 'output',
+                    }),
+            }),
+            createWorkReport: tool({
+                inputSchema: z.object({}),
+                execute: async () => {
+                    const admission = applyCheckpointCommand(state, 'discovered', { kind: 'reserve', id: 'draft', toolName: 'createWorkReport', stage: 'output' });
+                    if (!admission.accepted) return admission;
+                    creations++;
+                    reportStatus = 'draft';
+                    applyCheckpointCommand(state, 'discovered', { kind: 'settle', id: 'draft', failed: false, result: 'Draft saved' });
+                    return { id: 'report', status: 'draft' };
+                },
+            }),
+            updateWorkReport: tool({
+                inputSchema: z.object({}),
+                execute: async () => {
+                    saves++;
+                    reportStatus = 'ready';
+                    return { id: 'report', status: 'ready' };
+                },
+            }),
+            finishAnalysis: tool({ inputSchema: z.object({}), execute: async (): Promise<{ ok: boolean }> => assert.fail('Reports do not require saving Findings') }),
+        },
+        requiredReport: { status: async () => reportStatus },
+        checkpoint: { inspect: async () => applyCheckpointCommand(state, 'discovered', { kind: 'inspect' }), invalid: async () => {} },
+        instructions: 'Save a report when requested.',
+        requestId: 'discovered',
+        context: {},
+        recordUsage: async () => {},
+    });
+    assert.match((await agent.generate({ prompt: '帮我把上面的内容做成报告' })).text, /已保存/);
+    assert.equal(creations, 1);
+    assert.equal(saves, 1);
+    assert.equal(step, 5);
+});
+
+test('readAttachment remains discoverable after output and executes after its checkpoint', async () => {
+    const { tool } = await import('ai');
+    const { z } = await import('zod');
+    const { initialChatCheckpoints, applyCheckpointCommand } = await import('@dory/shared/types/chat-checkpoints');
+    const state = initialChatCheckpoints();
+    state.stage = 'output';
+    let executed = 0;
+    let step = 0;
+    const calls = [
+        { toolName: 'readAttachment', input: { artifactId: 'saved' } },
+        { toolName: 'publishProgress', input: { text: '图表工具需要先进入输出阶段，接下来读取已保存的结果生成趋势图。', nextStage: 'reference' } },
+        { toolName: 'readAttachment', input: { artifactId: 'saved' } },
+    ];
+    const agent = buildDoryChatAgent({
+        hasAttachments: true,
+        model: new MockLanguageModelV4({
+            doGenerate: async options => {
+                const current = step++;
+                if (current === 0)
+                    assert.deepEqual(
+                        options.tools?.map(tool => tool.name),
+                        ['publishProgress', 'readAttachment'],
+                    );
+                if (current === 1) {
+                    assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'publishProgress' });
+                    assert.match(JSON.stringify(options.prompt), /NOT an unavailable capability/);
+                }
+                if (current === 2) {
+                    // This provider would otherwise answer "chart created" right
+                    // after publishing progress, without executing readAttachment.
+                    assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'readAttachment' });
+                    assert.match(JSON.stringify(options.prompt), /publishing progress did not complete this action/);
+                    assert.equal(executed, 0);
+                }
+                if (current === calls.length) {
+                    assert.equal(options.toolChoice?.type, 'auto');
+                    assert.equal(executed, 1);
+                    return { content: [{ type: 'text', text: '图表已生成。' }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] };
+                }
+                return {
+                    content: [{ type: 'tool-call', toolCallId: `stage-readAttachment-${current}`, toolName: calls[current].toolName, input: JSON.stringify(calls[current].input) }],
+                    finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                    usage,
+                    warnings: [],
+                };
+            },
+        }),
+        tools: {
+            publishProgress: tool({
+                inputSchema: z.object({ text: z.string(), nextStage: z.literal('reference') }),
+                execute: async input =>
+                    applyCheckpointCommand(state, 'stage-readAttachment', { kind: 'publish', checkpointId: `stage-readAttachment:${state.revision}`, ...input }),
+            }),
+            readAttachment: tool({
+                inputSchema: z.object({ artifactId: z.string() }),
+                execute: async () => {
+                    const admission = applyCheckpointCommand(state, 'stage-readAttachment', { kind: 'reserve', id: 'chart', toolName: 'readAttachment', stage: 'reference' });
+                    if (!admission.accepted) return admission;
+                    executed++;
+                    applyCheckpointCommand(state, 'stage-readAttachment', { kind: 'settle', id: 'chart', failed: false, result: '18 rows charted' });
+                    return { rows: 18 };
+                },
+            }),
+        },
+        instructions: 'Create a chart from the saved result.',
+        requestId: 'stage-readAttachment',
+        checkpoint: { inspect: async () => applyCheckpointCommand(state, 'stage-readAttachment', { kind: 'inspect' }), invalid: async () => {} },
+        context: {},
+        recordUsage: async () => {},
+    });
+    assert.match((await agent.generate({ prompt: '画出上次结果的趋势图' })).text, /图表已生成/);
+    assert.equal(executed, 1);
+    assert.equal(step, 4);
+    assert.equal(state.stage, 'reference');
+    assert.equal(state.failures, 0);
+});
+
+test('queryAttachment remains discoverable after output and executes after its checkpoint', async () => {
+    const { tool } = await import('ai');
+    const { z } = await import('zod');
+    const { initialChatCheckpoints, applyCheckpointCommand } = await import('@dory/shared/types/chat-checkpoints');
+    const state = initialChatCheckpoints();
+    state.stage = 'output';
+    let executed = 0;
+    let step = 0;
+    const calls = [
+        { toolName: 'queryAttachment', input: { artifactId: 'saved' } },
+        { toolName: 'publishProgress', input: { text: '图表工具需要先进入输出阶段，接下来读取已保存的结果生成趋势图。', nextStage: 'query' } },
+        { toolName: 'queryAttachment', input: { artifactId: 'saved' } },
+    ];
+    const agent = buildDoryChatAgent({
+        hasAttachments: true,
+        model: new MockLanguageModelV4({
+            doGenerate: async options => {
+                const current = step++;
+                if (current === 0)
+                    assert.deepEqual(
+                        options.tools?.map(tool => tool.name),
+                        ['publishProgress', 'queryAttachment'],
+                    );
+                if (current === 1) {
+                    assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'publishProgress' });
+                    assert.match(JSON.stringify(options.prompt), /NOT an unavailable capability/);
+                }
+                if (current === 2) {
+                    // This provider would otherwise answer "chart created" right
+                    // after publishing progress, without executing queryAttachment.
+                    assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'queryAttachment' });
+                    assert.match(JSON.stringify(options.prompt), /publishing progress did not complete this action/);
+                    assert.equal(executed, 0);
+                }
+                if (current === calls.length) {
+                    assert.equal(options.toolChoice?.type, 'auto');
+                    assert.equal(executed, 1);
+                    return { content: [{ type: 'text', text: '图表已生成。' }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] };
+                }
+                return {
+                    content: [
+                        { type: 'tool-call', toolCallId: `stage-queryAttachment-${current}`, toolName: calls[current].toolName, input: JSON.stringify(calls[current].input) },
+                    ],
+                    finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                    usage,
+                    warnings: [],
+                };
+            },
+        }),
+        tools: {
+            publishProgress: tool({
+                inputSchema: z.object({ text: z.string(), nextStage: z.literal('query') }),
+                execute: async input =>
+                    applyCheckpointCommand(state, 'stage-queryAttachment', { kind: 'publish', checkpointId: `stage-queryAttachment:${state.revision}`, ...input }),
+            }),
+            queryAttachment: tool({
+                inputSchema: z.object({ artifactId: z.string() }),
+                execute: async () => {
+                    const admission = applyCheckpointCommand(state, 'stage-queryAttachment', { kind: 'reserve', id: 'chart', toolName: 'queryAttachment', stage: 'query' });
+                    if (!admission.accepted) return admission;
+                    executed++;
+                    applyCheckpointCommand(state, 'stage-queryAttachment', { kind: 'settle', id: 'chart', failed: false, result: '18 rows charted' });
+                    return { rows: 18 };
+                },
+            }),
+        },
+        instructions: 'Create a chart from the saved result.',
+        requestId: 'stage-queryAttachment',
+        checkpoint: { inspect: async () => applyCheckpointCommand(state, 'stage-queryAttachment', { kind: 'inspect' }), invalid: async () => {} },
+        context: {},
+        recordUsage: async () => {},
+    });
+    assert.match((await agent.generate({ prompt: '画出上次结果的趋势图' })).text, /图表已生成/);
+    assert.equal(executed, 1);
+    assert.equal(step, 4);
+    assert.equal(state.stage, 'query');
+    assert.equal(state.failures, 0);
+});

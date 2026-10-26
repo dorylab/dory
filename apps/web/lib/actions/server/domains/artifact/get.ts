@@ -1,3 +1,4 @@
+import { attachmentReadAccess } from '../../attachment-access';
 import { z } from 'zod';
 
 import { defineWebAction } from '../../define-web-action';
@@ -15,5 +16,5 @@ export const artifactGetAction = defineWebAction({
     scopes: ['query:read'],
     actors: ['user', 'agent', 'mcp', 'automation'],
     audit: { allowInputFields: ['artifactId'], resource: (_ctx, input) => ({ type: 'artifact', id: input.artifactId }) },
-    handler: (ctx, input) => ctx.services.db.artifacts.get({ organizationId: ctx.organizationId, artifactId: input.artifactId }),
+    handler: async (ctx, input) => ctx.services.db.artifacts.get({ organizationId: ctx.organizationId, ...(await attachmentReadAccess(ctx)), artifactId: input.artifactId }),
 });

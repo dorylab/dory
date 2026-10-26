@@ -645,5 +645,13 @@
     "bps": true,
     "folderMillis": 1792627200000,
     "hash": "57e0c06ec9bcd871a7de756684400ec8a32b15345fc202d970c4d477c602b60c"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"result_sets\" ADD COLUMN \"attachment_source\" jsonb;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1793059200000,
+    "hash": "09aec25ffb656662f233b941f81b5f37e5d8d9f928469cf70977fb67364bd068"
   }
 ]

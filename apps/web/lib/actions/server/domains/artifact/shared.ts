@@ -67,6 +67,14 @@ export const artifactDetailOutputSchema = artifactSummarySchema.extend({
     chartState: artifactChartStateSchema.nullable(),
     resultSet: z
         .object({
+            attachmentSource: z
+                .object({
+                    chatId: z.string(),
+                    userId: z.string(),
+                    files: z.array(z.object({ attachmentId: z.string(), filename: z.string(), sha256: z.string(), table: z.string(), sheet: z.string().optional() })),
+                })
+                .nullable()
+                .optional(),
             id: z.string(),
             columns: z.array(z.unknown()),
             dataAvailability: z.string(),

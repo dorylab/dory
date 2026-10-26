@@ -10,13 +10,14 @@ import { repairWorkToolInput } from './work-tool-input';
 type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     model: LanguageModel;
     tools: TOOLS;
+    hasAttachments?: boolean;
     instructions: string;
     temperature?: number;
     maxSteps?: number;
     structuredCompletion?: boolean;
     onSummaryInputError?: (error: unknown) => Promise<void>;
     checkpoint?: { inspect: () => Promise<CheckpointResult | null>; invalid: () => Promise<unknown> };
-    requiredReport?: { status: () => Promise<'missing' | 'draft' | 'ready'> };
+    requiredReport?: { status: () => Promise<'missing' | 'draft' | 'ready' | null> };
     headers?: Record<string, string | undefined> | null;
     context: AiGatewayContext;
     requestId: string;
@@ -139,12 +140,14 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                 const activeTools = Object.keys(options.tools).filter(
                     name =>
                         name === 'publishProgress' ||
+                        (options.hasAttachments && ['readAttachment', 'searchAttachment', 'queryAttachment'].includes(name)) ||
                         (!mustPublish &&
-                            (!options.requiredReport || name !== 'finishAnalysis') &&
+                            (!reportStatus || name !== 'finishAnalysis') &&
                             (reportStatus !== 'missing' || name === 'createWorkReport') &&
-                            // Keep charts discoverable across turns. Their execution
-                            // wrapper still requires a valid output-stage checkpoint.
-                            (name === 'chartBuilder' || (checkpoint.stage && (checkpoint.remainingActions ?? 0) > 0 && chatToolStage(name) === checkpoint.stage))),
+                            // Keep deliverable tools discoverable across turns. Their
+                            // execution wrappers still enforce the stage checkpoint.
+                            (['chartBuilder', 'createWorkReport', 'readWorkReport', 'updateWorkReport'].includes(name) ||
+                                (checkpoint.stage && (checkpoint.remainingActions ?? 0) > 0 && chatToolStage(name) === checkpoint.stage))),
                 ) as (keyof TOOLS & string)[];
                 const retryReady = retryTool && checkpoint.stage === chatToolStage(retryTool) && (checkpoint.remainingActions ?? 0) > 0 && activeTools.includes(retryTool);
                 return {

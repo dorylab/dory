@@ -6,13 +6,13 @@ import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organizatio
 
 export const runtime = 'nodejs';
 
-export const GET = withUserAndOrganizationHandler(async ({ req, db, organizationId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const exportId = decodeURIComponent(req.nextUrl.pathname.split('/').filter(Boolean).pop() ?? '');
     if (typeof exportId !== 'string' || !exportId) {
         return NextResponse.json({ error: 'Missing export id.' }, { status: 400 });
     }
 
-    const exportObject = await db.resultSets.openExport({ organizationId, exportId });
+    const exportObject = await db.resultSets.openExport({ organizationId, userId, exportId });
     const body = exportObject.stream instanceof Readable ? Readable.toWeb(exportObject.stream) : exportObject.stream;
     const headers = new Headers({
         'Content-Type': exportObject.contentType,

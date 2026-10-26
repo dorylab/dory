@@ -5644,10 +5644,10 @@
         "Incomplete": "Incomplete",
         "OpenReport": "Open report",
         "AttachmentErrors": {
-            "unsupported": "Unsupported file: {filename}. Choose TXT, Markdown, SQL, JSON, CSV, TSV, PNG, JPEG or WebP.",
-            "limit": "Attachment exceeds limits: {filename} ({size} MiB). Up to 20 files, 10 MiB per file, 100 MiB per message.",
+            "unsupported": "非対応のファイル：{filename}。TXT、Markdown、SQL、CSV、TSV、JSON/JSONL、Parquet、XLSX、PNG、JPEG、WebP を選択してください。",
+            "limit": "添付ファイルが上限を超えています：{filename}（{size} MiB）。最大 20 ファイル、各 100 MiB、メッセージ合計 500 MiB。",
             "imagesUnsupported": "This model channel does not support images ({filename}). Switch to an image-capable model or remove the image.",
-            "invalid": "Unable to read {filename}. Select a valid UTF-8 text file or a supported image."
+            "invalid": "{filename} を読み取れません。有効なデータファイル、UTF-8 テキスト、または対応画像を選択してください。"
         }
     }
 }

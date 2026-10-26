@@ -267,6 +267,13 @@
             "when": 1792627200000,
             "tag": "0038_work_documents",
             "breakpoints": true
+        },
+        {
+            "idx": 38,
+            "version": "7",
+            "when": 1793059200000,
+            "tag": "0039_chat_attachment_sources",
+            "breakpoints": true
         }
     ]
 }

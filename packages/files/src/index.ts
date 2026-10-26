@@ -157,7 +157,7 @@ function readZipEntry(buffer: Buffer, entry: ZipEntry) {
         return compressed.toString('utf8');
     }
     if (entry.compressionMethod === 8) {
-        return inflateRawSync(compressed).toString('utf8');
+        return inflateRawSync(compressed, { maxOutputLength: 4 * 1024 * 1024 }).toString('utf8');
     }
 
     throw new Error(`Unsupported XLSX compression method: ${entry.compressionMethod}`);
@@ -175,13 +175,38 @@ function extractWorkbookSheets(workbookXml: string): string[] {
 }
 
 async function inspectExcelSheets(filePath: string): Promise<string[]> {
-    const buffer = await fs.readFile(filePath);
-    const entries = parseZipEntries(buffer);
-    const workbookEntry = entries.find(entry => entry.name === 'xl/workbook.xml');
-    if (!workbookEntry) {
-        throw new Error('Invalid XLSX file: missing workbook.xml');
+    // Read only the ZIP directory and workbook metadata, not the entire uploaded workbook.
+    const handle = await fs.open(filePath, 'r');
+    try {
+        const { size } = await handle.stat();
+        const read = async (position: number, length: number) => {
+            if (position < 0 || length < 0 || position + length > size || length > 4 * 1024 * 1024) throw new Error('Invalid or oversized XLSX metadata');
+            const buffer = Buffer.alloc(length);
+            const result = await handle.read(buffer, 0, length, position);
+            if (result.bytesRead !== length) throw new Error('Truncated XLSX file');
+            return buffer;
+        };
+        const tail = await read(Math.max(0, size - 65557), Math.min(size, 65557));
+        let eocd = -1;
+        for (let offset = tail.length - 22; offset >= 0; offset--) {
+            if (tail.readUInt32LE(offset) === 0x06054b50 && offset + 22 + tail.readUInt16LE(offset + 20) === tail.length) {
+                eocd = offset;
+                break;
+            }
+        }
+        if (eocd < 0) throw new Error('Invalid XLSX file: missing zip directory');
+        const end = Buffer.from(tail.subarray(eocd, eocd + 22));
+        const central = await read(end.readUInt32LE(16), end.readUInt32LE(12));
+        end.writeUInt32LE(0, 16);
+        const entry = parseZipEntries(Buffer.concat([central, end])).find(item => item.name === 'xl/workbook.xml');
+        if (!entry) throw new Error('Invalid XLSX file: missing workbook.xml');
+        const header = await read(entry.localHeaderOffset, 30);
+        const headerLength = 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
+        const content = await read(entry.localHeaderOffset, headerLength + entry.compressedSize);
+        return extractWorkbookSheets(readZipEntry(content, { ...entry, localHeaderOffset: 0 }));
+    } finally {
+        await handle.close();
     }
-    return extractWorkbookSheets(readZipEntry(buffer, workbookEntry));
 }
 
 export function detectSourceType(filePath: string): LocalFileSourceType {

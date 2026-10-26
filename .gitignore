@@ -84,3 +84,6 @@ localdata/
 scan-symbol.cjs
 
 apps/web/data/
+
+# Native DuckDB extensions are provisioned for the build platform, never committed.
+/apps/web/public/resources/duckdb/

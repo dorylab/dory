@@ -99,6 +99,8 @@ function ToolGroup({ activities, ended, ...props }: Actions & { activities: Chat
         readArtifact: 'ReadResults',
         listConnections: 'ListSources',
         chartBuilder: 'BuildCharts',
+        queryAttachment: 'QueryData',
+        dory_query_attachment: 'QueryData',
         readAttachment: 'ReadFiles',
         dory_read_attachment: 'ReadFiles',
         searchAttachment: 'SearchFiles',

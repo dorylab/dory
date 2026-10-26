@@ -16,7 +16,7 @@ export const artifactRenameAction = defineWebAction({
     actors: ['user'],
     audit: { allowInputFields: ['artifactId', 'title'], resource: (_ctx, input) => ({ type: 'artifact', id: input.artifactId }) },
     handler: async (ctx, input) => {
-        const row = await ctx.services.db.artifacts.rename({ organizationId: ctx.organizationId, ...input });
+        const row = await ctx.services.db.artifacts.rename({ organizationId: ctx.organizationId, userId: ctx.userId, ...input });
         return { id: row.id, title: row.title };
     },
 });

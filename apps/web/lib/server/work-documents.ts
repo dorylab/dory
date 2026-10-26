@@ -1,3 +1,4 @@
+import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
 import type { DBService } from '@dory/database';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { AnalysisScope, WorkDocumentContent, WorkEvidence } from '@dory/shared/types/work-document';
@@ -63,18 +64,22 @@ export async function saveWorkDraft(
         ids.map(async artifactId => {
             const saved = existing.content.evidence.find(item => item.artifactId === artifactId);
             if (saved) return saved;
-            const artifact = await db.artifacts.get({ organizationId: input.organizationId, artifactId });
-            if (!artifact.connectionId || !scope.connectionIds.includes(artifact.connectionId)) throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
+            const artifact = await db.artifacts.get({ organizationId: input.organizationId, userId: input.userId, artifactId });
+            const attachment = artifact.resultSet?.attachmentSource;
+            if (!canReadAttachmentSource(attachment, input.userId, existing.chatId)) throw new DatabaseError('Attachment evidence belongs to another conversation.', 403);
+            if (!attachment && (!artifact.connectionId || !scope.connectionIds.includes(artifact.connectionId)))
+                throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
             if (artifact.workId) {
                 if (!(await db.works.getById({ ...input, workId: artifact.workId }))) throw new DatabaseError('Evidence is unavailable.', 403);
             }
             if (!artifact.resultSet) throw new DatabaseError('Evidence has no query result.', 400);
-            const result = await db.resultSets.readRows({ organizationId: input.organizationId, resultSetId: artifact.resultSet.id, limit: 500 });
+            const result = await db.resultSets.readRows({ organizationId: input.organizationId, userId: input.userId, resultSetId: artifact.resultSet.id, limit: 500 });
             if (result.dataAvailability === 'none' || ((result.rowCount ?? 0) > 0 && !result.rows.length))
                 throw new DatabaseError('Evidence data is no longer available. Re-run the query.', 409);
             const rows = result.rows;
             return {
                 artifactId,
+                attachmentSource: attachment ?? undefined,
                 title: artifact.title,
                 connectionId: artifact.connectionId,
                 connectionName: artifact.connectionName,
@@ -132,7 +137,7 @@ export async function createWorkFromRun(db: DBService, input: Owner & { runId: s
     if (!run) throw new DatabaseError('Analysis not found.', 404);
     const [findings, assets] = await Promise.all([
         db.works.listFindings({ ...input, workId: input.runId }),
-        db.artifacts.listByWork({ organizationId: input.organizationId, workId: input.runId }),
+        db.artifacts.listByWork({ organizationId: input.organizationId, userId: input.userId, workId: input.runId }),
     ]);
     const connectionIds = [...new Set(assets.flatMap(asset => (asset.connectionId ? [asset.connectionId] : [])).concat(run.connectionId ? [run.connectionId] : []))];
     const scope = { connectionIds };
@@ -148,9 +153,9 @@ export async function createWorkFromRun(db: DBService, input: Owner & { runId: s
     const available = new Set<string>();
     for (const asset of assets) {
         try {
-            const artifact = await db.artifacts.get({ organizationId: input.organizationId, artifactId: asset.id });
+            const artifact = await db.artifacts.get({ organizationId: input.organizationId, userId: input.userId, artifactId: asset.id });
             if (!artifact.resultSet) continue;
-            const preview = await db.resultSets.readRows({ organizationId: input.organizationId, resultSetId: artifact.resultSet.id, limit: 1 });
+            const preview = await db.resultSets.readRows({ organizationId: input.organizationId, userId: input.userId, resultSetId: artifact.resultSet.id, limit: 1 });
             if (preview.dataAvailability !== 'none' && ((preview.rowCount ?? 0) === 0 || preview.rows.length)) available.add(asset.id);
         } catch {
             /* Expired evidence is reported as a limitation below. */

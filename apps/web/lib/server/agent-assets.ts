@@ -42,6 +42,8 @@ export type SearchAgentAssetsInput = {
 };
 
 export type ReadAgentAssetInput = {
+    userId?: string;
+    chatId?: string | null;
     organizationId: string;
     ref: string;
     contentCursor?: string | null;
@@ -364,13 +366,17 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
 export async function readAgentAsset(db: DBService, input: ReadAgentAssetInput) {
     const parsed = parseAgentAssetRef(input.ref);
     if (parsed.kind === 'artifact') {
-        const artifact = await db.artifacts.get({ organizationId: input.organizationId, artifactId: parsed.artifactId }).catch(unavailable);
+        const artifact = await db.artifacts
+            .get({ organizationId: input.organizationId, userId: input.userId, chatId: input.chatId ?? null, artifactId: parsed.artifactId })
+            .catch(unavailable);
         const connectionIds = artifact.connectionId ? [artifact.connectionId] : [];
         if (artifact.status !== 'ready' || (artifact.expiresAt && new Date(artifact.expiresAt) <= new Date()) || !isConnectionAllowed(connectionIds, input.allowedConnectionIds))
             unavailable();
         const previewRows = Math.max(1, Math.min(input.previewRows ?? 100, MAX_ARTIFACT_PREVIEW_ROWS));
         const preview = artifact.sourceResultSetId
-            ? await db.resultSets.readRows({ organizationId: input.organizationId, resultSetId: artifact.sourceResultSetId, offset: 0, limit: previewRows }).catch(() => null)
+            ? await db.resultSets
+                  .readRows({ organizationId: input.organizationId, userId: input.userId, resultSetId: artifact.sourceResultSetId, offset: 0, limit: previewRows })
+                  .catch(() => null)
             : null;
         const asset: AgentAssetSummary = {
             ref: input.ref,

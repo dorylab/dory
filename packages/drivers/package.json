@@ -14,7 +14,8 @@
         "./database/register": "./src/database/register.ts",
         "./database/clickhouse/privileges": "./src/database/clickhouse/capabilities/privileges.ts",
         "./table-mutations": "./src/table-mutations.ts",
-        "./config": "./src/config/index.ts"
+        "./config": "./src/config/index.ts",
+        "./database/duckdb/attachments": "./src/database/duckdb/attachments.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit",
@@ -24,6 +25,7 @@
     "dependencies": {
         "@clickhouse/client": "^1.18.2",
         "@dory/data-plane": "0.1.0",
+        "@dory/files": "0.1.0",
         "@dory/import": "0.1.0",
         "@dory/schema-compare": "0.1.0",
         "@duckdb/node-api": "^1.5.2-r.1",

@@ -22,5 +22,5 @@ export const artifactListAction = defineWebAction({
     scopes: ['query:read'],
     actors: ['user', 'agent', 'mcp', 'automation'],
     audit: { allowInputFields: ['query', 'types', 'pinnedOnly', 'offset', 'limit'] },
-    handler: (ctx, input) => ctx.services.db.artifacts.list({ organizationId: ctx.organizationId, ...input, userId: input.forChatReference ? ctx.userId : undefined }),
+    handler: (ctx, input) => ctx.services.db.artifacts.list({ organizationId: ctx.organizationId, ...input, userId: ctx.userId }),
 });

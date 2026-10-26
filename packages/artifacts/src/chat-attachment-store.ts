@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { Readable } from 'node:stream';
+import { createHash, randomUUID } from 'node:crypto';
 import { joinObjectPath, readableToBuffer, type ObjectStore } from './object-store';
 
 export type ChatAttachmentOwner = { organizationId: string; userId: string };
@@ -9,6 +10,7 @@ export type ChatAttachmentManifest = ChatAttachmentOwner & {
     byteSize: number;
     chatId: string | null;
     createdAt: string;
+    sha256?: string;
 };
 
 /** Private objects. Only the authenticated chat service may expose their bytes. */
@@ -22,25 +24,57 @@ export class ChatAttachmentStore {
         return joinObjectPath(this.prefix, 'chat-attachments', Buffer.from(owner.organizationId).toString('base64url'), Buffer.from(owner.userId).toString('base64url'), id);
     }
     async put(owner: ChatAttachmentOwner, input: { filename: string; mediaType: string; chatId: string | null; bytes: Uint8Array }) {
+        return this.putStream(owner, { ...input, stream: Readable.from([input.bytes]), maxBytes: input.bytes.byteLength });
+    }
+    async putStream(
+        owner: ChatAttachmentOwner,
+        input: {
+            filename: string;
+            mediaType: string;
+            chatId: string | null;
+            stream: Readable;
+            maxBytes: number;
+        },
+    ) {
         const id = randomUUID();
-        const manifest: ChatAttachmentManifest = {
-            ...owner,
-            id,
-            filename: input.filename,
-            mediaType: input.mediaType,
-            chatId: input.chatId,
-            byteSize: input.bytes.byteLength,
-            createdAt: new Date().toISOString(),
-        };
         const key = this.key(owner, id);
-        await this.store.put(`${key}/content`, input.bytes, { contentType: input.mediaType });
+        let byteSize = 0;
+        const hash = createHash('sha256');
+        const content = Readable.from(
+            (async function* () {
+                for await (const chunk of input.stream) {
+                    const bytes = Buffer.from(chunk);
+                    byteSize += bytes.length;
+                    if (byteSize > input.maxBytes) throw new Error('Attachment exceeds the upload limit.');
+                    hash.update(bytes);
+                    yield bytes;
+                }
+            })(),
+        );
         try {
+            await this.store.put(`${key}/content`, content, { contentType: input.mediaType });
+            const manifest: ChatAttachmentManifest = {
+                ...owner,
+                id,
+                filename: input.filename,
+                mediaType: input.mediaType,
+                chatId: input.chatId,
+                byteSize,
+                sha256: hash.digest('hex'),
+                createdAt: new Date().toISOString(),
+            };
             await this.store.put(`${key}/manifest.json`, JSON.stringify(manifest), { contentType: 'application/json' });
+            return manifest;
         } catch (error) {
+            content.destroy();
+            input.stream.destroy();
             await this.store.deletePrefix(key);
             throw error;
         }
-        return manifest;
+    }
+    async open(owner: ChatAttachmentOwner, id: string) {
+        const manifest = await this.readManifest(owner, id);
+        return { manifest, stream: await this.store.get(`${this.key(owner, id)}/content`) };
     }
     async discardDraft(owner: ChatAttachmentOwner, id: string) {
         const manifest = await this.readManifest(owner, id);
@@ -54,7 +88,7 @@ export class ChatAttachmentStore {
         if (manifest.chatId === chatId) return;
         await this.store.put(`${this.key(owner, id)}/manifest.json`, JSON.stringify({ ...manifest, chatId }), { contentType: 'application/json' });
     }
-    private async readManifest(owner: ChatAttachmentOwner, id: string) {
+    async readManifest(owner: ChatAttachmentOwner, id: string) {
         const key = this.key(owner, id);
         if (!(await this.store.exists(`${key}/manifest.json`))) throw new Error('Attachment unavailable.');
         const manifest = JSON.parse((await readableToBuffer(await this.store.get(`${key}/manifest.json`))).toString('utf8')) as ChatAttachmentManifest;

@@ -29,6 +29,7 @@ import { resolveDoryAgentModel } from '@/lib/ai/agents/model';
 import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
 import { buildChatCompletionMetadata } from '@/lib/ai/chat-response-state';
+import { resolveChatOutputIntent } from '@/lib/chat-context/output-intent';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import {
     DORY_CODEX_CHAT_ID_HEADER,
@@ -182,15 +183,19 @@ export async function handleChatRequest(req: Request) {
         includeModel: true,
     });
     const contextInput = chatContextSchema.parse({ references: body.references, outputIntent: body.outputIntent, sourceMessageId: body.sourceMessageId });
+    contextInput.outputIntent = resolveChatOutputIntent(contextInput, currentUserText, body.documentId);
     if (contextInput.references.length && (!db || !userId || !organizationId)) throw new DatabaseError('Unauthorized.', 401);
     const referenceScope = analysisScope ?? {
         connectionIds: connectionId ? [connectionId] : [],
         databasesByConnection: connectionId && database ? { [connectionId]: database } : {},
     };
     const resolvedContext =
-        db && userId && organizationId ? await resolveChatContext(db, { userId, organizationId }, contextInput, referenceScope) : { ...contextInput, instruction: '' };
+        db && userId && organizationId
+            ? await resolveChatContext(db, { userId, organizationId }, contextInput, referenceScope, chatIdFromBody ?? null)
+            : { ...contextInput, instruction: '' };
+    const hasAttachments = historyMessagesForAgent.some(message => message.parts.some(part => part.type === 'file'));
     try {
-        if (historyMessagesForAgent.some(message => message.parts.some(part => part.type === 'file'))) {
+        if (hasAttachments) {
             if (!userId || !organizationId) throw new DatabaseError('Unauthorized.', 401);
             const attachments = await prepareStoredAttachments(
                 { userId, organizationId },
@@ -563,6 +568,7 @@ export async function handleChatRequest(req: Request) {
         const headers = mergeHeaders(mergeHeaders(undefined, gatewayHeaders), localCodexHeaders);
 
         const agent = buildDoryChatAgent({
+            hasAttachments,
             model,
             tools,
             instructions: agentInstructions,
@@ -571,7 +577,10 @@ export async function handleChatRequest(req: Request) {
             structuredCompletion: Boolean(analysis && !isLocalAiAgentProvider(execution.providerKey)),
             onSummaryInputError: analysis?.recordSummaryInputError,
             checkpoint: analysis && progressCheckpoints ? { inspect: analysis.inspectCheckpoint, invalid: analysis.invalidProgress } : undefined,
-            requiredReport: reports && contextInput.outputIntent === 'report' && !isLocalAiAgentProvider(execution.providerKey) ? { status: reports.completionStatus } : undefined,
+            requiredReport:
+                reports && !isLocalAiAgentProvider(execution.providerKey)
+                    ? { status: async () => (contextInput.outputIntent === 'report' || reports.currentId() ? reports.completionStatus() : null) }
+                    : undefined,
             headers,
             context: {
                 organizationId,
@@ -661,7 +670,7 @@ export async function handleChatRequest(req: Request) {
                                 });
                         }
                     }
-                    if (contextInput.outputIntent === 'report') {
+                    if (contextInput.outputIntent === 'report' || reports?.currentId()) {
                         try {
                             await reports?.assertReady();
                         } catch (error) {
@@ -688,7 +697,7 @@ export async function handleChatRequest(req: Request) {
                                 sourceMessageId: contextInput.sourceMessageId,
                                 reportDocumentId: reports?.currentId() ?? undefined,
                                 reportRevision: reports?.currentRevision(),
-                                ...(contextInput.outputIntent === 'report'
+                                ...(contextInput.outputIntent === 'report' || reports?.currentId()
                                     ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
                                     : {}),
                                 sessionTitle,
@@ -765,7 +774,7 @@ export async function handleChatRequest(req: Request) {
                                 messageMetadata: {
                                     reportDocumentId: reports?.currentId() ?? undefined,
                                     reportRevision: reports?.currentRevision(),
-                                    ...(contextInput.outputIntent === 'report'
+                                    ...(contextInput.outputIntent === 'report' || reports?.currentId()
                                         ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
                                         : {}),
                                 },

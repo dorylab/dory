@@ -1,3 +1,4 @@
+import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { createHash } from 'node:crypto';
 import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
 import { createDataSchema, rowDataStream, schemaToIpc } from '@dory/data-plane';
@@ -502,9 +503,13 @@ export class PostgresWorksRepository {
         const sourceWork = sourceWorkId ? await this.getById({ ...input, workId: sourceWorkId }) : null;
         if (sourceWorkId && (!sourceWork || sourceWork.archivedAt)) throw new DatabaseError('Evidence is unavailable.', 403);
         const scope = work.metadata?.analysisScope as { connectionIds: string[]; databasesByConnection?: Record<string, string> } | undefined;
-        if (scope && (!artifact.connectionId || !scope.connectionIds.includes(artifact.connectionId)))
+        const attachment = result?.attachmentSource;
+        if (attachment && !canReadAttachmentSource(attachment, input.userId, typeof work.metadata?.chatId === 'string' ? work.metadata.chatId : null))
+            throw new DatabaseError('Attachment evidence belongs to another conversation.', 403);
+        if (!attachment && scope && (!artifact.connectionId || !scope.connectionIds.includes(artifact.connectionId)))
             throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
-        if (!scope && work.connectionId && artifact.connectionId !== work.connectionId) throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
+        if (!attachment && !scope && work.connectionId && artifact.connectionId !== work.connectionId)
+            throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
         const selectedDatabase = artifact.connectionId ? scope?.databasesByConnection?.[artifact.connectionId] : undefined;
         if (selectedDatabase && database !== selectedDatabase) throw new DatabaseError('Evidence is outside the selected database.', 403);
         if (
@@ -519,6 +524,7 @@ export class PostgresWorksRepository {
         }
         return {
             artifactId: artifact.id,
+            attachmentSource: attachment,
             sourceWorkId,
             resultSetId: result.id,
             connectionId: artifact.connectionId,

@@ -5647,10 +5647,10 @@
         "Incomplete": "Incomplete",
         "OpenReport": "Open report",
         "AttachmentErrors": {
-            "unsupported": "Unsupported file: {filename}. Choose TXT, Markdown, SQL, JSON, CSV, TSV, PNG, JPEG or WebP.",
-            "limit": "Attachment exceeds limits: {filename} ({size} MiB). Up to 20 files, 10 MiB per file, 100 MiB per message.",
+            "unsupported": "Unsupported file: {filename}. Choose TXT, Markdown, SQL, CSV, TSV, JSON/JSONL, Parquet, XLSX, PNG, JPEG or WebP.",
+            "limit": "Attachment exceeds limits: {filename} ({size} MiB). Up to 20 files, 100 MiB per file, 500 MiB per message.",
             "imagesUnsupported": "This model channel does not support images ({filename}). Switch to an image-capable model or remove the image.",
-            "invalid": "Unable to read {filename}. Select a valid UTF-8 text file or a supported image."
+            "invalid": "Unable to read {filename}. Select a valid data file, UTF-8 text file or supported image."
         }
     }
 }

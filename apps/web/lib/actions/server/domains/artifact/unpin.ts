@@ -15,5 +15,5 @@ export const artifactUnpinAction = defineWebAction({
     scopes: ['query:read'],
     actors: ['user'],
     audit: { allowInputFields: ['artifactId'], resource: (_ctx, input) => ({ type: 'artifact', id: input.artifactId }) },
-    handler: async (ctx, input) => ctx.services.db.artifacts.unpin({ organizationId: ctx.organizationId, ...input }),
+    handler: async (ctx, input) => ctx.services.db.artifacts.unpin({ organizationId: ctx.organizationId, userId: ctx.userId, ...input }),
 });

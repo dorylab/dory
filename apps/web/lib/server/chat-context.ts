@@ -9,7 +9,7 @@ import { canReadWorkspace, resolveOrganizationAccess } from '@/lib/server/authz'
 type Owner = { organizationId: string; userId: string };
 
 /** Resolve IDs again on send; labels and client previews are never authoritative. */
-export async function resolveChatContext(db: DBService, owner: Owner, raw: unknown, scope: AnalysisScope) {
+export async function resolveChatContext(db: DBService, owner: Owner, raw: unknown, scope: AnalysisScope, chatId: string | null = null) {
     const context = chatContextSchema.parse(raw);
     if (!context.references.length) return { ...context, instruction: '' };
     const access = await resolveOrganizationAccess(owner.organizationId, owner.userId);
@@ -47,10 +47,12 @@ export async function resolveChatContext(db: DBService, owner: Owner, raw: unkno
                 evidenceIds: document.content.evidence.map(item => item.artifactId),
             });
         } else {
-            const artifact = await db.artifacts.get({ organizationId: owner.organizationId, artifactId: reference.id });
+            const artifact = await db.artifacts.get({ organizationId: owner.organizationId, userId: owner.userId, chatId, artifactId: reference.id });
             if (artifact.status !== 'ready') throw new DatabaseError('Referenced artifact is no longer available. Re-run its query.', 409);
             if (artifact.workId && !(await db.works.getById({ ...owner, workId: artifact.workId }))) throw new DatabaseError('Artifact access denied.', 403);
-            const result = artifact.resultSet ? await db.resultSets.readRows({ organizationId: owner.organizationId, resultSetId: artifact.resultSet.id, limit: 10 }) : null;
+            const result = artifact.resultSet
+                ? await db.resultSets.readRows({ organizationId: owner.organizationId, userId: owner.userId, resultSetId: artifact.resultSet.id, limit: 10 })
+                : null;
             if (result?.dataAvailability === 'none') throw new DatabaseError('Referenced artifact data expired. Re-run its query.', 409);
             references.push({ ...reference, title: artifact.title });
             snapshots.push({

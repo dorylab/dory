@@ -1,3 +1,4 @@
+import type { ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
 import type { ResultSetArtifactRef, ResultSetColumn, ResultSetDataAvailability, ResultSetKind, ResultSetSourceType } from '@dory/resultset';
@@ -59,6 +60,7 @@ export const resultSets = pgTable(
         sourceQueryRunId: text('source_query_run_id'),
         comparisonId: text('comparison_id'),
         comparisonRunId: text('comparison_run_id'),
+        attachmentSource: jsonb('attachment_source').$type<ChatAttachmentSource>(),
         sourceType: text('source_type').$type<ResultSetSourceType>().notNull(),
         kind: text('kind').$type<ResultSetKind>().notNull(),
         status: text('status').$type<ResultSetStatus>().notNull(),

@@ -6,10 +6,10 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "tsx ./scripts/dev-bootstrap.ts && next dev --turbopack",
+        "dev": "node ../../scripts/prepare-duckdb-extensions.mjs && tsx ./scripts/dev-bootstrap.ts && next dev --turbopack",
         "build": "yarn run build:bootstrap && next build --turbopack",
         "build:cf": "next build && opennextjs-cloudflare build",
-        "build:bootstrap": "bun build scripts/bootstrap.ts --target=node --format=esm --outfile=./dist-scripts/bootstrap.mjs && node scripts/copy-pglite-assets.mjs",
+        "build:bootstrap": "node ../../scripts/prepare-duckdb-extensions.mjs && bun build scripts/bootstrap.ts --target=node --format=esm --outfile=./dist-scripts/bootstrap.mjs && node scripts/copy-pglite-assets.mjs",
         "start": "next start",
         "studio": "drizzle-kit studio",
         "pglite:studio": "drizzle-kit studio --config ./drizzle.pglite.config.ts",

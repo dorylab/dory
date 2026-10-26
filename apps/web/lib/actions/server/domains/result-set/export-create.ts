@@ -1,3 +1,4 @@
+import { attachmentReadAccess } from '../../attachment-access';
 import { z } from 'zod';
 import { ActionError } from '@dory/actions';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -57,6 +58,7 @@ export const resultSetExportCreateAction = defineWebAction({
         try {
             return await ctx.services.db.resultSets.createExport({
                 organizationId: ctx.organizationId,
+                ...(await attachmentReadAccess(ctx)),
                 resultSetId: input.resultSetId,
                 format: input.format,
                 sorts: input.sorts,

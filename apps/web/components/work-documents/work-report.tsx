@@ -423,7 +423,17 @@ export function WorkReport({
                         <h1 className="text-2xl font-semibold">{document.title}</h1>
                     )}
                     <p className="my-3 text-xs text-muted-foreground">
-                        {t('Sources')}: {[...new Set(document.content.evidence.map(item => item.connectionName ?? item.connectionId))].join(', ')}
+                        {t('Sources')}:{' '}
+                        {[
+                            ...new Set(
+                                document.content.evidence.map(
+                                    item =>
+                                        item.connectionName ??
+                                        item.attachmentSource?.files.map(file => (file.sheet ? `${file.filename} / ${file.sheet}` : file.filename)).join(', ') ??
+                                        item.connectionId,
+                                ),
+                            ),
+                        ].join(', ')}
                     </p>
                     <div
                         className="work-prose"
@@ -480,7 +490,8 @@ export function WorkReport({
                         {document.content.evidence.map(item => (
                             <details key={item.artifactId} open={evidenceId === item.artifactId} className="rounded border p-3 text-sm">
                                 <summary className="cursor-pointer font-medium">
-                                    {item.title} · {item.connectionName}
+                                    {item.title} ·{' '}
+                                    {item.connectionName ?? item.attachmentSource?.files.map(file => (file.sheet ? `${file.filename} / ${file.sheet}` : file.filename)).join(', ')}
                                 </summary>
                                 <p className="my-2 text-xs text-muted-foreground">
                                     {t('CapturedAt')}: {item.capturedAt}
