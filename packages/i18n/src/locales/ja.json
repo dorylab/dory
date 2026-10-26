@@ -2734,7 +2734,7 @@
                 }
             },
             "ChartBuilder": {
-                "Description": "提供されたデータに基づいてグラフ設定を返します。\n\n使い方:\n1. chartType（bar/line/area/pie）を指定します。\n2. data はクエリ結果行の配列です。\n3. xKey / yKeys / categoryKey / valueKey が不明な場合は空にしてください。ツールが推定します。\n   - Line/area: x には時間フィールド、y には数値フィールドを優先します。\n   - Bar: x にはカテゴリフィールド、y には数値フィールドを優先します。\n   - Pie: categoryKey にカテゴリフィールド、valueKey に数値フィールドを選択します。\n4. ツールは時間/数値/カテゴリ列を推定し、必要に応じて options.xKeyType/sortBy を設定します。",
+                "Description": "検証済みのクエリ結果からグラフを作成します。chartType（bar/line/area/pie）と実際の列名を xKey/yKeys または categoryKey/valueKey に指定します。軸は省略して推定できます。以前の結果には artifactId を指定し、それ以外はこのターンで sqlRunner を実行してください。data 行配列は渡さないでください。データ不足はエラーです。",
                 "Errors": {
                     "DataRequired": "グラフデータは空にできません",
                     "YKeyRequired": "y 軸フィールドは空にできません"

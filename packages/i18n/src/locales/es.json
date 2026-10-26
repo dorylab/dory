@@ -2734,7 +2734,7 @@
                 }
             },
             "ChartBuilder": {
-                "Description": "Devuelve una configuración de gráfico basada en los datos proporcionados.\n\nUso:\n1. Especifica chartType (bar/line/area/pie).\n2. data es un arreglo de filas del resultado de la consulta.\n3. Si no tienes claro xKey / yKeys / categoryKey / valueKey, déjalos vacíos y la herramienta los inferirá:\n   - Línea/área: prioriza un campo temporal para x y campos numéricos para y.\n   - Barras: prioriza un campo categórico para x y campos numéricos para y.\n   - Circular: elige un campo categórico como categoryKey y un campo numérico como valueKey.\n4. La herramienta infiere columnas temporales/numéricas/categóricas y establece options.xKeyType/sortBy cuando corresponde.",
+                "Description": "Crea un gráfico a partir de un resultado de consulta verificado. Indica chartType (bar/line/area/pie) y columnas reales en xKey/yKeys o categoryKey/valueKey; omite los ejes para inferirlos. Para un resultado anterior, pasa artifactId; de lo contrario, ejecuta sqlRunner en este turno. No proporciones filas de datos. La falta de datos es un error, no un gráfico completado.",
                 "Errors": {
                     "DataRequired": "Los datos del gráfico no pueden estar vacíos",
                     "YKeyRequired": "El campo del eje y no puede estar vacío"

@@ -5,6 +5,12 @@ import type { AgentRunEventLike } from './summary';
 export type ChatTimelineItem = { id: string; kind: 'content'; content: ReactNode; relatedToolCallId?: string } | { id: string; kind: 'tool'; toolCallId: string };
 export type ChatTimelineGroup<T extends ChatMessageTool> = { id: string; kind: 'content'; content: ReactNode } | { id: string; kind: 'tools'; activities: ChatToolActivity<T>[] };
 
+/** SDK messages own their streamed prose; polling must not replace it with checkpoint summaries. */
+export function resolveChatTimeline<T extends ChatMessageTool>(items: ChatTimelineItem[], tools: T[], progressItems: ChatTimelineItem[], progressTools: T[]) {
+    const fromMessages = !progressItems.length || items.some(item => item.kind === 'tool' || Boolean(item.relatedToolCallId));
+    return fromMessages ? { items, tools, fromMessages } : { items: progressItems, tools: progressTools, fromMessages };
+}
+
 export function buildChatTimeline<T extends ChatMessageTool>(items: ChatTimelineItem[], tools: T[], events: AgentRunEventLike[]) {
     const keyed = events.filter(event => typeof event.inputSummary?.toolCallId === 'string');
     const unkeyed = events.filter(event => typeof event.inputSummary?.toolCallId !== 'string');

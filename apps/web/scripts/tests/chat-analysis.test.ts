@@ -285,6 +285,12 @@ test('built-in analysis closes the Knowledge → SQL → chart → Findings loop
         assert.ok(chunks.some(chunk => chunk.type === 'tool-output-available'));
         assert.ok(!chunks.some(chunk => chunk.type === 'error'));
         assert.equal(step, 4, 'chart generation must not stop the loop');
+        const chartOutput = chunks.find(chunk => chunk.type === 'tool-output-available' && chunk.toolCallId === 'call-3');
+        assert.ok(chartOutput && chartOutput.type === 'tool-output-available');
+        assert.deepEqual((chartOutput.output as { data: unknown[] }).data, [
+            { month: '2026-01', revenue: 180000, orders: 400 },
+            { month: '2026-02', revenue: 160000, orders: 350 },
+        ]);
         assert.equal(analysis.getFinalAnswer(), answer);
         await f.works.finishChatTurn({ ...scope, workId: work.workId, requestId: 'turn-1', outcome: 'completed', requireSummary: true });
         assert.equal((await f.works.getById({ ...scope, workId: work.workId }))?.status, 'completed');
@@ -688,6 +694,56 @@ test('completed turn duration is saved on its answer and survives a subsequent t
     }
 });
 
+test('follow-up charts read real saved rows and reject unavailable or out-of-scope Artifacts', async () => {
+    const f = await fixture(true);
+    try {
+        const source = await f.works.create({ ...scope, connectionId: 'connection', externalSessionId: 'chart-source' });
+        const rows = [
+            { month: '2026-01', revenue: 180000, orders: 400 },
+            { month: '2026-02', revenue: 160000, orders: 350 },
+        ];
+        const [artifact] = await f.works.saveSqlSnapshot(source.workId, {
+            session: {
+                sessionId: 'chart-source-sql',
+                userId: 'user',
+                connectionId: 'connection',
+                database: 'main',
+                sqlText: 'SELECT month, revenue, orders FROM monthly',
+                status: 'success',
+            },
+            queryResultSets: [
+                {
+                    sessionId: 'chart-source-sql',
+                    setIndex: 0,
+                    sqlText: 'SELECT month, revenue, orders FROM monthly',
+                    columns: [{ name: 'month' }, { name: 'revenue' }, { name: 'orders' }],
+                    rowCount: 2,
+                    status: 'success',
+                },
+            ],
+            results: [rows],
+        });
+        const analysis = f.makeAnalysis('chart-followup', undefined, ['connection'], { connection: 'main' });
+        await analysis.tools.publishProgress.execute!({ text: '将读取上一次已保存的月度收入查询结果，并据此生成趋势图。', nextStage: 'output' }, call('chart-progress'));
+        const input = { artifactId: artifact.artifactId, chartType: 'line', xKey: 'month', yKeys: [{ key: 'revenue' }, { key: 'orders' }] };
+        const chart = (await analysis.tools.chartBuilder.execute!(input, call('saved-chart'))) as { data: unknown[]; source: { artifactId: string }; dataState: string };
+        assert.equal(chart.dataState, 'ready');
+        assert.deepEqual(chart.data, rows);
+        assert.equal(chart.source.artifactId, artifact.artifactId);
+        assert.equal((await analysis.inspectCheckpoint())?.actions[0].state, 'completed');
+
+        await f.database.update(schema.resultSets).set({ dataAvailability: 'none' }).where(eq(schema.resultSets.id, artifact.resultSetId));
+        await assert.rejects(analysis.tools.chartBuilder.execute!(input, call('expired-chart')) as Promise<unknown>, /no longer available/);
+        assert.equal((await analysis.inspectCheckpoint())?.actions[1].state, 'failed');
+
+        const other = f.makeAnalysis('chart-outside-scope', undefined, ['other']);
+        await other.tools.publishProgress.execute!({ text: '检查保存的图表来源是否属于本轮选择的数据源。', nextStage: 'output' }, call('other-progress'));
+        await assert.rejects(other.tools.chartBuilder.execute!(input, call('outside-chart')) as Promise<unknown>, /outside the selected analysis scope/);
+    } finally {
+        await f.close();
+    }
+});
+
 test('external Artifact evidence is explicitly read, scoped, retained and revalidated in SDK and MCP saves', async () => {
     const f = await fixture();
     try {
@@ -913,7 +969,7 @@ test('SDK monthly analysis advances from three schema actions to SQL with host-o
                     if (current === 4)
                         assert.deepEqual(
                             options.tools?.map(tool => tool.name),
-                            ['publishProgress'],
+                            ['chartBuilder', 'publishProgress'],
                         );
                     if (current === 5) assert.ok(options.tools?.some(tool => tool.name === 'sqlRunner'));
                     if (current === calls.length) {
@@ -957,6 +1013,69 @@ test('SDK monthly analysis advances from three schema actions to SQL with host-o
     }
 });
 
+test('calling an existing chart tool in the wrong stage forces a progress transition before retrying', async () => {
+    const { tool } = await import('ai');
+    const { z } = await import('zod');
+    const { initialChatCheckpoints, applyCheckpointCommand } = await import('@dory/shared/types/chat-checkpoints');
+    const state = initialChatCheckpoints();
+    let executed = 0;
+    let step = 0;
+    const calls = [
+        { toolName: 'chartBuilder', input: { artifactId: 'saved' } },
+        { toolName: 'publishProgress', input: { text: '图表工具需要先进入输出阶段，接下来读取已保存的结果生成趋势图。', nextStage: 'output' } },
+        { toolName: 'chartBuilder', input: { artifactId: 'saved' } },
+    ];
+    const agent = buildDoryChatAgent({
+        model: new MockLanguageModelV4({
+            doGenerate: async options => {
+                const current = step++;
+                if (current === 0)
+                    assert.deepEqual(
+                        options.tools?.map(tool => tool.name),
+                        ['publishProgress', 'chartBuilder'],
+                    );
+                if (current === 1) {
+                    assert.deepEqual(options.toolChoice, { type: 'tool', toolName: 'publishProgress' });
+                    assert.match(JSON.stringify(options.prompt), /NOT an unavailable capability/);
+                }
+                if (current === calls.length) return { content: [{ type: 'text', text: '图表已生成。' }], finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] };
+                return {
+                    content: [{ type: 'tool-call', toolCallId: `stage-chart-${current}`, toolName: calls[current].toolName, input: JSON.stringify(calls[current].input) }],
+                    finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                    usage,
+                    warnings: [],
+                };
+            },
+        }),
+        tools: {
+            publishProgress: tool({
+                inputSchema: z.object({ text: z.string(), nextStage: z.literal('output') }),
+                execute: async input => applyCheckpointCommand(state, 'stage-chart', { kind: 'publish', checkpointId: `stage-chart:${state.revision}`, ...input }),
+            }),
+            chartBuilder: tool({
+                inputSchema: z.object({ artifactId: z.string() }),
+                execute: async () => {
+                    const admission = applyCheckpointCommand(state, 'stage-chart', { kind: 'reserve', id: 'chart', toolName: 'chartBuilder', stage: 'output' });
+                    if (!admission.accepted) return admission;
+                    executed++;
+                    applyCheckpointCommand(state, 'stage-chart', { kind: 'settle', id: 'chart', failed: false, result: '18 rows charted' });
+                    return { rows: 18 };
+                },
+            }),
+        },
+        instructions: 'Create a chart from the saved result.',
+        requestId: 'stage-chart',
+        checkpoint: { inspect: async () => applyCheckpointCommand(state, 'stage-chart', { kind: 'inspect' }), invalid: async () => {} },
+        context: {},
+        recordUsage: async () => {},
+    });
+    assert.match((await agent.generate({ prompt: '画出上次结果的趋势图' })).text, /图表已生成/);
+    assert.equal(executed, 1);
+    assert.equal(step, 4);
+    assert.equal(state.stage, 'output');
+    assert.equal(state.failures, 0);
+});
+
 test('ordinary SDK checkpoints restrict tools without forcing tools or consuming the business step budget', async () => {
     const f = await fixture(true);
     try {
@@ -973,7 +1092,7 @@ test('ordinary SDK checkpoints restrict tools without forcing tools or consuming
                 if (current === 0)
                     assert.deepEqual(
                         options.tools?.map(tool => tool.name),
-                        ['publishProgress'],
+                        ['chartBuilder', 'publishProgress'],
                     );
                 if (current === 1) {
                     assert.ok(options.tools?.some(tool => tool.name === 'exploreSchema'));

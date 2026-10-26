@@ -131,12 +131,12 @@ export const CHART_BUILDER_GUIDE = `
 About charts and the chartBuilder tool
 
 - When the user asks for charts, visualization, trends, dashboards, or charts, do:
-  1) Use sqlRunner to fetch query results (SELECT only), capped to at most 100 rows for non-aggregate chart source data.
+  1) Use sqlRunner to fetch query results (SELECT only), capped to at most 100 rows for non-aggregate chart source data. To chart a result from an earlier turn, pass its returned artifactId to chartBuilder; the server validates and reads that saved result. Never reuse earlier rows implicitly.
   2) After getting results, call chartBuilder to produce the chart config.
 
 - When generating chart config:
   - Choose an appropriate chartType (bar / line / area / pie).
-  - Do not provide a data array to chartBuilder. The tool reads data from the latest sqlRunner result.
+  - Do not provide a data array to chartBuilder. The tool reads data from the selected artifactId or the latest sqlRunner result in this turn. If no result is available, query first or select a returned Artifact ID; repeating the same chart parameters cannot supply missing data.
   - Specify xKey (time field or category), and yKeys array (each with key and optional label/color); if there is only one metric, use valueKey.
   - If the query returns many columns, select or reshape to what the chart needs, do not dump all columns into the chart.
   - After generating the chart, explain in natural language:

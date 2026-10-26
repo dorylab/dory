@@ -2741,7 +2741,7 @@
                 }
             },
             "ChartBuilder": {
-                "Description": "根据提供的数据返回图表配置。\n\n使用说明：\n1. 指定 chartType（bar/line/area/pie）。\n2. data 为查询结果行数组。\n3. 如果不确定 xKey / yKeys / categoryKey / valueKey，可留空，工具会自动推断：\n   - Line/area：优先选择时间字段作为 x，数值字段作为 y。\n   - Bar：优先选择分类字段作为 x，数值字段作为 y。\n   - Pie：选择一个分类字段作为 categoryKey，一个数值字段作为 valueKey。\n4. 工具会识别时间/数值/分类列，并在合适时设置 options.xKeyType/sortBy。",
+                "Description": "根据已验证的查询结果生成图表。指定 chartType（bar/line/area/pie），并在 xKey/yKeys 或 categoryKey/valueKey 中使用真实列名；留空可自动推断。复用上一轮结果时传入 artifactId，否则先在本轮调用 sqlRunner。不要传入 data 行数组。缺少来源数据属于失败，不代表图表创建完成。",
                 "Errors": {
                     "DataRequired": "图表数据不能为空",
                     "YKeyRequired": "y 轴字段不能为空"

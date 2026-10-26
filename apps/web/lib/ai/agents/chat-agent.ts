@@ -1,7 +1,7 @@
 import { chatToolStage, MAX_PROGRESS_PUBLICATIONS, type CheckpointResult } from '@dory/shared/types/chat-checkpoints';
 import 'server-only';
 
-import { isStepCount, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
+import { isStepCount, NoSuchToolError, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
 
 import { recordAiUsage, type AiDebugInput, type AiGatewayContext } from '@/lib/ai/gateway';
 
@@ -47,12 +47,25 @@ function stopAfterManualSqlResult<TOOLS extends ToolSet>(): StopCondition<TOOLS>
 
 export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChatAgentOptions<TOOLS>) {
     const startedAt = options.startedAt ?? Date.now();
+    let stageRecovery: string | null = null;
 
     return new ToolLoopAgent({
         model: options.model,
         tools: options.tools,
         toolsContext: {} as never,
         repairToolCall: async ({ toolCall, error }) => {
+            if (
+                NoSuchToolError.isInstance(error) &&
+                options.checkpoint &&
+                !['publishProgress', 'finishAnalysis'].includes(toolCall.toolName) &&
+                Object.hasOwn(options.tools, toolCall.toolName)
+            ) {
+                const checkpoint = await options.checkpoint.inspect();
+                if (checkpoint && !checkpoint.stopped && (checkpoint.stage !== chatToolStage(toolCall.toolName) || !checkpoint.remainingActions)) {
+                    stageRecovery = toolCall.toolName;
+                    return null;
+                }
+            }
             if (toolCall.toolName === 'publishProgress') {
                 await options.checkpoint?.invalid();
                 return null;
@@ -110,6 +123,12 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                 ? `\nThe requested report is ${reportStatus === 'missing' ? 'not created: first publish progress with nextStage: output, then call createWorkReport to save its draft' : 'still a draft: gather any necessary verified evidence, readWorkReport and updateWorkReport with status: ready'}. Report tools are available in the output stage; temporary stage restrictions are NOT missing capabilities. Do not substitute a Markdown chat response for saving the report. Use only the current checkpointId below, never one from conversation history.`
                 : '';
             if (checkpoint) {
+                const blocked = steps.at(-1)?.toolResults.find(result => {
+                    const output: unknown = result.output;
+                    return result.toolName !== 'publishProgress' && output && typeof output === 'object' && 'control' in output && output.control === 'progress_required';
+                });
+                const retryTool = stageRecovery ?? blocked?.toolName;
+                stageRecovery = null;
                 const mustPublish = reportPending && (!checkpoint.stage || !checkpoint.remainingActions || (reportStatus === 'missing' && checkpoint.stage !== 'output'));
                 const activeTools = Object.keys(options.tools).filter(
                     name =>
@@ -117,14 +136,24 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                         (!mustPublish &&
                             (!options.requiredReport || name !== 'finishAnalysis') &&
                             (reportStatus !== 'missing' || name === 'createWorkReport') &&
-                            checkpoint.stage &&
-                            (checkpoint.remainingActions ?? 0) > 0 &&
-                            chatToolStage(name) === checkpoint.stage),
+                            // Keep charts discoverable across turns. Their execution
+                            // wrapper still requires a valid output-stage checkpoint.
+                            (name === 'chartBuilder' || (checkpoint.stage && (checkpoint.remainingActions ?? 0) > 0 && chatToolStage(name) === checkpoint.stage))),
                 ) as (keyof TOOLS & string)[];
                 return {
-                    toolChoice: reportPending ? ('required' as const) : ('auto' as const),
+                    toolChoice: retryTool
+                        ? { type: 'tool' as const, toolName: 'publishProgress' as keyof TOOLS & string }
+                        : reportPending
+                          ? ('required' as const)
+                          : ('auto' as const),
                     activeTools,
-                    instructions: `${options.instructions}${reportInstruction}\nCurrent stage checkpoint: ${JSON.stringify({ ...checkpoint, actions: checkpoint.actions.map(({ id, toolName, state }) => ({ id, toolName, state })) })}. If the next action is in another stage, publish progress first. ${reportPending ? 'Finish only after the report is saved as ready.' : 'If sufficient evidence is available, directly give the final answer.'}`,
+                    instructions: `${options.instructions}${reportInstruction}${retryTool ? `\nThe ${retryTool} tool exists but its previous call was blocked by the stage checkpoint; it did not execute. This is NOT an unavailable capability. Call publishProgress now with nextStage: ${chatToolStage(retryTool)}, then retry the intended tool with corrected arguments.` : ''}\nAvailable tool stages: ${JSON.stringify(
+                        Object.fromEntries(
+                            Object.keys(options.tools)
+                                .filter(name => name !== 'publishProgress')
+                                .map(name => [name, chatToolStage(name)]),
+                        ),
+                    )}. Temporary stage restrictions are not missing capabilities. Current stage checkpoint: ${JSON.stringify({ ...checkpoint, actions: checkpoint.actions.map(({ id, toolName, state }) => ({ id, toolName, state })) })}. If the next action is in another stage, publish progress first. ${reportPending ? 'Finish only after the report is saved as ready.' : 'If sufficient evidence is available, directly give the final answer.'}`,
                 };
             }
             return {

@@ -15,6 +15,7 @@ import { resolveOrganizationAccess } from '@/lib/server/authz';
 import { applyAnalysisDatabase } from '@/lib/work-documents/analysis-scope';
 import { createChartBuilderTool } from '@/app/api/chat/tools/chart-builder';
 import { createSqlRunnerTool } from '@/app/api/chat/tools/sql-runner';
+import { readChatEvidence } from '@/lib/server/chat-evidence';
 
 const recordedSqlSchema = z.object({
     result: z.array(z.record(z.string(), z.unknown())),
@@ -212,7 +213,29 @@ export function createChatAnalysis(options: {
             },
         };
     }
-    const chart = createChartBuilderTool(options.locale);
+    const chart = createChartBuilderTool(options.locale, async artifactId => {
+        options.signal.throwIfAborted();
+        const ctx = await context();
+        const { provenance, result } = await readChatEvidence(
+            options.db,
+            { organizationId: options.organizationId, userId: options.userId, ...ctx.services.agentTurn! },
+            artifactId,
+        );
+        options.signal.throwIfAborted();
+        return {
+            source: { artifactId: provenance.artifactId, toolCallId: undefined },
+            result: {
+                type: 'sql-result',
+                ok: true,
+                sql: '',
+                database: provenance.database ?? null,
+                previewRows: result.rows,
+                columns: [],
+                rowCount: result.rowCount ?? undefined,
+                truncated: result.dataAvailability === 'preview-only' || (result.rowCount ?? 0) > result.rows.length,
+            },
+        };
+    });
     tools.chartBuilder = {
         ...chart,
         execute: (input, call) => {

@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Database, Loader2, Wrench } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ChatCheckpoints } from '@dory/shared/types/chat-checkpoints';
 import type { ChatProgressEntry } from '@dory/shared/types/chat-progress';
-import { buildChatTimeline, chatTurnDuration, formatChatDuration, type ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
+import { buildChatTimeline, chatTurnDuration, formatChatDuration, resolveChatTimeline, type ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
 import { canonicalChatToolName, chatToolActivityState, type ChatToolActivity } from '@/lib/agent-runs/chat-tool-activity';
 import { type AgentRunEventLike, type AgentRunWorkLike } from '@/lib/agent-runs/summary';
 import type { SqlResultBodyProps } from '@/components/@dory/ui/ai/sql-result/type';
@@ -99,25 +99,17 @@ function ToolGroup({ activities, ended, ...props }: Actions & { activities: Chat
         groups.set(key, { category, count: (prior?.count ?? 0) + 1 });
     }
     const titles = [...groups].map(([title, { category, count }]) => (category ? t(`Chat.Groups.${category}`, { count }) : `${title} × ${count}`)).join(' · ');
+    const ActivityIcon = activities.every(activity => ['exploreSchema', 'getSchemaGraph', 'sqlRunner', 'listConnections'].includes(activity.toolName)) ? Database : Wrench;
     return (
         <div>
             <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} data-testid="chat-tool-group" className="group/actions text-sm">
-                <summary className="flex cursor-pointer list-none items-center gap-2 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-                    {running ? <Loader2 className="size-3.5 animate-spin" /> : <ChevronRight className="size-3.5 transition-transform group-open/actions:rotate-90" />}
-                    {titles}
+                <summary className="flex w-fit max-w-full cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                    {running ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <ActivityIcon className="size-3.5 shrink-0" />}
+                    <span>{titles}</span>
+                    <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/actions:rotate-90" />
                 </summary>
-                <div className="mt-2">{(expanded || !running) && <ChatToolActivityList activities={activities} tools={[]} ended={ended} {...props} />}</div>
+                <div className="mt-2">{(expanded || ended) && <ChatToolActivityList activities={activities} tools={[]} ended={ended} {...props} />}</div>
             </details>
-            {running && !expanded && (
-                <div className="mt-2">
-                    <ChatToolActivityList
-                        activities={activities.filter(row => ['input-available', 'input-streaming'].includes(chatToolActivityState(row, row.message?.state)))}
-                        tools={[]}
-                        ended={ended}
-                        {...props}
-                    />
-                </div>
-            )}
         </div>
     );
 }
@@ -220,14 +212,15 @@ export function ChatRunActivity({
                     progress.some(entry => entry.eventId === event.eventId) || event.inputSummary?.activitySource === 'automatic' || event.toolName === 'semantic_model_context',
             )
           : events;
-    const mappedEvents = visibleEvents.map(event => {
-        const entry = progress.find(entry => entry.eventId === event.eventId && entry.kind === 'tool');
-        return entry ? { ...event, inputSummary: { ...event.inputSummary, toolCallId: entry.id } } : event;
-    });
-    const items = checkpointEntries || progress.length ? localItems : timeline;
-    const rows = checkpointEntries || progress.length ? localTools : tools;
+    const { items, tools: rows, fromMessages } = resolveChatTimeline(timeline, tools, localItems, localTools);
+    const mappedEvents = fromMessages
+        ? visibleEvents
+        : visibleEvents.map(event => {
+              const entry = progress.find(entry => entry.eventId === event.eventId && entry.kind === 'tool');
+              return entry ? { ...event, inputSummary: { ...event.inputSummary, toolCallId: entry.id } } : event;
+          });
     const count = buildChatTimeline(items, rows, mappedEvents).count;
-    const hasProcess = checkpointEntries ? ((!ended || interrupted) && items.length > 0) || count > 0 : items.length > 0 || count > 0;
+    const hasProcess = items.length > 0 || count > 0;
     return (
         <>
             {hasProcess && (

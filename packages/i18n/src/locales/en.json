@@ -2737,7 +2737,7 @@
                 }
             },
             "ChartBuilder": {
-                "Description": "Return a chart configuration based on the provided data.\n\nUsage:\n1. Specify chartType (bar/line/area/pie).\n2. data is an array of query result rows.\n3. If you are unsure about xKey / yKeys / categoryKey / valueKey, leave them empty and the tool will infer:\n   - Line/area: prefer a time field for x, numeric fields for y.\n   - Bar: prefer a category field for x, numeric fields for y.\n   - Pie: choose one category field as categoryKey and one numeric field as valueKey.\n4. The tool infers time/numeric/category columns and sets options.xKeyType/sortBy when appropriate.",
+                "Description": "Build a chart from a verified query result. Specify chartType (bar/line/area/pie) and real column names in xKey/yKeys or categoryKey/valueKey. Omit axes to infer them. Pass artifactId to reuse a saved query from an earlier turn; otherwise execute sqlRunner in this turn first. Do not supply data rows. Missing source data is an error, not a completed chart.",
                 "Errors": {
                     "DataRequired": "Chart data cannot be empty",
                     "YKeyRequired": "y-axis field cannot be empty"

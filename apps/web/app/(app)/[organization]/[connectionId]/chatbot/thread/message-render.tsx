@@ -98,6 +98,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
             ),
         );
     const lastTextIndex = (message.parts ?? []).findLastIndex(part => part.type === 'text' && part.text.trim());
+    const hasMessageTools = message.parts.some(part => isTypedToolPart(part) || isLegacyToolCallPart(part) || isLegacyToolResultPart(part));
     const renderedLegacyResultIds = new Set<string>();
     let didRenderSources = false;
     const { toolResultById, toolCallLocationById } = buildToolCompatibilityIndex(messages);
@@ -257,7 +258,11 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         const key = `${message.id}-tool-${getToolCallId(part) ?? index}`;
         const toolName = getToolName(part);
         const output = getToolOutput(part);
-        if (toolName === 'publishProgress' || output?.control) return null;
+        if (output?.control) return null;
+        if (toolName === 'publishProgress') {
+            const text = part.input?.text;
+            return output?.published && !output.duplicate && typeof text === 'string' && text.trim() ? <MessageResponse key={key}>{text}</MessageResponse> : null;
+        }
         if (toolName === 'finishAnalysis' && output?.ok === true && typeof output.finalAnswer === 'string') {
             renderToolStateCard({ part, key });
             return <MessageResponse key={key}>{output.finalAnswer}</MessageResponse>;
@@ -409,7 +414,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
             !completedAnswer &&
             (part.type === 'reasoning' ||
                 part.type === 'reasoning-file' ||
-                (part.type === 'text' && (Boolean(finalAnswer) || index < lastActionIndex || index !== lastTextIndex)) ||
+                (part.type === 'text' && ((isLatestAssistant && isStreaming && hasMessageTools) || Boolean(finalAnswer) || index < lastActionIndex || index !== lastTextIndex)) ||
                 isTypedToolPart(part) ||
                 isLegacyToolCallPart(part) ||
                 isLegacyToolResultPart(part));

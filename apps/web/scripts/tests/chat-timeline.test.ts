@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildChatTimeline } from '@/lib/agent-runs/chat-timeline';
+import { buildChatTimeline, resolveChatTimeline, type ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
 import { createLocalAgentProgressParser } from '@dory/shared/utils/local-agent-progress';
 import { mergeChatProgress, type ChatProgressEntry } from '@dory/shared/types/chat-progress';
 
@@ -53,6 +53,53 @@ test('public JSONL events preserve message/tool order, final identity and ignore
     assert.equal(entries[2].phase, 'final');
     assert.equal(entries[0].phase, 'commentary');
     assert.deepEqual(mergeChatProgress(entries, [{ ...entries[1], revision: 1, state: 'running' }]), entries);
+});
+
+test('checkpoint polling cannot remove streamed SDK text or replace SDK tool identities', () => {
+    const intro: ChatTimelineItem = { id: 'intro', kind: 'content', content: 'I will inspect the order data.' };
+    const publication: ChatTimelineItem = { id: 'plan', kind: 'content', content: 'Checking the order schema.', relatedToolCallId: 'publish-1' };
+    const checkpointItems: ChatTimelineItem[] = [{ id: 'checkpoint-plan', kind: 'content', content: 'Checking the order schema.' }];
+    const first = resolveChatTimeline([intro, publication], [], checkpointItems, []);
+    assert.deepEqual(
+        buildChatTimeline(first.items, first.tools, []).groups.map(group => group.kind === 'content' && group.content),
+        [intro.content, publication.content],
+    );
+
+    const tools = [
+        { toolCallId: 'schema-sdk', toolName: 'exploreSchema' },
+        { toolCallId: 'sql-sdk', toolName: 'sqlRunner' },
+    ];
+    const messages: ChatTimelineItem[] = [
+        intro,
+        publication,
+        { id: 'schema', kind: 'tool', toolCallId: 'schema-sdk' },
+        { id: 'update', kind: 'content', content: 'The schema is confirmed. Querying monthly revenue.' },
+        { id: 'sql', kind: 'tool', toolCallId: 'sql-sdk' },
+    ];
+    const progressTools = tools.map((tool, i) => ({ ...tool, toolCallId: `checkpoint-${i}` }));
+    const later = resolveChatTimeline(messages, tools, [...checkpointItems, { id: 'checkpoint-0', kind: 'tool', toolCallId: 'checkpoint-0' }], progressTools);
+    const result = buildChatTimeline(later.items, later.tools, [
+        { eventId: 'schema-event', toolName: 'dory_explore_schema', inputSummary: { toolCallId: 'schema-sdk' } },
+        { eventId: 'sql-event', toolName: 'dory_run_readonly_sql', inputSummary: { toolCallId: 'sql-sdk' } },
+    ]);
+    assert.equal(later.fromMessages, true);
+    assert.deepEqual(
+        result.groups.map(group => (group.kind === 'content' ? group.content : group.activities.map(activity => activity.message?.toolCallId))),
+        [intro.content, publication.content, ['schema-sdk'], 'The schema is confirmed. Querying monthly revenue.', ['sql-sdk']],
+    );
+    assert.deepEqual(result.unplaced, []);
+});
+
+test('local agents retain their server progress timeline when no SDK tool stream exists', () => {
+    const progress: ChatTimelineItem[] = [
+        { id: 'plan', kind: 'content', content: 'Reading the saved query.' },
+        { id: 'read', kind: 'tool', toolCallId: 'mcp-read' },
+    ];
+    const tools = [{ toolCallId: 'mcp-read', toolName: 'readArtifact' }];
+    const result = resolveChatTimeline([], [], progress, tools);
+    assert.equal(result.fromMessages, false);
+    assert.deepEqual(result.items, progress);
+    assert.deepEqual(result.tools, tools);
 });
 
 test('out-of-order progress batches are idempotent and preserve the original position', () => {

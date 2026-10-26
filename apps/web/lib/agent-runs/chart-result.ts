@@ -4,6 +4,7 @@ import { getSqlResultFromPart, isSqlToolPart, record, toolResultValue } from './
 
 type Message = { role: string; content?: unknown; parts?: unknown[] };
 type ChartConfig = Omit<ChartResultPart, 'type' | 'data'>;
+export type ChartQuery = NonNullable<ReturnType<typeof latestChartQuery>>;
 
 /** Stop at the latest query, even if it failed, is pending, or returned no rows. */
 export function latestChartQuery(messages: readonly Message[]) {
@@ -29,7 +30,10 @@ export function latestChartQuery(messages: readonly Message[]) {
 }
 
 export function buildQueryChart(config: ChartConfig, messages: readonly Message[], requireExplicitFields = false): ChartResultPart {
-    const query = latestChartQuery(messages);
+    return buildChartFromQuery(config, latestChartQuery(messages), requireExplicitFields);
+}
+
+export function buildChartFromQuery(config: ChartConfig, query: ChartQuery | null, requireExplicitFields = false): ChartResultPart {
     const base: ChartResultPart = { ...config, type: 'chart', data: [], source: query?.source };
     if (!query?.result?.ok) return { ...base, dataState: 'missing' };
     const rows = query.result.previewRows ?? [];

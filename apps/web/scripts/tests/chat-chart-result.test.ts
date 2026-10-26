@@ -47,6 +47,37 @@ test('latest query failure, empty or pending output never falls back to older da
     assert.equal(buildQueryChart(config, [...messages(saved), { role: 'user', content: 'Next turn' }]).dataState, 'missing');
 });
 
+test('a follow-up chart explicitly resolves its saved Artifact instead of consuming older message rows', async () => {
+    const oldMessages = [...messages(saved, true), { role: 'user', content: 'Chart the previous result' }] as ModelMessage[];
+    let selected: string | undefined;
+    const tool = createChartBuilderTool('en', async artifactId => {
+        selected = artifactId;
+        return {
+            source: { artifactId, toolCallId: undefined },
+            result: { type: 'sql-result', ok: true, sql: '', database: 'main', previewRows: [{ status: 'verified', count: 42 }], columns: [] },
+        };
+    });
+    const options = { toolCallId: 'followup-chart', context: {}, messages: oldMessages };
+    await assert.rejects(tool.execute!({ ...config }, options) as Promise<unknown>, /Pass the artifactId/);
+    const result = await tool.execute!({ ...config, artifactId: 'payments' }, options);
+    assert.ok('data' in result);
+    assert.equal(selected, 'payments');
+    assert.deepEqual(result.source, { artifactId: 'payments', toolCallId: undefined });
+    assert.deepEqual(result.data, [{ status: 'verified', count: 42 }]);
+    assert.equal(result.dataState, 'ready');
+});
+
+test('missing data, invalid fields and inaccessible saved results fail instead of returning completed empty charts', async () => {
+    const options = { toolCallId: 'bad-chart', context: {}, messages: messages(saved, true) as ModelMessage[] };
+    const tool = createChartBuilderTool('en');
+    await assert.rejects(tool.execute!({ ...config, yKeys: [{ key: 'unknown' }] }, options) as Promise<unknown>, /Chart fields do not match/);
+    await assert.rejects(tool.execute!({ ...config, artifactId: 'payments' }, options) as Promise<unknown>, /active Dory Run/);
+    const denied = createChartBuilderTool('en', async () => {
+        throw new Error('Evidence is outside the selected analysis scope.');
+    });
+    await assert.rejects(denied.execute!({ ...config, artifactId: 'payments' }, options) as Promise<unknown>, /outside the selected analysis scope/);
+});
+
 test('history repair is read-only, requires matching explicit fields, and preserves new empty states', () => {
     const part = { type: 'tool-chartBuilder', output: { type: 'chart', ...config, data: [] } };
     const snapshot = structuredClone(part);
