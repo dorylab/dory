@@ -230,3 +230,30 @@ test('revision query parameters accept only positive safe integers', () => {
     assert.equal(parseWorkRevision('5'), 5);
     for (const value of ['', '0', '-1', '1.5', '1e2', 'NaN', ' 1', '01', '9007199254740992']) assert.throws(() => parseWorkRevision(value));
 });
+
+test('report pie and area visuals validate and share the same deterministic export renderer', () => {
+    const evidence = {
+        ...content.evidence[0],
+        rows: [
+            { month: 'Active', revenue: 200 },
+            { month: 'Inactive', revenue: 1800 },
+        ],
+        rowCount: 2,
+    };
+    for (const type of ['pie', 'area'] as const) {
+        const visual = { id: 'chart', type: 'chart' as const, title: '<Customers>', evidenceId: 'art-1', chart: { type, xKey: 'month', yKey: 'revenue' } };
+        assert.doesNotThrow(() => workDraftSchema.parse({ title: 'Customers', status: 'ready', markdown: '![Customers](dory://visual/chart)', visuals: [visual] }));
+        const svg = workChartSvg(visual, evidence);
+        assert.ok(svg.includes('&lt;Customers&gt;'));
+        assert.ok(svg.includes(type === 'pie' ? '10.0%' : '<polygon'));
+        if (type === 'pie') assert.ok(svg.includes('oklch('), 'standalone SVG must retain distinguishable theme-default colors');
+    }
+    assert.throws(() =>
+        workDraftSchema.parse({
+            title: 'Invalid pie',
+            status: 'ready',
+            markdown: '',
+            visuals: [{ id: 'pie', type: 'chart', title: 'Invalid', evidenceId: 'art-1', chart: { type: 'pie', xKey: 'month', yKeys: [{ key: 'revenue' }, { key: 'orders' }] } }],
+        }),
+    );
+});

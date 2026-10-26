@@ -9,6 +9,7 @@ import { useChat } from '@ai-sdk/react';
 import type { AnalysisScope, WorkDocumentSummary, WorkDocumentView } from '@dory/shared/types/work-document';
 import type { AgentWorkSummary } from '@dory/shared/types/agent-work';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getChatCompletion } from '@/lib/ai/chat-response-state';
 import type { UIMessage } from 'ai';
 import { ListTree, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -157,7 +158,18 @@ export function DataAgent() {
             outputs: [],
         }));
     const savedWork = works.find(item => item.id === chatId);
-    const currentWork = savedWork ? { ...savedWork, ...(busy ? { status: 'running' as const } : {}) } : undefined;
+    const lastMessage = (liveMessages.length ? liveMessages : (history.data?.messages ?? [])).at(-1);
+    const latestCompletion = lastMessage?.role === 'assistant' ? getChatCompletion(lastMessage) : undefined;
+    const currentWork = savedWork
+        ? {
+              ...savedWork,
+              ...(busy
+                  ? { status: 'running' as const }
+                  : latestCompletion
+                    ? { status: latestCompletion.status === 'aborted' ? ('stopped' as const) : latestCompletion.status }
+                    : {}),
+          }
+        : undefined;
     const actions = useAgentWorkActions(organization, chatId, newChat);
     const workT = useTranslations('WorkDocuments.Works');
     // Opening a newly created draft must not unmount the streaming conversation.
@@ -450,6 +462,14 @@ function AgentConversation({
                                     messages={messages}
                                     status={status}
                                     showRunLinks={false}
+                                    onOpenReport={onOpenReport}
+                                    onContinue={messageId => {
+                                        if (busy || blocked || !ready || sendLock.current) return;
+                                        sendLock.current = true;
+                                        void sendMessage({ text: t('ContinueUnfinished') }, { body: { chatId, analysisScope: scope, resumeMessageId: messageId } }).finally(() => {
+                                            sendLock.current = false;
+                                        });
+                                    }}
                                     onCopySql={sql => navigator.clipboard.writeText(sql)}
                                 />
                                 <AgentMessageReports message={message} messages={messages} reports={reports} busy={busy} onOpen={onOpenReport} />

@@ -25,10 +25,11 @@ export type WorkVisual = {
     type: 'metric' | 'chart' | 'table';
     title: string;
     evidenceId: string;
-    chart?: { type: 'bar' | 'line'; xKey: string } & ({ yKey: string; yKeys?: never } | { yKey?: never; yKeys: Array<{ key: string; label?: string }> });
+    chart?: { type: 'bar' | 'line' | 'area' | 'pie'; xKey: string } & ({ yKey: string; yKeys?: never } | { yKey?: never; yKeys: Array<{ key: string; label?: string }> });
     metric?: { column: string; rowIndex: number };
 };
 export type WorkDocumentContent = {
+    agentWrite?: { requestId: string; revision: number; visualIds: string[]; writeKey?: string };
     markdown: string;
     visuals: WorkVisual[];
     evidence: WorkEvidence[];

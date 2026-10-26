@@ -111,3 +111,24 @@ test('automatic queries require an explicit database while discovery remains ava
     });
     assert.doesNotThrow(() => applyAnalysisDatabase(scope, 'dory_explore_schema', { connectionId: 'source', operation: 'list_databases' }));
 });
+
+test('report edits preserve the existing report intent while explanations remain read only', async () => {
+    const { isReportEditRequest, requestedChartType } = await import('@/lib/chat-context/output-intent');
+    const context = chatContextSchema.parse({});
+    for (const text of ['给刚才这份报告的活跃客户比例统计加一个饼图，并保存到原报告。', '添加饼图，不要修改其他内容', 'Add a pie chart and save the report.']) {
+        assert.equal(resolveChatOutputIntent(context, text), 'answer');
+        assert.equal(isReportEditRequest(text), true);
+        assert.equal(requestedChartType(text), 'pie');
+    }
+    for (const text of ['解释一下这份报告', '不要更新报告', 'How do I add a pie chart?', '> 更新报告']) assert.equal(isReportEditRequest(text), false);
+    assert.equal(resolveChatOutputIntent(context, '创建新报告，添加饼图'), 'report');
+});
+
+test('report target resolution respects explicit references and never guesses between reports', async () => {
+    const { selectReportTarget } = await import('@/lib/chat-context/output-intent');
+    assert.deepEqual(selectReportTarget('open', ['referenced'], ['older', 'newer']), { documentId: 'referenced', ambiguous: false });
+    assert.deepEqual(selectReportTarget('open', ['one', 'two'], []), { documentId: null, ambiguous: true });
+    assert.deepEqual(selectReportTarget(null, [], ['one', 'two']), { documentId: null, ambiguous: true });
+    assert.deepEqual(selectReportTarget(null, [], ['only']), { documentId: 'only', ambiguous: false });
+    assert.deepEqual(selectReportTarget(null, [], []), { documentId: null, ambiguous: false });
+});

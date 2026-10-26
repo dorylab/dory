@@ -7,9 +7,10 @@ type AssistantFallbackCardProps = {
     reason?: string;
     historical?: boolean;
     reportSaveFailed?: boolean;
+    hasContent?: boolean;
 };
 
-export function AssistantFallbackCard({ reason, historical = false, reportSaveFailed = false }: AssistantFallbackCardProps) {
+export function AssistantFallbackCard({ reason, historical = false, reportSaveFailed = false, hasContent = false }: AssistantFallbackCardProps) {
     const t = useTranslations('DoryUI');
     const isDesktopCloud = USE_CLOUD_AI;
     const isMissingEnvReason = typeof reason === 'string' && (reason.includes('DORY_AI_API_KEY') || reason.includes('DORY_AI_URL') || reason.includes('MISSING_AI_ENV'));
@@ -39,7 +40,9 @@ export function AssistantFallbackCard({ reason, historical = false, reportSaveFa
                         ? t('AssistantFallback.ReportNotSavedDescription')
                         : missingAiEnv
                           ? t('AssistantFallback.MissingAiEnvDescription')
-                          : t('AssistantFallback.Description')}
+                          : hasContent
+                            ? t('AssistantFallback.PartialDescription')
+                            : t('AssistantFallback.Description')}
                 </p>
                 {reportSaveFailed && showReason && (
                     <details className="mt-2 text-xs text-muted-foreground">

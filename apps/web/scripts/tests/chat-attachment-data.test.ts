@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { renderWorkHtml, workChartSvg } from '@/lib/work-documents/render';
+import { chatContinuity } from '@/lib/server/chat-continuity';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -66,7 +68,7 @@ test('private attachments produce reusable full-data evidence, charts and report
             filename: 'customers.csv',
             mediaType: 'text/csv',
             chatId: null,
-            bytes: Buffer.from('id,active\n' + Array.from({ length: 25000 }, (_, n) => `${n},${n % 4 === 0}`).join('\n')),
+            bytes: Buffer.from('id,active\n' + Array.from({ length: 25000 }, (_, n) => `${n},${n < 200 || (n - 200) % 4 === 0}`).join('\n')),
         });
         const messages = [
             {
@@ -88,14 +90,14 @@ test('private attachments produce reusable full-data evidence, charts and report
         assert.equal(inspected.tables[0].rowCount, 25000);
         const sql = `SELECT count(*) AS total, count(*) FILTER (WHERE active) AS active_count, avg(active::INT) AS ratio FROM "${inspected.tables[0].name}"`;
         const result = await queryChatAttachments(db, owner, chat.id, { attachmentIds: [file.id], sql }, work.workId, 'attachment-turn');
-        assert.deepEqual(result.rows, [{ total: '25000', active_count: '6250', ratio: 0.25 }]);
+        assert.deepEqual(result.rows, [{ total: '25000', active_count: '6400', ratio: 0.256 }]);
         const evidence = await db.works.inspectChatEvidence({ ...owner, workId: work.workId, requestId: 'attachment-turn', artifactId: result.artifactId });
         assert.equal(evidence.attachmentSource?.files[0].sha256, file.sha256);
         assert.equal(evidence.connectionId, null);
         assert.equal((await db.connections.list(owner.organizationId)).length, 0);
         const artifact = await db.artifacts.get({ ...owner, artifactId: result.artifactId });
         assert.equal(artifact.resultSet?.attachmentSource?.chatId, chat.id);
-        assert.equal((await db.resultSets.readRows({ ...owner, resultSetId: result.resultSetId })).rows[0].ratio, 0.25);
+        assert.equal((await db.resultSets.readRows({ ...owner, resultSetId: result.resultSetId })).rows[0].ratio, 0.256);
         const exported = await db.resultSets.createExport({ ...owner, resultSetId: result.resultSetId, format: 'csv' });
         assert.ok(exported);
         await assert.rejects(db.artifacts.get({ ...owner, userId: 'other-user', artifactId: result.artifactId }), /unavailable/);
@@ -122,7 +124,9 @@ test('private attachments produce reusable full-data evidence, charts and report
             resolveWork: async () => work,
         });
         const sdk = await analysis.tools.queryAttachment.execute!({ attachmentIds: [file.id], sql }, { ...call, toolCallId: 'query' });
-        assert.match(JSON.stringify(sdk), /0.25/);
+        assert.match(JSON.stringify(sdk), /0.256/);
+        const readSaved = await analysis.tools.readArtifact.execute!({ artifactId: result.artifactId, previewRows: 10 }, { ...call, toolCallId: 'read-attachment-artifact' });
+        assert.match(JSON.stringify(readSaved), /0.256/);
         const chart = await analysis.tools.chartBuilder.execute!(
             { chartType: 'bar', title: 'Active customers', artifactId: result.artifactId, xKey: 'total', yKeys: [{ key: 'active_count' }] },
             { ...call, toolCallId: 'chart' },
@@ -149,15 +153,119 @@ test('private attachments produce reusable full-data evidence, charts and report
         assert.ok('id' in report);
         const saved = await db.workDocuments.get({ ...owner, documentId: report.id });
         assert.equal(saved.status, 'ready');
-        assert.equal(saved.content.evidence[0].rows[0].ratio, 0.25);
+        assert.equal(saved.content.evidence[0].rows[0].ratio, 0.256);
         assert.equal(saved.content.evidence[0].attachmentSource?.files[0].filename, 'customers.csv');
+        await assert.rejects(
+            reports.tools.updateWorkReport.execute!(
+                {
+                    documentId: saved.id,
+                    expectedRevision: saved.revision,
+                    patch: { edits: [{ oldText: saved.content.markdown, newText: 'Customers: 25,000; active: 6,400.' }], status: 'ready' },
+                },
+                { ...call, toolCallId: 'unlinked-stats' },
+            ) as Promise<unknown>,
+            /Query evidence is required/,
+        );
+        assert.equal((await db.workDocuments.get({ ...owner, documentId: saved.id })).revision, saved.revision);
         // New turn resolves the same original attachment and existing immutable dataset.
         const followup = await db.works.startChatTurn({
             ...owner,
             requestId: 'followup',
             externalSessionId: `chat:${chat.id}`,
-            metadata: { source: 'internal_chat', chatId: chat.id, analysisScope: scope },
+            metadata: { source: 'internal_chat', chatId: chat.id, analysisScope: scope, reportTarget: { documentId: saved.id, requireChart: true, chartType: 'pie' } },
         });
+        const edits = createWorkDocumentTools({
+            db,
+            ...owner,
+            chatId: chat.id,
+            requestId: 'followup',
+            creationKey: `${chat.id}:followup`,
+            scope,
+            documentId: saved.id,
+            requireUpdate: true,
+            requireChart: true,
+            requiredChartType: 'pie',
+            runId: async () => followup.workId,
+        });
+        assert.equal(await edits.completionStatus(), 'draft');
+        await assert.rejects(edits.assertReady(), /not saved in this turn/);
+        const explaining = createWorkDocumentTools({
+            db,
+            ...owner,
+            chatId: chat.id,
+            requestId: 'followup',
+            creationKey: 'explain',
+            scope,
+            documentId: saved.id,
+            runId: async () => followup.workId,
+        });
+        await explaining.assertReady();
+        assert.equal(explaining.required(), false);
+        const proportions = await queryChatAttachments(
+            db,
+            owner,
+            chat.id,
+            {
+                attachmentIds: [file.id],
+                sql: `SELECT active AS status, count(*) AS count, count(*) * 100.0 / sum(count(*)) OVER () AS percentage FROM "${inspected.tables[0].name}" GROUP BY active`,
+            },
+            followup.workId,
+            'followup',
+        );
+        assert.equal(proportions.rows.length, 2);
+        const input = {
+            documentId: saved.id,
+            expectedRevision: saved.revision,
+            patch: {
+                edits: [],
+                embedVisualIds: ['activity-pie'],
+                visuals: [
+                    {
+                        id: 'activity-pie',
+                        type: 'chart' as const,
+                        title: 'Customer activity',
+                        evidenceId: proportions.artifactId,
+                        chart: { type: 'pie' as const, xKey: 'status', yKey: 'count' },
+                    },
+                ],
+                status: 'ready' as const,
+            },
+        };
+        await assert.rejects(
+            edits.tools.updateWorkReport.execute!({ documentId: saved.id, expectedRevision: saved.revision, patch: { edits: [], status: 'ready' } }, call) as Promise<unknown>,
+            /requested chart must be embedded/,
+        );
+        await edits.tools.readWorkReport.execute!({ documentId: saved.id }, call);
+        await edits.tools.updateWorkReport.execute!(input, { ...call, toolCallId: 'update-report' });
+        await edits.assertReady();
+        assert.equal(await edits.completionStatus(), 'ready');
+        const updated = await db.workDocuments.get({ ...owner, documentId: saved.id });
+        assert.equal(updated.revision, saved.revision + 1);
+        assert.equal(updated.content.agentWrite?.requestId, 'followup');
+        assert.equal((await db.workDocuments.list({ ...owner, chatId: chat.id })).length, 1);
+        assert.match(
+            renderWorkHtml({
+                ...updated,
+                createdAt: updated.createdAt.toISOString(),
+                updatedAt: updated.updatedAt.toISOString(),
+                archivedAt: updated.archivedAt?.toISOString() ?? null,
+            }),
+            /data-chart-type="pie"/,
+        );
+        const visual = updated.content.visuals.find(item => item.id === 'activity-pie')!;
+        const chartEvidence = updated.content.evidence.find(item => item.artifactId === proportions.artifactId)!;
+        assert.match(workChartSvg(visual, chartEvidence), /6400/);
+        assert.match(workChartSvg(visual, chartEvidence), /25.6%/);
+        // A replay after a lost save response returns its receipt without a second write.
+        await edits.tools.updateWorkReport.execute!(input, { ...call, toolCallId: 'retry-save' });
+        assert.equal((await db.workDocuments.get({ ...owner, documentId: saved.id })).revision, updated.revision);
+        const contextSummary = await chatContinuity(db, { ...owner, chatId: chat.id, workId: followup.workId, requestId: 'followup' }, [proportions.artifactId]);
+        assert.match(contextSummary, /customers.csv/);
+        assert.ok(contextSummary.includes(proportions.artifactId));
+        await assert.rejects(
+            edits.tools.updateWorkReport.execute!({ ...input, patch: { ...input.patch, edits: [{ oldText: 'changed', newText: 'different' }] } }, call) as Promise<unknown>,
+            /changed/,
+        );
         const ctx = {
             ...owner,
             access: (await resolveOrganizationAccess(owner.organizationId, owner.userId))!,
@@ -167,7 +275,7 @@ test('private attachments produce reusable full-data evidence, charts and report
         const mcp = await getAgentExecutionTools()
             .find(tool => tool.name === 'dory_query_attachment')!
             .execute(ctx, { workId: followup.workId, requestId: 'followup', attachmentIds: [file.id], sql });
-        assert.match(JSON.stringify(mcp), /6250/);
+        assert.match(JSON.stringify(mcp), /6400/);
         const inspectedAgain = await readChatAttachment(db, owner, chat.id, { attachmentId: file.id });
         assert.deepEqual(inspectedAgain, inspected);
         const pg = await readFile(new URL('../../../../packages/database/src/postgres/migrations/0039_chat_attachment_sources.sql', import.meta.url), 'utf8');

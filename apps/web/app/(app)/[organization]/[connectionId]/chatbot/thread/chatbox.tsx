@@ -486,6 +486,17 @@ const ChatBotComp = ({
                                 onCopySql={handleCopySql}
                                 onManualExecute={handleManualExecute}
                                 onExecuteAction={onExecuteAction}
+                                onOpenReport={id => void setReportId(id)}
+                                onContinue={messageId => {
+                                    if (busy || submitInFlightRef.current) return;
+                                    submitInFlightRef.current = true;
+                                    void sendMessage(
+                                        { text: reportT('ContinueUnfinished') },
+                                        { body: { chatId: sessionId, connectionId: scopeConnection, database: resolvedActiveDatabase, resumeMessageId: messageId } },
+                                    ).finally(() => {
+                                        submitInFlightRef.current = false;
+                                    });
+                                }}
                             />
                             {mode === 'global' && (
                                 <AgentMessageReports

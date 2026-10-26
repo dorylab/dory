@@ -1,4 +1,4 @@
-export type AgentWorkStatus = 'running' | 'completed' | 'failed' | 'stopped' | 'idle';
+export type AgentWorkStatus = 'running' | 'partial' | 'completed' | 'failed' | 'stopped' | 'idle';
 
 export type AgentWorkOutput = {
     id: string;

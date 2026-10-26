@@ -19,7 +19,9 @@ export function createChatAgentRunLifecycle(options: {
     requireSummary?: boolean;
     progressCheckpoints?: boolean;
     reportCreationKey?: string;
+    reportReadOnly?: boolean;
     outputIntent?: 'answer' | 'report';
+    reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean };
     analysisScope?: AnalysisScope;
 }) {
     let workPromise: ReturnType<typeof options.works.startChatTurn> | undefined;
@@ -63,7 +65,9 @@ export function createChatAgentRunLifecycle(options: {
                 title: options.title ?? 'Chat Agent Run',
                 metadata: {
                     reportCreationKey: options.reportCreationKey,
+                    reportReadOnly: options.reportReadOnly,
                     outputIntent: options.outputIntent,
+                    reportTarget: options.reportTarget,
                     chatId: options.chatId,
                     source: 'internal_chat',
                     progressCheckpoints: options.progressCheckpoints,

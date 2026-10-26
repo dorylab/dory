@@ -423,6 +423,8 @@ export class PostgresWorksRepository {
             startedAt: now.toISOString(),
             reportCreationKey: input.metadata?.reportCreationKey,
             outputIntent: input.metadata?.outputIntent,
+            reportTarget: input.metadata?.reportTarget,
+            reportReadOnly: input.metadata?.reportReadOnly,
             progressCheckpoints: input.metadata?.progressCheckpoints === true,
         };
         const [row] = await this.db
@@ -1132,6 +1134,26 @@ export class PostgresWorksRepository {
         if (!row) throw new DatabaseError('This analysis turn is no longer active', 409);
     }
 
+    async setChatCompletion(input: {
+        organizationId: string;
+        userId: string;
+        workId: string;
+        requestId: string;
+        completion: import('@dory/shared/types/chat-completion').ChatCompletion;
+    }) {
+        await this.db
+            .update(works)
+            .set({ metadata: sql`jsonb_set(${works.metadata}, '{chatTurn,completion}', ${JSON.stringify(input.completion)}::jsonb)` })
+            .where(
+                and(
+                    eq(works.workId, input.workId),
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                ),
+            );
+    }
+
     /** Serialize stage reservations and publications across SDK, MCP and Bridge calls. */
     async chatCheckpoint(input: { organizationId: string; userId: string; workId: string; requestId: string; command: CheckpointCommand }) {
         return this.db.transaction(async tx => {
@@ -1146,6 +1168,12 @@ export class PostgresWorksRepository {
             const eventId = `checkpoints_${createHash('sha256').update(`${input.workId}:${input.requestId}`).digest('hex').slice(0, 32)}`;
             const [prior] = await tx.select().from(workEvents).where(eq(workEvents.eventId, eventId));
             const state = (prior?.outputSummary?.state as ChatCheckpoints | undefined) ?? initialChatCheckpoints();
+            state.maxActions ??=
+                work.metadata?.analysisScope ||
+                (work.metadata?.chatTurn as { reportTarget?: unknown; outputIntent?: string })?.reportTarget ||
+                (work.metadata?.chatTurn as { outputIntent?: string })?.outputIntent === 'report'
+                    ? 24
+                    : 16;
             if (turn.summarySave?.status === 'failed') state.stopped = true;
             const result = applyCheckpointCommand(state, input.requestId, input.command);
             if (state.stopped)

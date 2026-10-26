@@ -110,3 +110,59 @@ test('report saving failure is distinct from an empty or failed answer and recog
     );
     assert.equal(getReportSaveError({ ...answer, metadata: { responseError: 'Connection closed' } }), undefined);
 });
+
+test('completion distinguishes partial work, recovered tools, unsaved edits and cancellation', async () => {
+    const { summarizeChatCompletion, getChatCompletion } = await import('@/lib/ai/chat-response-state');
+    const { chatToolFailure } = await import('@dory/shared/types/chat-tool-error');
+    const message = { id: 'answer', role: 'assistant' as const, parts: [{ type: 'text' as const, text: 'The verified count is 42.' }] };
+    const failed = { id: 'chart', toolName: 'chartBuilder', state: 'failed' as const, failure: chatToolFailure(new Error('Chart fields do not match'), 'chartBuilder') };
+    const partial = summarizeChatCompletion({ message, actions: [failed], aborted: false, report: { documentId: 'report', saved: false } });
+    assert.equal(partial.status, 'partial');
+    assert.ok(partial.unfinished.includes('REPORT_NOT_SAVED'));
+    assert.equal(partial.canContinue, true);
+    assert.deepEqual(getChatCompletion({ ...message, metadata: { completion: partial } }), partial);
+    const recovered = summarizeChatCompletion({ message, actions: [failed, { id: 'fixed', toolName: 'chartBuilder', state: 'completed' }], aborted: false });
+    assert.equal(recovered.status, 'completed');
+    assert.deepEqual(recovered.unfinished, []);
+    assert.equal(summarizeChatCompletion({ message, actions: [], aborted: true }).status, 'aborted');
+});
+
+test('completion includes preflight failures and recognizes their later recovery', async () => {
+    const { summarizeChatCompletion } = await import('@/lib/ai/chat-response-state');
+    const parts: UIMessage['parts'] = [{ type: 'dynamic-tool', toolCallId: 'invalid', toolName: 'chartBuilder', state: 'output-error', input: {}, errorText: 'Invalid fields' }];
+    const completion = () => summarizeChatCompletion({ message: { id: 'preflight', role: 'assistant', parts }, actions: [], aborted: false });
+    assert.equal(completion().status, 'failed');
+    assert.deepEqual(completion().unfinished, ['INVALID_FIELDS']);
+    parts.push({ type: 'dynamic-tool', toolCallId: 'repaired', toolName: 'chartBuilder', state: 'output-available', input: {}, output: { ok: true } });
+    assert.equal(completion().status, 'completed');
+    assert.deepEqual(completion().unfinished, []);
+});
+
+test('a verified report save resolves an earlier report creation failure', async () => {
+    const { summarizeChatCompletion } = await import('@/lib/ai/chat-response-state');
+    const completion = summarizeChatCompletion({
+        message: answer,
+        aborted: false,
+        report: { documentId: 'saved', revision: 3, saved: true },
+        actions: [
+            { id: 'create', toolName: 'createWorkReport', state: 'failed' },
+            { id: 'update', toolName: 'updateWorkReport', state: 'completed' },
+        ],
+    });
+    assert.equal(completion.status, 'completed');
+    assert.deepEqual(completion.unfinished, []);
+});
+
+test('repeated continuation retains the original chart request and rejects unavailable history', async () => {
+    const { getChatResumeRequest } = await import('@/lib/ai/chat-response-state');
+    const root: UIMessage = { id: 'original', role: 'user', parts: [{ type: 'text', text: 'Add a pie chart to this report.' }] };
+    const continuation: UIMessage = { id: 'continue', role: 'user', parts: [{ type: 'text', text: 'Continue unfinished steps' }] };
+    const completion = { status: 'partial', completed: [], unfinished: ['REPORT_NOT_SAVED'], canContinue: true };
+    const first: UIMessage = { id: 'first', role: 'assistant', parts: [], metadata: { userMessageId: root.id, completion } };
+    const second: UIMessage = { id: 'second', role: 'assistant', parts: [], metadata: { userMessageId: continuation.id, resumeUserMessageId: root.id, completion } };
+    const history = [root, first, continuation, second];
+    assert.equal(getChatResumeRequest(history, first.id)?.id, root.id);
+    assert.equal(getChatResumeRequest(history, second.id)?.id, root.id);
+    assert.equal(getChatResumeRequest(history.slice(1), second.id), null);
+    assert.equal(getChatResumeRequest(history, 'unknown'), null);
+});

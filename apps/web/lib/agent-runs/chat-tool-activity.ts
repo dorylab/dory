@@ -13,6 +13,10 @@ export type ChatToolActivity<T extends ChatMessageTool = ChatMessageTool> = {
 
 export function canonicalChatToolName(name: string) {
     const aliases: Record<string, string> = {
+        dory_query_attachment: 'queryAttachment',
+        dory_read_attachment: 'readAttachment',
+        dory_search_attachment: 'searchAttachment',
+        dory_publish_progress: 'publishProgress',
         dory_search_assets: 'search_assets',
         search_knowledge: 'search_assets',
         dory_read_asset: 'read_asset',

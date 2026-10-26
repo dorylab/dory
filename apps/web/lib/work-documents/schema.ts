@@ -15,7 +15,7 @@ export const analysisScopeSchema = z
         message: 'Database selections must belong to the selected data sources.',
         path: ['databasesByConnection'],
     });
-const chartAxes = { type: z.enum(['bar', 'line']), xKey: z.string().min(1) };
+const chartAxes = { type: z.enum(['bar', 'line', 'area', 'pie']), xKey: z.string().min(1) };
 const workChartSchema = z.union([
     z.object({ ...chartAxes, yKey: z.string().min(1) }).strict(),
     z
@@ -47,6 +47,8 @@ export const workVisualSchema = z
     })
     .superRefine((value, ctx) => {
         if (value.type === 'chart' && !value.chart) ctx.addIssue({ code: 'custom', message: 'Chart configuration is required.' });
+        if (value.chart?.type === 'pie' && 'yKeys' in value.chart && value.chart.yKeys && value.chart.yKeys.length !== 1)
+            ctx.addIssue({ code: 'custom', message: 'A pie chart requires exactly one numeric series.' });
         if (value.type === 'metric' && !value.metric) ctx.addIssue({ code: 'custom', message: 'Metric must reference an evidence cell.' });
     });
 export const workDraftSchema = z
@@ -67,6 +69,11 @@ export const workPatchSchema = z
             .max(100)
             .optional()
             .describe('Upsert only changed visual configurations by ID. Existing visuals are retained; remove their Markdown references to delete them.'),
+        embedVisualIds: z
+            .array(z.string().regex(/^[a-zA-Z0-9_-]+$/))
+            .max(100)
+            .optional()
+            .describe('Append Markdown embeds for these visual IDs, only if not already embedded. Use with edits:[] and visuals to add charts without copying the report body.'),
         status: z.enum(['draft', 'ready']),
     })
     .strict();

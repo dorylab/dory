@@ -3099,7 +3099,8 @@
             "MissingAiEnvDescription": "AI 機能を有効にするには DORY_AI_API_KEY と DORY_AI_URL を設定してください。",
             "ReportNotSavedTitle": "レポートは保存されていません",
             "ReportNotSavedDescription": "依頼されたレポートは保存されませんでした。上記の回答は保持されています。再度保存を依頼できます。",
-            "FailureDetails": "エラーの詳細"
+            "FailureDetails": "エラーの詳細",
+            "PartialDescription": "既存の内容は保持されています。一部の手順が未完了です。"
         },
         "CodeReview": {
             "Header": "SQL プレビュー",
@@ -3192,7 +3193,8 @@
             "Collapse": "グラフを折りたたむ",
             "Expand": "グラフを展開",
             "EmptyQuery": "クエリの結果は0件でした。",
-            "InvalidFields": "グラフのフィールドがクエリ結果と一致しません。"
+            "InvalidFields": "グラフのフィールドがクエリ結果と一致しません。",
+            "Preview": "プレビューのみです。結果全体を表すものではありません。"
         },
         "Mermaid": {
             "Title": "Mermaid",
@@ -4915,6 +4917,37 @@
                 "BuildCharts": "グラフを {count} 件作成",
                 "ReadFiles": "ファイルを {count} 件参照",
                 "SearchFiles": "ファイルを {count} 回検索"
+            },
+            "Completion": {
+                "completed": "今回の処理が完了しました",
+                "partial": "一部完了",
+                "failed": "今回の処理は未完了です",
+                "aborted": "処理を停止しました",
+                "reportSaved": "レポートを保存しました · v{revision}",
+                "reportPreserved": "今回の更新は未完了です。以前のレポートは保持されています。",
+                "details": "未完了の手順を確認",
+                "viewReport": "レポートを見る",
+                "continue": "未完了の手順を再開",
+                "reasons": {
+                    "ACCESS_DENIED": "選択したリソースは利用できないか、アクセス権がありません。利用可能なデータを選択してください。",
+                    "SOURCE_UNAVAILABLE": "元のデータを再読み込みするか、再アップロードしてください。",
+                    "EVIDENCE_REQUIRED": "関連するクエリ結果を選択するか、元のデータを再照会してください。",
+                    "REPORT_CONFLICT": "最新のレポートを読み込み、変更を反映してください。",
+                    "INVALID_FIELDS": "グラフのフィールドや数値を修正してください。",
+                    "EMPTY_RESULT": "クエリ結果にグラフ化できるデータがありません。",
+                    "TRANSIENT": "一時的なエラーです。現在の状態を確認してから再試行してください。",
+                    "TOOL_FAILED": "一部の手順が失敗しました。完了した結果は保持されています。",
+                    "REPORT_NOT_SAVED": "今回のレポート変更は保存されていません。",
+                    "CHART_NOT_CREATED": "依頼されたグラフは作成されていません。",
+                    "EXECUTION_INTERRUPTED": "未完了の手順を残して処理が停止しました。"
+                }
+            },
+            "Current": {
+                "attachment": "添付ファイル全体を集計中",
+                "report": "レポートを更新中",
+                "chart": "グラフを作成中",
+                "query": "データを照会中",
+                "source": "データソースを確認中"
             }
         }
     },
@@ -5596,7 +5629,8 @@
                 "completed": "完了",
                 "failed": "失敗",
                 "stopped": "停止",
-                "idle": "続行可能"
+                "idle": "続行可能",
+                "partial": "一部完了"
             },
             "Types": {
                 "report": "レポート",
@@ -5609,7 +5643,8 @@
                 "result": "結果 {count} 件"
             },
             "ChartNotReady": "グラフを読み込み中か、書き出せる保存済みデータがありません。"
-        }
+        },
+        "ContinueUnfinished": "未完了の手順を再開"
     },
     "ChatComposer": {
         "Add": "Add",

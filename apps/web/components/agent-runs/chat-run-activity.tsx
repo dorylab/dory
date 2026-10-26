@@ -31,6 +31,7 @@ export function ChatAnalysisProcess({
     ended = !streaming,
     durationMs = null,
     startedAt,
+    activityLabel,
     children,
     renderTimeline,
 }: {
@@ -39,12 +40,13 @@ export function ChatAnalysisProcess({
     ended?: boolean;
     durationMs?: number | null;
     startedAt?: number;
+    activityLabel?: string;
     children?: ReactNode;
     renderTimeline?: (expanded: boolean) => ReactNode;
 }) {
     const t = useTranslations('AgentRuns');
     const timelineId = useId();
-    const [open, setOpen] = useState(streaming || failed);
+    const [open, setOpen] = useState(false);
     const [mountedAt] = useState(Date.now);
     const [now, setNow] = useState(mountedAt);
     const previous = useRef<string | null>(null);
@@ -57,19 +59,25 @@ export function ChatAnalysisProcess({
         return () => clearInterval(timer);
     }, [ended]);
     useEffect(() => {
-        if (previous.current !== phase) setOpen(phase !== 'completed');
+        if (previous.current !== null && previous.current !== phase) setOpen(false);
         previous.current = phase;
     }, [phase]);
     return (
         <>
-            <details className="group/analysis my-3 text-sm" open={open} onToggle={event => setOpen(event.currentTarget.open)} data-testid="chat-analysis-process">
+            <details className="group/analysis my-3 text-sm" open={open} data-testid="chat-analysis-process">
                 <summary
+                    onClick={event => {
+                        event.preventDefault();
+                        setOpen(value => !value);
+                    }}
                     aria-controls={renderTimeline ? timelineId : undefined}
                     className="flex cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
                 >
                     {phase === 'running' ? <Loader2 className="size-4 animate-spin" /> : <ChevronRight className="size-4 transition-transform group-open/analysis:rotate-90" />}
                     {!ended
-                        ? t('Chat.WorkingFor', { duration: duration ?? '<1s' })
+                        ? activityLabel
+                            ? `${activityLabel} · ${duration ?? '<1s'}`
+                            : t('Chat.WorkingFor', { duration: duration ?? '<1s' })
                         : duration
                           ? t('Chat.WorkedFor', { duration })
                           : t(failed ? 'Chat.Process' : 'Chat.ProcessCompleted')}
@@ -117,8 +125,14 @@ function ToolGroup({ activities, ended, ...props }: Actions & { activities: Chat
     const ActivityIcon = activities.every(activity => ['exploreSchema', 'getSchemaGraph', 'sqlRunner', 'listConnections'].includes(activity.toolName)) ? Database : Wrench;
     return (
         <div>
-            <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} data-testid="chat-tool-group" className="group/actions text-sm">
-                <summary className="flex w-fit max-w-full cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <details open={expanded} data-testid="chat-tool-group" className="group/actions text-sm">
+                <summary
+                    onClick={event => {
+                        event.preventDefault();
+                        setExpanded(value => !value);
+                    }}
+                    className="flex w-fit max-w-full cursor-pointer list-none items-center gap-2 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+                >
                     {running ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <ActivityIcon className="size-3.5 shrink-0" />}
                     <span>{titles}</span>
                     <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/actions:rotate-90" />
@@ -164,6 +178,7 @@ export function ChatRunActivity({
     inlineResults = false,
     failed = false,
     responseError,
+    hasCompletion = false,
     showLinks = true,
     summarySave,
     durationMs,
@@ -179,6 +194,7 @@ export function ChatRunActivity({
     children?: ReactNode;
     failed?: boolean;
     responseError?: string;
+    hasCompletion?: boolean;
     showLinks?: boolean;
     summarySave?: { status: string; error?: string };
     durationMs?: number;
@@ -250,6 +266,14 @@ export function ChatRunActivity({
             {hasProcess && (
                 <ChatAnalysisProcess
                     streaming={streaming}
+                    activityLabel={(() => {
+                        const current = rows.findLast(row => ['input-available', 'input-streaming'].includes(row.state ?? ''));
+                        return current
+                            ? t(
+                                  `Chat.Current.${current.toolName === 'queryAttachment' ? 'attachment' : ['updateWorkReport', 'createWorkReport', 'dory_finish_work'].includes(current.toolName) ? 'report' : current.toolName === 'chartBuilder' ? 'chart' : current.toolName === 'sqlRunner' ? 'query' : 'source'}`,
+                              )
+                            : undefined;
+                    })()}
                     ended={ended || (!data && !streaming)}
                     failed={interrupted}
                     durationMs={chatTurnDuration(durationMs, turn, requestId)}
@@ -277,8 +301,8 @@ export function ChatRunActivity({
                 </div>
             )}
             {ended && incomplete && <p className="mb-3 text-sm text-muted-foreground">{t('Chat.Incomplete')}</p>}
-            {finalText && !(inlineResults && fromMessages) ? <MessageResponse>{finalText}</MessageResponse> : answer}
-            {finalText && responseError && (
+            {finalText && !hasCompletion && !(inlineResults && fromMessages) ? <MessageResponse>{finalText}</MessageResponse> : answer}
+            {finalText && responseError && !hasCompletion && (
                 <p role="alert" className="text-sm text-destructive">
                     {responseError}
                 </p>

@@ -172,3 +172,70 @@ test('streaming validation failures retain actionable field errors instead of re
     assert.match(errors[0], /Chart configuration is required/);
     assert.match(errors[1], /documentId/);
 });
+
+test('invalid SDK tool inputs enter recovery accounting and unchanged repeated failures stop', async () => {
+    const { applyCheckpointCommand, initialChatCheckpoints } = await import('@dory/shared/types/chat-checkpoints');
+    const { chatToolFailure } = await import('@dory/shared/types/chat-tool-error');
+    const state = initialChatCheckpoints();
+    let calls = 0;
+    let failures = 0;
+    let writes = 0;
+    const agent = buildDoryChatAgent({
+        model: new MockLanguageModelV4({
+            doGenerate: async options => {
+                calls++;
+                const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } };
+                if (calls <= 2)
+                    return {
+                        content: [{ type: 'tool-call', toolCallId: `invalid-${calls}`, toolName: 'updateWorkReport', input: '{}' }],
+                        finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
+                        usage,
+                        warnings: [],
+                    };
+                assert.equal(options.toolChoice?.type, 'none');
+                return {
+                    content: [{ type: 'text', text: 'Update unfinished. The previous report is preserved.' }],
+                    finishReason: { unified: 'stop', raw: 'stop' },
+                    usage,
+                    warnings: [],
+                };
+            },
+        }),
+        tools: {
+            updateWorkReport: tool({
+                inputSchema: z.object({ documentId: z.string() }),
+                execute: async () => {
+                    writes++;
+                    return {};
+                },
+            }),
+        },
+        onToolInputError: async (call, error) => {
+            failures++;
+            const result = applyCheckpointCommand(state, 'invalid-input', {
+                kind: 'reserve',
+                id: call.toolCallId,
+                toolName: call.toolName,
+                stage: 'output',
+                fingerprint: call.input,
+            });
+            if (result.control) return true;
+            applyCheckpointCommand(state, 'invalid-input', {
+                kind: 'settle',
+                id: call.toolCallId,
+                failed: true,
+                result: String(error),
+                failure: chatToolFailure(error, call.toolName),
+            });
+            return false;
+        },
+        instructions: 'Update report.',
+        requestId: 'invalid-input',
+        context: {},
+        recordUsage: async () => {},
+    });
+    assert.match((await agent.generate({ prompt: 'Add chart' })).text, /unfinished/);
+    assert.equal(failures, 2);
+    assert.equal(writes, 0);
+    assert.equal(state.actionAttempts, 2);
+});

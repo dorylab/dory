@@ -21,7 +21,7 @@ export function latestChartQuery(messages: readonly Message[]) {
                 result: getSqlResultFromPart(part),
                 source: {
                     toolCallId: typeof part.toolCallId === 'string' ? part.toolCallId : undefined,
-                    artifactId: typeof artifacts[0] === 'string' ? artifacts[0] : undefined,
+                    artifactId: typeof output.artifactId === 'string' ? output.artifactId : typeof artifacts[0] === 'string' ? artifacts[0] : undefined,
                 },
             };
         }
@@ -30,11 +30,39 @@ export function latestChartQuery(messages: readonly Message[]) {
 }
 
 export function buildQueryChart(config: ChartConfig, messages: readonly Message[], requireExplicitFields = false): ChartResultPart {
-    return buildChartFromQuery(config, latestChartQuery(messages), requireExplicitFields);
+    const latest = latestChartQuery(messages);
+    // Never recover a failed/pending/empty latest query by silently selecting older rows.
+    if (!latest?.result?.ok || !latest.result.previewRows?.length) return buildChartFromQuery(config, latest, requireExplicitFields);
+    const candidates: ChartQuery[] = [];
+    const seen = new Set<string>();
+    for (const message of [...messages].reverse()) {
+        if (message.role === 'user') break;
+        const parts = message.parts ?? message.content;
+        if (!Array.isArray(parts)) continue;
+        for (const part of parts) {
+            if (!isSqlToolPart(part)) continue;
+            const query = latestChartQuery([{ role: 'tool', parts: [part] }]);
+            if (!query?.result?.ok) continue;
+            const identity = query.source.artifactId ?? query.source.toolCallId;
+            if (identity && seen.has(identity)) continue;
+            if (identity) seen.add(identity);
+            if (buildChartFromQuery(config, query, requireExplicitFields).dataState === 'ready') candidates.push(query);
+        }
+    }
+    // Ambiguity must be resolved with an explicit Artifact, not message ordering.
+    return candidates.length > 1 ? { ...config, type: 'chart', data: [], dataState: 'missing' } : buildChartFromQuery(config, candidates[0] ?? latest, requireExplicitFields);
 }
 
 export function buildChartFromQuery(config: ChartConfig, query: ChartQuery | null, requireExplicitFields = false): ChartResultPart {
-    const base: ChartResultPart = { ...config, type: 'chart', data: [], source: query?.source };
+    const base: ChartResultPart = {
+        ...config,
+        type: 'chart',
+        data: [],
+        source: query
+            ? { ...query.source, rowCount: query.result?.rowCount, truncated: query.result?.truncated, columns: query.result?.columns?.map(column => column.name) }
+            : undefined,
+    };
+    if (config.chartType === 'pie' && query?.result?.truncated) return { ...base, dataState: 'incomplete' };
     if (!query?.result?.ok) return { ...base, dataState: 'missing' };
     const rows = query.result.previewRows ?? [];
     if (!rows.length) return { ...base, dataState: 'empty' };
@@ -45,6 +73,16 @@ export function buildChartFromQuery(config: ChartConfig, query: ChartQuery | nul
         return { ...base, dataState: 'invalid-fields' };
     }
     if (ys.some(key => !rows.some(row => row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== '' && Number.isFinite(Number(row[key]))))) {
+        return { ...base, dataState: 'invalid-fields' };
+    }
+    if (
+        config.chartType === 'pie' &&
+        (ys.length !== 1 ||
+            rows.some(
+                row => row[ys[0]] === null || row[ys[0]] === undefined || String(row[ys[0]]).trim() === '' || !Number.isFinite(Number(row[ys[0]])) || Number(row[ys[0]]) < 0,
+            ) ||
+            rows.reduce((sum, row) => sum + Number(row[ys[0]]), 0) <= 0)
+    ) {
         return { ...base, dataState: 'invalid-fields' };
     }
     // Explicit axes already describe the SQL result. Do not aggregate it again:
@@ -65,7 +103,7 @@ export function buildChartFromQuery(config: ChartConfig, query: ChartQuery | nul
         };
     const profile = buildResultAutoChartProfile({ rows, overrides: config });
     const chart = toChartResultPart(profile, { title: config.title, description: config.description });
-    return chart ? { ...chart, source: query.source, dataState: 'ready' } : { ...base, dataState: 'invalid-fields' };
+    return chart ? { ...chart, source: base.source, dataState: 'ready' } : { ...base, dataState: 'invalid-fields' };
 }
 
 export function getChartResultFromPart(value: unknown, precedingMessages?: readonly Message[]): ChartResultPart | null {
@@ -89,8 +127,18 @@ export function getChartResultFromPart(value: unknown, precedingMessages?: reado
         categoryKey: text(candidate.categoryKey),
         valueKey: text(candidate.valueKey),
         options: candidate.options && typeof candidate.options === 'object' ? { stacked: record(candidate.options).stacked === true } : undefined,
-        source: candidate.source ? { toolCallId: text(source.toolCallId), artifactId: text(source.artifactId) } : undefined,
-        dataState: ['ready', 'empty', 'missing', 'invalid-fields'].includes(String(candidate.dataState)) ? (candidate.dataState as ChartResultPart['dataState']) : undefined,
+        source: candidate.source
+            ? {
+                  toolCallId: text(source.toolCallId),
+                  artifactId: text(source.artifactId),
+                  rowCount: typeof source.rowCount === 'number' ? source.rowCount : undefined,
+                  truncated: source.truncated === true,
+                  columns: Array.isArray(source.columns) ? source.columns.filter((column): column is string => typeof column === 'string') : undefined,
+              }
+            : undefined,
+        dataState: ['ready', 'empty', 'missing', 'invalid-fields', 'incomplete'].includes(String(candidate.dataState))
+            ? (candidate.dataState as ChartResultPart['dataState'])
+            : undefined,
     };
     const normalized = chart;
     // Explicit new empty/error states must never be replaced by a different query.

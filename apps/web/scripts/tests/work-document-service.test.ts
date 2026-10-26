@@ -482,7 +482,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 const progressArgs = { workId: localTurn.workId, requestId: 'transport-progress' };
                 const malformed = await client.callTool({ name: 'dory_publish_progress', arguments: progressArgs });
                 assert.notEqual(malformed.isError, true);
-                assert.match(JSON.stringify(malformed.structuredContent), /progress_required/);
+                assert.match(JSON.stringify(malformed.structuredContent), /"published":false/);
                 const published = await client.callTool({
                     name: 'dory_publish_progress',
                     arguments: { ...progressArgs, checkpointId: 'transport-progress:0', text: '我先核对现有订单知识的口径，再确认需要查询的数据。', nextStage: 'reference' },
@@ -494,10 +494,10 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 });
                 assert.match(JSON.stringify(duplicate.structuredContent), /"duplicate":true/);
                 const gated = await client.callTool({ name: 'dory_list_connections', arguments: progressArgs });
-                assert.notEqual(gated.isError, true);
-                assert.match(JSON.stringify(gated.structuredContent), /progress_required/);
+                assert.equal(gated.isError, true);
+                assert.doesNotMatch(JSON.stringify(gated.structuredContent), /progress_required/);
                 const progressEvents = await db.works.listEvents({ ...owner, workId: localTurn.workId });
-                assert.equal(progressEvents.filter(event => event.inputSummary?.requestId === 'transport-progress' && event.toolName !== 'chat_checkpoints').length, 0);
+                assert.equal(progressEvents.filter(event => event.inputSummary?.requestId === 'transport-progress' && event.toolName !== 'chat_checkpoints').length, 1);
             } finally {
                 await client.close();
                 await server.close();

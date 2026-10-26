@@ -240,6 +240,7 @@ async function openAnalysis(
     );
     await page.evaluate(value => localStorage.setItem('currentConnection', JSON.stringify(value)), connection);
     await page.goto(`/${organization}/${connection.connection.id}/chatbot`);
+    if (!legacy) await expect(page.getByRole('link', { name: 'View Agent Run' })).toBeVisible();
 }
 
 async function expandActionGroups(page: Page) {
@@ -308,7 +309,8 @@ test('failed finalization preserves the answer and clearly marks incomplete conc
     await expect(page.getByText(answer, { exact: true })).toBeVisible();
     await expect(page.getByText('Conclusions are not fully saved.', { exact: false })).toBeVisible();
     await expect(page.getByText('No matching Knowledge', { exact: true })).toHaveCount(0);
-    await expect(page.getByTestId('chat-analysis-process')).toHaveJSProperty('open', true);
+    await expect(page.getByTestId('chat-analysis-process')).toHaveJSProperty('open', false);
+    await page.getByTestId('chat-analysis-process').locator('summary').first().click();
     await expandActionGroups(page);
     const search = page.getByTestId('chat-response-timeline').locator('[data-tool-name="search_assets"]');
     await expect(search.getByText('Failed', { exact: true })).toBeVisible();
@@ -391,8 +393,10 @@ test('running steps remain visible and collapse automatically when the answer fi
     await page.getByRole('textbox').last().fill('Compare the previous two months');
     await page.getByRole('textbox').last().press('Enter');
     const process = page.getByTestId('chat-analysis-process').last();
-    await expect(process).toHaveJSProperty('open', true);
+    await expect(process).toHaveJSProperty('open', false);
+    await process.locator('summary').first().click();
     await expect(page.getByText('Checking the relevant business definitions.', { exact: true })).toBeVisible();
+    await expandActionGroups(page);
     const readRow = process.locator('[data-tool-name="read_asset"]');
     await readRow.getByRole('button', { name: /Read Knowledge source/ }).click();
     includeEvent = true;
@@ -560,6 +564,7 @@ test('SQL Copilot retains its original input and sends the editor context', asyn
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    const sessionLoaded = page.waitForResponse(response => response.url().includes('/api/chat/session/copilot-chat'));
     await page.goto(`/${organization}/${connection.connection.id}/sql-console`);
     await expect(page.getByRole('tab', { name: /Copilot verification/ })).toBeVisible();
     if (!(await page.getByRole('tab', { name: 'Ask', exact: true }).isVisible())) await page.getByRole('button', { name: 'Toggle Work', exact: true }).click();
@@ -567,6 +572,7 @@ test('SQL Copilot retains its original input and sends the editor context', asyn
     const input = page.getByPlaceholder('Ask about this SQL / let AI fix or rewrite it, Shift + Enter for a new line');
     await expect(input).toBeVisible();
     await expect(page.getByTestId('agent-composer')).toHaveCount(0);
+    await sessionLoaded;
     await input.fill('Explain this SQL');
     await input.press('Enter');
     await expect.poll(() => submitted?.copilotEnvelope).toBeTruthy();
@@ -588,7 +594,7 @@ test('a failed conclusion save keeps the later reply visible without repeating t
     await expect(page.getByText(answer, { exact: true })).toHaveCount(0);
 });
 
-test('SDK charts stay between their original prose and answer when activity collapses and after refresh', async ({ page }, testInfo) => {
+test('legacy SDK charts stay with the answer when activity collapses and after refresh', async ({ page }, testInfo) => {
     await openAnalysis(page, false, false, { interleaved: true });
     const process = page.getByTestId('chat-analysis-process');
     await expect(process).toHaveJSProperty('open', false);
@@ -597,6 +603,7 @@ test('SDK charts stay between their original prose and answer when activity coll
     const intro = response.getByText('I will read the business definition before analyzing the results.', { exact: true });
     const update = response.getByText('The definition is confirmed. I will query the data next.', { exact: true });
     await expect(update).toBeVisible();
+    await expandActionGroups(page);
     const order = await response.evaluate(element => {
         const children = [...element.querySelectorAll('[data-testid="chat-tool-group"], p')];
         return children.map(node => node.textContent ?? '');
@@ -611,15 +618,15 @@ test('SDK charts stay between their original prose and answer when activity coll
     const chartNode = await chart.elementHandle();
     const visibleOrder = () =>
         response
-            .locator(':scope > [data-timeline-id]')
-            .evaluateAll(nodes => nodes.filter(node => !node.hasAttribute('hidden')).map(node => (node.querySelector('.recharts-wrapper') ? 'chart' : (node.textContent ?? ''))));
+            .locator('p, .recharts-wrapper')
+            .evaluateAll(nodes => nodes.filter(node => !node.closest('[hidden]')).map(node => (node.matches('.recharts-wrapper') ? 'chart' : (node.textContent ?? ''))));
     await process.locator('summary').first().click();
     await expect(process).toHaveJSProperty('open', false);
     await expect(chart).toBeVisible();
     expect(await chartNode!.evaluate(node => node.isConnected)).toBe(true);
     const collapsedOrder = await visibleOrder();
     expect(collapsedOrder.findIndex(text => text.includes('The definition is confirmed'))).toBeLessThan(collapsedOrder.indexOf('chart'));
-    expect(collapsedOrder.indexOf('chart')).toBeLessThan(collapsedOrder.findIndex(text => text.includes(answer)));
+    expect(collapsedOrder.findIndex(text => text.includes(answer))).toBeLessThan(collapsedOrder.indexOf('chart'));
     await page.screenshot({ path: testInfo.outputPath('ordered-sdk-process.png'), fullPage: true });
     await page.reload();
     await expect(page.getByTestId('chat-analysis-process')).toHaveJSProperty('open', false);
@@ -673,9 +680,11 @@ for (const outcome of ['completed', 'failed', 'aborted'] as const) {
         const organization = new URL(page.url()).pathname.split('/')[1];
         await page.goto(`/${organization}/work?chat=analysis-chat`);
         const process = page.getByTestId('chat-analysis-process');
-        await expect(process).toHaveJSProperty('open', true);
+        await expect(process).toHaveJSProperty('open', false);
+        await process.locator('summary').first().click();
         await expect(process.getByText('先读取已有查询结果。', { exact: true })).toBeVisible();
         await expect(process.getByText('结果有 42 条记录，继续检查报告。', { exact: true })).toBeVisible();
+        await expandActionGroups(page);
         await expect(process.locator('[data-tool-name="readArtifact"]')).toHaveCount(1);
         await expect(process.getByTestId('chat-unplaced-activity')).toHaveCount(0);
         await process.locator('summary').first().click();
@@ -685,7 +694,7 @@ for (const outcome of ['completed', 'failed', 'aborted'] as const) {
         await process.locator('summary').first().click();
         finished = true;
         await expect(page.getByText('已保留分析结果。', { exact: true })).toBeVisible();
-        await expect(process).toHaveJSProperty('open', outcome !== 'completed');
+        await expect(process).toHaveJSProperty('open', false);
         await expect(process.locator('summary').first()).toHaveText('Worked for 1m 21s');
         await expect(page.getByRole('button', { name: /^(Generate report|生成报告)$/i })).toHaveCount(0);
         await expect(process.getByTestId('chat-tool-group').first().locator('summary').first()).toHaveText(/Read 1 result|阅读 1 个结果/);
@@ -702,7 +711,7 @@ for (const outcome of ['completed', 'failed', 'aborted'] as const) {
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         } else {
             await page.reload();
-            await expect(process).toHaveJSProperty('open', true);
+            await expect(process).toHaveJSProperty('open', false);
             await expect(page.getByText('已保留分析结果。', { exact: true })).toHaveCount(1);
         }
     });

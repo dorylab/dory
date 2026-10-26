@@ -1,5 +1,6 @@
 'use client';
 
+import { ChatCompletionCard } from '@/components/agent-runs/chat-completion';
 import { ReactNode } from 'react';
 import type { ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
 import Image from 'next/image';
@@ -8,7 +9,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenuItem } from '@/registry/new-york-v4/ui/dropdown-menu';
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
-import { getAssistantResponseError, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
+import { getAssistantResponseError, getChatCompletion, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
 import { buildChatChartLayout } from '@/lib/agent-runs/chat-chart-layout';
 import { getChatResponseText } from '@/lib/agent-runs/chat-response';
@@ -63,17 +64,32 @@ type MessageRendererProps = {
     onManualExecute?: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
 
     showRunLinks?: boolean;
+    onContinue?: (messageId: string) => void;
+    onOpenReport?: (documentId: string) => void;
     mode?: ChatMode;
     onExecuteAction?: CopilotActionExecutor;
 };
 
-const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, onManualExecute, mode = 'global', onExecuteAction, showRunLinks = true }: MessageRendererProps) => {
+const MessageRenderer = ({
+    message,
+    messageIndex,
+    messages,
+    status,
+    onCopySql,
+    onManualExecute,
+    mode = 'global',
+    onExecuteAction,
+    showRunLinks = true,
+    onContinue,
+    onOpenReport,
+}: MessageRendererProps) => {
     const t = useTranslations('Chatbot');
     const composerT = useTranslations('ChatComposer');
     const runsT = useTranslations('AgentRuns');
     const metadata = message.metadata as
         | { agentRunId?: string; requestId?: string; summarySave?: { status: string; error?: string }; responseStatus?: string; analysisDurationMs?: number }
         | undefined;
+    const completion = getChatCompletion(message);
     const assistantMessage = message.role === 'assistant';
     const isLatestAssistant = assistantMessage && messageIndex === messages.length - 1;
     const isStreaming = status === 'streaming' || status === 'submitted';
@@ -519,6 +535,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
     if (
         assistantMessage &&
+        !completion &&
         (getReportSaveError(message) || getAssistantResponseError(message) || (contentItems.length === 0 && processItems.length === 0 && toolRows.length === 0)) &&
         (!isLatestAssistant || !isStreaming)
     ) {
@@ -527,7 +544,20 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 key={`${message.id}-fallback`}
                 reason={getReportSaveError(message) ?? getAssistantResponseError(message)}
                 reportSaveFailed={Boolean(getReportSaveError(message))}
+                hasContent={message.parts.some(part => part.type === 'text' && Boolean(part.text.trim()))}
                 historical={hasLaterAssistantResponse(messages, messageIndex, status)}
+            />,
+        );
+    }
+
+    if (assistantMessage && completion && (!isLatestAssistant || !isStreaming)) {
+        contentItems.push(
+            <ChatCompletionCard
+                key={`${message.id}-completion`}
+                completion={completion}
+                onContinue={isLatestAssistant && onContinue ? () => onContinue(message.id) : undefined}
+                onOpenReport={onOpenReport}
+                disabled={isStreaming}
             />,
         );
     }
@@ -552,13 +582,16 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                             timeline={timeline}
                             answer={contentItems}
                             inlineResults={hasInlineCharts}
+                            hasCompletion={Boolean(completion)}
                             responseError={getAssistantResponseError(message)}
                             failed={
-                                Boolean(getAssistantResponseError(message)) ||
-                                (isLatestAssistant && status === 'error') ||
-                                metadata.summarySave?.status === 'failed' ||
-                                metadata.responseStatus === 'aborted' ||
-                                metadata.responseStatus === 'failed'
+                                completion
+                                    ? completion.status !== 'completed'
+                                    : Boolean(getAssistantResponseError(message)) ||
+                                      (isLatestAssistant && status === 'error') ||
+                                      metadata.summarySave?.status === 'failed' ||
+                                      metadata.responseStatus === 'aborted' ||
+                                      metadata.responseStatus === 'failed'
                             }
                             onCopySql={onCopySql}
                             onManualExecute={onManualExecute}

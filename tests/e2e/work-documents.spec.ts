@@ -1477,3 +1477,83 @@ test('an existing Artifact can be analyzed in chat without saving conclusions, i
     await expect(page.locator('[data-tool-name="finishAnalysis"]')).toHaveCount(0);
     await expectAppHealthy(appErrors);
 });
+
+test('partial completion preserves the answer, resumes a new request and survives reload', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const session = { id: 'recovery-chat', title: 'CSV analysis', type: 'global', connectionId: null };
+    const completion = {
+        status: 'partial',
+        completed: ['queryAttachment'],
+        unfinished: ['REPORT_NOT_SAVED', 'CHART_NOT_CREATED'],
+        report: { documentId: 'doc-report', revision: 1, saved: false },
+        canContinue: true,
+    };
+    const messages = [
+        { id: 'request', role: 'user', parts: [{ type: 'text', text: 'Add a pie chart to the report' }] },
+        { id: 'partial-answer', role: 'assistant', parts: [{ type: 'text', text: 'Verified full-data activity: 25.6%.' }], metadata: { userMessageId: 'request', completion } },
+    ];
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [session] } }));
+    await page.route('**/api/chat/session/recovery-chat', route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [] } }));
+    let resumed: Record<string, unknown> | undefined;
+    await page.route('**/api/chat', route => {
+        resumed = route.request().postDataJSON();
+        return route.fulfill({
+            contentType: 'text/event-stream',
+            headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
+            body: 'data: {"type":"start","messageId":"resumed-answer"}\n\ndata: {"type":"finish","finishReason":"stop"}\n\ndata: [DONE]\n\n',
+        });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=recovery-chat&panel=closed`);
+    const card = page.getByTestId('chat-completion');
+    for (let i = 0; i < 2; i++) {
+        await expect(card).toContainText('Partially completed');
+        await expect(page.getByText('Verified full-data activity: 25.6%.', { exact: true })).toBeVisible();
+        await expect(page.getByText(/has not returned usable content/)).toHaveCount(0);
+        await expect(card.getByRole('button', { name: 'View report', exact: true })).toBeVisible();
+        if (i === 0) await page.reload();
+    }
+    await card.locator('summary').click();
+    await expect(card).toContainText('has not been saved');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: testInfo.outputPath('partial-completion-mobile.png'), fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await card.getByRole('button', { name: 'Continue unfinished steps' }).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => resumed?.resumeMessageId).toBe('partial-answer');
+    expect((resumed?.messages as UIMessage[]).at(-1)?.id).not.toBe('request');
+    await expectAppHealthy(appErrors);
+});
+
+test('report pie charts retain source values on screen, after reload and in HTML export', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const document = makeDocument();
+    document.content.visuals[0].chart.type = 'pie';
+    document.content.evidence[0].rows = [
+        { month: 'Active', revenue: 6400 },
+        { month: 'Inactive', revenue: 18600 },
+    ];
+    await page.route('**/api/work-documents/doc-report', route => route.fulfill({ json: { document, versions: [] } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/reports/doc-report`);
+    for (let i = 0; i < 2; i++) {
+        await expect(page.locator('[data-chart-type="pie"]')).toBeVisible();
+        await expect(page.locator('[data-chart-type="pie"]')).toContainText('25.6%');
+        if (i === 0) await page.reload();
+    }
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'HTML', exact: true }).click();
+    const stream = await (await download).createReadStream();
+    let html = '';
+    for await (const chunk of stream!) html += chunk.toString();
+    expect(html).toContain('data-chart-type="pie"');
+    expect(html).toContain('6400');
+    expect(html).toContain('25.6%');
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.locator('[data-chart-type="pie"]')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('report-pie-print.png'), fullPage: true });
+    await expectAppHealthy(appErrors);
+});

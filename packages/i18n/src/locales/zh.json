@@ -2668,7 +2668,7 @@
         "Chat": {
             "Errors": {
                 "MissingSessionId": "缺少会话 ID",
-                "AnalysisInterrupted": "分析因进度校验失败或达到进度上限而中断，部分步骤尚未完成。请以已返回的查询结果为准，不能将仅生成的 SQL 当作已执行的分析。请重试以完成分析。",
+                "AnalysisInterrupted": "执行已停止，部分步骤尚未完成。已完成的查询和成果保留，可继续未完成步骤。",
                 "SessionNotFound": "会话不存在",
                 "FetchSessionFailed": "获取会话详情失败",
                 "InvalidTitle": "无效的标题",
@@ -3106,7 +3106,8 @@
             "MissingAiEnvDescription": "请设置 DORY_AI_API_KEY 和 DORY_AI_URL 以启用 AI 功能。",
             "ReportNotSavedTitle": "报告未保存",
             "ReportNotSavedDescription": "本次报告尚未保存，已有回答已保留。你可以再次要求生成并保存报告。",
-            "FailureDetails": "失败详情"
+            "FailureDetails": "失败详情",
+            "PartialDescription": "已有内容保留，部分步骤尚未完成，请查看原因后继续。"
         },
         "CodeReview": {
             "Header": "SQL 预览",
@@ -3199,7 +3200,8 @@
             "Collapse": "折叠图表",
             "Expand": "展开图表",
             "EmptyQuery": "查询未返回任何数据。",
-            "InvalidFields": "图表字段与查询结果不匹配。"
+            "InvalidFields": "图表字段与查询结果不匹配。",
+            "Preview": "仅展示预览数据，不代表完整结果。"
         },
         "Mermaid": {
             "Title": "Mermaid",
@@ -4910,8 +4912,8 @@
                 "Results": "结果数",
                 "Action": "操作"
             },
-            "WorkedFor": "Worked for {duration}",
-            "WorkingFor": "Working for {duration}",
+            "WorkedFor": "处理用时 {duration}",
+            "WorkingFor": "正在处理 · {duration}",
             "Groups": {
                 "ReadKnowledge": "阅读 {count} 个知识来源",
                 "SearchKnowledge": "检索 {count} 次知识",
@@ -4922,6 +4924,37 @@
                 "BuildCharts": "生成 {count} 个图表",
                 "ReadFiles": "阅读 {count} 个文件",
                 "SearchFiles": "搜索 {count} 次文件"
+            },
+            "Completion": {
+                "completed": "本轮已完成",
+                "partial": "本轮部分完成",
+                "failed": "本轮未完成",
+                "aborted": "本轮已停止",
+                "reportSaved": "报告已保存 · v{revision}",
+                "reportPreserved": "本次修改未完成，已有报告保留，可查看旧版。",
+                "details": "查看未完成事项",
+                "viewReport": "查看报告",
+                "continue": "继续未完成步骤",
+                "reasons": {
+                    "ACCESS_DENIED": "所选资源不可用或没有访问权限，请选择可访问的数据。",
+                    "SOURCE_UNAVAILABLE": "原始数据不可用，需要重新读取或上传。",
+                    "EVIDENCE_REQUIRED": "缺少唯一匹配的查询结果，需要补充查询或选择来源。",
+                    "REPORT_CONFLICT": "报告版本已变化，需要读取最新版本后合并。",
+                    "INVALID_FIELDS": "图表字段或数值不符合要求，需要修正。",
+                    "EMPTY_RESULT": "查询没有返回可绘制的数据。",
+                    "TRANSIENT": "服务暂时失败，需要检查当前状态后重试。",
+                    "TOOL_FAILED": "部分步骤失败，已完成结果仍保留。",
+                    "REPORT_NOT_SAVED": "本轮请求的报告修改尚未保存。",
+                    "CHART_NOT_CREATED": "请求的图表尚未生成。",
+                    "EXECUTION_INTERRUPTED": "执行已中断，仍有步骤未完成。"
+                }
+            },
+            "Current": {
+                "attachment": "正在统计完整附件",
+                "report": "正在更新报告",
+                "chart": "正在生成图表",
+                "query": "正在查询数据",
+                "source": "正在读取来源"
             }
         }
     },
@@ -5603,7 +5636,8 @@
                 "completed": "已完成",
                 "failed": "失败",
                 "stopped": "已停止",
-                "idle": "待继续"
+                "idle": "待继续",
+                "partial": "部分完成"
             },
             "Types": {
                 "report": "报告",
@@ -5616,7 +5650,8 @@
                 "result": "{count} 个结果"
             },
             "ChartNotReady": "图表尚未加载完成，或没有可导出的已保存数据。"
-        }
+        },
+        "ContinueUnfinished": "继续未完成步骤"
     },
     "ChatComposer": {
         "Add": "添加",

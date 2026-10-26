@@ -3102,7 +3102,8 @@
             "MissingAiEnvDescription": "Please set DORY_AI_API_KEY and DORY_AI_URL to enable AI features.",
             "ReportNotSavedTitle": "Report not saved",
             "ReportNotSavedDescription": "The requested report was not saved. Any answer above has been retained. You can ask to save the report again.",
-            "FailureDetails": "Failure details"
+            "FailureDetails": "Failure details",
+            "PartialDescription": "Existing content is preserved. Some steps remain unfinished."
         },
         "CodeReview": {
             "Header": "SQL Preview",
@@ -3195,7 +3196,8 @@
             "Collapse": "Collapse chart",
             "Expand": "Expand chart",
             "EmptyQuery": "The query returned no rows.",
-            "InvalidFields": "The chart fields do not match the query results."
+            "InvalidFields": "The chart fields do not match the query results.",
+            "Preview": "Preview only; this chart does not represent the complete result."
         },
         "Mermaid": {
             "Title": "Mermaid",
@@ -4918,6 +4920,37 @@
                 "BuildCharts": "Created {count, plural, one {# chart} other {# charts}}",
                 "ReadFiles": "Read {count, plural, one {# file} other {# files}}",
                 "SearchFiles": "Searched files {count} times"
+            },
+            "Completion": {
+                "completed": "Turn completed",
+                "partial": "Partially completed",
+                "failed": "Turn incomplete",
+                "aborted": "Turn stopped",
+                "reportSaved": "Report saved · v{revision}",
+                "reportPreserved": "This update was not completed. The existing report is preserved.",
+                "details": "View unfinished steps",
+                "viewReport": "View report",
+                "continue": "Continue unfinished steps",
+                "reasons": {
+                    "ACCESS_DENIED": "The selected resource is unavailable or access is denied. Select an accessible source.",
+                    "SOURCE_UNAVAILABLE": "The original source must be read again or uploaded.",
+                    "EVIDENCE_REQUIRED": "Select the relevant query result or query the original source.",
+                    "REPORT_CONFLICT": "Read the latest report and reconcile the requested changes.",
+                    "INVALID_FIELDS": "Correct the chart fields or numeric values.",
+                    "EMPTY_RESULT": "The query returned no data to chart.",
+                    "TRANSIENT": "Check the current state before retrying the temporary failure.",
+                    "TOOL_FAILED": "Some steps failed. Completed results are preserved.",
+                    "REPORT_NOT_SAVED": "The report change requested in this turn has not been saved.",
+                    "CHART_NOT_CREATED": "The requested chart has not been created.",
+                    "EXECUTION_INTERRUPTED": "Execution stopped with unfinished steps."
+                }
+            },
+            "Current": {
+                "attachment": "Querying the complete attachment",
+                "report": "Updating the report",
+                "chart": "Creating the chart",
+                "query": "Querying data",
+                "source": "Reading sources"
             }
         }
     },
@@ -5599,7 +5632,8 @@
                 "completed": "Completed",
                 "failed": "Failed",
                 "stopped": "Stopped",
-                "idle": "Ready to continue"
+                "idle": "Ready to continue",
+                "partial": "Partially completed"
             },
             "Types": {
                 "report": "Report",
@@ -5612,7 +5646,8 @@
                 "result": "{count, plural, one {# Result} other {# Results}}"
             },
             "ChartNotReady": "The chart is still loading or has no saved data to export."
-        }
+        },
+        "ContinueUnfinished": "Continue unfinished steps"
     },
     "ChatComposer": {
         "Add": "Add",

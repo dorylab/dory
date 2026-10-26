@@ -3099,7 +3099,8 @@
             "MissingAiEnvDescription": "Define DORY_AI_API_KEY y DORY_AI_URL para habilitar las funciones de IA.",
             "ReportNotSavedTitle": "Informe sin guardar",
             "ReportNotSavedDescription": "El informe solicitado no se guardó. Se ha conservado la respuesta anterior. Puedes solicitar que se guarde de nuevo.",
-            "FailureDetails": "Detalles del error"
+            "FailureDetails": "Detalles del error",
+            "PartialDescription": "El contenido existente se conserva. Quedan pasos pendientes."
         },
         "CodeReview": {
             "Header": "Vista previa de SQL",
@@ -3192,7 +3193,8 @@
             "Collapse": "Contraer gráfico",
             "Expand": "Expandir gráfico",
             "EmptyQuery": "La consulta no devolvió filas.",
-            "InvalidFields": "Los campos del gráfico no coinciden con los resultados de la consulta."
+            "InvalidFields": "Los campos del gráfico no coinciden con los resultados de la consulta.",
+            "Preview": "Solo vista previa; no representa el resultado completo."
         },
         "Mermaid": {
             "Title": "Mermaid",
@@ -4909,6 +4911,37 @@
                 "BuildCharts": "Creados {count} gráficos",
                 "ReadFiles": "Leídos {count} archivos",
                 "SearchFiles": "Archivos buscados {count} veces"
+            },
+            "Completion": {
+                "completed": "Turno completado",
+                "partial": "Completado parcialmente",
+                "failed": "Turno incompleto",
+                "aborted": "Turno detenido",
+                "reportSaved": "Informe guardado · v{revision}",
+                "reportPreserved": "Esta actualización no se completó. El informe anterior se conserva.",
+                "details": "Ver pasos pendientes",
+                "viewReport": "Ver informe",
+                "continue": "Continuar pasos pendientes",
+                "reasons": {
+                    "ACCESS_DENIED": "El recurso no está disponible o no tienes acceso. Selecciona una fuente accesible.",
+                    "SOURCE_UNAVAILABLE": "Es necesario volver a leer o cargar la fuente original.",
+                    "EVIDENCE_REQUIRED": "Selecciona el resultado correspondiente o consulta la fuente original.",
+                    "REPORT_CONFLICT": "Lee el informe más reciente e integra los cambios solicitados.",
+                    "INVALID_FIELDS": "Corrige los campos del gráfico o los valores numéricos.",
+                    "EMPTY_RESULT": "La consulta no devolvió datos para el gráfico.",
+                    "TRANSIENT": "Comprueba el estado actual antes de reintentar el fallo temporal.",
+                    "TOOL_FAILED": "Algunos pasos fallaron. Los resultados completados se conservan.",
+                    "REPORT_NOT_SAVED": "El cambio solicitado en este turno no se ha guardado.",
+                    "CHART_NOT_CREATED": "El gráfico solicitado no se ha creado.",
+                    "EXECUTION_INTERRUPTED": "La ejecución se detuvo con pasos pendientes."
+                }
+            },
+            "Current": {
+                "attachment": "Consultando el archivo completo",
+                "report": "Actualizando el informe",
+                "chart": "Creando el gráfico",
+                "query": "Consultando datos",
+                "source": "Leyendo fuentes"
             }
         }
     },
@@ -5590,7 +5623,8 @@
                 "completed": "Completado",
                 "failed": "Error",
                 "stopped": "Detenido",
-                "idle": "Listo para continuar"
+                "idle": "Listo para continuar",
+                "partial": "Completado parcialmente"
             },
             "Types": {
                 "report": "Informe",
@@ -5603,7 +5637,8 @@
                 "result": "{count, plural, one {# resultado} other {# resultados}}"
             },
             "ChartNotReady": "El gráfico aún se está cargando o no tiene datos guardados para exportar."
-        }
+        },
+        "ContinueUnfinished": "Continuar pasos pendientes"
     },
     "ChatComposer": {
         "Add": "Add",

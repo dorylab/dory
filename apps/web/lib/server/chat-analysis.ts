@@ -241,7 +241,7 @@ export function createChatAnalysis(options: {
                 sql: '',
                 database: provenance.database ?? null,
                 previewRows: result.rows,
-                columns: [],
+                columns: result.columns.map(column => ({ name: column.name, type: null })),
                 rowCount: result.rowCount ?? undefined,
                 truncated: result.dataAvailability === 'preview-only' || (result.rowCount ?? 0) > result.rows.length,
             },
@@ -300,7 +300,7 @@ export function createChatAnalysis(options: {
     if (options.progressCheckpoints) {
         tools.publishProgress = tool({
             description:
-                'Publish a factual public stage update before tools, stage changes, or more than 3 actions. Supply text and nextStage; the host manages the checkpointId. Prefer a final answer when evidence is sufficient.',
+                'Publish a factual public stage update when useful. Tool stages are managed by the server. Supply text and nextStage; the host manages the checkpointId. Prefer a final answer when evidence is sufficient.',
             inputSchema: publishProgressSchema.omit({ checkpointId: true }),
             execute: (input, { toolCallId }) => {
                 let pending = executions.get(toolCallId);
@@ -330,6 +330,7 @@ export function createChatAnalysis(options: {
                         requestId: options.requestId,
                         toolName: 'chartBuilder',
                         toolCallId: call.toolCallId,
+                        input,
                     },
                     async () => original(input, call),
                 ),
@@ -339,6 +340,28 @@ export function createChatAnalysis(options: {
         tools,
         inspectCheckpoint: async () => (await checkpoint()).inspect(),
         invalidProgress: async () => (await checkpoint()).publish({}),
+        recordToolInputError: async (call: { toolName: string; toolCallId: string; input: string }, error: unknown) => {
+            const ctx = await context();
+            try {
+                const admission = await runChatStageAction(
+                    {
+                        db: options.db,
+                        organizationId: options.organizationId,
+                        userId: options.userId,
+                        ...ctx.services.agentTurn!,
+                        toolName: call.toolName,
+                        toolCallId: call.toolCallId,
+                        input: call.input,
+                    },
+                    async () => {
+                        throw error;
+                    },
+                );
+                return isCheckpointControl(admission);
+            } catch {
+                return false;
+            }
+        },
         getFinalAnswer: () => finalAnswer,
         async recordSummaryInputError(error: unknown) {
             const ctx = await context();

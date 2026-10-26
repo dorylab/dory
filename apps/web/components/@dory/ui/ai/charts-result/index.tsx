@@ -18,8 +18,8 @@ export type ChartResultCardProps = {
 
 export type ChartResultPart = {
     type: 'chart';
-    source?: { toolCallId?: string; artifactId?: string };
-    dataState?: 'ready' | 'empty' | 'missing' | 'invalid-fields';
+    source?: { toolCallId?: string; artifactId?: string; rowCount?: number; truncated?: boolean; columns?: string[] };
+    dataState?: 'ready' | 'empty' | 'missing' | 'invalid-fields' | 'incomplete';
     chartType: 'bar' | 'line' | 'area' | 'pie';
     title?: string;
     description?: string;
@@ -126,7 +126,15 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                 </CardHeader>
                 <CardContent className="px-3 pb-3 pt-0">
                     <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">
-                        {t(result.dataState === 'empty' ? 'ChartResult.EmptyQuery' : result.dataState === 'invalid-fields' ? 'ChartResult.InvalidFields' : 'ChartResult.NoData')}
+                        {t(
+                            result.dataState === 'incomplete'
+                                ? 'ChartResult.Preview'
+                                : result.dataState === 'empty'
+                                  ? 'ChartResult.EmptyQuery'
+                                  : result.dataState === 'invalid-fields'
+                                    ? 'ChartResult.InvalidFields'
+                                    : 'ChartResult.NoData',
+                        )}
                     </div>
                 </CardContent>
             </Card>
@@ -270,6 +278,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
     return (
         <div className="mt-2">
             <div className="rounded-lg border border-border/50 bg-background/35 px-2 py-2 shadow-none">
+                {result.source?.truncated && <p className="px-1 pb-1 text-xs text-muted-foreground">{t('ChartResult.Preview')}</p>}
                 {description ? <div className="px-1 pb-1 text-xs text-muted-foreground">{description}</div> : null}
                 {onFollowUp ? (
                     <div className="flex justify-end px-1 pb-1">

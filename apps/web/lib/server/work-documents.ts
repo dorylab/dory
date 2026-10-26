@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
 import type { DBService } from '@dory/database';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -42,6 +43,8 @@ export async function saveWorkDraft(
         draft: z.infer<typeof workDraftSchema>;
         source: 'agent' | 'user';
         runId?: string;
+        requestId?: string;
+        writeKey?: string;
         scope?: AnalysisScope;
     },
 ) {
@@ -49,6 +52,32 @@ export async function saveWorkDraft(
     const existing = await db.workDocuments.get(input);
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const draft = workDraftSchema.parse(input.draft);
+    const previousWrite = existing.content.agentWrite;
+    const changedVisualIds = draft.visuals
+        .filter(
+            visual =>
+                JSON.stringify(visual) !== JSON.stringify(existing.content.visuals.find(prior => prior.id === visual.id)) ||
+                !existing.content.markdown.includes(`dory://visual/${visual.id}`) ||
+                (previousWrite?.requestId === input.requestId && previousWrite?.visualIds.includes(visual.id)),
+        )
+        .map(visual => visual.id);
+    if (input.source === 'agent' && input.runId && input.requestId) {
+        const work = await db.works.assertChatTurn({ ...input, workId: input.runId, requestId: input.requestId });
+        const target = (work.metadata?.chatTurn as { reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean } } | undefined)?.reportTarget;
+        if (target && target.documentId !== input.documentId) throw new DatabaseError('Update the selected report.', 403);
+        if (
+            target?.requireChart &&
+            draft.status === 'ready' &&
+            !draft.visuals.some(
+                visual =>
+                    changedVisualIds.includes(visual.id) &&
+                    visual.chart &&
+                    (!target.chartType || visual.chart.type === target.chartType) &&
+                    draft.markdown.includes(`dory://visual/${visual.id}`),
+            )
+        )
+            throw new DatabaseError('The requested chart must be embedded in the report before saving it as ready.', 400);
+    }
     const scope = input.scope ?? existing.scope;
     if (input.source === 'agent' && existing.status === 'ready' && draft.status === 'draft') {
         throw new DatabaseError('The update is incomplete. The previous report is preserved. Explain the missing sources in chat, then retry.', 409);
@@ -60,6 +89,18 @@ export async function saveWorkDraft(
         throw new DatabaseError(error instanceof Error ? error.message : 'Invalid references.', 400);
     }
     const { ids, visuals } = references;
+    if (
+        input.source === 'agent' &&
+        input.runId &&
+        draft.status === 'ready' &&
+        !ids.length &&
+        (existing.content.evidence.length || (await db.artifacts.listByWork({ ...input, workId: input.runId })).length)
+    ) {
+        throw new DatabaseError(
+            'Query evidence is required in this report. Cite the relevant returned Artifact with [Source](dory://evidence/ARTIFACT_ID), or embed a table visual using that Artifact. Plain copied statistics are not a saved evidence link.',
+            400,
+        );
+    }
     const evidence: WorkEvidence[] = await Promise.all(
         ids.map(async artifactId => {
             const saved = existing.content.evidence.find(item => item.artifactId === artifactId);
@@ -99,6 +140,18 @@ export async function saveWorkDraft(
             const yKeys = visual.chart.yKeys ? visual.chart.yKeys.map(series => series.key) : [visual.chart.yKey];
             if (!source?.columns.includes(visual.chart.xKey) || yKeys.some(key => !source.columns.includes(key)))
                 throw new DatabaseError('Chart columns do not match its evidence.', 400);
+            if (visual.chart.type === 'pie') {
+                const key = yKeys[0];
+                if (
+                    yKeys.length !== 1 ||
+                    source.rows.some(
+                        row => row[key] === null || row[key] === undefined || String(row[key]).trim() === '' || !Number.isFinite(Number(row[key])) || Number(row[key]) < 0,
+                    ) ||
+                    source.rows.reduce((sum, row) => sum + Number(row[key]), 0) <= 0
+                )
+                    throw new DatabaseError('A pie requires one non-negative numeric series with a positive total.', 400);
+                if (source.truncated) throw new DatabaseError('A pie requires a complete aggregate result. Re-run the query grouped by category.', 400);
+            }
         }
     }
     for (const visual of visuals) {
@@ -119,7 +172,22 @@ export async function saveWorkDraft(
             });
         }
     }
-    const content: WorkDocumentContent = { markdown: draft.markdown, visuals, evidence, knowledge };
+    const content: WorkDocumentContent = {
+        markdown: draft.markdown,
+        visuals,
+        evidence,
+        knowledge,
+        ...(input.source === 'agent' && input.requestId
+            ? {
+                  agentWrite: {
+                      requestId: input.requestId,
+                      revision: input.expectedRevision + 1,
+                      visualIds: changedVisualIds,
+                      writeKey: input.writeKey,
+                  },
+              }
+            : {}),
+    };
     if (JSON.stringify(content).length > 4_000_000) throw new DatabaseError('Report snapshot is too large. Use smaller aggregated results.', 400);
     return db.workDocuments.update({
         ...input,
@@ -188,9 +256,20 @@ export async function createWorkFromRun(db: DBService, input: Owner & { runId: s
 
 export async function patchWorkDocument(
     db: DBService,
-    input: Owner & { documentId: string; expectedRevision: number; patch: z.infer<typeof workPatchSchema>; runId: string; scope: AnalysisScope },
+    input: Owner & { documentId: string; expectedRevision: number; patch: z.infer<typeof workPatchSchema>; runId: string; requestId?: string; scope: AnalysisScope },
 ) {
+    await assertDocumentWrite(input);
     const existing = await db.workDocuments.get(input);
+    const writeKey = createHash('sha256')
+        .update(JSON.stringify([input.expectedRevision, input.patch]))
+        .digest('hex');
+    if (
+        input.requestId &&
+        existing.content.agentWrite?.requestId === input.requestId &&
+        existing.content.agentWrite.writeKey === writeKey &&
+        existing.revision === input.expectedRevision + 1
+    )
+        return existing;
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const patch = workPatchSchema.parse(input.patch);
     let markdown: string;
@@ -202,9 +281,14 @@ export async function patchWorkDocument(
     const visuals = new Map(existing.content.visuals.map(visual => [visual.id, visual]));
     if (patch.visuals && new Set(patch.visuals.map(visual => visual.id)).size !== patch.visuals.length) throw new DatabaseError('Visual IDs must be unique.', 400);
     for (const visual of patch.visuals ?? []) visuals.set(visual.id, visual);
+    for (const id of new Set(patch.embedVisualIds ?? [])) {
+        if (!visuals.has(id)) throw new DatabaseError('The visual to embed does not exist in this report. Supply its visual configuration.', 400);
+        if (!markdown.includes(`dory://visual/${id}`)) markdown += `\n\n![Chart](dory://visual/${id})`;
+    }
     return saveWorkDraft(db, {
         ...input,
         source: 'agent',
+        writeKey,
         draft: { title: patch.title ?? existing.title, markdown, visuals: [...visuals.values()], status: patch.status },
     });
 }

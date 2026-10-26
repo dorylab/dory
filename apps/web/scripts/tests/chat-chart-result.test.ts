@@ -26,7 +26,9 @@ test('chart builder consumes single and multi-source query results and persists 
         assert.ok('data' in result);
         assert.equal(result.dataState, 'ready');
         assert.equal(result.embed, '![Chart](dory://chart/chart-1)');
-        assert.deepEqual(result.source, { toolCallId: 'sql-1', artifactId: 'payments' });
+        assert.equal(result.source?.toolCallId, 'sql-1');
+        assert.equal(result.source?.artifactId, 'payments');
+        assert.deepEqual(result.source?.columns, output === saved ? ['status', 'count'] : []);
         assert.ok(JSON.stringify(result.data).includes('7829'));
         assert.ok(JSON.stringify(result.data).includes('375'));
         assert.deepEqual(getChartResultFromPart({ type: 'tool-chartBuilder', output: JSON.parse(JSON.stringify(result)) })?.data, result.data);
@@ -63,7 +65,8 @@ test('a follow-up chart explicitly resolves its saved Artifact instead of consum
     const result = await tool.execute!({ ...config, artifactId: 'payments' }, options);
     assert.ok('data' in result);
     assert.equal(selected, 'payments');
-    assert.deepEqual(result.source, { artifactId: 'payments', toolCallId: undefined });
+    assert.equal(result.source?.artifactId, 'payments');
+    assert.deepEqual(result.source?.columns, []);
     assert.deepEqual(result.data, [{ status: 'verified', count: 42 }]);
     assert.equal(result.dataState, 'ready');
 });
@@ -95,4 +98,37 @@ test('history repair is read-only, requires matching explicit fields, and preser
 
 test('malformed stored chart fields cannot crash history rendering', () => {
     assert.doesNotThrow(() => getChartResultFromPart({ type: 'tool-chartBuilder', output: { type: 'chart', chartType: 'bar', yKeys: 'count', data: null } }, messages(saved)));
+});
+
+test('attachment queries provide chart evidence and multiple matching results require an explicit Artifact', async () => {
+    const attachment = {
+        role: 'tool',
+        content: [
+            {
+                type: 'tool-result',
+                toolName: 'queryAttachment',
+                toolCallId: 'attachment-query',
+                output: {
+                    type: 'json',
+                    value: { rows, columns: [{ name: 'status' }, { name: 'count' }], rowCount: 2, artifactId: 'attachment-artifact', previewTruncated: false },
+                },
+            },
+        ],
+    };
+    const history = [{ role: 'user', content: 'Chart uploaded customers' }, attachment];
+    const chart = buildQueryChart({ chartType: 'pie', categoryKey: 'status', valueKey: 'count' }, history);
+    assert.equal(chart.dataState, 'ready');
+    assert.equal(chart.source?.artifactId, 'attachment-artifact');
+    assert.equal(buildQueryChart(config, [...messages(saved), attachment]).dataState, 'missing');
+    for (const count of [-1, null, '', 'bad', 0]) {
+        const invalid = messages({ ...saved, result: [{ status: 'active', count }] });
+        assert.equal(buildQueryChart({ chartType: 'pie', categoryKey: 'status', valueKey: 'count' }, invalid).dataState, 'invalid-fields');
+    }
+});
+
+test('truncated query previews remain labeled and cannot become complete pie proportions', () => {
+    const history = messages({ ...saved, truncated: true, rowCount: 1000 });
+    assert.equal(buildQueryChart(config, history).source?.truncated, true);
+    assert.equal(buildQueryChart(config, history).source?.rowCount, 1000);
+    assert.equal(buildQueryChart({ chartType: 'pie', categoryKey: 'status', valueKey: 'count' }, history).dataState, 'incomplete');
 });

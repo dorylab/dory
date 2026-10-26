@@ -131,14 +131,14 @@ export const CHART_BUILDER_GUIDE = `
 About charts and the chartBuilder tool
 
 - When the user asks for charts, visualization, trends, dashboards, or charts, do:
-  1) Use sqlRunner to fetch query results (SELECT only), capped to at most 100 rows for non-aggregate chart source data. To chart a result from an earlier turn, pass its returned artifactId to chartBuilder; the server validates and reads that saved result. Never reuse earlier rows implicitly.
+  1) Use queryAttachment for attachment data, or sqlRunner for database query results (SELECT only), capped to at most 100 rows for non-aggregate chart source data. To chart a result from an earlier turn, pass its returned artifactId to chartBuilder; the server validates and reads that saved result. Never reuse earlier rows implicitly.
   2) After getting results, call chartBuilder to produce the chart config.
-  3) Only say a chart was created after chartBuilder returns a chart result. A progress_required response means the tool did not execute: publish progress for the output stage, then retry chartBuilder before describing the chart as complete. If chart creation fails, explain the failure.
+  3) Only say a chart was created after chartBuilder returns a chart result. The server manages stages. A blocked or failed tool did not complete the chart; follow its recovery action before claiming completion. If chart creation fails, explain the failure.
   4) Place the returned embed Markdown on its own line inside the final answer (or saved finalAnswer), next to the paragraph discussing that chart. Introduce the chart first, insert its embed, then explain the findings. Tool execution order does not determine the chart's position in the answer. Use each returned embed once; never invent chart IDs.
 
 - When generating chart config:
   - Choose an appropriate chartType (bar / line / area / pie).
-  - Do not provide a data array to chartBuilder. The tool reads data from the selected artifactId or the latest sqlRunner result in this turn. If no result is available, query first or select a returned Artifact ID; repeating the same chart parameters cannot supply missing data.
+  - Do not provide a data array to chartBuilder. The tool reads data from the selected artifactId or a unique matching successful queryAttachment or sqlRunner result in this turn. If no result is available, query first or select a returned Artifact ID; repeating the same chart parameters cannot supply missing data.
   - Specify xKey (time field or category), and yKeys array (each with key and optional label/color); if there is only one metric, use valueKey.
   - If the query returns many columns, select or reshape to what the chart needs, do not dump all columns into the chart.
   - After generating the chart, explain in natural language:

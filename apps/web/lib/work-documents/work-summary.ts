@@ -1,8 +1,10 @@
 import type { AgentWorkOutput, AgentWorkStatus, AgentWorkSummary } from '@dory/shared/types/agent-work';
 
 export function workStatus(status: string | null | undefined, metadata: Record<string, unknown> | null): AgentWorkStatus {
-    const turn = metadata?.chatTurn as { outcome?: string } | undefined;
+    const turn = metadata?.chatTurn as { outcome?: string; completion?: { status: string } } | undefined;
     if (status === 'active') return 'running';
+    if (turn?.completion?.status === 'partial') return 'partial';
+    if (turn?.completion?.status === 'completed') return 'completed';
     if (turn?.outcome === 'aborted') return 'stopped';
     return status === 'completed' ? 'completed' : status === 'error' ? 'failed' : 'idle';
 }

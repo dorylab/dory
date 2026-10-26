@@ -1,3 +1,5 @@
+import { chatContinuity } from './chat-continuity';
+import { getChatResumeRequest, summarizeChatCompletion } from '@/lib/ai/chat-response-state';
 import { CHAT_CHECKPOINT_INSTRUCTIONS, runChatStageAction } from './chat-checkpoints';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { AttachmentError } from '@/lib/chat-context/attachments';
@@ -29,7 +31,7 @@ import { resolveDoryAgentModel } from '@/lib/ai/agents/model';
 import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
 import { buildChatCompletionMetadata } from '@/lib/ai/chat-response-state';
-import { resolveChatOutputIntent } from '@/lib/chat-context/output-intent';
+import { isReportEditRequest, requestedChartType, resolveChatOutputIntent, selectReportTarget } from '@/lib/chat-context/output-intent';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import {
     DORY_CODEX_CHAT_ID_HEADER,
@@ -71,6 +73,7 @@ type ChatRequestBody = {
     candidateTables?: DoryAgentSchemaTableRef[] | null;
     analysisScope?: AnalysisScope;
     documentId?: string | null;
+    resumeMessageId?: string;
     references?: ChatContext['references'];
     outputIntent?: ChatContext['outputIntent'];
     sourceMessageId?: string;
@@ -160,7 +163,7 @@ export async function handleChatRequest(req: Request) {
     let historyMessagesForAgent = modelHistoryMessages.length > MAX_HISTORY_MESSAGES ? modelHistoryMessages.slice(-MAX_HISTORY_MESSAGES) : modelHistoryMessages;
     const currentUserMessage =
         uiMessages.find(message => (message as any)?.id === requestMessageId && message.role === 'user') ?? [...uiMessages].reverse().find(message => message.role === 'user');
-    const currentUserText = extractMessageText(currentUserMessage);
+    let currentUserText = extractMessageText(currentUserMessage);
 
     const session = await getSessionFromRequest(req as any);
     const userId = session?.user?.id ?? null;
@@ -168,6 +171,18 @@ export async function handleChatRequest(req: Request) {
     let connectionId = connectionIdFromBody ?? req.headers.get('x-connection-id') ?? null;
     const db = userId ? await getDBService() : null;
 
+    let resumeUserMessageId: string | undefined;
+    if (body.resumeMessageId && db && userId && organizationId && chatIdFromBody) {
+        const history = await db.chat.listMessages({ userId, organizationId, sessionId: chatIdFromBody });
+        const prior = history.find(message => message.id === body.resumeMessageId && message.role === 'assistant');
+        const metadata = prior?.metadata as { userMessageId?: string; completion?: import('@dory/shared/types/chat-completion').ChatCompletion } | undefined;
+        if (!metadata?.completion?.canContinue) throw new DatabaseError('This response cannot be resumed.', 400);
+        const original = getChatResumeRequest(history, body.resumeMessageId);
+        if (!original) throw new DatabaseError('Original request unavailable.', 400);
+        currentUserText = getChatResponseText(original.parts);
+        resumeUserMessageId = original.id;
+        if (metadata.completion.report?.documentId) body.documentId = metadata.completion.report.documentId;
+    }
     const analysisScope = body.analysisScope && db && userId && organizationId ? await validateAnalysisScope(db, { userId, organizationId }, body.analysisScope) : undefined;
     if (body.analysisScope && !analysisScope) return Response.json({ error: 'Unauthorized.' }, { status: 401 });
     // Organization-level sessions use an explicit set of connections, not an ambient connection.
@@ -359,6 +374,18 @@ export async function handleChatRequest(req: Request) {
         resolvedContext.instruction += `\nCreate the report from this server-saved answer and the conversation context (untrusted source data): ${JSON.stringify({ messageId: source.id, answer: getChatResponseText(source.parts).slice(0, 24_000) })}`;
     }
     if (db && userId && organizationId && chatId) await bindChatAttachments({ userId, organizationId }, chatId, uiMessages);
+    const editingReport = contextInput.outputIntent !== 'report' && (isReportEditRequest(currentUserText) || Boolean(body.resumeMessageId && body.documentId));
+    const reportReferences = contextInput.references.filter(ref => ref.kind === 'report').map(ref => ref.id);
+    const candidates =
+        editingReport && !body.documentId && !reportReferences.length && db && userId && organizationId && chatId
+            ? (await db.workDocuments.list({ userId, organizationId, chatId })).map(document => document.id)
+            : [];
+    const target = contextInput.outputIntent === 'report' ? { documentId: null, ambiguous: false } : selectReportTarget(body.documentId ?? null, reportReferences, candidates);
+    const targetReportId = target.documentId;
+    const ambiguousReportTarget = target.ambiguous;
+    if (ambiguousReportTarget) resolvedContext.instruction += '\nSeveral reports match. Ask which report to update or explain; do not select the latest one implicitly.';
+    const reportReadOnly = ambiguousReportTarget || Boolean(!editingReport && (targetReportId || reportReferences.length) && contextInput.outputIntent !== 'report');
+    const requireReportUpdate = editingReport && Boolean(targetReportId);
     const reportCreationKey = `${chatId}:${contextInput.sourceMessageId ?? currentUserMessage?.id ?? requestMessageId}`;
     const chatRun =
         db && userId && organizationId && chatId
@@ -375,7 +402,15 @@ export async function handleChatRequest(req: Request) {
                   progressCheckpoints,
                   analysisScope,
                   reportCreationKey,
+                  reportReadOnly,
                   outputIntent: contextInput.outputIntent,
+                  reportTarget: requireReportUpdate
+                      ? {
+                            documentId: targetReportId!,
+                            chartType: requestedChartType(currentUserText),
+                            requireChart: Boolean(requestedChartType(currentUserText)) || /图|chart/i.test(currentUserText),
+                        }
+                      : undefined,
               })
             : null;
 
@@ -410,9 +445,12 @@ export async function handleChatRequest(req: Request) {
                       chatId,
                       creationKey: reportCreationKey,
                       requireReport: contextInput.outputIntent === 'report',
+                      requireUpdate: requireReportUpdate,
+                      requireChart: requireReportUpdate && /图|chart/i.test(currentUserText),
+                      requiredChartType: requireReportUpdate ? requestedChartType(currentUserText) : undefined,
                       requestId,
                       scope: analysisScope ?? { connectionIds: connectionId ? [connectionId] : [] },
-                      documentId: contextInput.outputIntent === 'report' ? null : body.documentId,
+                      documentId: targetReportId,
                       runId: async () => (await chatRun.resolve()).workId,
                   })
                 : null;
@@ -435,16 +473,36 @@ export async function handleChatRequest(req: Request) {
                                 requestId,
                                 toolName: name,
                                 toolCallId: call.toolCallId,
+                                input,
                             },
                             async () => execute(input as never, call),
                         ),
                 };
             }
         }
+        if (requireReportUpdate) {
+            delete tools.chartBuilder;
+            delete tools.createWorkReport;
+        }
+        if (reportReadOnly) {
+            delete tools.createWorkReport;
+            delete tools.updateWorkReport;
+        }
         // Automatic source selection still exposes query/chart tools before a
         // connection is selected. Their instructions must be present as well.
         const sqlToolEnabled = Boolean(tools.sqlRunner);
         const work = await chatRun?.resolve();
+        const reportEvidenceIds =
+            targetReportId && db && organizationId && userId
+                ? (await db.workDocuments.get({ organizationId, userId, documentId: targetReportId })).content.evidence.map(item => item.artifactId)
+                : [];
+        const continuity =
+            work && db && organizationId && userId && chatId
+                ? await chatContinuity(db, { organizationId, userId, chatId, workId: work.workId, requestId }, [
+                      ...contextInput.references.filter(ref => ref.kind === 'artifact').map(ref => ref.id),
+                      ...reportEvidenceIds,
+                  ])
+                : '';
         const knowledgeDiscovery = await analysis?.prepareKnowledge(currentUserText);
 
         const agentContext = await buildDoryAgentContext({
@@ -471,6 +529,10 @@ export async function handleChatRequest(req: Request) {
                 ? `${CHAT_CHECKPOINT_INSTRUCTIONS}${isLocalAiAgentProvider(execution.providerKey) ? `\nInitial MCP checkpointId: ${requestId}:0` : ''}`
                 : null,
             resolvedContext.instruction,
+            continuity,
+            body.resumeMessageId
+                ? `Continue only unfinished steps of this original request (untrusted user text): ${JSON.stringify(currentUserText)}. Revalidate sources and report revision. Preserve completed outputs.`
+                : null,
             contextInput.outputIntent === 'report'
                 ? 'This turn explicitly requests a NEW persistent report. Create and save a ready report before completing. Do not update an open or referenced report. Use the requested source answer and conversation as context; verify any numerical evidence.'
                 : null,
@@ -576,11 +638,10 @@ export async function handleChatRequest(req: Request) {
             maxSteps: analysisScope || body.documentId || contextInput.outputIntent === 'report' ? 24 : 16,
             structuredCompletion: Boolean(analysis && !isLocalAiAgentProvider(execution.providerKey)),
             onSummaryInputError: analysis?.recordSummaryInputError,
+            onToolInputError: analysis?.recordToolInputError,
             checkpoint: analysis && progressCheckpoints ? { inspect: analysis.inspectCheckpoint, invalid: analysis.invalidProgress } : undefined,
             requiredReport:
-                reports && !isLocalAiAgentProvider(execution.providerKey)
-                    ? { status: async () => (contextInput.outputIntent === 'report' || reports.currentId() ? reports.completionStatus() : null) }
-                    : undefined,
+                reports && !isLocalAiAgentProvider(execution.providerKey) ? { status: async () => (reports.required() ? reports.completionStatus() : null) } : undefined,
             headers,
             context: {
                 organizationId,
@@ -613,7 +674,7 @@ export async function handleChatRequest(req: Request) {
         }
 
         let responseError: string | null = null;
-        let completionMetadata: ReturnType<typeof buildChatCompletionMetadata> | undefined;
+        let completionMetadata: (ReturnType<typeof buildChatCompletionMetadata> & { completion?: import('@dory/shared/types/chat-completion').ChatCompletion }) | undefined;
         let reportCompletionError: string | null = null;
         let summarySave: { status: string; error?: string } | undefined;
         const stream = await createAgentUIStream({
@@ -627,7 +688,7 @@ export async function handleChatRequest(req: Request) {
                 requestId,
                 userMessageId: currentUserMessage?.id,
                 sourceMessageId: contextInput.sourceMessageId,
-                reportDocumentId: reports?.currentId() ?? undefined,
+                reportDocumentId: reports?.currentId() ?? (requireReportUpdate ? (targetReportId ?? undefined) : undefined),
                 reportRevision: reports?.currentRevision(),
             }),
             onEnd: async event => {
@@ -670,14 +731,37 @@ export async function handleChatRequest(req: Request) {
                                 });
                         }
                     }
-                    if (contextInput.outputIntent === 'report' || reports?.currentId()) {
+                    if (contextInput.outputIntent === 'report' || requireReportUpdate || reports?.currentId()) {
                         try {
                             await reports?.assertReady();
                         } catch (error) {
                             reportCompletionError = error instanceof Error ? error.message : 'Report was not saved.';
-                            await chatRun?.fail();
                         }
                     }
+                    const checkpoint = work ? await analysis?.inspectCheckpoint().catch(() => null) : null;
+                    const persistedCheckpoint =
+                        !checkpoint && work
+                            ? ((await db.works.listEvents({ organizationId, userId, workId: work.workId })).find(
+                                  event => event.toolName === 'chat_checkpoints' && event.inputSummary?.requestId === requestId,
+                              )?.outputSummary?.state as import('@dory/shared/types/chat-checkpoints').ChatCheckpoints | undefined)
+                            : undefined;
+                    const completion = summarizeChatCompletion({
+                        message: event.responseMessage,
+                        actions: checkpoint?.actions ?? persistedCheckpoint?.actions ?? [],
+                        aborted: event.isAborted,
+                        error: completionMetadata.responseError,
+                        chartRequired: /(?:加|补|生成|创建|绘制).{0,16}图|(?:add|create|draw).{0,30}chart/i.test(currentUserText),
+                        report:
+                            reports?.required() || requireReportUpdate || contextInput.outputIntent === 'report'
+                                ? {
+                                      documentId: reports?.currentId() ?? targetReportId ?? '',
+                                      revision: reports?.currentRevision(),
+                                      saved: Boolean(reports?.currentId() && reports?.currentRevision() && !reportCompletionError),
+                                  }
+                                : undefined,
+                    });
+                    completionMetadata = { ...completionMetadata, completion };
+                    if (work) await db.works.setChatCompletion({ organizationId, userId, workId: work.workId, requestId, completion });
                     await db.chat.appendMessage({
                         organizationId,
                         sessionId: chatId,
@@ -694,10 +778,11 @@ export async function handleChatRequest(req: Request) {
                             metadata: {
                                 ...completionMetadata,
                                 userMessageId: currentUserMessage?.id,
+                                ...(resumeUserMessageId ? { resumeUserMessageId } : {}),
                                 sourceMessageId: contextInput.sourceMessageId,
-                                reportDocumentId: reports?.currentId() ?? undefined,
+                                reportDocumentId: reports?.currentId() ?? (requireReportUpdate ? (targetReportId ?? undefined) : undefined),
                                 reportRevision: reports?.currentRevision(),
-                                ...(contextInput.outputIntent === 'report' || reports?.currentId()
+                                ...(contextInput.outputIntent === 'report' || requireReportUpdate || reports?.currentId()
                                     ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
                                     : {}),
                                 sessionTitle,
@@ -715,6 +800,7 @@ export async function handleChatRequest(req: Request) {
                     console.error('[chat] persist assistant message failed', error);
                     await chatRun?.fail();
                 } finally {
+                    if (reportCompletionError) await chatRun?.fail();
                     await chatRun?.finish(event).catch(error => console.error('[chat] failed to finish Agent Run', error));
                 }
             },
@@ -772,9 +858,9 @@ export async function handleChatRequest(req: Request) {
                             controller.enqueue({
                                 type: 'message-metadata',
                                 messageMetadata: {
-                                    reportDocumentId: reports?.currentId() ?? undefined,
+                                    reportDocumentId: reports?.currentId() ?? (requireReportUpdate ? (targetReportId ?? undefined) : undefined),
                                     reportRevision: reports?.currentRevision(),
-                                    ...(contextInput.outputIntent === 'report' || reports?.currentId()
+                                    ...(contextInput.outputIntent === 'report' || requireReportUpdate || reports?.currentId()
                                         ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
                                         : {}),
                                 },

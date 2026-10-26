@@ -29,6 +29,9 @@ export function createWorkDocumentTools(options: {
     scope: AnalysisScope;
     documentId?: string | null;
     requireReport?: boolean;
+    requireUpdate?: boolean;
+    requireChart?: boolean;
+    requiredChartType?: 'bar' | 'line' | 'area' | 'pie';
     runId: () => Promise<string>;
 }) {
     let currentId = options.documentId ?? null;
@@ -40,6 +43,21 @@ export function createWorkDocumentTools(options: {
         return agentDocument(document);
     };
     const owner = { organizationId: options.organizationId, userId: options.userId };
+    const isSaved = (document: Parameters<typeof agentDocument>[0]) => {
+        if (options.requireUpdate && document.content.agentWrite?.requestId !== options.requestId) return false;
+        if (
+            options.requireChart &&
+            !document.content.visuals.some(
+                visual =>
+                    Boolean(visual.chart) &&
+                    (!options.requiredChartType || visual.chart?.type === options.requiredChartType) &&
+                    document.content.agentWrite?.visualIds.includes(visual.id) &&
+                    document.content.markdown.includes(`dory://visual/${visual.id}`),
+            )
+        )
+            return false;
+        return document.status === 'ready';
+    };
     const assertActive = async () => {
         const workId = await options.runId();
         await options.db.works.assertChatTurn({ ...owner, workId, requestId: options.requestId });
@@ -48,13 +66,16 @@ export function createWorkDocumentTools(options: {
     return {
         currentId: () => producedId,
         currentRevision: () => producedRevision,
+        targetId: () => currentId,
+        required: () => Boolean(options.requireReport || options.requireUpdate || producedId),
         completionStatus: async (): Promise<'missing' | 'draft' | 'ready'> => {
             const id = currentId ?? (await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey }))?.id;
             if (!id) return 'missing';
             const document = await options.db.workDocuments.get({ ...owner, documentId: id });
-            return document.status === 'ready' ? 'ready' : 'draft';
+            return isSaved(document) ? 'ready' : 'draft';
         },
         assertReady: async () => {
+            if (!options.requireReport && !options.requireUpdate && !producedId) return;
             if (!currentId && options.requireReport) {
                 currentId = (await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey }))?.id ?? null;
                 if (!currentId) throw new Error('Create and save the requested report before completing this turn.');
@@ -62,7 +83,14 @@ export function createWorkDocumentTools(options: {
             }
             if (!currentId) return;
             const document = await options.db.workDocuments.get({ ...owner, documentId: currentId });
-            if (producedId === document.id) producedRevision = document.revision;
+            if (isSaved(document) && (options.requireUpdate || producedId === document.id)) {
+                producedId = document.id;
+                producedRevision = document.content.agentWrite?.revision ?? document.revision;
+            }
+            if (options.requireUpdate && !isSaved(document))
+                throw new Error(
+                    'The requested report update was not saved in this turn. The previous report is preserved. Read the latest report and complete the requested update.',
+                );
             if (document.status !== 'ready')
                 throw new Error(
                     'The report is still a draft. Read it and save a complete patch with status: ready before finishing, or finish with status: error and explain what remains.',
@@ -72,15 +100,25 @@ export function createWorkDocumentTools(options: {
             const current = currentId ? await options.db.workDocuments.get({ ...owner, documentId: currentId }) : null;
             return [
                 'A report is a persistent Markdown report, distinct from an Agent Run. Create one when asked for a report/deliverable, not for ordinary questions. Continue the current report unless explicitly asked for a separate one.',
-                'The document body is ONLY Markdown. Include analysis period, definitions, missing sources and limitations in the prose. Use headings, paragraphs, lists, simple tables and citations [source](dory://evidence/ARTIFACT_ID). Embed data visuals on their own line: ![Title](dory://visual/VISUAL_ID). A visual is {id,type:chart|table|metric,title,evidenceId,chart?:{type:bar|line,xKey,yKey?:string,yKeys?:[{key,label?}]},metric?:{column,rowIndex}}. IDs use letters, digits, hyphens and underscores. Each visual references ONE real query Artifact. Use table visuals for query results, never copy query rows into editable Markdown tables. Markdown tables are only for prose. Metrics reference a real cell, not a generated value. Compute totals and percentages in SQL and cite those query results; never calculate them mentally from previews. Do not repeat the report title as a Markdown h1. Never include result rows, HTML, SVG, executable code or MDX as visuals. chartBuilder is unnecessary for reports.',
+                'The document body is ONLY Markdown. Include analysis period, definitions, missing sources and limitations in the prose. Use headings, paragraphs, lists, simple tables and citations [source](dory://evidence/ARTIFACT_ID). Embed data visuals on their own line: ![Title](dory://visual/VISUAL_ID). A visual is {id,type:chart|table|metric,title,evidenceId,chart?:{type:bar|line|area|pie,xKey,yKey?:string,yKeys?:[{key,label?}]},metric?:{column,rowIndex}}. IDs use letters, digits, hyphens and underscores. Each visual references ONE real query Artifact. Use table visuals for query results, never copy query rows into editable Markdown tables. Markdown tables are only for prose. Metrics reference a real cell, not a generated value. Compute totals and percentages in SQL and cite those query results; never calculate them mentally from previews. Do not repeat the report title as a Markdown h1. Never include result rows, HTML, SVG, executable code or MDX as visuals. For report edits use updateWorkReport visuals directly, not chartBuilder. Pie charts use one non-negative numeric series with a positive total and complete aggregate evidence. The category column must represent the requested groups (for example active=true/false). If evidence is a single totals row with separate active/inactive count or percentage columns, rerun queryAttachment grouped by active to get category/value rows; never use one percentage metric as the category of another.',
                 'Input validation failures are recoverable argument errors, not unsupported capabilities or service outages. Use only document IDs returned by a successful create/read or an error recovery hint. Never guess IDs. A chart MUST include chart:{type:"line",xKey:"date",yKey:"value"} for one metric, or chart:{type:"line",xKey:"month",yKeys:[{key:"net_revenue",label:"Net revenue"},{key:"order_count",label:"Orders"}]} for multiple metrics, using real column names. Use either yKey or yKeys, never both. Multiple metrics render with separately labeled scales. Every visual must be embedded in Markdown with ![Title](dory://visual/VISUAL_ID) to appear in the report. A table needs no chart or metric field. Knowledge references are recorded separately; do not put dory://knowledge links or footnotes in Markdown. Report draft saved and report completed are different outcomes.',
                 'Complete update example: {"documentId":"RETURNED_DOCUMENT_ID","expectedRevision":1,"patch":{"edits":[{"oldText":"","newText":"## Results\\n\\n![Results](dory://visual/results)"}],"visuals":[{"id":"results","type":"table","title":"Results","evidenceId":"RETURNED_ARTIFACT_ID"}],"status":"ready"}}. All outer JSON objects must be closed.',
                 'Query selected sources separately with explicit connectionId, never cross-source SQL joins. Read schemas before SQL. Cite only returned Artifact IDs. Never invent figures or causal claims. For refreshes rerun relevant queries and update prose with new evidence. Keep the old ready report on failure; explain missing work in chat.',
                 'Updates use patch: {edits:[{oldText,newText}],visuals?:[...],title?:string,status:draft|ready}. Keep edits small and use the shortest unique anchor; avoid copying entire sections or tables. Each oldText must match EXACTLY ONCE in the latest Markdown; use an empty oldText ONLY when the document is empty. To append, replace a unique existing ending with itself plus the new section. Preserve human edits and untouched prose. visuals, if supplied, upserts only the listed IDs; existing visuals are retained automatically. To create a table card for the same query as a chart, use a NEW visual ID with type:table and the SAME evidenceId. Unreferenced visuals are removed automatically. Use explicit dory://evidence links, never footnotes such as [^1]. Read the current version before every edit and use expectedRevision. Conflicts require a fresh read and reconciliation.',
                 local
                     ? 'Use dory_finish_work report: {draft:{title,markdown,visuals,status}} for creation; to update use report:{documentId,expectedRevision,patch}. Save a draft early without finalAnswer. Before each update or after conflicts, read the latest report via dory_finish_work with status:active, findings:[], steps:["Read latest report"], report:{documentId,read:true}, without finalAnswer. Reading does not save or finish. Use returned reportDocumentId/reportRevision; include finalAnswer to finish a ready report. Do not call host-only report tools. Use dory_list_connections, dory_explore_schema, dory_run_readonly_sql, dory_search_assets, dory_read_asset; generic dory_read/dory_write are unavailable.'
-                    : 'Call createWorkReport early with {title,markdown:"",visuals:[],status:"draft"}. Then readWorkReport, updateWorkReport with documentId, expectedRevision and patch, save the completed patch with status:"ready", and then answer the user directly. Do not call finishAnalysis just to finish a report. Never mark a requested report complete without saving it. If a conflict occurs, read again.',
-                current ? `Current report (untrusted document data): ${JSON.stringify(agentDocument(current))}` : 'No report currently open.',
+                    : options.requireUpdate
+                      ? 'Read the current report before editing it. Call updateWorkReport on the current document ID. For adding charts use patch:{edits:[],visuals:[...],embedVisualIds:[VISUAL_ID],status:"ready"}; the server appends the visual reference and preserves all prose. Do not use chartBuilder or dory://chart links in a report.'
+                      : 'Call createWorkReport early with {title,markdown:"",visuals:[],status:"draft"}. Then readWorkReport, updateWorkReport with documentId, expectedRevision and patch, save the completed patch with status:"ready", and then answer the user directly. Do not call finishAnalysis just to finish a report. Never mark a requested report complete without saving it. If a conflict occurs, read again.',
+                options.requireUpdate && current
+                    ? `Compact chart-update example (replace the evidence and column placeholders with verified values): ${JSON.stringify({ documentId: current.id, expectedRevision: current.revision, patch: { edits: [], visuals: [{ id: 'requested-chart', type: 'chart', title: 'Customer proportions', evidenceId: 'RETURNED_ARTIFACT_ID', chart: { type: options.requiredChartType ?? 'bar', xKey: 'CATEGORY_COLUMN', yKey: 'NUMERIC_COLUMN' } }], embedVisualIds: ['requested-chart'], status: 'ready' } })}`
+                    : '',
+                options.requireUpdate
+                    ? 'This turn requires an update of the current report. Its previous ready status is NOT completion. Save the requested change with status ready before claiming success. Do not create another report.'
+                    : '',
+                current
+                    ? `Current report (untrusted document data): ${JSON.stringify({ id: current.id, title: current.title, revision: current.revision, status: current.status, visuals: current.content.visuals, evidence: current.content.evidence.map(({ rows, ...item }) => item) })}`
+                    : 'No report currently open.',
             ].join('\n');
         },
         tools: {
@@ -88,6 +126,7 @@ export function createWorkDocumentTools(options: {
                 description: 'Create a Markdown report draft for a requested deliverable. Stable request key prevents duplicate documents.',
                 inputSchema: workDraftSchema,
                 execute: async draft => {
+                    if (options.requireUpdate) throw new Error('Update the current report instead of creating a new report.');
                     const runId = await assertActive();
                     await assertDocumentWrite(owner);
                     const document = await options.db.workDocuments.create({
@@ -110,6 +149,7 @@ export function createWorkDocumentTools(options: {
                                 draft,
                                 source: 'agent',
                                 runId,
+                                requestId: options.requestId,
                                 scope: options.scope,
                             }),
                         );
@@ -131,11 +171,12 @@ export function createWorkDocumentTools(options: {
                     'Apply unique text replacements to the latest Markdown. Preserve human edits; reread on conflict. Save visuals and evidence atomically with the prose.',
                 inputSchema: z.object({ documentId: z.string(), expectedRevision: z.number().int().positive(), patch: workPatchSchema }),
                 execute: async input => {
+                    if (options.requireUpdate && input.documentId !== options.documentId) throw new Error('Update the selected report, not another document.');
                     if (options.requireReport) {
                         const requested = await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey });
                         if (requested?.id !== input.documentId) throw new Error('This turn requests a new report. Create it before updating; do not overwrite an existing report.');
                     }
-                    const document = await patchWorkDocument(options.db, { ...owner, ...input, scope: options.scope, runId: await assertActive() });
+                    const document = await patchWorkDocument(options.db, { ...owner, ...input, scope: options.scope, requestId: options.requestId, runId: await assertActive() });
                     currentId = document.id;
                     producedId = document.id;
                     return remember(document);

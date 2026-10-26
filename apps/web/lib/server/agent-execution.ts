@@ -1,5 +1,6 @@
+import { chatToolFailure } from '@dory/shared/types/chat-tool-error';
 import { attachmentQuerySchema, queryChatAttachments } from './chat-attachment-data';
-import { chatCheckpoints, isCheckpointControl, publishProgressSchema } from './chat-checkpoints';
+import { chatActionFingerprint, chatCheckpoints, isCheckpointControl, publishProgressSchema } from './chat-checkpoints';
 import { readChatEvidence, revalidateChatFindingEvidence } from '@/lib/server/chat-evidence';
 import { attachmentReadSchema, readChatAttachment } from '@/lib/server/chat-attachments';
 import type { ActionContext, ActionDefinition, ActionId, ActionProjection } from '@dory/actions';
@@ -1771,7 +1772,16 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     let reportRevision: number | undefined;
     if (turn && input.finalAnswer && input.status === 'completed') {
         const run = await ctx.services.db.works.getById({ organizationId: ctx.organizationId, userId: ctx.userId, workId: turn.workId });
-        const chatTurn = run?.metadata?.chatTurn as { outputIntent?: string; reportCreationKey?: string } | undefined;
+        const chatTurn = run?.metadata?.chatTurn as
+            | { outputIntent?: string; reportCreationKey?: string; reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean } }
+            | undefined;
+        if (chatTurn?.reportTarget && !input.report) {
+            const report = await ctx.services.db.workDocuments.get({ organizationId: ctx.organizationId, userId: ctx.userId, documentId: chatTurn.reportTarget.documentId });
+            if (report.status !== 'ready' || report.content.agentWrite?.requestId !== turn.requestId)
+                throw new McpFacadeError('REPORT_INCOMPLETE', 'The requested report update was not saved in this turn. The previous report is preserved.');
+            reportDocumentId = report.id;
+            reportRevision = report.revision;
+        }
         if (chatTurn?.outputIntent === 'report' && !input.report) {
             const report = chatTurn.reportCreationKey
                 ? await ctx.services.db.workDocuments.findByCreationKey({ organizationId: ctx.organizationId, userId: ctx.userId, creationKey: chatTurn.reportCreationKey })
@@ -1788,7 +1798,13 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         const run = await ctx.services.db.works.getById({ ...owner, workId: turn.workId });
         if (run?.metadata?.source !== 'internal_chat') throw new McpFacadeError('REPORT_REQUIRES_CHAT', 'Report requires an internal chat.', { status: 403 });
         const scope = (run.metadata.analysisScope as AnalysisScope | undefined) ?? { connectionIds: run.connectionId ? [run.connectionId] : [] };
-        const chatTurn = run.metadata.chatTurn as { outputIntent?: string; reportCreationKey?: string } | undefined;
+        const chatTurn = run.metadata.chatTurn as
+            | { outputIntent?: string; reportCreationKey?: string; reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean } }
+            | undefined;
+        if ((run.metadata.chatTurn as { reportReadOnly?: boolean } | undefined)?.reportReadOnly && !input.report.read)
+            throw new McpFacadeError('REPORT_READ_ONLY', 'This request only explains a report or needs the user to select which report to edit. Do not modify reports.');
+        if (chatTurn?.reportTarget && !input.report.read && input.report.documentId !== chatTurn.reportTarget.documentId)
+            throw new McpFacadeError('REPORT_TARGET_MISMATCH', 'Update the selected report; do not create or edit another report.');
         if (chatTurn?.outputIntent === 'report' && input.report.documentId && !input.report.read) {
             const requested = chatTurn.reportCreationKey ? await ctx.services.db.workDocuments.findByCreationKey({ ...owner, creationKey: chatTurn.reportCreationKey }) : null;
             if (requested?.id !== input.report.documentId)
@@ -1837,6 +1853,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                         expectedRevision: input.report.expectedRevision!,
                         patch: input.report.patch!,
                         runId: run.workId,
+                        requestId: turn.requestId,
                         scope,
                     })
                   : await saveWorkDraft(ctx.services.db, {
@@ -1846,6 +1863,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                         draft: input.report.draft!,
                         source: 'agent',
                         runId: run.workId,
+                        requestId: turn.requestId,
                         scope,
                     });
         reportDocumentId = saved.id;
@@ -2113,14 +2131,19 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                 executeWithOptionalWork(ctx, 'dory_artifacts', rawInput, async (input, work) => {
                     const artifactId = requireString(input.artifactId, 'artifactId');
                     const artifact = await executeInternal<UnknownRecord>(ctx, 'artifact.get', { artifactId });
-                    if (Array.isArray(ctx.actor.metadata?.allowedConnectionIds) && !ctx.actor.metadata.allowedConnectionIds.includes(artifact.connectionId))
-                        throw new McpFacadeError('SCOPE_MISMATCH', 'Evidence is outside the selected analysis scope.', { status: 403 });
                     const sourceResultSetId = getString(artifact.sourceResultSetId);
                     const previewRows = Math.min(getNumber(input.previewRows) ?? 100, 200);
                     const bound = ctx.services.agentTurn;
                     const checked = bound
                         ? await readChatEvidence(ctx.services.db, { organizationId: ctx.organizationId, userId: ctx.userId, ...bound }, artifactId, previewRows)
                         : null;
+                    // Attachment scope is the validated owner/conversation above, not a database connection.
+                    if (
+                        !checked?.provenance.attachmentSource &&
+                        Array.isArray(ctx.actor.metadata?.allowedConnectionIds) &&
+                        !ctx.actor.metadata.allowedConnectionIds.includes(artifact.connectionId)
+                    )
+                        throw new McpFacadeError('SCOPE_MISMATCH', 'Evidence is outside the selected analysis scope.', { status: 403 });
                     const result =
                         checked?.result ??
                         (sourceResultSetId
@@ -2281,7 +2304,7 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
         name: 'dory_publish_progress',
         title: 'Explain analysis progress',
         description:
-            'Publish a concise public explanation before starting tools, changing stages, or continuing after 3 actions. Use the current checkpointId; explain actual results, limitations and next steps. Not a business action. Final answers need no checkpoint.',
+            'Optionally publish a concise public explanation of actual findings, limitations and next steps. The server manages tool stages and budgets; progress is never required to unlock tools. Stale or invalid commentary does not stop business work.',
         inputSchema: publishProgressSchema.merge(workResolutionInputSchema),
         outputSchema: unknownObjectOutputSchema,
         annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
@@ -2298,6 +2321,8 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
         ...definition,
         execute: async (ctx, rawInput) => {
             const input = toRecord(rawInput);
+            // Preserve legacy offset/limit text reads before schema defaults are applied.
+            if (definition.name === 'dory_read_attachment' && input.mode === undefined) input.mode = 'offset' in input || 'limit' in input ? 'text' : 'auto';
             const workId = ctx.services.agentTurn?.workId ?? getString(input.workId);
             const requestId = ctx.services.agentTurn?.requestId ?? getString(input.requestId);
             if (workId) {
@@ -2363,11 +2388,14 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                 if ((definition.name === 'dory_read' || definition.name === 'dory_write') && input.operation !== 'run') {
                     return definition.execute(ctx, { ...input, workId: bound.workId, requestId: bound.requestId });
                 }
-                const eventId = newEntityId();
+                const eventId = ctx.services.agentToolCallId
+                    ? `action_${chatActionFingerprint([bound.workId, bound.requestId, ctx.services.agentToolCallId]).slice(0, 32)}`
+                    : newEntityId();
                 const checkpoint = chatCheckpoints(ctx.services.db, { organizationId: ctx.organizationId, userId: ctx.userId, ...bound });
                 const admission =
-                    ctx.services.agentActivitySource === 'automatic' ? null : await checkpoint.reserve(eventId, definition.name, getString(input.actionId) ?? undefined);
+                    ctx.services.agentActivitySource === 'automatic' ? null : await checkpoint.reserve(eventId, definition.name, getString(input.actionId) ?? undefined, input);
                 if (isCheckpointControl(admission)) return admission;
+                if (admission?.duplicate) return admission.output;
                 const report = toRecord(input.report);
                 const summaryAttempt =
                     definition.name === 'dory_finish_work' &&
@@ -2402,12 +2430,14 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                 ctx = { ...ctx, services: { ...ctx.services, agentEventId: eventId } };
                 try {
                     await ctx.services.db.works.recordEvent({ ...event, status: 'running' });
-                    const output = await definition.execute(ctx, { ...input, workId: bound.workId, requestId: bound.requestId });
+                    const boundInput = { ...input, workId: bound.workId, requestId: bound.requestId };
+                    const validated = definition.name === 'dory_finish_work' ? boundInput : definition.inputSchema.parse(boundInput);
+                    const output = await definition.execute(ctx, validated);
                     if (admission) await checkpoint.settle(eventId, output, toRecord(output).ok === false);
                     if (summaryAttempt) await ctx.services.db.works.endChatSummarySave({ ...summaryOwner, output: { ...toRecord(output), activityEventId: eventId } });
                     return { ...toRecord(output), activityEventId: eventId };
                 } catch (error) {
-                    if (admission) await checkpoint.settle(eventId, { error: error instanceof Error ? error.message : String(error) }, true);
+                    if (admission) await checkpoint.settle(eventId, error, true, definition.name);
                     if (summaryAttempt)
                         await ctx.services.db.works.endChatSummarySave({ ...summaryOwner, error: error instanceof Error ? error.message : 'Conclusion save failed.' });
                     // Also close the event for validation failures before a tool's own recorder.
@@ -2426,11 +2456,11 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                     const failure = toMcpStructuredError(error);
                     throw new McpFacadeError(failure.code, failure.message, {
                         status: error && typeof error === 'object' && 'status' in error && typeof error.status === 'number' ? error.status : 400,
-                        details: { ...toRecord(failure.details), activityEventId: eventId },
+                        details: { ...toRecord(failure.details), recovery: chatToolFailure(error, definition.name), activityEventId: eventId },
                     });
                 }
             }
-            return definition.execute(ctx, rawInput);
+            return definition.execute(ctx, ['dory_finish_work', 'dory_publish_progress'].includes(definition.name) ? rawInput : definition.inputSchema.parse(input));
         },
     }));
 }
