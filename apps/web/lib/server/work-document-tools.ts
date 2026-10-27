@@ -37,9 +37,11 @@ export function createWorkDocumentTools(options: {
     let currentId = options.documentId ?? null;
     let producedId: string | null = null;
     let producedRevision: number | undefined;
+    let producedVersion: number | undefined;
     const remember = (document: Parameters<typeof agentDocument>[0]) => {
         producedId = document.id;
         producedRevision = document.revision;
+        producedVersion = document.version;
         return agentDocument(document);
     };
     const owner = { organizationId: options.organizationId, userId: options.userId };
@@ -66,6 +68,7 @@ export function createWorkDocumentTools(options: {
     return {
         currentId: () => producedId,
         currentRevision: () => producedRevision,
+        currentVersion: () => producedVersion,
         targetId: () => currentId,
         required: () => Boolean(options.requireReport || options.requireUpdate || producedId),
         completionStatus: async (): Promise<'missing' | 'draft' | 'ready'> => {
@@ -86,6 +89,10 @@ export function createWorkDocumentTools(options: {
             if (isSaved(document) && (options.requireUpdate || producedId === document.id)) {
                 producedId = document.id;
                 producedRevision = document.content.agentWrite?.revision ?? document.revision;
+                producedVersion =
+                    producedRevision === document.revision
+                        ? document.version
+                        : (await options.db.workDocuments.getVersion({ ...owner, documentId: document.id, revision: producedRevision })).version;
             }
             if (options.requireUpdate && !isSaved(document))
                 throw new Error(

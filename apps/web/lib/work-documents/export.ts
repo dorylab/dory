@@ -65,7 +65,9 @@ export function markdownExportFiles(document: WorkDocumentView): Record<string, 
     const sources = document.content.evidence
         .map((e, index) => `${index + 1}. ${cell(e.connectionName ?? e.connectionId)} — ${cell(e.title)} — ${e.capturedAt}${e.truncated ? ' (Preview / 数据预览)' : ''}`)
         .join('\n');
-    files['report.md'] = strToU8(`# ${cell(document.title)}\n\nv${document.revision} · ${document.updatedAt}\n\n${markdown}\n\n## Sources / 来源\n\n${sources}\n`);
+    files['report.md'] = strToU8(
+        `# ${cell(document.title)}\n\nv${document.version ?? document.revision} · ${document.updatedAt}\n\n${markdown}\n\n## Sources / 来源\n\n${sources}\n`,
+    );
     return files;
 }
 export function exportMarkdownZip(document: WorkDocumentView): Uint8Array {

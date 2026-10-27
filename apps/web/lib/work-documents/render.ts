@@ -130,5 +130,5 @@ export function renderWorkHtml(document: WorkDocumentView): string {
         .join('');
     // Export references resolve within the document; SQL is intentionally absent.
     const body = renderWorkMarkdown(document.content).replace(/href="dory:\/\/evidence\/([^"<>]+)"/g, 'href="#evidence-$1"');
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>${workPrintStyles}</style></head><body><header><h1>${escapeHtml(document.title)}</h1><p>v${document.revision} · ${escapeHtml(document.updatedAt)}${document.status === 'draft' ? ' · Incomplete / 未完成' : ''}</p></header>${body}<footer><h2>Sources / 来源</h2><ul>${sources}</ul></footer></body></html>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>${workPrintStyles}</style></head><body><header><h1>${escapeHtml(document.title)}</h1><p>v${document.version ?? document.revision} · ${escapeHtml(document.updatedAt)}${document.status === 'draft' ? ' · Incomplete / 未完成' : ''}</p></header>${body}<footer><h2>Sources / 来源</h2><ul>${sources}</ul></footer></body></html>`;
 }

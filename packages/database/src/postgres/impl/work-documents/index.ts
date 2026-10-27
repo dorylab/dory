@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -16,10 +16,48 @@ export class PostgresWorkDocumentsRepository {
     private owned(input: Target) {
         return and(eq(workDocuments.id, input.documentId), eq(workDocuments.organizationId, input.organizationId), eq(workDocuments.userId, input.userId));
     }
-    async get(input: Target) {
+    private async numberedHistory(documentIds: string[], db: Pick<PostgresDBClient, 'select'> = this.db) {
+        if (!documentIds.length) return [];
+        const snapshots = await db
+            .select({
+                documentId: workDocumentVersions.documentId,
+                revision: workDocumentVersions.revision,
+                title: workDocumentVersions.title,
+                createdAt: workDocumentVersions.createdAt,
+                source: workDocumentVersions.source,
+                requestId: sql<string | null>`${workDocumentVersions.content}->'agentWrite'->>'requestId'`,
+                emptyDraft: sql<boolean>`${workDocumentVersions.status} = 'draft' and coalesce(${workDocumentVersions.content}->>'markdown', '') = '' and coalesce(${workDocumentVersions.content}->'visuals', '[]'::jsonb) = '[]'::jsonb`,
+            })
+            .from(workDocumentVersions)
+            .where(inArray(workDocumentVersions.documentId, documentIds))
+            .orderBy(asc(workDocumentVersions.documentId), asc(workDocumentVersions.revision));
+        let previous: (typeof snapshots)[number] | undefined;
+        let version = 0;
+        return snapshots.map(snapshot => {
+            if (previous?.documentId !== snapshot.documentId) {
+                previous = undefined;
+                version = 0;
+            }
+            // The initial empty draft and incremental writes in one agent turn
+            // are one public version. Revisions still identify immutable saves.
+            const initialDraft = snapshot.revision === 1 && snapshot.emptyDraft;
+            const sameTurn = snapshot.source === 'agent' && snapshot.requestId && previous?.source === 'agent' && previous.requestId === snapshot.requestId;
+            if (!initialDraft && !sameTurn) version++;
+            previous = snapshot;
+            return { ...snapshot, version: Math.max(1, version) };
+        });
+    }
+    private async withVersion<T extends { id: string; revision: number }>(row: T, db: Pick<PostgresDBClient, 'select'> = this.db) {
+        const history = await this.numberedHistory([row.id], db);
+        return { ...row, version: history.find(snapshot => snapshot.revision === row.revision)?.version ?? 1 };
+    }
+    private async getRow(input: Target) {
         const [row] = await this.db.select().from(workDocuments).where(this.owned(input));
         if (!row) throw new DatabaseError('Report not found.', 404);
         return row;
+    }
+    async get(input: Target) {
+        return this.withVersion(await this.getRow(input));
     }
     async list(input: Owner & { query?: string; connectionId?: string; chatId?: string; archived?: boolean; archiveState?: 'active' | 'archived' | 'all' }) {
         const conditions = [eq(workDocuments.organizationId, input.organizationId), eq(workDocuments.userId, input.userId)];
@@ -29,7 +67,7 @@ export class PostgresWorkDocumentsRepository {
         if (input.query) conditions.push(ilike(workDocuments.title, `%${input.query.replace(/[\\%_]/g, '\\$&')}%`));
         if (input.chatId) conditions.push(eq(workDocuments.chatId, input.chatId));
         if (input.connectionId) conditions.push(sql`${workDocuments.scope}->'connectionIds' @> ${JSON.stringify([input.connectionId])}::jsonb`);
-        return this.db
+        const rows = await this.db
             .select({
                 id: workDocuments.id,
                 sourceMessageId: sql<
@@ -62,6 +100,9 @@ export class PostgresWorkDocumentsRepository {
             .where(and(...conditions))
             .orderBy(desc(workDocuments.updatedAt))
             .limit(100);
+        const history = await this.numberedHistory(rows.map(row => row.id));
+        const versions = new Map(history.map(snapshot => [`${snapshot.documentId}:${snapshot.revision}`, snapshot.version]));
+        return rows.map(row => ({ ...row, version: versions.get(`${row.id}:${row.revision}`) ?? 1 }));
     }
     async findByCreationKey(input: Owner & { creationKey: string }) {
         const [row] = await this.db
@@ -75,7 +116,7 @@ export class PostgresWorkDocumentsRepository {
                     isNull(workDocuments.archivedAt),
                 ),
             );
-        return row ?? null;
+        return row ? this.withVersion(row) : null;
     }
     async create(input: Owner & { creationKey: string; chatId?: string | null; title: string; scope: AnalysisScope; content: WorkDocumentContent }) {
         return this.db.transaction(async tx => {
@@ -89,10 +130,10 @@ export class PostgresWorkDocumentsRepository {
                     .select()
                     .from(workDocuments)
                     .where(and(eq(workDocuments.organizationId, input.organizationId), eq(workDocuments.userId, input.userId), eq(workDocuments.creationKey, input.creationKey)));
-                return existing!;
+                return this.withVersion(existing!, tx);
             }
             await tx.insert(workDocumentVersions).values(this.version(created, 'agent'));
-            return created;
+            return this.withVersion(created, tx);
         });
     }
     private version(row: Record, source: 'user' | 'agent' | 'restore') {
@@ -116,24 +157,22 @@ export class PostgresWorkDocumentsRepository {
                 .returning();
             if (!row) throw new DatabaseError('Report changed or was archived. Reload the latest version before saving.', 409);
             await tx.insert(workDocumentVersions).values(this.version(row, input.source));
-            return row;
+            return this.withVersion(row, tx);
         });
     }
     async versions(input: Target) {
-        await this.get(input);
-        return this.db
-            .select({ revision: workDocumentVersions.revision, title: workDocumentVersions.title, createdAt: workDocumentVersions.createdAt, source: workDocumentVersions.source })
-            .from(workDocumentVersions)
-            .where(eq(workDocumentVersions.documentId, input.documentId))
-            .orderBy(desc(workDocumentVersions.revision));
+        await this.getRow(input);
+        const history = await this.numberedHistory([input.documentId]);
+        return [...new Map(history.map(({ revision, version, title, createdAt, source }) => [version, { revision, version, title, createdAt, source }])).values()].reverse();
     }
     async getVersion(input: Target & { revision: number }) {
-        const current = await this.get(input);
+        const current = await this.getRow(input);
         const [version] = await this.db
             .select()
             .from(workDocumentVersions)
             .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.revision)));
         if (!version) throw new DatabaseError('Version not found.', 404);
+        const history = await this.numberedHistory([input.documentId]);
         return {
             ...current,
             title: version.title,
@@ -141,6 +180,7 @@ export class PostgresWorkDocumentsRepository {
             scope: version.scope,
             status: version.status,
             revision: version.revision,
+            version: history.find(snapshot => snapshot.revision === version.revision)!.version,
             updatedAt: version.createdAt,
         };
     }
@@ -160,6 +200,6 @@ export class PostgresWorkDocumentsRepository {
             .where(this.owned(input))
             .returning();
         if (!row) throw new DatabaseError('Report not found.', 404);
-        return row;
+        return this.withVersion(row);
     }
 }

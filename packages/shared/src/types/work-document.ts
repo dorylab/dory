@@ -42,6 +42,8 @@ export type WorkDocumentView = {
     scope: AnalysisScope;
     content: WorkDocumentContent;
     revision: number;
+    /** Public version; multiple internal revisions can belong to one agent turn. */
+    version?: number;
     status: 'draft' | 'ready';
     archivedAt: string | null;
     createdAt: string;

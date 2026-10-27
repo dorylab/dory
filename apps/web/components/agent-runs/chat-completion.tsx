@@ -1,7 +1,12 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import type { ChatCompletion } from '@dory/shared/types/chat-completion';
+import type { WorkDocumentView } from '@dory/shared/types/work-document';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
+
+import { workRequest } from '@/lib/work-documents/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 
 export function ChatCompletionCard({
@@ -16,6 +21,15 @@ export function ChatCompletionCard({
     disabled?: boolean;
 }) {
     const t = useTranslations('AgentRuns.Chat.Completion');
+    const { organization } = useParams<{ organization: string }>();
+    const report = completion.report;
+    const snapshot = useQuery({
+        queryKey: ['work-document', organization, report?.documentId, report?.revision],
+        enabled: Boolean(report?.documentId && report.revision && report.version === undefined),
+        queryFn: () => workRequest<{ document: WorkDocumentView }>(`/api/work-documents/${encodeURIComponent(report!.documentId)}?revision=${report!.revision}`),
+        staleTime: Infinity,
+        retry: false,
+    });
     if (completion.status === 'completed' && !completion.report && !completion.unfinished.length && !completion.canContinue) return null;
 
     return (
@@ -26,7 +40,7 @@ export function ChatCompletionCard({
             {completion.report && (
                 <p className="text-muted-foreground">
                     {t(completion.report.saved ? 'reportSaved' : completion.report.documentId ? 'reportPreserved' : 'reasons.REPORT_NOT_SAVED', {
-                        revision: completion.report.revision ?? '',
+                        revision: completion.report.version ?? snapshot.data?.document.version ?? completion.report.revision ?? '',
                     })}
                 </p>
             )}

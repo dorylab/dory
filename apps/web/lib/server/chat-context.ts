@@ -40,7 +40,7 @@ export async function resolveChatContext(db: DBService, owner: Owner, raw: unkno
             const target = { ...owner, documentId: reference.id };
             const document = reference.revision ? await db.workDocuments.getVersion({ ...target, revision: reference.revision }) : await db.workDocuments.get(target);
             if (document.archivedAt) throw new DatabaseError('Referenced report is archived.', 409);
-            references.push({ ...reference, title: document.title, revision: document.revision });
+            references.push({ ...reference, title: document.title, revision: document.revision, version: document.version });
             snapshots.push({
                 referenceKey: key,
                 kind: 'report',

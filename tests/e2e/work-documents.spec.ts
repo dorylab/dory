@@ -1529,6 +1529,46 @@ test('completed answers omit redundant status cards before and after reload', as
     await expectAppHealthy(appErrors);
 });
 
+test('one report generation displays v1 across cards, completion and history despite five internal saves', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const session = { id: 'version-chat', title: 'Key Findings Report', type: 'global', connectionId: null };
+    const document = { ...makeDocument(), chatId: session.id, revision: 5, version: 1, sourceMessageId: 'version-request' };
+    const versions = [{ revision: 5, version: 1, source: 'agent', createdAt: now }];
+    const messages = [
+        { id: 'version-request', role: 'user', parts: [{ type: 'text', text: 'Generate a report' }] },
+        {
+            id: 'version-answer',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'Your report is saved.' }],
+            metadata: {
+                userMessageId: 'version-request',
+                // Legacy completions have only the internal revision.
+                completion: { status: 'completed', completed: [], unfinished: [], report: { documentId: document.id, revision: 5, saved: true }, canContinue: false },
+            },
+        },
+    ];
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [session] } }));
+    await page.route('**/api/chat/session/version-chat', route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [document] } }));
+    await page.route('**/api/work-documents/doc-report*', route => route.fulfill({ json: { document, versions } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=${session.id}&panel=closed`);
+    for (let i = 0; i < 2; i++) {
+        await expect(page.getByTestId('message-reports')).toContainText('v1');
+        await expect(page.getByTestId('chat-completion')).toContainText('Report saved · v1');
+        await expect(page.getByTestId('message-reports')).not.toContainText('v5');
+        if (i === 0) await page.reload();
+    }
+    await page.goto(`/${organization}/reports/${document.id}`);
+    const selector = page.getByRole('button', { name: 'Report version', exact: true });
+    await expect(selector).toHaveText('Version 1');
+    await selector.click();
+    await expect(page.getByRole('menuitemradio')).toHaveCount(1);
+    await expect(page.getByRole('menuitemradio')).toContainText('v1');
+    await expectAppHealthy(appErrors);
+});
+
 test('partial completion preserves the answer, resumes a new request and survives reload', async ({ page, appErrors }, testInfo) => {
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     const session = { id: 'recovery-chat', title: 'CSV analysis', type: 'global', connectionId: null };

@@ -55,7 +55,7 @@ export function AgentOutputs({
                 </span>
                 {report ? (
                     <Badge variant="secondary" className="self-start">
-                        v{report.revision}
+                        v{report.version ?? report.revision}
                     </Badge>
                 ) : (
                     <ChevronRight className="size-4 shrink-0" />

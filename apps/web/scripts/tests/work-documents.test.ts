@@ -145,6 +145,70 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         assert.doesNotMatch(JSON.stringify(summary), /secret_table|attachmentId|rowCount/);
         await repository.create({ ...input, ...listOwner, creationKey: 'no-sources', title: 'No sources fixture', content: { ...content, evidence: [] } });
         assert.deepEqual((await repository.list({ ...listOwner, query: 'No sources fixture' }))[0].sourceLabels, []);
+
+        // One generation can create an empty draft and save several patches.
+        // Public versions follow turns while revisions retain every snapshot.
+        const generated = await repository.create({ ...input, creationKey: 'incremental-report', content: { markdown: '', visuals: [], evidence: [], knowledge: [] } });
+        const generatedTarget = { ...owner, documentId: generated.id };
+        let latest = generated;
+        for (let revision = 2; revision <= 5; revision++) {
+            latest = await repository.update({
+                ...generatedTarget,
+                expectedRevision: latest.revision,
+                title: latest.title,
+                scope: latest.scope,
+                content: { ...content, markdown: `Section ${revision}`, agentWrite: { requestId: 'generation-1', revision, visualIds: [] } },
+                status: revision === 5 ? 'ready' : 'draft',
+                source: 'agent',
+            });
+            assert.equal(latest.version, 1);
+        }
+        assert.equal(latest.revision, 5);
+        assert.equal((await repository.get(generatedTarget)).version, 1);
+        assert.equal((await repository.findByCreationKey({ ...owner, creationKey: 'incremental-report' }))?.version, 1);
+        assert.equal((await repository.list({ ...owner, query: latest.title })).find(row => row.id === latest.id)?.version, 1);
+        assert.deepEqual(
+            (await repository.versions(generatedTarget)).map(({ revision, version }) => ({ revision, version })),
+            [{ revision: 5, version: 1 }],
+        );
+        const intermediate = await repository.getVersion({ ...generatedTarget, revision: 3 });
+        assert.equal(intermediate.version, 1);
+        assert.equal(intermediate.content.markdown, 'Section 3');
+        const view: WorkDocumentView = { ...latest, createdAt: latest.createdAt.toISOString(), updatedAt: latest.updatedAt.toISOString(), archivedAt: null };
+        assert.match(renderWorkHtml(view), /<p>v1 ·/);
+        assert.match(new TextDecoder().decode(markdownExportFiles(view)['report.md']), /\nv1 ·/);
+        for (let revision = 6; revision <= 7; revision++) {
+            latest = await repository.update({
+                ...generatedTarget,
+                expectedRevision: latest.revision,
+                title: latest.title,
+                scope: latest.scope,
+                content: { ...content, agentWrite: { requestId: 'generation-2', revision, visualIds: [] } },
+                status: 'ready',
+                source: 'agent',
+            });
+            assert.equal(latest.version, 2);
+        }
+        const humanVersion = await repository.rename({ ...generatedTarget, expectedRevision: latest.revision, title: 'Reviewed generation' });
+        assert.equal(humanVersion.version, 3);
+        const afterHuman = await repository.update({
+            ...generatedTarget,
+            expectedRevision: humanVersion.revision,
+            title: humanVersion.title,
+            scope: humanVersion.scope,
+            content: { ...content, agentWrite: { requestId: 'generation-2', revision: humanVersion.revision + 1, visualIds: [] } },
+            status: 'ready',
+            source: 'agent',
+        });
+        assert.equal(afterHuman.version, 4);
+        const restoredGeneration = await repository.restore({ ...generatedTarget, expectedRevision: afterHuman.revision, revision: 5 });
+        assert.equal(restoredGeneration.version, 5);
+        assert.equal(restoredGeneration.content.markdown, 'Section 5');
+        assert.deepEqual(
+            (await repository.versions(generatedTarget)).map(row => row.version),
+            [5, 4, 3, 2, 1],
+        );
+        assert.equal((await repository.getVersion({ ...generatedTarget, revision: 5 })).version, 1);
     } finally {
         await db?.close();
         await postgres?.end();

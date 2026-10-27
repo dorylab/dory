@@ -4,7 +4,7 @@ import { z } from 'zod';
 const name = z.string().min(1).max(512);
 export const chatReferenceSchema = z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('table'), connectionId: name, database: name, schema: z.string().max(512).nullable(), table: name, title: name }),
-    z.object({ kind: z.literal('report'), id: name, title: name, revision: z.number().int().positive().optional() }),
+    z.object({ kind: z.literal('report'), id: name, title: name, revision: z.number().int().positive().optional(), version: z.number().int().positive().optional() }),
     z.object({ kind: z.literal('artifact'), id: name, title: name }),
 ]);
 export const chatContextSchema = z.object({

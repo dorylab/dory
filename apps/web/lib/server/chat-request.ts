@@ -773,6 +773,7 @@ export async function handleChatRequest(req: Request) {
                                 ? {
                                       documentId: reports?.currentId() ?? targetReportId ?? '',
                                       revision: reports?.currentRevision(),
+                                      version: reports?.currentVersion(),
                                       saved: Boolean(reports?.currentId() && reports?.currentRevision() && !reportCompletionError),
                                   }
                                 : undefined,

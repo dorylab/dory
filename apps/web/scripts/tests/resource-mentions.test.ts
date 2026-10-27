@@ -35,6 +35,12 @@ test('overlapping, out-of-bounds, forged and unknown mention positions are rejec
 });
 
 test('resource identity distinguishes sources, schemas and immutable report revisions', () => {
+    const numbered = { ...report, version: 1 };
+    assert.equal(mentionLabel(numbered), '@月度收入 · v1');
+    assert.equal(referenceKey(numbered), referenceKey(report));
+    const text = mentionLabel(numbered);
+    const spans = [{ start: 0, end: text.length, referenceKey: referenceKey(numbered) }];
+    assert.deepEqual(serializeMentionDocument(buildMentionDocument(text, [numbered], spans)).references, [numbered]);
     assert.notEqual(referenceKey(report), referenceKey({ ...report, revision: 7 }));
     assert.notEqual(referenceKey(table), referenceKey({ ...table, connectionId: 'warehouse' }));
     assert.notEqual(referenceKey(table), referenceKey({ ...table, schema: 'archive' }));

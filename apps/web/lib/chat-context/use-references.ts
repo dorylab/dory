@@ -129,8 +129,8 @@ export function useChatReferences(
         ...(needTables && (!category || category === 'table') ? [...tables, ...autoTables].flatMap(item => (item.isError ? [] : (item.data ?? []))) : []),
         ...(!category || category === 'report'
             ? (reports.isError ? [] : (reports.data?.documents ?? [])).map(report => ({
-                  reference: { kind: 'report' as const, id: report.id, title: report.title, revision: report.revision },
-                  detail: `Report · v${report.revision}`,
+                  reference: { kind: 'report' as const, id: report.id, title: report.title, revision: report.revision, version: report.version },
+                  detail: `Report · v${report.version ?? report.revision}`,
                   current: Boolean(chatId && report.chatId === chatId),
                   timestamp: report.updatedAt,
               }))
@@ -164,7 +164,11 @@ export function useChatReferences(
                             signal,
                         );
                         if (document.archivedAt) return null;
-                        return { reference: { ...ref, title: document.title, revision: document.revision }, detail: `Report · v${document.revision}`, recentAt: item.usedAt };
+                        return {
+                            reference: { ...ref, title: document.title, revision: document.revision, version: document.version },
+                            detail: `Report · v${document.version ?? document.revision}`,
+                            recentAt: item.usedAt,
+                        };
                     }
                     if (ref.kind !== 'artifact') return null;
                     const artifact = await executeActionClient<ArtifactDetail>('artifact.get', { artifactId: ref.id }, { signal });

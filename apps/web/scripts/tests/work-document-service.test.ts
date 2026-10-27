@@ -166,6 +166,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         assert.ok('id' in created && 'id' in retry);
         assert.equal(created.id, retry.id);
         assert.equal(created.status, 'draft');
+        assert.equal(created.version, 1);
         assert.equal(await reports.completionStatus(), 'draft');
         await assert.rejects(reports.assertReady(), /still a draft/);
         // The SDK validates tool outputs as JSON before sending the next model step.
@@ -218,6 +219,8 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         const ready = await reports.tools.updateWorkReport.execute!({ documentId: created.id, expectedRevision: 1, patch }, call);
         await reports.assertReady();
         assert.ok('id' in ready);
+        assert.equal(ready.version, 1);
+        assert.equal(reports.currentVersion(), 1);
         assert.equal(ready.content.evidence.length, 2);
         assert.equal(ready.content.evidence[0].truncated, true);
         assert.deepEqual(ready.content.evidence[0].rows, [{ revenue: 42 }]);
@@ -368,7 +371,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         })) as { reportRevision: number; report: { markdown: string } };
         assert.equal(read.reportRevision, partial.reportRevision);
         assert.equal(read.report.markdown, '');
-        assert.equal((await db.workDocuments.versions({ ...owner, documentId: partial.reportDocumentId })).length, 2);
+        assert.equal((await db.workDocuments.versions({ ...owner, documentId: partial.reportDocumentId })).length, 1);
         expired = false;
         dataAvailability = 'none';
         await assert.rejects(

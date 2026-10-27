@@ -36,7 +36,7 @@ export function inlineMessageMentions(text: string, metadata: unknown) {
                         >
                             <ResourceIcon reference={reference} />
                             <span className="max-w-64 truncate">{reference.title}</span>
-                            {reference.kind === 'report' && reference.revision && <span className="text-xs text-muted-foreground">v{reference.revision}</span>}
+                            {reference.kind === 'report' && reference.revision && <span className="text-xs text-muted-foreground">v{reference.version ?? reference.revision}</span>}
                         </span>
                     </Fragment>
                 );

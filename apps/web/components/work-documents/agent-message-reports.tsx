@@ -104,7 +104,7 @@ export function AgentMessageReports({
                             <span className="flex items-start justify-between gap-3">
                                 <span className="line-clamp-2 break-words text-sm font-semibold leading-6">{document.title}</span>
                                 <Badge variant="secondary" className="mt-0.5 shrink-0 font-mono text-[11px] tabular-nums">
-                                    v{document.revision}
+                                    v{document.version ?? document.revision}
                                 </Badge>
                             </span>
                             {preview && <span className="mt-1.5 line-clamp-2 break-words text-sm leading-6 text-muted-foreground">{preview}</span>}

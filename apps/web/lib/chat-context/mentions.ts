@@ -4,7 +4,7 @@ import { isAnalysisDatabaseAllowed } from '@dory/shared/utils/analysis-scope';
 import { referenceKey, type ChatReference, type MentionSpan } from './types';
 
 export function mentionLabel(reference: ChatReference) {
-    return `@${reference.title}${reference.kind === 'report' && reference.revision ? ` · v${reference.revision}` : ''}`;
+    return `@${reference.title}${reference.kind === 'report' && reference.revision ? ` · v${reference.version ?? reference.revision}` : ''}`;
 }
 
 /** Offsets are UTF-16 string offsets, identical in the editor, JSON and JS. */

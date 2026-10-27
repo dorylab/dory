@@ -25,7 +25,7 @@ import { AddDefinitionDialog } from './add-definition-dialog';
 
 const MarkdownEditor = dynamic(() => import('./markdown-editor'), { ssr: false });
 
-type Detail = { document: WorkDocumentView; versions: Array<{ revision: number; source: string; createdAt: string }> };
+type Detail = { document: WorkDocumentView; versions: Array<{ revision: number; version?: number; source: string; createdAt: string }> };
 export type WorkReportHandle = { requestLeave: () => Promise<boolean> };
 export function WorkReport({
     ref,
@@ -103,7 +103,7 @@ export function WorkReport({
             client.setQueryData<Detail>(key, previous => (previous ? { ...previous, document: data.document } : undefined));
             if (editRef.current) {
                 const wasChangedDuringSave = editRef.current !== savingRef.current;
-                setEditing(previous => (previous ? { ...previous, revision: data.document.revision } : null));
+                setEditing(previous => (previous ? { ...previous, revision: data.document.revision, version: data.document.version } : null));
                 setDirty(wasChangedDuringSave);
                 if (!wasChangedDuringSave && leaveAfterSave.current) resolveLeave(true);
             }
@@ -201,6 +201,9 @@ export function WorkReport({
     const latestRevision = query.data?.document.revision;
     const versions = query.data?.versions ?? [];
     const latestVersion = versions.find(version => version.revision === latestRevision);
+    const displayedVersion = historical
+        ? (historyQuery.data?.document.version ?? versions.find(version => version.revision === selectedRevision)?.version ?? selectedRevision!)
+        : (document?.version ?? document?.revision);
     if (query.isPending) return <p className="p-6 text-muted-foreground">{t('Loading')}</p>;
     if (query.error && !query.data)
         return (
@@ -366,7 +369,7 @@ export function WorkReport({
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="outline" aria-label={t('VersionHistory.Select')} disabled={restore.isPending}>
-                                    {t('VersionLabel', { revision: historical ? selectedRevision! : document.revision })}
+                                    {t('VersionLabel', { revision: displayedVersion! })}
                                     <ChevronDown className="ml-1 size-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -376,7 +379,7 @@ export function WorkReport({
                                     onValueChange={value => void switchVersion(Number(value) === latestRevision ? null : Number(value))}
                                 >
                                     <DropdownMenuRadioItem value={String(latestRevision)}>
-                                        v{latestRevision} · {t('VersionHistory.Latest')}
+                                        v{query.data?.document.version ?? latestRevision} · {t('VersionHistory.Latest')}
                                         {latestVersion ? (
                                             <>
                                                 {' '}
@@ -395,7 +398,7 @@ export function WorkReport({
                                         .filter(version => version.revision !== latestRevision)
                                         .map(version => (
                                             <DropdownMenuRadioItem key={version.revision} value={String(version.revision)}>
-                                                v{version.revision} · {new Date(version.createdAt).toLocaleString()} ·{' '}
+                                                v{version.version ?? version.revision} · {new Date(version.createdAt).toLocaleString()} ·{' '}
                                                 {t(
                                                     version.source === 'user'
                                                         ? 'VersionHistory.User'
@@ -445,7 +448,7 @@ export function WorkReport({
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>{t('VersionHistory.Restore')}</AlertDialogTitle>
-                            <AlertDialogDescription>{t('VersionHistory.RestoreDescription', { revision: selectedRevision ?? document.revision })}</AlertDialogDescription>
+                            <AlertDialogDescription>{t('VersionHistory.RestoreDescription', { revision: displayedVersion! })}</AlertDialogDescription>
                         </AlertDialogHeader>
                         {restore.error ? (
                             <p role="alert" className="text-sm text-destructive">
