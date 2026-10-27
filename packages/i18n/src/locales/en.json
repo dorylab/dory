@@ -5556,8 +5556,8 @@
         "Resources": {
             "NoArtifacts": "No artifacts yet.",
             "NoQueries": "No queries yet.",
-            "Title": "Work outputs",
-            "Description": "Agent Runs and reports for this conversation",
+            "Title": "Work resources",
+            "Description": "Outputs and executions for this conversation",
             "Back": "Back to resources",
             "Close": "Close resources",
             "NoRuns": "No Agent Runs yet",
@@ -5578,7 +5578,18 @@
             "Cancel": "Cancel",
             "Discard": "Discard changes",
             "SaveAndContinue": "Save and continue",
-            "Reports": "Reports"
+            "Reports": "Reports",
+            "Outputs": "Outputs",
+            "Executions": "Executions",
+            "Report": "Report",
+            "Updated": "Updated {time}",
+            "LoadedCount": "Count includes loaded items only.",
+            "NoOutputs": "No outputs yet.",
+            "SqlQueries": "SQL Queries",
+            "StatusCount": "{status} {count}",
+            "ReportsLoadFailed": "Unable to load reports",
+            "AgentRun": "Agent Run",
+            "RunSource": "Agent Run · {title}"
         },
         "VersionHistory": {
             "Select": "Report version",

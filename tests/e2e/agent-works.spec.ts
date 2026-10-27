@@ -302,7 +302,7 @@ test('Share retries failed reads and protects unsaved report edits', async ({ pa
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByTestId('work-share-preview')).toBeVisible();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await header.getByRole('button', { name: 'Work outputs', exact: true }).click();
+    await header.getByRole('button', { name: 'Work resources', exact: true }).click();
     await page
         .getByTestId('agent-resources')
         .getByRole('button', { name: /Revenue report/ })

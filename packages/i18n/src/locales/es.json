@@ -5547,8 +5547,8 @@
         "Resources": {
             "NoArtifacts": "Aún no hay artefactos.",
             "NoQueries": "Aún no hay consultas.",
-            "Title": "Resultados del trabajo",
-            "Description": "Agent Runs e informes de esta conversación",
+            "Title": "Recursos del trabajo",
+            "Description": "Resultados y ejecuciones de esta conversación",
             "Back": "Volver a recursos",
             "Close": "Cerrar recursos",
             "NoRuns": "Aún no hay Agent Runs",
@@ -5569,7 +5569,18 @@
             "Cancel": "Cancelar",
             "Discard": "Descartar cambios",
             "SaveAndContinue": "Guardar y continuar",
-            "Reports": "Informes"
+            "Reports": "Informes",
+            "Outputs": "Resultados",
+            "Executions": "Ejecuciones",
+            "Report": "Informe",
+            "Updated": "Actualizado {time}",
+            "LoadedCount": "El recuento solo incluye los elementos cargados.",
+            "NoOutputs": "Aún no hay resultados.",
+            "SqlQueries": "Consultas SQL",
+            "StatusCount": "{status} {count}",
+            "ReportsLoadFailed": "No se pudieron cargar los informes",
+            "AgentRun": "Ejecución del agente",
+            "RunSource": "Ejecución del agente · {title}"
         },
         "VersionHistory": {
             "Select": "Versión del informe",

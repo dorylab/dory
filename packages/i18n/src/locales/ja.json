@@ -5553,8 +5553,8 @@
         "Resources": {
             "NoArtifacts": "成果物はまだありません。",
             "NoQueries": "クエリはまだありません。",
-            "Title": "作業の成果物",
-            "Description": "この会話の Agent Runs とレポート",
+            "Title": "作業リソース",
+            "Description": "この会話の成果物と実行履歴",
             "Back": "リソースに戻る",
             "Close": "リソースを閉じる",
             "NoRuns": "Agent Run はまだありません",
@@ -5575,7 +5575,18 @@
             "Cancel": "キャンセル",
             "Discard": "変更を破棄",
             "SaveAndContinue": "保存して続行",
-            "Reports": "レポート"
+            "Reports": "レポート",
+            "Outputs": "成果物",
+            "Executions": "実行履歴",
+            "Report": "レポート",
+            "Updated": "{time}に更新",
+            "LoadedCount": "件数は読み込み済みの項目のみです。",
+            "NoOutputs": "成果物はまだありません。",
+            "SqlQueries": "SQL クエリ",
+            "StatusCount": "{status} {count}",
+            "ReportsLoadFailed": "レポートを読み込めません",
+            "AgentRun": "エージェント実行",
+            "RunSource": "エージェント実行 · {title}"
         },
         "VersionHistory": {
             "Select": "レポートのバージョン",

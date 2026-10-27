@@ -1,9 +1,8 @@
-import type { UIMessage } from 'ai';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
-import type { ChatContext } from '../../apps/web/lib/chat-context/types';
-
 import { expect, type Page } from '@playwright/test';
+import type { UIMessage } from 'ai';
 
+import type { ChatContext } from '../../apps/web/lib/chat-context/types';
 import { expectAppHealthy, test } from './fixtures';
 import { createWorkbenchConnection, mockWorkbenchApis } from './helpers/workbench';
 
@@ -229,7 +228,7 @@ test('opening a generated draft preserves the active chat stream', async ({ page
                             },
                         ],
                     },
-                    artifacts: [{ id: 'live-artifact', title: 'Live results', type: 'result_set', status: 'ready', rowCount: 1, createdAt: now }],
+                    artifacts: [{ id: 'live-artifact', title: 'Live results', type: 'result_set', status: 'ready', rowCount: 1, createdAt: now, updatedAt: now }],
                 },
             },
         }),
@@ -313,25 +312,29 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     created = true;
     await expect(page.getByTestId('agent-resources')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
-    await page.getByRole('region', { name: 'Queries', exact: true }).getByRole('button').first().click();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await page.getByRole('button', { name: /^Executions/ }).click();
+    await page.getByTestId('resource-queries').getByRole('button').first().click();
     await expect(page.getByTestId('agent-query-preview').getByRole('cell', { name: '42', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
-    await page.getByRole('region', { name: 'Artifacts', exact: true }).getByRole('button').first().click();
+    await page
+        .getByRole('region', { name: 'Outputs', exact: true })
+        .getByRole('button', { name: /Live results/ })
+        .click();
     await expect(page.getByTestId('agent-artifact-preview').getByRole('cell', { name: '42', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Revenue analysis Draft' })).toBeVisible();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await expect(page.getByRole('button', { name: /Revenue analysis Report.*Draft/ })).toBeVisible();
     await expect(page.getByTestId('work-report')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Revenue analysis Draft' }).click();
+    await page.getByRole('button', { name: /Revenue analysis Report.*Draft/ }).click();
     await expect(page.getByTestId('work-report')).toBeVisible();
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
     await expect(page.getByTestId('work-report')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
-    await page.getByRole('button', { name: 'Revenue analysis Draft' }).click();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await page.getByRole('button', { name: /Revenue analysis Report.*Draft/ }).click();
     await expect(page.getByTestId('work-report')).toBeVisible();
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
@@ -599,17 +602,18 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await expect(page.getByText('Updated analysis', { exact: true })).toBeVisible();
     await expect(page.getByTestId('agent-resources')).toHaveCount(0);
     const chatWidth = (await page.getByTestId('data-agent').locator('main').boundingBox())!.width;
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
     await expect(page.getByTestId('agent-resources')).toBeVisible();
     expect((await page.getByTestId('data-agent').locator('main').boundingBox())!.width).toBe(chatWidth);
     await page.getByRole('textbox', { name: /Ask a question/ }).click();
     await expect(page.getByTestId('agent-resources')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: /Ask a question/ })).toBeFocused();
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
-    await expect(page.getByRole('link', { name: 'Payment analysis' })).toHaveCount(1);
-    await expect(page.getByRole('link', { name: 'Payment analysis' })).toHaveAttribute('target', '_blank');
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await page.getByRole('button', { name: /^Executions/ }).click();
+    await expect(page.getByRole('link', { name: 'Agent Run · Payment analysis' })).toHaveCount(1);
+    await expect(page.getByRole('link', { name: 'Agent Run · Payment analysis' })).toHaveAttribute('target', '_blank');
     await expect(page.getByRole('link', { name: 'View Agent Run' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Revenue analysis Ready' }).click();
+    await page.getByRole('button', { name: /Revenue analysis Report/ }).click();
     expect((await page.getByTestId('data-agent').locator('main').boundingBox())!.width).toBe(chatWidth);
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Unsaved analysis');
@@ -622,10 +626,10 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     saveFails = false;
     await dialog.getByRole('button', { name: 'Save and continue' }).click();
     await expect(page.getByTestId('work-report')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Work outputs', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Work resources', exact: true })).toBeFocused();
     expect(document.title).toBe('Unsaved analysis');
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
-    await page.getByRole('button', { name: 'Unsaved analysis Ready' }).click();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await page.getByRole('button', { name: /Unsaved analysis Report/ }).click();
     await expect(page.getByRole('heading', { name: 'Unsaved analysis' })).toBeVisible();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Discard this');
@@ -639,22 +643,23 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-resources-light.png') });
     await page.getByText('Toggle theme', { exact: true }).click();
     await expect(page.locator('html')).toHaveClass(/dark/);
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-resources-dark.png') });
     await page.setViewportSize({ width: 900, height: 900 });
-    await expect(page.getByRole('dialog', { name: 'Work outputs' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Work resources' })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Work outputs' })).toBeVisible();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Work resources' })).toBeVisible();
     const popupBounds = (await page.getByTestId('agent-resources').boundingBox())!;
     expect(popupBounds.x).toBeGreaterThanOrEqual(0);
     expect(popupBounds.x + popupBounds.width).toBeLessThanOrEqual(390);
-    await expect(page.getByRole('link', { name: 'Payment analysis' })).toBeVisible();
+    await page.getByRole('button', { name: /^Executions/ }).click();
+    await expect(page.getByRole('link', { name: 'Agent Run · Payment analysis' })).toBeVisible();
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-resources-mobile.png') });
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog', { name: 'Work outputs' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Work outputs', exact: true })).toBeFocused();
+    await expect(page.getByRole('dialog', { name: 'Work resources' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Work resources', exact: true })).toBeFocused();
     await expectAppHealthy(appErrors);
 });
 
@@ -675,8 +680,9 @@ test('global SQL tools show saved rows and Queries restore the exact source and 
         connectionName: 'Orders',
         rowCount: 1,
         createdAt: now,
+        updatedAt: now,
     };
-    const chartArtifact = { ...resultArtifact, id: 'chart-payments', title: 'Payment trend', type: 'chart', createdAt: '2026-10-23T10:00:00Z' };
+    const chartArtifact = { ...resultArtifact, id: 'chart-payments', title: 'Payment trend', type: 'chart', createdAt: '2026-10-23T10:00:00Z', updatedAt: '2026-10-23T10:00:00Z' };
     const fileArtifact = { ...resultArtifact, id: 'file-payments', title: 'Payment export', type: 'file', status: 'unavailable' };
     let failSnapshot = true;
     let failArtifact = true;
@@ -788,11 +794,14 @@ test('global SQL tools show saved rows and Queries restore the exact source and 
     await expect(tool.getByRole('cell', { name: '42', exact: true })).toBeVisible();
     await expect(tool.getByText('Tool completed.', { exact: true })).toHaveCount(0);
     await expect(tool).toContainText(sql);
-    await page.getByRole('button', { name: 'Work outputs', exact: true }).click();
-    const queries = page.getByRole('region', { name: 'Queries', exact: true });
-    await expect(queries.getByRole('alert')).toBeVisible();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    const executions = page.getByRole('region', { name: 'Executions', exact: true });
+    await expect(executions.getByRole('button', { name: /^Executions/ })).toHaveAttribute('aria-expanded', 'false');
+    await executions.getByRole('button', { name: /^Executions/ }).click();
+    const queries = page.getByTestId('resource-queries');
+    await expect(executions.getByRole('alert')).toBeVisible();
     failSnapshot = false;
-    await queries.getByRole('button', { name: 'Retry', exact: true }).click();
+    await executions.getByRole('button', { name: 'Retry', exact: true }).click();
     const pageCount = page.context().pages().length;
     await expect(queries.getByRole('button')).toHaveCount(2);
     await expect(queries.getByRole('button').first()).toContainText('analytics');
@@ -806,7 +815,8 @@ test('global SQL tools show saved rows and Queries restore the exact source and 
     await page.reload();
     await expect(page.getByTestId('agent-query-preview').getByRole('cell', { name: '42', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
-    const artifacts = page.getByRole('region', { name: 'Artifacts', exact: true });
+    await expect(page.getByRole('button', { name: /^Executions/ })).toHaveAttribute('aria-expanded', 'false');
+    const artifacts = page.getByRole('region', { name: 'Outputs', exact: true });
     await expect(artifacts.getByRole('button')).toHaveCount(3);
     await expect(artifacts.getByRole('button').first()).toContainText('Payment trend');
     await artifacts.getByRole('button', { name: /Payment results/ }).click();
@@ -831,7 +841,7 @@ test('global SQL tools show saved rows and Queries restore the exact source and 
     await page.screenshot({ path: testInfo.outputPath('agent-artifact-inline.png'), animations: 'disabled' });
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
     await expect(preview).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Work outputs', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Work resources', exact: true })).toBeFocused();
     expect(page.context().pages()).toHaveLength(pageCount);
     expect(new URL(page.url()).pathname).toBe(`/${organization}/work`);
     await expectAppHealthy(appErrors);
@@ -1555,5 +1565,186 @@ test('report pie charts retain source values on screen, after reload and in HTML
     await page.emulateMedia({ media: 'print' });
     await expect(page.locator('[data-chart-type="pie"]')).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('report-pie-print.png'), fullPage: true });
+    await expectAppHealthy(appErrors);
+});
+
+test('work resources prioritize deduplicated outputs and refresh collapsed execution counts after partial failures', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    let failed = true;
+    let finished = false;
+    const report = { ...makeDocument(), revision: 5, sourceMessageId: 'earlier-turn' };
+    const olderReport = { ...report, id: 'older-report', title: 'Earlier draft', status: 'draft', revision: 2, updatedAt: '2026-10-21T10:00:00Z' };
+    const result = { id: 'output-result', type: 'result_set', title: 'Monthly revenue', status: 'ready', rowCount: 12, createdAt: now, updatedAt: now };
+    const chart = { ...result, id: 'output-chart', type: 'chart', title: 'Revenue trend', updatedAt: '2026-10-24T10:00:00Z' };
+    const file = { ...result, id: 'output-file', type: 'file', title: 'Revenue export', fileFormat: 'csv', status: 'unavailable' };
+    const query = {
+        session: { sessionId: 'shared-session', sqlText: 'SELECT revenue FROM orders', database: 'sales', status: 'success', startedAt: now },
+        queryResultSets: [{ rowCount: 12 }],
+        results: [],
+    };
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [] } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [olderReport, report, report] } }));
+    await page.route('**/api/chat/session/resources-chat', route =>
+        route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    session: { id: 'resources-chat', type: 'global', title: 'Revenue' },
+                    messages: ['run-main', 'run-more', 'run-empty', 'run-main'].map((agentRunId, index) => ({
+                        id: `message-${index}`,
+                        role: 'assistant',
+                        parts: [{ type: 'text', text: `Analysis ${index}` }],
+                        metadata: { agentRunId },
+                    })),
+                },
+            },
+        }),
+    );
+    await page.route('**/api/chat/run-activity?*', route => {
+        const id = new URL(route.request().url()).searchParams.get('workId');
+        return route.fulfill({
+            json: { work: { workId: id, title: id === 'run-empty' ? 'Planning only' : 'Revenue analysis', status: id === 'run-more' ? 'active' : 'completed' } },
+        });
+    });
+    await page.route('**/api/works/run-main/snapshot', route => route.fulfill({ json: { data: { snapshot: { sessions: [query, query] }, artifacts: [result, file, result] } } }));
+    await page.route('**/api/works/run-empty/snapshot', route => route.fulfill({ json: { data: { snapshot: { sessions: [] }, artifacts: [] } } }));
+    await page.route('**/api/works/run-more/snapshot', route =>
+        failed
+            ? route.fulfill({ status: 503, json: { error: 'Unavailable' } })
+            : route.fulfill({
+                  json: {
+                      data: {
+                          snapshot: {
+                              sessions: [
+                                  { ...query, session: { ...query.session, status: finished ? 'success' : 'running', startedAt: '2026-10-24T10:00:00Z' } },
+                                  { ...query, session: { ...query.session, sessionId: 'failed-query', sqlText: 'SELECT missing_column', status: 'error' } },
+                                  { ...query, session: { ...query.session, sessionId: 'unknown-query', sqlText: 'SELECT unknown_status', status: 'cancelled' } },
+                              ],
+                          },
+                          artifacts: [chart, result],
+                      },
+                  },
+              }),
+    );
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=resources-chat`);
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    const outputs = page.getByRole('region', { name: 'Outputs', exact: true });
+    const executions = page.getByRole('region', { name: 'Executions', exact: true });
+    const toggle = executions.getByRole('button', { name: /^Executions/ });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(outputs.getByTestId('outputs-count')).toHaveText('4');
+    await expect(outputs).toContainText('Count includes loaded items only.');
+    await expect(outputs.getByRole('alert')).toBeVisible({ timeout: 15_000 });
+    await expect(outputs.getByTestId('resource-output')).toHaveCount(4);
+    await expect(page.getByTestId('executions-count')).toHaveText('1');
+    failed = false;
+    await outputs.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(outputs.getByTestId('outputs-count')).toHaveText('5');
+    await expect(outputs.getByRole('alert')).toHaveCount(0);
+    await expect(outputs).not.toContainText('Count includes loaded items only.');
+    const cards = outputs.getByTestId('resource-output');
+    await expect(cards).toHaveCount(5);
+    await expect(cards.nth(0)).toContainText('Revenue analysis');
+    await expect(cards.nth(0)).toContainText('v5');
+    await expect(cards.nth(0)).toContainText('Report · Updated');
+    await expect(cards.nth(1)).toContainText('Earlier draft');
+    await expect(cards.nth(1)).toContainText('Draft');
+    await expect(cards.nth(2)).toContainText('Revenue trend');
+    await expect(cards.nth(2)).toContainText('Chart · 12 rows');
+    await expect(outputs.getByRole('button', { name: /Monthly revenue/ })).toContainText('Result Set · 12 rows');
+    await expect(outputs.getByRole('button', { name: /Revenue export/ })).toContainText('CSV · Unavailable');
+    await expect(page.getByTestId('executions-count')).toHaveText('4');
+    await expect(page.getByTestId('execution-summary')).toHaveText('SQL Queries · Running 1 · Failed 1 · Completed 1 · Status unavailable 1');
+    finished = true;
+    await expect(page.getByTestId('execution-summary')).toHaveText('SQL Queries · Failed 1 · Completed 2 · Status unavailable 1');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await page.screenshot({ path: testInfo.outputPath('resources-outputs-light.png'), animations: 'disabled' });
+    await toggle.click();
+    await expect(page.getByTestId('resource-queries').getByRole('button')).toHaveCount(4);
+    await expect(executions.getByRole('link', { name: 'Agent Run · Planning only' })).toHaveAttribute('target', '_blank');
+    await expect(page.getByTestId('resource-queries').getByRole('button').first()).toContainText('SELECT revenue');
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
+    await page.getByText('Toggle theme', { exact: true }).click();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await page.screenshot({ path: testInfo.outputPath('resources-outputs-dark.png'), animations: 'disabled' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const bounds = (await page.getByTestId('agent-resources').boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: testInfo.outputPath('resources-outputs-mobile.png'), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Work resources', exact: true })).toBeFocused();
+    await expectAppHealthy(appErrors);
+});
+
+test('work resources handle empty and execution-only conversations and reset expansion on conversation changes', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({
+            json: {
+                connections: [],
+                models: [],
+                sessions: [
+                    { id: 'empty-resources', title: 'Empty conversation', createdAt: now, updatedAt: now },
+                    { id: 'execution-resources', title: 'Execution conversation', createdAt: now, updatedAt: now },
+                ],
+            },
+        }),
+    );
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [] } }));
+    await page.route('**/api/chat/session/*-resources', route => {
+        const id = new URL(route.request().url()).pathname.split('/').pop();
+        return route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    session: { id, type: 'global', title: id },
+                    messages:
+                        id === 'empty-resources'
+                            ? []
+                            : [{ id: 'execution-message', role: 'assistant', parts: [{ type: 'text', text: 'Query failed.' }], metadata: { agentRunId: 'run-only' } }],
+                },
+            },
+        });
+    });
+    await page.route('**/api/chat/run-activity?*', route => route.fulfill({ json: { work: { workId: 'run-only', title: 'SQL only', status: 'error' } } }));
+    await page.route('**/api/works/run-only/snapshot', route =>
+        route.fulfill({
+            json: {
+                data: {
+                    snapshot: {
+                        sessions: [
+                            {
+                                session: { sessionId: 'only-query', sqlText: 'SELECT missing_table', database: 'sales', status: 'error', startedAt: now },
+                                queryResultSets: [],
+                                results: [],
+                            },
+                        ],
+                    },
+                    artifacts: [],
+                },
+            },
+        }),
+    );
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=empty-resources`);
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Outputs', exact: true })).toContainText('No outputs yet.');
+    await expect(page.getByTestId('outputs-count')).toHaveText('0');
+    await expect(page.getByTestId('executions-count')).toHaveText('0');
+    await page.getByRole('button', { name: /^Executions/ }).click();
+    await expect(page.getByRole('region', { name: 'Executions', exact: true })).toContainText('No queries yet.');
+    await page.getByRole('button', { name: /^Execution conversation/ }).click();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^Executions/ })).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('region', { name: 'Outputs', exact: true })).toContainText('No outputs yet.');
+    await expect(page.getByTestId('executions-count')).toHaveText('1');
+    await expect(page.getByTestId('execution-summary')).toHaveText('SQL Queries · Failed 1');
+    await page.getByRole('button', { name: /^Executions/ }).click();
+    await expect(page.getByTestId('resource-queries').getByRole('button')).toContainText('SELECT missing_table');
     await expectAppHealthy(appErrors);
 });

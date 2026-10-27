@@ -5560,8 +5560,8 @@
         "Resources": {
             "NoArtifacts": "暂无查询产物。",
             "NoQueries": "暂无查询。",
-            "Title": "工作成果",
-            "Description": "当前会话的 Agent Runs 和报告",
+            "Title": "工作资源",
+            "Description": "当前对话的成果和执行记录",
             "Back": "返回资源列表",
             "Close": "关闭资源浮层",
             "NoRuns": "暂无 Agent Run",
@@ -5582,7 +5582,18 @@
             "Cancel": "取消",
             "Discard": "放弃修改",
             "SaveAndContinue": "保存后继续",
-            "Reports": "报告"
+            "Reports": "报告",
+            "Outputs": "成果",
+            "Executions": "执行记录",
+            "Report": "报告",
+            "Updated": "{time}更新",
+            "LoadedCount": "数量仅包含已加载的项目。",
+            "NoOutputs": "暂无成果。",
+            "SqlQueries": "SQL 查询",
+            "StatusCount": "{status} {count}",
+            "ReportsLoadFailed": "无法加载报告",
+            "AgentRun": "Agent Run",
+            "RunSource": "Agent Run · {title}"
         },
         "VersionHistory": {
             "Select": "报告版本",

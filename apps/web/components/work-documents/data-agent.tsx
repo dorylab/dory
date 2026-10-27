@@ -284,6 +284,7 @@ export function DataAgent() {
                             )}
                         </main>
                         <AgentResources
+                            key={chatId}
                             activeDocumentId={state.document}
                             open={panel !== 'closed'}
                             detailVisible={panel === 'report' || panel === 'query' || panel === 'artifact'}

@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
-import Link from 'next/link';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
+import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { PopoverContent } from '@/registry/new-york-v4/ui/popover';
 import type { WorkDocumentSummary } from '@dory/shared/types/work-document';
-import { useQueries, type Query } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { ArrowLeft, ArrowUpRight, FileText, Loader2, Play, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Loader2, Terminal, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import type { AgentRunWorkLike } from '@/lib/agent-runs/summary';
-import { workRequest } from '@/lib/work-documents/client';
+import { executionStatus, useAgentResources } from '@/hooks/use-agent-resources';
 
+import { AgentOutputs } from './agent-outputs';
 import { AgentQueries } from './agent-queries';
 
 export function AgentResources({
@@ -62,21 +62,35 @@ export function AgentResources({
         if (open && (!previousView.current.open || previousView.current.detailVisible !== detailVisible)) closeButton.current?.focus();
         previousView.current = { open, detailVisible };
     }, [open, detailVisible]);
-    const runs = [
-        ...new Map(
-            [...messages].reverse().flatMap(message => {
-                const metadata = message.metadata as { agentRunId?: string; requestId?: string } | undefined;
-                return metadata?.agentRunId ? [[metadata.agentRunId, metadata] as const] : [];
-            }),
-        ).entries(),
-    ];
-    const activities = useQueries({
-        queries: runs.map(([id]) => ({
-            queryKey: ['agent-resource-run', organization, id],
-            queryFn: () => workRequest<{ work: AgentRunWorkLike }>(`/api/chat/run-activity?workId=${encodeURIComponent(id)}`),
-            refetchInterval: (query: Query<{ work: AgentRunWorkLike }>) => (busy || query.state.data?.work.status === 'active' ? 1500 : false),
-        })),
+    const resources = useAgentResources({ organization, messages, reports, open, busy });
+    const [executionsOpen, setExecutionsOpen] = useState(false);
+    useEffect(() => {
+        if (!open) setExecutionsOpen(false);
+    }, [open]);
+    const outputsIncomplete = loading || Boolean(error) || resources.loading || resources.failed;
+    const counts = { Running: 0, Failed: 0, Completed: 0, Unknown: 0 };
+    resources.queries.forEach(query => {
+        counts[executionStatus(query.session.status)]++;
     });
+    const executionSummary = [
+        t('SqlQueries'),
+        ...(['Running', 'Failed', 'Completed', 'Unknown'] as const)
+            .filter(status => counts[status] > 0)
+            .map(status => t('StatusCount', { status: t(status), count: counts[status] })),
+    ].join(' · ');
+    const snapshotFeedback = (
+        <>
+            {resources.loading ? <Loader2 aria-label={t('Loading')} className="size-4 animate-spin" /> : null}
+            {resources.failed ? (
+                <div role="alert" className="text-sm text-destructive">
+                    {t('LoadFailed')}
+                    <Button variant="ghost" size="sm" onClick={resources.retry}>
+                        {t('Retry')}
+                    </Button>
+                </div>
+            ) : null}
+        </>
+    );
     const content = (
         <>
             <div className="flex shrink-0 items-center justify-between gap-2 border-b p-3">
@@ -105,94 +119,51 @@ export function AgentResources({
                 <div className="min-h-0 flex-1">{children}</div>
             ) : (
                 <div className="min-h-0 flex-1 space-y-5 overflow-auto p-4">
-                    <section aria-label="Agent Runs" className="space-y-2">
-                        <h3 className="text-xs font-medium text-muted-foreground">Agent Runs</h3>
-                        {!runs.length ? (
-                            <p className="text-sm text-muted-foreground">{t('NoRuns')}</p>
-                        ) : (
-                            runs.map(([id], index) => {
-                                const query = activities[index];
-                                const work = query.data?.work;
-                                const status = work?.status;
-                                return (
-                                    <div key={id} className="rounded-lg border p-3">
-                                        <Link
-                                            className="flex items-start gap-2 rounded-sm text-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                                            href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(id)}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            <Play className="mt-0.5 size-4 shrink-0" />
-                                            <span className="min-w-0 flex-1 break-words">{work?.title || 'Agent Run'}</span>
-                                            <ArrowUpRight className="size-4 shrink-0" />
-                                        </Link>
-                                        <p className="mt-2 text-xs text-muted-foreground">
-                                            {t(
-                                                query.isPending
-                                                    ? 'Loading'
-                                                    : query.isError
-                                                      ? 'LoadFailed'
-                                                      : status === 'active'
-                                                        ? 'Running'
-                                                        : status === 'completed'
-                                                          ? 'Completed'
-                                                          : status === 'error'
-                                                            ? 'Failed'
-                                                            : status === 'archived'
-                                                              ? 'Archived'
-                                                              : 'Unknown',
-                                            )}
-                                        </p>
-                                        {query.isError ? (
-                                            <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
-                                                {t('Retry')}
-                                            </Button>
-                                        ) : null}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </section>
-                    <AgentQueries
-                        onSelectQuery={onSelectQuery}
-                        onSelectArtifact={onSelectArtifact}
-                        organization={organization}
-                        runIds={runs.map(([id]) => id)}
-                        open={open}
-                        busy={busy}
-                    />
-                    <section aria-label={t('Reports')} className="space-y-2 border-t pt-4">
-                        <h3 className="text-xs font-medium text-muted-foreground">{t('Reports')}</h3>
-                        {loading ? (
-                            <Loader2 aria-label={t('Loading')} className="size-4 animate-spin" />
-                        ) : error ? (
+                    <section aria-label={t('Outputs')} className="space-y-2">
+                        <h3 className="flex items-center gap-2 text-sm font-medium">
+                            {t('Outputs')}
+                            <Badge variant="secondary" data-testid="outputs-count">
+                                {resources.outputs.length}
+                            </Badge>
+                        </h3>
+                        {outputsIncomplete ? <p className="text-xs text-muted-foreground">{t('LoadedCount')}</p> : null}
+                        {loading ? <Loader2 aria-label={t('Loading')} className="size-4 animate-spin" /> : null}
+                        {error ? (
                             <div role="alert" className="text-sm text-destructive">
-                                {t('LoadFailed')}
+                                {t('ReportsLoadFailed')}
                                 <Button variant="ghost" size="sm" onClick={onRetry}>
                                     {t('Retry')}
                                 </Button>
                             </div>
-                        ) : !reports.length ? (
-                            <p className="text-sm text-muted-foreground">{t('NoWorks')}</p>
-                        ) : (
-                            [...reports]
-                                .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-                                .map(report => (
-                                    <Button
-                                        key={report.id}
-                                        aria-pressed={report.id === activeDocumentId}
-                                        variant="ghost"
-                                        className="h-auto w-full justify-start gap-2 rounded-lg border p-3 text-left"
-                                        onClick={() => onSelect(report.id)}
-                                    >
-                                        <FileText className="size-4 shrink-0" />
-                                        <span className="min-w-0 flex-1">
-                                            <span className="block truncate">{report.title}</span>
-                                            <span className="block text-xs font-normal text-muted-foreground">{t(report.status === 'ready' ? 'Ready' : 'Draft')}</span>
-                                        </span>
+                        ) : null}
+                        {snapshotFeedback}
+                        {!outputsIncomplete && !resources.outputs.length ? <p className="text-sm text-muted-foreground">{t('NoOutputs')}</p> : null}
+                        <AgentOutputs outputs={resources.outputs} activeDocumentId={activeDocumentId} onSelectReport={onSelect} onSelectArtifact={onSelectArtifact} />
+                    </section>
+                    <section aria-label={t('Executions')} className="border-t pt-4">
+                        <Collapsible open={executionsOpen} onOpenChange={setExecutionsOpen} className="space-y-2">
+                            <h3>
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" className="h-auto w-full justify-start gap-2 p-0 py-1 hover:bg-transparent">
+                                        <Terminal className="size-4 shrink-0" />
+                                        <span className="flex-1 text-left">{t('Executions')}</span>
+                                        <Badge variant="secondary" data-testid="executions-count">
+                                            {resources.queries.length}
+                                        </Badge>
+                                        <ChevronDown className={`size-4 shrink-0 transition-transform ${executionsOpen ? 'rotate-180' : ''}`} />
                                     </Button>
-                                ))
-                        )}
+                                </CollapsibleTrigger>
+                            </h3>
+                            <p className="text-xs text-muted-foreground" data-testid="execution-summary">
+                                {executionSummary}
+                            </p>
+                            {resources.loading || resources.failed ? <p className="text-xs text-muted-foreground">{t('LoadedCount')}</p> : null}
+                            <CollapsibleContent className="space-y-2">
+                                {snapshotFeedback}
+                                {!resources.loading && !resources.failed && !resources.queries.length ? <p className="text-sm text-muted-foreground">{t('NoQueries')}</p> : null}
+                                <AgentQueries organization={organization} queries={resources.queries} runs={resources.runs} onSelectQuery={onSelectQuery} />
+                            </CollapsibleContent>
+                        </Collapsible>
                     </section>
                 </div>
             )}
