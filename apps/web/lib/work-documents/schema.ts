@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
+export const databaseSelectionsSchema = z.record(z.string().min(1), z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]));
+
 export const analysisScopeSchema = z
     .object({
         connectionIds: z.array(z.string().min(1)),
         connectionMode: z.enum(['auto', 'manual']).optional(),
         knowledgeMode: z.enum(['auto', 'manual', 'none']).optional(),
         knowledgeModelId: z.string().min(1).nullable().optional(),
-        databasesByConnection: z.record(z.string().min(1), z.string().min(1)).optional(),
+        databasesByConnection: databaseSelectionsSchema.optional(),
     })
     .refine(scope => scope.connectionMode === 'auto' || (scope.connectionIds.length <= 12 && (scope.connectionMode !== 'manual' || scope.connectionIds.length > 0)), {
         message: 'Select between 1 and 12 data sources in manual mode.',

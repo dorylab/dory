@@ -1,5 +1,7 @@
 'use client';
 
+import { inlineMessageMentions } from '@/components/work-documents/inline-message-mentions';
+
 import { ChatCompletionCard } from '@/components/agent-runs/chat-completion';
 import { ReactNode } from 'react';
 import type { ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
@@ -452,6 +454,13 @@ const MessageRenderer = ({
         return null;
     };
     const contentItems: ReactNode[] = [];
+    const userText =
+        message.parts
+            ?.filter(part => part.type === 'text')
+            .map(part => part.text)
+            .join('\n') ?? '';
+    const inlineMentions = message.role === 'user' ? inlineMessageMentions(userText, message.metadata) : null;
+    let renderedInlineMentions = false;
     if (message.role === 'user') {
         if ((message.metadata as { outputIntent?: string } | undefined)?.outputIntent === 'report')
             contentItems.push(
@@ -461,7 +470,7 @@ const MessageRenderer = ({
             );
         const rawReferences = (message.metadata as { references?: unknown } | undefined)?.references;
         const references = chatReferenceSchema.array().safeParse(rawReferences);
-        if (references.success && references.data.length)
+        if (!inlineMentions && references.success && references.data.length)
             contentItems.push(
                 <div key="references" className="mb-2 flex flex-wrap gap-1">
                     {references.data.map(reference => (
@@ -478,6 +487,11 @@ const MessageRenderer = ({
             );
     }
     (message.parts ?? []).forEach((part, index) => {
+        if (inlineMentions && part.type === 'text') {
+            if (!renderedInlineMentions) contentItems.push(<div key="inline-mentions">{inlineMentions}</div>);
+            renderedInlineMentions = true;
+            return;
+        }
         const before = toolRows.length;
         const chartsBefore = chartResults.length;
         const item = renderPart(part, index);

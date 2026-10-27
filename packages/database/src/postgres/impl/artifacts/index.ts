@@ -13,6 +13,7 @@ import {
     resultSets,
     user,
     works,
+    workQuerySessions,
     type ArtifactChartState,
     type ArtifactType,
     type NewArtifact,
@@ -77,6 +78,7 @@ export type ArtifactWorkspaceTarget =
 export type ArtifactDetail = ArtifactSummary & {
     chartState: ArtifactChartState | null;
     resultSet: {
+        sourceDatabaseName: string | null;
         attachmentSource?: ChatAttachmentSource | null;
         id: string;
         columns: unknown[];
@@ -284,6 +286,7 @@ export class PostgresArtifactsRepository {
                 runTitle: works.title,
                 comparisonName: comparisons.name,
                 resultSet: resultSets,
+                legacyDatabase: workQuerySessions.database,
                 createdByName: user.name,
             })
             .from(artifacts)
@@ -291,6 +294,7 @@ export class PostgresArtifactsRepository {
             .leftJoin(works, eq(works.workId, artifacts.workId))
             .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
             .leftJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
+            .leftJoin(workQuerySessions, and(eq(workQuerySessions.workId, resultSets.workId), eq(workQuerySessions.sessionId, resultSets.sessionId)))
             .leftJoin(user, eq(user.id, artifacts.createdByActorId))
             .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
             .limit(1);
@@ -321,6 +325,7 @@ export class PostgresArtifactsRepository {
             chartState: row.artifact.chartState,
             resultSet: row.resultSet
                 ? {
+                      sourceDatabaseName: row.resultSet.sourceDatabaseName ?? row.legacyDatabase,
                       attachmentSource: row.resultSet.attachmentSource,
                       id: row.resultSet.id,
                       columns: row.resultSet.schemaJson,

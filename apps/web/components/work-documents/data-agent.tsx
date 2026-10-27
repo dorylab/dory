@@ -14,7 +14,7 @@ import type { UIMessage } from 'ai';
 import { ListTree, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsArrayOf, parseAsInteger, parseAsJson, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
-import { z } from 'zod';
+import { databaseSelectionsSchema } from '@/lib/work-documents/schema';
 
 import { workRequest } from '@/lib/work-documents/client';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
@@ -36,7 +36,6 @@ const WorkShareDialog = dynamic(() => import('./work-share-dialog').then(module 
 
 type AgentSession = ChatSessionItem & { connectionId: string | null; activeDatabase?: string | null; scope: AnalysisScope | null };
 type Options = { connections: AgentConnection[]; models: AgentKnowledge[]; sessions: AgentSession[]; works?: AgentWorkSummary[] };
-const databaseSelections = z.record(z.string(), z.string().min(1));
 const emptyConnections: AgentConnection[] = [];
 
 function sessionScope(session?: AgentSession): AnalysisScope {
@@ -63,7 +62,7 @@ export function DataAgent() {
         knowledge: parseAsString,
         connectionMode: parseAsStringLiteral(['auto', 'manual'] as const),
         knowledgeMode: parseAsStringLiteral(['auto', 'manual', 'none'] as const),
-        databases: parseAsJson(databaseSelections.parse),
+        databases: parseAsJson(databaseSelectionsSchema.parse),
     });
     const [newId, setNewId] = useState(() => crypto.randomUUID());
     const [busy, setBusy] = useState(false);
@@ -401,7 +400,12 @@ function AgentConversation({
             sendFailed.current = false;
             onBusy(true);
             try {
-                const metadata = { references: message.references ?? [], outputIntent: message.outputIntent ?? 'answer', sourceMessageId: message.sourceMessageId };
+                const metadata = {
+                    references: message.references ?? [],
+                    mentionSpans: message.mentionSpans,
+                    outputIntent: message.outputIntent ?? 'answer',
+                    sourceMessageId: message.sourceMessageId,
+                };
                 await sendMessage(
                     {
                         id: message.id ?? crypto.randomUUID(),

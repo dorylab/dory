@@ -5529,6 +5529,16 @@
         "Link": "Link",
         "LinkUrl": "Link URL",
         "ScopePicker": {
+            "SearchSourcesAndDatabases": "Search data sources or databases…",
+            "DatabaseCount": "{count, plural, one {# database} other {# databases}}",
+            "AutoSourceCount": "{count, plural, one {# source · automatic databases} other {# sources · automatic databases}}",
+            "SelectedCount": "{count} selected",
+            "AutoDescription": "Let Dory choose relevant databases",
+            "AutoDatabases": "Automatic databases",
+            "SelectAll": "Select all",
+            "Clear": "Clear",
+            "RemoveUnavailable": "Remove unavailable source",
+            "ScopeDescription": "Selections apply to subsequent Agent queries only.",
             "Sources": "Data sources",
             "Knowledge": "Knowledge",
             "Databases": "Databases",
@@ -5661,7 +5671,26 @@
         "ContinueUnfinished": "Continue unfinished steps"
     },
     "ChatComposer": {
+        "Picker": {
+            "Refine": "Showing the first 60 matches. Type more to narrow the search.",
+            "Search": "Search resources",
+            "AllResources": "All resources",
+            "Close": "Close resource search",
+            "CurrentWork": "Current Work",
+            "Recent": "Recently referenced",
+            "Browse": "Browse",
+            "NoRecent": "Type to search, or browse by type.",
+            "Keyboard": "↑ ↓ Navigate · Enter Select · Esc Close",
+            "OutOfScope": "A referenced table is outside the selected data sources. Remove it or update Data Sources before sending.",
+            "OutOfScopeShort": "Out of scope",
+            "Categories": {
+                "report": "Reports",
+                "result_set": "Result Sets",
+                "table": "Database Tables"
+            }
+        },
         "Add": "Add",
+        "MentionResource": "Reference a resource",
         "AddFiles": "Add files",
         "AddFolder": "Add folder",
         "ReportMode": "Report · generate and save",
@@ -5673,7 +5702,7 @@
         "Loading": "Loading…",
         "SearchFailed": "Unable to load some references.",
         "Retry": "Retry",
-        "NoReferences": "No matching resources. Select a data source to mention tables.",
+        "NoReferences": "No matching resources. Try another name.",
         "Kinds": {
             "table": "Tables",
             "report": "Reports",

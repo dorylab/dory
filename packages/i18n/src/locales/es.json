@@ -5520,6 +5520,16 @@
         "Link": "Enlace",
         "LinkUrl": "URL del enlace",
         "ScopePicker": {
+            "SearchSourcesAndDatabases": "Buscar fuentes de datos o bases de datos…",
+            "DatabaseCount": "{count, plural, one {# base de datos} other {# bases de datos}}",
+            "AutoSourceCount": "{count, plural, one {# fuente · bases automáticas} other {# fuentes · bases automáticas}}",
+            "SelectedCount": "{count} seleccionadas",
+            "AutoDescription": "Dory elige las bases de datos relevantes",
+            "AutoDatabases": "Bases de datos automáticas",
+            "SelectAll": "Seleccionar todo",
+            "Clear": "Limpiar",
+            "RemoveUnavailable": "Eliminar fuente no disponible",
+            "ScopeDescription": "La selección solo se aplica a las siguientes consultas del Agent.",
             "Sources": "Fuentes de datos",
             "Knowledge": "Conocimiento",
             "Databases": "Bases de datos",
@@ -5652,7 +5662,26 @@
         "ContinueUnfinished": "Continuar pasos pendientes"
     },
     "ChatComposer": {
+        "Picker": {
+            "Refine": "Se muestran las primeras 60 coincidencias. Escribe más para acotar la búsqueda.",
+            "Search": "Buscar recursos",
+            "AllResources": "Todos los recursos",
+            "Close": "Cerrar búsqueda",
+            "CurrentWork": "Work actual",
+            "Recent": "Referencias recientes",
+            "Browse": "Explorar por tipo",
+            "NoRecent": "Escribe para buscar o explora por tipo.",
+            "Keyboard": "↑ ↓ Navegar · Enter Seleccionar · Esc Cerrar",
+            "OutOfScope": "Una tabla está fuera de las fuentes seleccionadas. Elimina la referencia o cambia las fuentes antes de enviar.",
+            "OutOfScopeShort": "Fuera de alcance",
+            "Categories": {
+                "report": "Informes",
+                "result_set": "Resultados",
+                "table": "Tablas de bases de datos"
+            }
+        },
         "Add": "Add",
+        "MentionResource": "Referenciar un recurso",
         "AddFiles": "Add files",
         "AddFolder": "Add folder",
         "ReportMode": "Report · generate and save",
@@ -5664,7 +5693,7 @@
         "Loading": "Loading…",
         "SearchFailed": "Unable to load some references.",
         "Retry": "Retry",
-        "NoReferences": "No matching resources. Select a data source to mention tables.",
+        "NoReferences": "No hay recursos coincidentes. Prueba otro nombre.",
         "Kinds": {
             "table": "Tables",
             "report": "Reports",

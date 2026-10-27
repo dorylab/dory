@@ -1,3 +1,5 @@
+import type { AnalysisScope } from '@dory/shared/types/work-document';
+import { isAnalysisDatabaseAllowed } from '@dory/shared/utils/analysis-scope';
 import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { createHash } from 'node:crypto';
 import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
@@ -504,7 +506,7 @@ export class PostgresWorksRepository {
         const sourceWorkId = artifact.workId ?? artifact.agentRunId;
         const sourceWork = sourceWorkId ? await this.getById({ ...input, workId: sourceWorkId }) : null;
         if (sourceWorkId && (!sourceWork || sourceWork.archivedAt)) throw new DatabaseError('Evidence is unavailable.', 403);
-        const scope = work.metadata?.analysisScope as { connectionIds: string[]; databasesByConnection?: Record<string, string> } | undefined;
+        const scope = work.metadata?.analysisScope as AnalysisScope | undefined;
         const attachment = result?.attachmentSource;
         if (attachment && !canReadAttachmentSource(attachment, input.userId, typeof work.metadata?.chatId === 'string' ? work.metadata.chatId : null))
             throw new DatabaseError('Attachment evidence belongs to another conversation.', 403);
@@ -512,8 +514,7 @@ export class PostgresWorksRepository {
             throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
         if (!attachment && !scope && work.connectionId && artifact.connectionId !== work.connectionId)
             throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
-        const selectedDatabase = artifact.connectionId ? scope?.databasesByConnection?.[artifact.connectionId] : undefined;
-        if (selectedDatabase && database !== selectedDatabase) throw new DatabaseError('Evidence is outside the selected database.', 403);
+        if (artifact.connectionId && !isAnalysisDatabaseAllowed(scope, artifact.connectionId, database)) throw new DatabaseError('Evidence is outside the selected database.', 403);
         if (
             artifact.status !== 'ready' ||
             (artifact.expiresAt && artifact.expiresAt <= new Date()) ||
@@ -1062,12 +1063,10 @@ export class PostgresWorksRepository {
                             if (!source) throw new DatabaseError('Finding evidence access denied.', 403);
                         }
                     }
-                    const scope = currentMetadata.analysisScope as { connectionIds: string[]; databasesByConnection?: Record<string, string> } | undefined;
+                    const scope = currentMetadata.analysisScope as AnalysisScope | undefined;
                     if (
                         scope &&
-                        (!artifact.connectionId ||
-                            !scope.connectionIds.includes(artifact.connectionId) ||
-                            (scope.databasesByConnection?.[artifact.connectionId] && scope.databasesByConnection[artifact.connectionId] !== database))
+                        (!artifact.connectionId || !scope.connectionIds.includes(artifact.connectionId) || !isAnalysisDatabaseAllowed(scope, artifact.connectionId, database))
                     )
                         throw new DatabaseError('Finding evidence is outside the selected scope.', 403);
                 }

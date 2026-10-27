@@ -343,7 +343,7 @@ const ChatBotComp = ({
 
             try {
                 const tabId = mode === 'copilot' ? (copilotEnvelope?.meta?.tabId ?? null) : null;
-                if (mode === 'copilot' && !tabId) return;
+                if (mode === 'copilot' && !tabId) return false;
                 const connectionId = copilotEnvelope?.meta?.connectionId ?? params?.connectionId ?? currentConnection?.connection?.id ?? null;
 
                 const databaseForContext =
@@ -368,7 +368,7 @@ const ChatBotComp = ({
                     } catch (err: any) {
                         console.error('[chat] create copilot session failed', err);
                         toast.error(err?.message || t('Errors.CreateCopilotSession'));
-                        return;
+                        return false;
                     }
                 }
 
@@ -392,6 +392,7 @@ const ChatBotComp = ({
                         copilotEnvelope,
                         chatId: chatIdForRequest,
                         references: message.references,
+                        mentionSpans: message.mentionSpans,
                         outputIntent: message.outputIntent,
                         sourceMessageId: message.sourceMessageId,
                     },
@@ -403,7 +404,12 @@ const ChatBotComp = ({
                         messageId: message.id && messages.some(item => item.id === message.id) ? message.id : undefined,
                         role: 'user',
                         parts: [{ type: 'text', text: message.text || t('Input.SentWithAttachments') }, ...message.files],
-                        metadata: { references: message.references, outputIntent: message.outputIntent, sourceMessageId: message.sourceMessageId },
+                        metadata: {
+                            references: message.references,
+                            mentionSpans: message.mentionSpans,
+                            outputIntent: message.outputIntent,
+                            sourceMessageId: message.sourceMessageId,
+                        },
                     },
                     requestOptions,
                 );

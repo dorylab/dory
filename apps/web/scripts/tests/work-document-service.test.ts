@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -149,7 +149,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             chatId: 'reports',
             requestId: 'turn-1',
             creationKey: 'reports:user-message',
-            scope: { connectionIds: ['orders', 'ads'] },
+            scope: { connectionIds: ['orders', 'ads'], databasesByConnection: { orders: ['main', 'sales'] } },
             runId: async () => run.workId,
         });
         assert.deepEqual(await db.workDocuments.list(owner), []);
@@ -182,7 +182,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 workId: run.workId,
                 createdAt: new Date(),
                 rowCount: 1,
-                resultSet: { id: artifactId, sql: `SELECT revenue FROM ${artifactId}` },
+                resultSet: { id: artifactId, sourceDatabaseName: 'main', sql: `SELECT revenue FROM ${artifactId}` },
             };
         });
         let dataAvailability: 'full' | 'preview-only' | 'none' = 'preview-only';
@@ -203,6 +203,17 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 call,
             ) as Promise<unknown>,
             /outside/,
+        );
+        await assert.rejects(
+            saveWorkDraft(db, {
+                ...owner,
+                documentId: created.id,
+                expectedRevision: 1,
+                draft,
+                source: 'user',
+                scope: { connectionIds: ['orders', 'ads'], databasesByConnection: { orders: ['sales', 'analytics'] } },
+            }),
+            /outside the selected database/,
         );
         const ready = await reports.tools.updateWorkReport.execute!({ documentId: created.id, expectedRevision: 1, patch }, call);
         await reports.assertReady();
@@ -395,6 +406,72 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         assert.notEqual(referenced.references[0].title, 'forged name');
         assert.match(referenced.instruction, /revision/);
         assert.match(referenced.instruction, /do not expand/);
+        await t.test('report mentions read the selected revision and reject missing or archived versions', async () => {
+            const original = await db.workDocuments.get({ ...owner, documentId: partial.reportDocumentId });
+            const pinned = await db.workDocuments.create({
+                ...owner,
+                creationKey: 'mention-versions',
+                title: 'Pinned original',
+                scope: original.scope,
+                content: { ...original.content, markdown: 'Original revenue: 42' },
+            });
+            const ref = { kind: 'report' as const, id: pinned.id, title: pinned.title, revision: 1 };
+            await db.workDocuments.update({
+                ...owner,
+                documentId: pinned.id,
+                expectedRevision: 1,
+                title: 'Updated title',
+                scope: pinned.scope,
+                status: 'ready',
+                source: 'user',
+                content: { ...original.content, markdown: 'Updated revenue: 99' },
+            });
+            const resolved = await resolveChatContext(db, owner, { references: [ref] }, { connectionIds: [] });
+            assert.equal(resolved.references[0].title, 'Pinned original');
+            assert.match(resolved.instruction, /Original revenue: 42/);
+            assert.doesNotMatch(resolved.instruction, /Updated revenue: 99/);
+            const legacy = await resolveChatContext(db, owner, { references: [{ ...ref, revision: undefined }] }, { connectionIds: [] });
+            assert.match(legacy.instruction, /Updated revenue: 99/);
+            assert.equal(legacy.references[0].kind === 'report' && legacy.references[0].revision, 2);
+            await assert.rejects(resolveChatContext(db, owner, { references: [{ ...ref, revision: 999 }] }, { connectionIds: [] }), /Version not found/);
+            await assert.rejects(resolveChatContext(db, { ...owner, userId: 'outsider' }, { references: [ref] }, { connectionIds: [] }));
+            await assert.rejects(
+                resolveChatContext(db, owner, { references: [ref], mentionSpans: [{ start: 0, end: 999, referenceKey: 'invalid' }] }, { connectionIds: [] }),
+                /positions/,
+            );
+            await db.workDocuments.archive({ ...owner, documentId: pinned.id, archived: true });
+            await assert.rejects(resolveChatContext(db, owner, { references: [ref] }, { connectionIds: [] }), /archived/);
+        });
+
+        await writeFile(join(directory, 'references.sqlite'), '');
+        await database.insert(schema.connections).values({
+            id: 'reference-source',
+            organizationId: owner.organizationId,
+            type: 'sqlite',
+            engine: 'sqlite',
+            name: 'References',
+            path: join(directory, 'references.sqlite'),
+        });
+        const { ensureConnectionPoolForUser } = await import('@/lib/connection/utils');
+        const { destroyDriverPool } = await import('@dory/drivers/core');
+        const { entry } = await ensureConnectionPoolForUser(owner.userId, owner.organizationId, 'reference-source');
+        const described: string[] = [];
+        t.mock.method(entry.instance, 'describeTable', async (database: string) => {
+            described.push(database);
+            return [];
+        });
+        try {
+            const multiReferences = await resolveChatContext(
+                db,
+                owner,
+                { references: ['main', 'sales'].map(database => ({ kind: 'table', title: 'orders', table: 'orders', schema: null, connectionId: 'reference-source', database })) },
+                { connectionIds: ['reference-source'], databasesByConnection: { 'reference-source': ['main', 'sales'] } },
+            );
+            assert.equal(multiReferences.references.length, 2);
+            assert.deepEqual(described, ['main', 'sales']);
+        } finally {
+            await destroyDriverPool(entry.config.id);
+        }
         const artifactReference = await resolveChatContext(db, owner, { references: [{ kind: 'artifact', id: 'outside', title: 'forged' }] }, { connectionIds: ['orders'] });
         assert.equal(artifactReference.references[0].title, 'Query');
         assert.match(artifactReference.instruction, /private/);
@@ -416,7 +493,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 db,
                 owner,
                 { references: [{ kind: 'table', title: 'orders', table: 'orders', schema: null, connectionId: 'orders', database: 'analytics' }] },
-                { connectionIds: ['orders'], databasesByConnection: { orders: 'main' } },
+                { connectionIds: ['orders'], databasesByConnection: { orders: ['main', 'sales'] } },
             ),
             /outside the selected data source\/database/,
         );

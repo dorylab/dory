@@ -78,7 +78,7 @@ async function fixture(progressCheckpoints = false) {
     const db = { works, chat, tabState, artifacts, resultSets } as DBService;
     await database.insert(schema.user).values({ id: 'user', name: 'User', email: 'user@example.test' });
     await chat.createGlobalSession({ ...scope, id: 'chat', connectionId: 'connection' });
-    const start = (requestId: string, connectionIds?: string[], databasesByConnection?: Record<string, string>) =>
+    const start = (requestId: string, connectionIds?: string[], databasesByConnection?: Record<string, string | string[]>) =>
         works.startChatTurn({
             ...scope,
             requestId,
@@ -91,7 +91,7 @@ async function fixture(progressCheckpoints = false) {
                 ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
             },
         });
-    const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string>) => {
+    const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string | string[]>) => {
         // Match the request-local lifecycle: resolving an old Run must not restart its turn.
         let work: ReturnType<typeof start> | undefined;
         return createChatAnalysis({
@@ -509,7 +509,7 @@ test('ordinary answers, tool budget and failed saves finish with text without fo
 test('global analysis queries two selected sources, retains per-source evidence and rejects out-of-scope SQL', async t => {
     const f = await fixture();
     const executed: Array<{ connectionId: string; database: string | null | undefined }> = [];
-    const selectedDatabases = { connection: 'sales', second: 'advertising' };
+    const selectedDatabases = { connection: ['sales', 'analytics'], second: 'advertising' };
     const graphs: Array<{ connectionId?: string; database: string }> = [];
     t.mock.method(schemaGetGraphAction, 'handler', async (_ctx: unknown, input: { connectionId?: string; database: string }) => {
         graphs.push(input);
@@ -541,19 +541,20 @@ test('global analysis queries two selected sources, retains per-source evidence 
         assert.equal(work.connectionId, null);
         const analysis = f.makeAnalysis('multi', undefined, ['connection', 'second'], selectedDatabases);
         const execute = analysis.tools.sqlRunner.execute!;
-        await execute({ connectionId: 'connection', sql: 'select 42 as total' }, call('one'));
+        await assert.rejects(async () => execute({ connectionId: 'connection', sql: 'select 42 as total' }, call('missing-db')), /explicit database/);
+        await execute({ connectionId: 'connection', database: 'sales', sql: 'select 42 as total' }, call('one'));
         await execute({ connectionId: 'second', sql: 'select 42 as total', database: 'advertising' }, call('two'));
         assert.deepEqual(executed, [
             { connectionId: 'connection', database: 'sales' },
             { connectionId: 'second', database: 'advertising' },
         ]);
         await assert.rejects(async () => execute({ connectionId: 'second', sql: 'select 42', database: 'sales' }, call('wrong-db')), /does not match/);
-        await analysis.tools.exploreSchema.execute!({ operation: 'list_tables', connectionId: 'connection' }, call('schema-one'));
+        await analysis.tools.exploreSchema.execute!({ operation: 'list_tables', connectionId: 'connection', database: 'analytics' }, call('schema-one'));
         await analysis.tools.exploreSchema.execute!({ operation: 'list_tables', connectionId: 'second' }, call('schema-two'));
         assert.deepEqual(
             explored.map(item => [item.connectionId, item.database]),
             [
-                ['connection', 'sales'],
+                ['connection', 'analytics'],
                 ['second', 'advertising'],
             ],
         );
@@ -592,10 +593,10 @@ test('global analysis queries two selected sources, retains per-source evidence 
             /does not match/,
         );
         const bridgeGraph = getAgentExecutionTools().find(tool => tool.name === 'dory_get_schema_graph')!;
-        const graphInput = { workId: work.workId, requestId: 'multi', connectionId: 'connection' };
+        const graphInput = { workId: work.workId, requestId: 'multi', connectionId: 'connection', database: 'analytics' };
         assert.ok(bridgeGraph.inputSchema.safeParse(graphInput).success);
         await bridgeGraph.execute(bridgeContext, graphInput);
-        assert.equal(graphs.at(-1)?.database, 'sales');
+        assert.equal(graphs.at(-1)?.database, 'analytics');
         const persisted = await f.works.getById({ ...scope, workId: work.workId });
         assert.deepEqual(persisted?.metadata?.analysisScope, { connectionIds: ['connection', 'second'], databasesByConnection: selectedDatabases });
         await f.chat.updateSession({ ...scope, sessionId: 'chat', patch: { metadata: { analysisScope: persisted?.metadata?.analysisScope } } });
@@ -756,6 +757,7 @@ test('external Artifact evidence is explicitly read, scoped, retained and revali
             results: [[{ orders: 42 }]],
         });
         await f.database.update(schema.resultSets).set({ sourceDatabaseName: null }).where(eq(schema.resultSets.id, artifact.resultSetId));
+        assert.equal((await f.db.artifacts.get({ ...scope, artifactId: artifact.artifactId })).resultSet?.sourceDatabaseName, 'main');
         const work = await f.start('unread', ['connection'], { connection: 'main' });
         const payload = {
             status: 'completed',
@@ -767,8 +769,8 @@ test('external Artifact evidence is explicitly read, scoped, retained and revali
             f.makeAnalysis('unread', undefined, ['connection'], { connection: 'main' }).tools.finishAnalysis.execute!(payload, call('unread')) as Promise<unknown>,
             /explicitly read/,
         );
-        await f.start('read', ['connection'], { connection: 'main' });
-        const analysis = f.makeAnalysis('read', undefined, ['connection'], { connection: 'main' });
+        await f.start('read', ['connection'], { connection: ['main', 'analytics'] });
+        const analysis = f.makeAnalysis('read', undefined, ['connection'], { connection: ['main', 'analytics'] });
         const preview = (await analysis.tools.readArtifact.execute!({ artifactId: artifact.artifactId }, call('read'))) as {
             evidence: { sourceWorkId: string };
             preview: { rows: unknown[] };
@@ -790,7 +792,7 @@ test('external Artifact evidence is explicitly read, scoped, retained and revali
         };
         const read = getAgentExecutionTools().find(tool => tool.name === 'dory_artifacts')!;
         const finish = getAgentExecutionTools().find(tool => tool.name === 'dory_finish_work')!;
-        await f.start('mcp', ['connection'], { connection: 'main' });
+        await f.start('mcp', ['connection'], { connection: ['main', 'analytics'] });
         await read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'mcp' });
         await finish.execute(ctx, { ...payload, workId: work.workId, requestId: 'mcp' });
         await finish.execute(ctx, { ...payload, workId: work.workId, requestId: 'mcp' });
@@ -800,7 +802,15 @@ test('external Artifact evidence is explicitly read, scoped, retained and revali
         };
         assert.equal(summary.sections[0].evidence[artifact.artifactId].sourceWorkId, source.workId);
         assert.equal(summary.sections[1].evidence[artifact.artifactId].sourceWorkId, source.workId);
-        await f.start('db-mismatch', ['connection'], { connection: 'other-db' });
+        await f.start('narrow-save', ['connection'], { connection: ['main', 'analytics'] });
+        await read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'narrow-save' });
+        const beforeNarrow = await f.works.getById({ ...scope, workId: work.workId });
+        await f.database
+            .update(schema.works)
+            .set({ metadata: { ...beforeNarrow!.metadata, analysisScope: { connectionIds: ['connection'], databasesByConnection: { connection: ['other-db', 'third-db'] } } } })
+            .where(eq(schema.works.workId, work.workId));
+        await assert.rejects(finish.execute(ctx, { ...payload, workId: work.workId, requestId: 'narrow-save' }), /outside the selected database/);
+        await f.start('db-mismatch', ['connection'], { connection: ['other-db', 'third-db'] });
         await assert.rejects(read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'db-mismatch' }), /selected database/);
         await f.start('source-mismatch', ['other']);
         await assert.rejects(read.execute(ctx, { artifactId: artifact.artifactId, workId: work.workId, requestId: 'source-mismatch' }), /scope/);

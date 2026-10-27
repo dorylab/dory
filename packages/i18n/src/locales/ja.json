@@ -5526,6 +5526,16 @@
         "Link": "リンク",
         "LinkUrl": "リンク先",
         "ScopePicker": {
+            "SearchSourcesAndDatabases": "データソースまたはデータベースを検索…",
+            "DatabaseCount": "{count} データベース",
+            "AutoSourceCount": "{count} ソース · DB 自動選択",
+            "SelectedCount": "{count} 件選択",
+            "AutoDescription": "Dory が関連するデータベースを選択",
+            "AutoDatabases": "データベースを自動選択",
+            "SelectAll": "すべて選択",
+            "Clear": "クリア",
+            "RemoveUnavailable": "利用できないソースを削除",
+            "ScopeDescription": "選択範囲は以降の Agent クエリにのみ適用されます。",
             "Sources": "データソース",
             "Knowledge": "ナレッジ",
             "Databases": "データベース",
@@ -5658,7 +5668,26 @@
         "ContinueUnfinished": "未完了の手順を再開"
     },
     "ChatComposer": {
+        "Picker": {
+            "Refine": "最初の60件を表示しています。入力を続けて絞り込んでください。",
+            "Search": "リソースを検索",
+            "AllResources": "すべてのリソース",
+            "Close": "検索を閉じる",
+            "CurrentWork": "現在の Work",
+            "Recent": "最近の参照",
+            "Browse": "種類で探す",
+            "NoRecent": "キーワードを入力するか、種類で探してください。",
+            "Keyboard": "↑ ↓ 移動 · Enter 選択 · Esc 閉じる",
+            "OutOfScope": "参照したテーブルはデータソースの範囲外です。参照を削除するか、データソースを変更してください。",
+            "OutOfScopeShort": "範囲外",
+            "Categories": {
+                "report": "レポート",
+                "result_set": "結果セット",
+                "table": "データベーステーブル"
+            }
+        },
         "Add": "Add",
+        "MentionResource": "リソースを参照",
         "AddFiles": "Add files",
         "AddFolder": "Add folder",
         "ReportMode": "Report · generate and save",
@@ -5670,7 +5699,7 @@
         "Loading": "Loading…",
         "SearchFailed": "Unable to load some references.",
         "Retry": "Retry",
-        "NoReferences": "No matching resources. Select a data source to mention tables.",
+        "NoReferences": "一致するリソースがありません。別の名前をお試しください。",
         "Kinds": {
             "table": "Tables",
             "report": "Reports",

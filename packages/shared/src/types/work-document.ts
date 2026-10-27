@@ -4,7 +4,7 @@ export type AnalysisScope = {
     knowledgeMode?: 'auto' | 'manual' | 'none';
     connectionIds: string[];
     knowledgeModelId?: string | null;
-    databasesByConnection?: Record<string, string>;
+    databasesByConnection?: Record<string, string | string[]>;
 };
 export type WorkEvidence = {
     attachmentSource?: ChatAttachmentSource;

@@ -3,6 +3,7 @@ import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
 import type { DBService } from '@dory/database';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { AnalysisScope, WorkDocumentContent, WorkEvidence } from '@dory/shared/types/work-document';
+import { isAnalysisDatabaseAllowed } from '@dory/shared/utils/analysis-scope';
 import { z } from 'zod';
 
 import { canWriteWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
@@ -114,6 +115,8 @@ export async function saveWorkDraft(
                 if (!(await db.works.getById({ ...input, workId: artifact.workId }))) throw new DatabaseError('Evidence is unavailable.', 403);
             }
             if (!artifact.resultSet) throw new DatabaseError('Evidence has no query result.', 400);
+            if (!attachment && artifact.connectionId && !isAnalysisDatabaseAllowed(scope, artifact.connectionId, artifact.resultSet.sourceDatabaseName))
+                throw new DatabaseError('Evidence is outside the selected database.', 403);
             const result = await db.resultSets.readRows({ organizationId: input.organizationId, userId: input.userId, resultSetId: artifact.resultSet.id, limit: 500 });
             if (result.dataAvailability === 'none' || ((result.rowCount ?? 0) > 0 && !result.rows.length))
                 throw new DatabaseError('Evidence data is no longer available. Re-run the query.', 409);

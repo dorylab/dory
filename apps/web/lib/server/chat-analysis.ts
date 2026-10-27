@@ -5,6 +5,7 @@ import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { Locale } from '@dory/i18n/routing';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
+import { getAnalysisDatabases } from '@dory/shared/utils/analysis-scope';
 import { tool, type ToolSet } from 'ai';
 import { z } from 'zod';
 
@@ -128,7 +129,8 @@ export function createChatAnalysis(options: {
                           .map(item => {
                               const connection = asRecord(item);
                               const id = String(connection.connectionId ?? connection.id);
-                              return { ...connection, defaultDatabase: options.analysisScope?.databasesByConnection?.[id] ?? connection.defaultDatabase };
+                              const databases = getAnalysisDatabases(options.analysisScope, id);
+                              return { ...connection, defaultDatabase: databases ? (databases.length === 1 ? databases[0] : null) : connection.defaultDatabase };
                           })
                     : [],
             };

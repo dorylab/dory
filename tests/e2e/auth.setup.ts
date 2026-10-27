@@ -14,7 +14,11 @@ setup('authenticate demo user', async ({ page, context }) => {
             break;
         }
 
-        const demoButton = page.getByTestId('demo-sign-in').or(page.getByRole('button', { name: /enter as demo|login as demo|sign in as demo/i }));
+        const demoButton = page
+            .getByTestId('demo-sign-in')
+            .or(page.getByRole('button', { name: /enter as demo|login as demo|sign in as demo/i }))
+            .or(page.getByTestId('guest-sign-in'))
+            .first();
 
         try {
             await expect(demoButton).toBeVisible({ timeout: 20_000 });
@@ -28,7 +32,10 @@ setup('authenticate demo user', async ({ page, context }) => {
 
         await expect(demoButton).toBeEnabled({ timeout: 20_000 });
 
-        const navigation = page.waitForURL(/\/[^/]+\/work$/, { timeout: 30_000 }).catch(() => null);
+        const navigation = page
+            .waitForURL(/\/[^/]+\/work$/, { timeout: 30_000, waitUntil: 'domcontentloaded' })
+            .then(() => true)
+            .catch(() => false);
         await demoButton.click();
 
         if (await navigation) {

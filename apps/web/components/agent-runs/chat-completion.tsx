@@ -16,6 +16,8 @@ export function ChatCompletionCard({
     disabled?: boolean;
 }) {
     const t = useTranslations('AgentRuns.Chat.Completion');
+    if (completion.status === 'completed' && !completion.report && !completion.unfinished.length && !completion.canContinue) return null;
+
     return (
         <section className="my-3 space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-sm" data-testid="chat-completion">
             <p role="status" aria-live="polite" className="font-medium">

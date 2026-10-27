@@ -75,6 +75,7 @@ type ChatRequestBody = {
     documentId?: string | null;
     resumeMessageId?: string;
     references?: ChatContext['references'];
+    mentionSpans?: ChatContext['mentionSpans'];
     outputIntent?: ChatContext['outputIntent'];
     sourceMessageId?: string;
 };
@@ -197,7 +198,12 @@ export async function handleChatRequest(req: Request) {
         requestedModel,
         includeModel: true,
     });
-    const contextInput = chatContextSchema.parse({ references: body.references, outputIntent: body.outputIntent, sourceMessageId: body.sourceMessageId });
+    const contextInput = chatContextSchema.parse({
+        references: body.references,
+        mentionSpans: body.mentionSpans,
+        outputIntent: body.outputIntent,
+        sourceMessageId: body.sourceMessageId,
+    });
     contextInput.outputIntent = resolveChatOutputIntent(contextInput, currentUserText, body.documentId);
     if (contextInput.references.length && (!db || !userId || !organizationId)) throw new DatabaseError('Unauthorized.', 401);
     const referenceScope = analysisScope ?? {
@@ -206,7 +212,17 @@ export async function handleChatRequest(req: Request) {
     };
     const resolvedContext =
         db && userId && organizationId
-            ? await resolveChatContext(db, { userId, organizationId }, contextInput, referenceScope, chatIdFromBody ?? null)
+            ? await resolveChatContext(
+                  db,
+                  { userId, organizationId },
+                  contextInput,
+                  referenceScope,
+                  chatIdFromBody ?? null,
+                  currentUserMessage?.parts
+                      .filter(part => part.type === 'text')
+                      .map(part => part.text)
+                      .join('\n') ?? '',
+              )
             : { ...contextInput, instruction: '' };
     const hasAttachments = historyMessagesForAgent.some(message => message.parts.some(part => part.type === 'file'));
     try {
@@ -375,7 +391,7 @@ export async function handleChatRequest(req: Request) {
     }
     if (db && userId && organizationId && chatId) await bindChatAttachments({ userId, organizationId }, chatId, uiMessages);
     const editingReport = contextInput.outputIntent !== 'report' && (isReportEditRequest(currentUserText) || Boolean(body.resumeMessageId && body.documentId));
-    const reportReferences = contextInput.references.filter(ref => ref.kind === 'report').map(ref => ref.id);
+    const reportReferences = [...new Set(contextInput.references.filter(ref => ref.kind === 'report').map(ref => ref.id))];
     const candidates =
         editingReport && !body.documentId && !reportReferences.length && db && userId && organizationId && chatId
             ? (await db.workDocuments.list({ userId, organizationId, chatId })).map(document => document.id)
@@ -538,7 +554,7 @@ export async function handleChatRequest(req: Request) {
                 : null,
             reports ? await reports.instructions(isLocalAiAgentProvider(execution.providerKey)) : null,
             analysisScope
-                ? `Analysis scope: ${JSON.stringify(analysisScope)}. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
+                ? `Analysis scope: ${JSON.stringify(analysisScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
                 : null,
             currentTurnExecutionInstruction,
             knowledgeDiscovery,
@@ -583,6 +599,7 @@ export async function handleChatRequest(req: Request) {
                             ...contextInput,
                             attachments: currentUserMessage.parts.filter(part => part.type === 'file'),
                             references: resolvedContext.references,
+                            mentionSpans: resolvedContext.mentionSpans,
                             referenceContext: resolvedContext.instruction || undefined,
                         },
                         createdAt: new Date(),

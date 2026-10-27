@@ -1,5 +1,6 @@
 'use client';
 
+import { getAnalysisDatabases } from '@dory/shared/utils/analysis-scope';
 import type { ConnectionType } from '@dory/shared/types/connections';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { isHiddenDatabase } from '@/app/(app)/[organization]/components/sql-console-sidebar/utils';
@@ -8,31 +9,41 @@ import type { AnalysisScope, WorkDocumentSummary } from '@dory/shared/types/work
 import { useQueries, useQuery } from '@tanstack/react-query';
 
 import { executeActionClient } from '@/lib/actions/client';
-import type { ArtifactSummary } from '@/lib/artifacts/types';
+import type { ArtifactDetail, ArtifactSummary } from '@/lib/artifacts/types';
 import { workRequest } from '@/lib/work-documents/client';
 import { querySnapshotOptions } from '@/lib/agent-runs/query-snapshot';
-import { referenceKey, type ChatReference } from './types';
+import { referenceKey } from './types';
+import { rankReferences, referenceInScope, type ReferenceOption, type ReferenceCategory } from './mentions';
+import type { RecentReference } from './recent-references';
+export type { ReferenceOption } from './mentions';
 
-export type ReferenceOption = { reference: ChatReference; detail: string; current?: boolean };
-
-export function useChatReferences(organization: string, chatId: string | null, scope: AnalysisScope, search: string | null, runIds: string[]) {
+export function useChatReferences(
+    organization: string,
+    chatId: string | null,
+    scope: AnalysisScope,
+    search: string | null,
+    runIds: string[],
+    category: ReferenceCategory = null,
+    recent: RecentReference[] = [],
+    sourceNames: Record<string, string> = {},
+) {
     const enabled = search !== null;
-    const category = /^(table|report|artifact)(?:\s|$)/i.exec(search ?? '')?.[1]?.toLowerCase();
-    const query = (category ? search!.slice(category.length) : (search ?? '')).trim();
+    const query = (search ?? '').trim();
+    const needTables = Boolean(query || category === 'table' || recent.some(item => item.reference.kind === 'table'));
     const automatic = scope.connectionMode === 'auto' || (!scope.connectionMode && !scope.connectionIds.length);
-    const discoverDatabases = automatic || scope.connectionIds.some(id => !scope.databasesByConnection?.[id]);
+    const discoverDatabases = automatic || scope.connectionIds.some(id => getAnalysisDatabases(scope, id) === undefined);
     const discovery = useQuery({
         queryKey: ['chat-auto-sources', organization],
-        enabled: enabled && discoverDatabases && (!category || category === 'table'),
+        enabled: enabled && needTables && discoverDatabases && (!category || category === 'table'),
         queryFn: () => workRequest<{ connections: Array<{ id: string; name: string; type: ConnectionType }> }>('/api/data-agent'),
         staleTime: 60_000,
     });
     const autoTables = useQueries({
         queries: (discovery.data?.connections ?? [])
-            .filter(connection => automatic || (scope.connectionIds.includes(connection.id) && !scope.databasesByConnection?.[connection.id]))
+            .filter(connection => automatic || (scope.connectionIds.includes(connection.id) && getAnalysisDatabases(scope, connection.id) === undefined))
             .map(connection => ({
                 queryKey: ['chat-auto-tables', organization, connection.id],
-                enabled: enabled && discoverDatabases && (!category || category === 'table'),
+                enabled: enabled && needTables && discoverDatabases && (!category || category === 'table'),
                 staleTime: 60_000,
                 queryFn: async ({ signal }: { signal: AbortSignal }) => {
                     const result = await executeActionClient<{ databases: Array<{ value?: string; name?: string; label?: string }> }>(
@@ -69,19 +80,21 @@ export function useChatReferences(organization: string, chatId: string | null, s
             })),
     });
     const tables = useQueries({
-        queries: (automatic ? [] : scope.connectionIds.filter(id => Boolean(scope.databasesByConnection?.[id]))).map(connectionId => ({
-            queryKey: ['chat-tables', organization, connectionId, scope.databasesByConnection?.[connectionId]],
-            enabled: enabled && (!category || category === 'table') && Boolean(scope.databasesByConnection?.[connectionId]),
+        queries: (automatic
+            ? []
+            : scope.connectionIds.flatMap(connectionId => (getAnalysisDatabases(scope, connectionId) ?? []).map(database => ({ connectionId, database })))
+        ).map(({ connectionId, database }) => ({
+            queryKey: ['chat-tables', organization, connectionId, database],
+            enabled: enabled && needTables && (!category || category === 'table'),
             staleTime: 60_000,
             queryFn: async ({ signal }: { signal: AbortSignal }) => {
-                const database = scope.databasesByConnection![connectionId];
                 const [tables, views] = await Promise.all([
                     executeActionClient<{ tables: DatabaseObjectRow[] }>('schema.listTables', { connectionId, database }, { signal }),
                     executeActionClient<{ views: DatabaseObjectRow[] }>('schema.listViews', { connectionId, database }, { signal }).catch(() => ({ views: [] })),
                 ]);
                 return [...tables.tables, ...views.views].map(table => ({
                     reference: { kind: 'table' as const, connectionId, database, schema: table.schema ?? null, table: table.value ?? table.name, title: table.label ?? table.name },
-                    detail: [connectionId, database, table.schema].filter(Boolean).join(' / '),
+                    detail: [sourceNames[connectionId] ?? connectionId, database, table.schema].filter(Boolean).join(' / '),
                 }));
             },
         })),
@@ -89,11 +102,15 @@ export function useChatReferences(organization: string, chatId: string | null, s
     const reports = useQuery({
         queryKey: ['chat-report-references', organization, chatId, query],
         enabled: enabled && (!category || category === 'report'),
-        queryFn: async () => {
+        queryFn: async ({ signal }) => {
             const [all, current] = await Promise.all([
-                workRequest<{ documents: WorkDocumentSummary[] }>(`/api/work-documents?q=${encodeURIComponent(query)}`),
+                workRequest<{ documents: WorkDocumentSummary[] }>(`/api/work-documents?q=${encodeURIComponent(query)}`, undefined, signal),
                 chatId
-                    ? workRequest<{ documents: WorkDocumentSummary[] }>(`/api/work-documents?chatId=${encodeURIComponent(chatId)}&q=${encodeURIComponent(query)}`)
+                    ? workRequest<{ documents: WorkDocumentSummary[] }>(
+                          `/api/work-documents?chatId=${encodeURIComponent(chatId)}&q=${encodeURIComponent(query)}`,
+                          undefined,
+                          signal,
+                      )
                     : Promise.resolve({ documents: [] }),
             ]);
             return { documents: [...new Map([...current.documents, ...all.documents].map(document => [document.id, document])).values()] };
@@ -101,40 +118,87 @@ export function useChatReferences(organization: string, chatId: string | null, s
     });
     const artifacts = useQuery({
         queryKey: ['chat-artifact-references', organization, query],
-        enabled: enabled && (!category || category === 'artifact'),
+        enabled: enabled && (!category || category === 'result_set'),
         queryFn: ({ signal }) => executeActionClient<{ rows: ArtifactSummary[] }>('artifact.list', { query, limit: 100, forChatReference: true }, { signal }),
     });
-    const currentArtifacts = useQueries({ queries: runIds.map(id => ({ ...querySnapshotOptions(organization, id), enabled: enabled && (!category || category === 'artifact') })) });
-    const artifactOptions = [...currentArtifacts.flatMap(item => item.data?.artifacts ?? []), ...(artifacts.data?.rows ?? [])];
+    const currentArtifacts = useQueries({
+        queries: runIds.map(id => ({ ...querySnapshotOptions(organization, id), enabled: enabled && (!category || category === 'result_set') })),
+    });
+    const artifactOptions = [...currentArtifacts.flatMap(item => (item.isError ? [] : (item.data?.artifacts ?? []))), ...(artifacts.isError ? [] : (artifacts.data?.rows ?? []))];
     const candidates: ReferenceOption[] = [
-        ...(!category || category === 'table' ? [...tables, ...autoTables].flatMap(item => item.data ?? []) : []),
+        ...(needTables && (!category || category === 'table') ? [...tables, ...autoTables].flatMap(item => (item.isError ? [] : (item.data ?? []))) : []),
         ...(!category || category === 'report'
-            ? (reports.data?.documents ?? []).map(report => ({
-                  reference: { kind: 'report' as const, id: report.id, title: report.title },
+            ? (reports.isError ? [] : (reports.data?.documents ?? [])).map(report => ({
+                  reference: { kind: 'report' as const, id: report.id, title: report.title, revision: report.revision },
                   detail: `Report · v${report.revision}`,
-                  current: report.chatId === chatId,
+                  current: Boolean(chatId && report.chatId === chatId),
+                  timestamp: report.updatedAt,
               }))
             : []),
-        ...(!category || category === 'artifact'
+        ...(!category || category === 'result_set'
             ? artifactOptions
-                  .filter(item => item.status === 'ready')
+                  .filter(item => item.status === 'ready' && (!item.expiresAt || Date.parse(item.expiresAt) > Date.now()))
                   .map(artifact => ({
                       reference: { kind: 'artifact' as const, id: artifact.id, title: artifact.title },
-                      detail: [artifact.type, artifact.connectionName].filter(Boolean).join(' · '),
-                      current: Boolean(artifact.workId && runIds.includes(artifact.workId)),
+                      detail: artifactDetail(artifact),
+                      artifactType: artifact.type,
+                      timestamp: artifact.createdAt,
+                      current: Boolean((artifact.workId && runIds.includes(artifact.workId)) || (artifact.agentRunId && runIds.includes(artifact.agentRunId))),
                   }))
             : []),
     ];
-    const options = [
-        ...new Map(
-            candidates.filter(item => `${item.reference.title} ${item.detail}`.toLowerCase().includes(query.toLowerCase())).map(item => [referenceKey(item.reference), item]),
-        ).values(),
-    ].sort((a, b) => Number(Boolean(b.current)) - Number(Boolean(a.current)));
+    const recentDetails = useQueries({
+        queries: recent
+            .filter(item => item.reference.kind !== 'table' && referenceInScope(item.reference, scope))
+            .map(item => ({
+                queryKey: ['chat-recent-resource', organization, chatId, referenceKey(item.reference)],
+                enabled: enabled && !query && !category,
+                staleTime: 0,
+                retry: false,
+                queryFn: async ({ signal }: { signal: AbortSignal }): Promise<ReferenceOption | null> => {
+                    const ref = item.reference;
+                    if (ref.kind === 'report') {
+                        const { document } = await workRequest<{ document: WorkDocumentSummary }>(
+                            `/api/work-documents/${encodeURIComponent(ref.id)}${ref.revision ? `?revision=${ref.revision}` : ''}`,
+                            undefined,
+                            signal,
+                        );
+                        if (document.archivedAt) return null;
+                        return { reference: { ...ref, title: document.title, revision: document.revision }, detail: `Report · v${document.revision}`, recentAt: item.usedAt };
+                    }
+                    if (ref.kind !== 'artifact') return null;
+                    const artifact = await executeActionClient<ArtifactDetail>('artifact.get', { artifactId: ref.id }, { signal });
+                    if (
+                        artifact.status !== 'ready' ||
+                        (artifact.expiresAt && Date.parse(artifact.expiresAt) <= Date.now()) ||
+                        ('resultSet' in artifact && artifact.resultSet?.dataAvailability === 'none')
+                    )
+                        return null;
+                    return { reference: { ...ref, title: artifact.title }, detail: artifactDetail(artifact), artifactType: artifact.type, recentAt: item.usedAt };
+                },
+            })),
+    });
+    const recentTimes = new Map(recent.map(item => [referenceKey(item.reference), item.usedAt]));
+    const options = rankReferences(
+        [
+            ...candidates
+                .filter(option => referenceInScope(option.reference, scope))
+                .map(option => ({ ...option, recentAt: query || category || option.reference.kind === 'table' ? recentTimes.get(referenceKey(option.reference)) : undefined })),
+            ...(!query && !category ? recentDetails.flatMap(result => (result.isSuccess && !result.isFetching && result.data ? [result.data] : [])) : []),
+        ],
+        query,
+        category,
+    );
     const queries = [discovery, ...autoTables, ...tables, reports, artifacts, ...currentArtifacts];
     return {
         options,
-        loading: queries.some(item => item.isFetching),
+        loading: queries.some(item => item.isFetching) || recentDetails.some(item => item.isFetching),
         error: queries.find(item => item.error)?.error,
         retry: () => queries.filter(item => item.isError).forEach(item => void item.refetch()),
     };
+}
+
+function artifactDetail(artifact: ArtifactSummary) {
+    const label = artifact.type === 'result_set' ? 'Result Set' : artifact.type === 'chart' ? 'Chart' : 'File';
+    return `${label}${artifact.rowCount == null ? '' : ` · ${artifact.rowCount.toLocaleString()} rows`}`;
 }

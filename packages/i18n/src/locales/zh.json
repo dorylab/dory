@@ -5533,6 +5533,16 @@
         "Link": "链接",
         "LinkUrl": "链接地址",
         "ScopePicker": {
+            "SearchSourcesAndDatabases": "搜索数据源或数据库…",
+            "DatabaseCount": "{count} 个数据库",
+            "AutoSourceCount": "{count} 个数据源 · 自动选库",
+            "SelectedCount": "已选 {count} 个",
+            "AutoDescription": "由 Dory 选择相关数据库",
+            "AutoDatabases": "自动选库",
+            "SelectAll": "全选",
+            "Clear": "清空",
+            "RemoveUnavailable": "移除不可用数据源",
+            "ScopeDescription": "选择范围仅约束后续 Agent 查询。",
             "Sources": "数据源",
             "Knowledge": "知识",
             "Databases": "数据库",
@@ -5665,7 +5675,26 @@
         "ContinueUnfinished": "继续未完成步骤"
     },
     "ChatComposer": {
+        "Picker": {
+            "Refine": "显示前 60 项匹配结果，继续输入可缩小范围。",
+            "Search": "搜索资源",
+            "AllResources": "全部资源",
+            "Close": "关闭资源搜索",
+            "CurrentWork": "当前 Work",
+            "Recent": "最近引用",
+            "Browse": "按类型浏览",
+            "NoRecent": "输入关键词搜索，或按类型浏览。",
+            "Keyboard": "↑ ↓ 导航 · Enter 引用 · Esc 关闭",
+            "OutOfScope": "引用的表不在当前数据源范围内。请移除引用或调整 Data Sources 后再发送。",
+            "OutOfScopeShort": "超出范围",
+            "Categories": {
+                "report": "报告",
+                "result_set": "结果集",
+                "table": "数据库表"
+            }
+        },
         "Add": "添加",
+        "MentionResource": "引用资源",
         "AddFiles": "添加文件",
         "AddFolder": "添加文件夹",
         "ReportMode": "Report · 生成并保存",
@@ -5677,7 +5706,7 @@
         "Loading": "加载中…",
         "SearchFailed": "部分引用资源加载失败。",
         "Retry": "重试",
-        "NoReferences": "没有匹配的资源。选择数据源后可引用表。",
+        "NoReferences": "没有匹配的资源，请尝试其他名称。",
         "Kinds": {
             "table": "数据表",
             "report": "报告",

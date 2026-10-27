@@ -31,8 +31,8 @@ test.beforeEach(async ({ page }) => {
 
 async function toggleSource(page: Page, name: string) {
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
-    await page.getByPlaceholder('Search data sources…').fill('');
-    await page.getByRole('option', { name: new RegExp(name) }).click();
+    await page.getByPlaceholder('Search data sources or databases…').fill('');
+    await page.getByRole('option', { name: name === 'Unavailable source' ? 'Remove unavailable source' : `${name}: Automatic databases`, exact: true }).click();
     await page.keyboard.press('Escape');
 }
 
@@ -167,7 +167,7 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
         .toMatchObject({ description: 'Revenue is paid orders less refunds.', sourceConnectionId: connection.connection.id, status: 'verified' });
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await page.evaluate(() => window.document.documentElement.classList.add('dark'));
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('work-dark-mobile.png'), fullPage: true });
     await expectAppHealthy(appErrors);
@@ -198,9 +198,9 @@ test('Work has explicit multi-source scope without creating an unsolicited repor
     await page.getByPlaceholder('Search Knowledge…').fill('Commerce');
     await page.getByRole('option', { name: 'Commerce', exact: true }).click();
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
-    await expect(page.getByRole('option', { name: /Orders/ })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByRole('option', { name: /Advertising/ })).toHaveAttribute('aria-checked', 'true');
-    await page.getByPlaceholder('Search data sources…').fill('Advertising');
+    await expect(page.getByRole('option', { name: 'Orders: Automatic databases', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Advertising: Automatic databases', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.getByPlaceholder('Search data sources or databases…').fill('Advertising');
     await expect(page.getByRole('option', { name: /Orders/ })).toHaveCount(0);
     await page.keyboard.press('Escape');
     await toggleSource(page, 'Orders');
@@ -466,13 +466,15 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('agent-welcome-light.png') });
     await toggleSource(page, 'Orders');
     await toggleSource(page, 'Advertising');
-    await page.getByRole('button', { name: 'Databases', exact: true }).click();
+    await page.getByRole('button', { name: 'Data sources', exact: true }).click();
     await page.getByRole('option', { name: 'Orders: analytics', exact: true }).click();
     await page.getByRole('option', { name: 'Advertising: main', exact: true }).click();
     await page.keyboard.press('Escape');
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Compare the selected databases');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(() => submitted?.analysisScope).toEqual({ ...scope, connectionMode: 'manual', knowledgeMode: 'auto' });
+    await expect
+        .poll(() => submitted?.analysisScope)
+        .toEqual({ ...scope, databasesByConnection: { 'conn-1': ['analytics'], ads: ['main'] }, connectionMode: 'manual', knowledgeMode: 'auto' });
     await expect(page.getByText('Both databases received.', { exact: true })).toBeVisible();
     // Search and select the persisted conversation, then reload its URL state.
     await page.getByPlaceholder('Search works and outputs…').fill('Monthly');
@@ -481,7 +483,7 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     await expect(page.getByText('Orders and advertising are ready for analysis.')).toBeVisible();
     await page.reload();
     await expect(page.getByText('Orders and advertising are ready for analysis.')).toBeVisible();
-    await page.getByRole('button', { name: 'Databases', exact: true }).click();
+    await page.getByRole('button', { name: 'Data sources', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Orders: analytics' })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('option', { name: 'Advertising: main' })).toHaveAttribute('aria-checked', 'true');
     await page.keyboard.press('Escape');
@@ -497,7 +499,7 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     await expect(page.getByRole('heading', { name: /Ask anything about your data/ })).toBeVisible();
     await expect(page).toHaveURL(/databases=/);
     await page.getByRole('button', { name: /^Earlier analysis/ }).click();
-    await expect(page.getByRole('button', { name: 'Databases', exact: true })).toHaveText('analytics');
+    await expect(page.getByRole('button', { name: 'Data sources', exact: true })).toHaveText('analytics');
     await page.getByRole('button', { name: 'New Work', exact: true }).click();
     const monthlyRow = page.getByRole('button', { name: /^Monthly comparison/ }).locator('..');
     await monthlyRow.hover();
@@ -535,7 +537,7 @@ test('automatic databases allow send during loading failures and explicit select
     await toggleSource(page, 'Unavailable source');
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Inspect data');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
-    await page.getByRole('button', { name: 'Databases', exact: true }).click();
+    await page.getByRole('button', { name: 'Data sources', exact: true }).click();
     await expect(page.getByText('Could not load databases')).toBeVisible();
     failed = false;
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
@@ -547,11 +549,11 @@ test('automatic databases allow send during loading failures and explicit select
     await page.reload();
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Inspect data');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-    await page.getByRole('button', { name: 'Databases', exact: true }).click();
+    await page.getByRole('button', { name: 'Data sources', exact: true }).click();
     await expect(page.getByText('Could not load databases')).toBeVisible();
-    await page.getByRole('option', { name: 'Orders: Auto', exact: true }).click();
+    await page.getByRole('option', { name: 'Orders: Automatic databases', exact: true }).click();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('button', { name: 'Databases', exact: true })).toHaveText('Auto');
+    await expect(page.getByRole('button', { name: 'Data sources', exact: true })).toHaveText('1 source · automatic databases');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
     await expectAppHealthy(appErrors);
 });
@@ -897,7 +899,7 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('version-light.png') });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await page.evaluate(() => window.document.documentElement.classList.add('dark'));
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('version-dark-mobile.png'), fullPage: true });
     await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
@@ -1191,15 +1193,14 @@ test('Agent references, attachments and per-turn reports survive history without
     await expect(page.getByRole('button', { name: 'Generate report', exact: true })).toHaveCount(0);
     await expect(composer.getByRole('button', { name: 'Generate report', exact: true })).toHaveCount(0);
     await input.fill('@订单');
-    await expect(composer.getByRole('option')).toHaveCount(2);
-    await expect(composer.getByRole('option').first()).toContainText('Orders / main / public');
-    await input.press('Enter');
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await page.getByRole('option', { name: /Orders \/ main \/ public/ }).click();
     await expect(composer.getByRole('button', { name: 'Remove 订单', exact: true })).toBeVisible();
-    await input.fill('@report');
-    await composer.getByRole('option', { name: /Existing report/ }).click();
-    await input.fill('@artifact');
-    await composer.getByRole('option', { name: /Saved query/ }).click();
-    await input.fill('Summarize the selected context.');
+    await input.pressSequentially(' @Existing report');
+    await page.getByRole('option', { name: /Existing report/ }).click();
+    await input.pressSequentially(' @Saved query');
+    await page.getByRole('option', { name: /Saved query/ }).click();
+    await input.pressSequentially(' Summarize the selected context.');
     await composer
         .locator('input[type=file]')
         .first()
@@ -1230,7 +1231,7 @@ test('Agent references, attachments and per-turn reports survive history without
     await input.fill('Keep this unsent draft');
     await expect(page.getByRole('button', { name: 'Generate report', exact: true })).toHaveCount(0);
     expect(requests.length).toBe(2);
-    await expect(input).toHaveValue('Keep this unsent draft');
+    await expect(input).toHaveText('Keep this unsent draft');
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath('composer-reports.png'), animations: 'disabled' });
     await expectAppHealthy(appErrors);
@@ -1324,17 +1325,23 @@ test('automatic table references keep source identity and Knowledge replaces sou
     await page.goto(`/${organization}/work`);
     const composer = page.getByTestId('agent-composer');
     await composer.getByRole('textbox').fill('@订单');
-    await expect(composer.getByRole('option')).toHaveCount(2);
-    await composer.getByRole('option', { name: /Advertising/ }).click();
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await page.getByRole('option', { name: /Advertising/ }).click();
     await composer.getByRole('button', { name: 'Send', exact: true }).click();
     await expect.poll(() => request?.references[0]).toMatchObject({ connectionId: 'ads', database: 'main' });
     expect(request?.analysisScope).toMatchObject({ connectionMode: 'auto', connectionIds: [] });
     await expect(page.getByText('Test model unavailable')).toBeVisible();
+    expect(
+        await page.evaluate(() =>
+            Object.keys(localStorage)
+                .filter(key => key.startsWith('dory:recent-references:v1:'))
+                .some(key => JSON.parse(localStorage.getItem(key) ?? '[]').length > 0),
+        ),
+    ).toBe(false);
     await toggleSource(page, 'Orders');
     await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
     await page.getByRole('option', { name: 'Commerce', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Data sources', exact: true })).toHaveText('Advertising');
-    await expect(page.getByRole('button', { name: 'Databases', exact: true })).toHaveText('Auto');
+    await expect(page.getByRole('button', { name: 'Data sources', exact: true })).toHaveText('1 source · automatic databases');
     await expectAppHealthy(appErrors);
 });
 
@@ -1370,43 +1377,46 @@ test('Knowledge linkage resets databases, preserves manual additions, and limits
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/work`);
     const sources = page.getByRole('button', { name: 'Data sources', exact: true });
-    const databases = page.getByRole('button', { name: 'Databases', exact: true });
+    const databases = page.getByRole('button', { name: 'Data sources', exact: true });
     const chooseKnowledge = async (name: string) => {
         await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
         await page.getByRole('option', { name, exact: true }).click();
     };
     await toggleSource(page, 'Orders');
-    await expect(databases).toHaveText('Auto');
+    await expect(databases).toHaveText('1 source · automatic databases');
     const composer = page.getByTestId('agent-composer');
-    await composer.getByRole('textbox').fill('@table 订单');
-    await expect(composer.getByRole('option')).toHaveCount(2);
-    await composer.getByRole('option', { name: /Orders.*analytics/ }).click();
+    await composer.getByRole('textbox').fill('@订单');
+    await expect(page.getByRole('option')).toHaveCount(2);
+    await page.getByRole('option', { name: /Orders.*analytics/ }).click();
     await expect(composer.getByRole('button', { name: 'Remove 订单' })).toBeVisible();
     await databases.click();
     await page.getByRole('option', { name: 'Orders: main', exact: true }).click();
     await page.keyboard.press('Escape');
-    await expect(composer.getByRole('button', { name: 'Remove 订单' })).toHaveCount(0);
-    await composer.getByRole('textbox').fill('@table 订单');
-    await expect(composer.getByRole('option')).toHaveCount(1);
+    await expect(composer.getByRole('button', { name: 'Remove 订单' })).toBeVisible();
+    await expect(composer.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+    await expect(composer.getByRole('alert')).toContainText('outside the selected data sources');
+    await composer.getByRole('button', { name: 'Remove 订单' }).click();
+    await composer.getByRole('textbox').fill('@订单');
+    await expect(page.getByRole('option')).toHaveCount(1);
     await composer.getByRole('textbox').fill('Analyze');
     await toggleSource(page, 'Advertising');
     await databases.click();
     await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByRole('option', { name: 'Advertising: Auto', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Advertising: Automatic databases', exact: true })).toHaveAttribute('aria-checked', 'true');
     await page.keyboard.press('Escape');
     await page.reload();
     await databases.click();
     await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByRole('option', { name: 'Advertising: Auto', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Advertising: Automatic databases', exact: true })).toHaveAttribute('aria-checked', 'true');
     await page.keyboard.press('Escape');
     await chooseKnowledge('Commerce');
-    await expect(databases).toHaveText('Auto');
+    await expect(databases).toHaveText('2 sources · automatic databases');
     await chooseKnowledge('Campaigns');
-    await expect(sources).toHaveText('Advertising');
+    await expect(sources).toHaveText('1 source · automatic databases');
     await chooseKnowledge('Auto');
-    await expect(sources).toHaveText('Advertising');
+    await expect(sources).toHaveText('1 source · automatic databases');
     await chooseKnowledge('No Knowledge');
-    await expect(sources).toHaveText('Advertising');
+    await expect(sources).toHaveText('1 source · automatic databases');
     await chooseKnowledge('General definitions');
     await expect(sources).toHaveText('Auto');
     await chooseKnowledge('Unavailable Knowledge');
@@ -1471,9 +1481,9 @@ test('an existing Artifact can be analyzed in chat without saving conclusions, i
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/work?chat=${session.id}`);
     const composer = page.getByTestId('agent-composer');
-    await composer.getByRole('textbox').fill('@artifact');
-    await composer.getByRole('option', { name: /Orders — total orders/ }).click();
-    await composer.getByRole('textbox').fill('帮我分析这个查询结果');
+    await composer.getByRole('textbox').fill('@Orders — total orders');
+    await page.getByRole('option', { name: /Orders — total orders/ }).click();
+    await composer.getByRole('textbox').pressSequentially('帮我分析这个查询结果');
     await composer.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.getByText(answer, { exact: true })).toBeVisible();
     await page.getByTestId('chat-analysis-process').locator('summary').first().click();
@@ -1485,6 +1495,32 @@ test('an existing Artifact can be analyzed in chat without saving conclusions, i
     await expect(page.getByText('@Orders — total orders', { exact: true })).toBeVisible();
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('artifact-analysis-without-saving.png') });
     await expect(page.locator('[data-tool-name="finishAnalysis"]')).toHaveCount(0);
+    await expectAppHealthy(appErrors);
+});
+
+test('completed answers omit redundant status cards before and after reload', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const session = { id: 'completed-chat', title: 'Completed analysis', type: 'global', connectionId: null };
+    const messages = [
+        { id: 'request', role: 'user', parts: [{ type: 'text', text: 'Summarize the data' }] },
+        {
+            id: 'answer',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'The analysis is complete and the answer is available.' }],
+            metadata: { userMessageId: 'request', completion: { status: 'completed', completed: [], unfinished: [], canContinue: false } },
+        },
+    ];
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [session] } }));
+    await page.route('**/api/chat/session/completed-chat', route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [] } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=completed-chat&panel=closed`);
+    for (let i = 0; i < 2; i++) {
+        await expect(page.getByText('The analysis is complete and the answer is available.', { exact: true })).toBeVisible();
+        await expect(page.getByTestId('chat-completion')).toHaveCount(0);
+        if (i === 0) await page.reload();
+    }
     await expectAppHealthy(appErrors);
 });
 
@@ -1746,5 +1782,290 @@ test('work resources handle empty and execution-only conversations and reset exp
     await expect(page.getByTestId('execution-summary')).toHaveText('SQL Queries · Failed 1');
     await page.getByRole('button', { name: /^Executions/ }).click();
     await expect(page.getByTestId('resource-queries').getByRole('button')).toContainText('SELECT missing_table');
+    await expectAppHealthy(appErrors);
+});
+
+test('unified Data Sources supports database multi-select, full-group selection, keyboard search and restoration', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    let names = ['main', 'analytics'];
+    let databaseLoads = 0;
+    await page.route('**/api/actions/execute', route => {
+        const { actionId, input } = route.request().postDataJSON();
+        if (actionId === 'schema.listDatabases') {
+            databaseLoads += 1;
+            return route.fulfill({ json: { ok: true, data: { databases: names.map(value => ({ value, label: value })) } } });
+        }
+        if (actionId === 'schema.listTables')
+            return route.fulfill({ json: { ok: true, data: { tables: [{ name: 'orders', value: 'orders', label: `Orders in ${input.database}` }] } } });
+        if (actionId === 'schema.listViews') return route.fulfill({ json: { ok: true, data: { views: [] } } });
+        return route.fallback();
+    });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({
+            json: {
+                connections: [
+                    { id: 'conn-1', name: 'Orders', type: 'postgres' },
+                    { id: 'ads', name: 'Advertising', type: 'postgres' },
+                ],
+                models: [],
+                sessions: [],
+            },
+        }),
+    );
+    await page.route('**/api/work-documents**', route => route.fulfill({ json: { documents: [] } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work`);
+    const picker = page.getByTestId('agent-scope-picker');
+    await expect(picker.getByRole('button')).toHaveCount(2);
+    await expect(picker.getByRole('button').nth(0)).toHaveAttribute('aria-label', 'Knowledge');
+    await expect(picker.getByRole('button').nth(1)).toHaveAttribute('aria-label', 'Data sources');
+    expect(databaseLoads).toBe(0);
+    const sources = page.getByRole('button', { name: 'Data sources', exact: true });
+    await sources.click();
+    const search = page.getByPlaceholder('Search data sources or databases…');
+    await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toBeVisible();
+    await search.fill('MAIN');
+    await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toHaveCount(0);
+    // Select all includes analytics even while search hides it.
+    await page.getByRole('button', { name: 'Orders: Select all', exact: true }).click();
+    await search.fill('orders');
+    await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Advertising: main', exact: true })).toHaveCount(0);
+    await search.fill('analytics');
+    await search.press('End');
+    await search.press('Enter');
+    await expect(page.getByRole('option', { name: 'Advertising: analytics', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(sources).toHaveText('3 databases');
+    await search.fill('does not exist');
+    await expect(page.getByText('No results', { exact: true })).toBeVisible();
+    await search.fill('');
+    await page.screenshot({ path: testInfo.outputPath('data-sources-multi-light.png'), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    const question = page.getByTestId('agent-composer').getByRole('textbox');
+    await question.fill('@Orders');
+    await expect(page.getByRole('option')).toHaveCount(3);
+    await question.fill('Compare selected databases');
+    names = ['main', 'analytics', 'new_database'];
+    await page.reload();
+    await sources.click();
+    await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Orders: new_database', exact: true })).toHaveAttribute('aria-checked', 'false');
+    await expect(page.getByRole('option', { name: 'Advertising: analytics', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.evaluate(() => {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+    });
+    await page.setViewportSize({ width: 600, height: 850 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('data-sources-multi-dark-narrow.png'), animations: 'disabled' });
+    await page.getByRole('button', { name: 'Orders: Select all', exact: true }).click();
+    await page.getByRole('button', { name: 'Orders: Clear', exact: true }).click();
+    await page.getByRole('option', { name: 'Advertising: analytics', exact: true }).click();
+    await expect(page.getByRole('option', { name: 'Auto', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(sources).toHaveText('Auto');
+    await page.getByRole('option', { name: 'Orders: main', exact: true }).click();
+    await page.getByRole('option', { name: 'Auto', exact: true }).click();
+    await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'false');
+    await expectAppHealthy(appErrors);
+});
+
+test('unified Data Sources enforces source limits and preserves unavailable database selections', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({
+            json: {
+                connections: Array.from({ length: 13 }, (_, index) => ({ id: `source-${index}`, name: `Source ${index}`, type: 'postgres' })),
+                models: [],
+                sessions: [],
+            },
+        }),
+    );
+    await page.route('**/api/work-documents**', route => route.fulfill({ json: { documents: [] } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    const ids = Array.from({ length: 12 }, (_, index) => `source-${index}`).join(',');
+    await page.goto(`/${organization}/work?sources=${ids}&databases=${encodeURIComponent(JSON.stringify({ 'source-0': ['deleted'] }))}`);
+    await page.getByTestId('agent-composer').getByRole('textbox').fill('Analyze');
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Data sources', exact: true }).click();
+    await expect(page.getByRole('option', { name: 'Source 0: deleted', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('option', { name: 'Source 12: main', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await page.getByRole('option', { name: 'Source 0: deleted', exact: true }).click();
+    await expect(page.getByRole('option', { name: 'Source 12: main', exact: true })).toHaveAttribute('aria-disabled', 'false');
+    await page.getByRole('option', { name: 'Source 12: main', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+    await expectAppHealthy(appErrors);
+});
+
+test('Resource Mention Picker keeps inline identity, ranked results, pinned versions and local recents', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const session = {
+        id: 'mention-picker',
+        title: 'Mentions',
+        type: 'global',
+        connectionId: null,
+        scope: { connectionIds: [connection.connection.id], databasesByConnection: { [connection.connection.id]: 'main' } },
+    };
+    const document = { ...makeDocument(), id: 'mention-report', title: 'orders', revision: 6, chatId: session.id };
+    let messages: UIMessage[] = [{ id: 'intro', role: 'assistant', parts: [{ type: 'text', text: 'Ready to compare resources.' }] }];
+    let submitted: ChatContext & { messages: UIMessage[]; analysisScope: AnalysisScope };
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({ json: { connections: [{ id: connection.connection.id, name: 'Orders', type: 'postgres' }], models: [], sessions: [session] } }),
+    );
+    await page.route('**/api/chat/session/mention-picker', route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [document] } }));
+    await page.route('**/api/work-documents/mention-report?*', route =>
+        route.fulfill({
+            json: {
+                document: { ...document, revision: Number(new URL(route.request().url()).searchParams.get('revision') ?? document.revision) },
+                versions: [{ revision: 6 }, { revision: 7 }],
+            },
+        }),
+    );
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId } = route.request().postDataJSON();
+        if (actionId === 'schema.listTables')
+            return route.fulfill({ json: { ok: true, data: { tables: [{ name: 'orders', value: 'orders', label: 'orders', schema: 'public' }] } } });
+        if (actionId === 'schema.listViews') return route.fulfill({ json: { ok: true, data: { views: [] } } });
+        if (actionId === 'artifact.list')
+            return route.fulfill({
+                json: { ok: true, data: { rows: [{ id: 'orders-result', title: 'orders by month', type: 'result_set', status: 'ready', rowCount: 12, createdAt: now }] } },
+            });
+        return route.fallback();
+    });
+    await page.route('**/api/chat', route => {
+        submitted = route.request().postDataJSON();
+        messages = [...submitted.messages, { id: 'reply', role: 'assistant', parts: [{ type: 'text', text: 'Compared the pinned report with the table.' }] }];
+        const chunks = [
+            { type: 'start', messageId: 'reply' },
+            { type: 'text-start', id: 'answer' },
+            { type: 'text-delta', id: 'answer', delta: 'Compared the pinned report with the table.' },
+            { type: 'text-end', id: 'answer' },
+            { type: 'finish', finishReason: 'stop' },
+        ];
+        return route.fulfill({
+            contentType: 'text/event-stream',
+            headers: { 'x-vercel-ai-ui-message-stream': 'v1' },
+            body: chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n',
+        });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=${session.id}`);
+    const composer = page.getByTestId('agent-composer');
+    const input = composer.getByRole('textbox');
+    await composer.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Reference a resource' }).click();
+    await expect(input).toHaveText('@');
+    await expect(input).toBeFocused();
+    const picker = page.getByRole('listbox', { name: 'References' });
+    await expect(picker.getByText('Current Work', { exact: true })).toBeVisible();
+    await expect(picker.getByRole('option', { name: /orders.*Report/ })).toBeVisible();
+    const box = await picker.boundingBox();
+    expect(box?.width).toBeLessThanOrEqual(440);
+    await page.screenshot({ path: testInfo.outputPath('mention-default-light.png'), animations: 'disabled' });
+    await input.fill('📈 对比 @orders');
+    await expect(picker.getByRole('option')).toHaveCount(3);
+    await expect(picker.getByRole('option').first()).toContainText('Report · v6');
+    await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+    await expect(composer.getByTestId('mention-chip')).toHaveCount(0);
+    await input.press('Enter');
+    await expect(composer.getByTestId('mention-chip')).toHaveCount(1);
+    await expect(input).toContainText('📈 对比');
+    await expect(input).toContainText('v6');
+    await input.pressSequentially('和 @orders');
+    await expect(picker.getByRole('option')).toHaveCount(3);
+    await input.press('ArrowDown');
+    await input.press('Enter');
+    await expect(composer.getByTestId('mention-chip')).toHaveCount(2);
+    await composer.getByRole('button', { name: 'Remove orders', exact: true }).last().click();
+    await expect(composer.getByTestId('mention-chip')).toHaveCount(1);
+    await input.press('ControlOrMeta+z');
+    await expect(composer.getByTestId('mention-chip')).toHaveCount(2);
+    await input.press('ControlOrMeta+End');
+    await input.pressSequentially('检查收入。');
+    await composer.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByText('Compared the pinned report with the table.', { exact: true })).toBeVisible();
+    expect(submitted!.references[0]).toMatchObject({ kind: 'report', id: document.id, revision: 6 });
+    expect(submitted!.references[1]).toMatchObject({ kind: 'table', table: 'orders' });
+    expect(submitted!.mentionSpans).toHaveLength(2);
+    expect(submitted!.analysisScope.connectionIds).toEqual([connection.connection.id]);
+    await expect(page.getByTestId('message-mention')).toHaveCount(2);
+    await expect(input).toBeEmpty();
+    await expect
+        .poll(() =>
+            page.evaluate(() =>
+                Object.keys(localStorage)
+                    .filter(key => key.startsWith('dory:recent-references:v1:'))
+                    .some(key => JSON.parse(localStorage.getItem(key) ?? '[]').length === 2),
+            ),
+        )
+        .toBe(true);
+    await page.reload();
+    await expect(page.getByTestId('message-mention')).toHaveCount(2);
+    await input.fill('@');
+    await expect(picker.getByText('Recently referenced', { exact: true })).toBeVisible();
+    await expect(picker.getByRole('option', { name: /orders.*Orders \/ main/ })).toBeVisible();
+    await input.press('Escape');
+    await expect(picker).toBeHidden();
+    await input.fill('@nothing-matches');
+    await expect(picker.getByRole('status')).toContainText('No matching resources');
+    await input.press('Enter');
+    await expect(input).toHaveText('@nothing-matches');
+    await input.fill('');
+    const clipboard = await page.evaluateHandle(() => {
+        const data = new DataTransfer();
+        const span = window.document.createElement('span');
+        span.setAttribute('data-dory-reference', JSON.stringify({ kind: 'report', id: 'unknown-report', title: 'Forged', revision: 99 }));
+        span.textContent = '@Forged · v99';
+        data.setData('text/html', span.outerHTML);
+        data.setData('text/plain', '@Forged · v99');
+        return data;
+    });
+    await input.evaluate((element, data) => element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })), clipboard);
+    await expect(input).toHaveText('@Forged · v99');
+    await expect(composer.getByTestId('mention-chip')).toHaveCount(0);
+    await clipboard.dispose();
+    await input.fill('@orders');
+    await expect(picker.getByRole('option')).toHaveCount(3);
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.evaluate(() => window.document.documentElement.classList.add('dark'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(picker).toBeVisible();
+    const small = await picker.boundingBox();
+    expect(small!.width).toBeLessThanOrEqual(366);
+    expect(small!.x).toBeGreaterThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath('mention-search-dark-narrow.png'), animations: 'disabled' });
+    document.revision = 7;
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.route('**/api/chat/session/other-mention', route =>
+        route.fulfill({ json: { code: 0, data: { session: { ...session, id: 'other-mention', title: 'Other Work' }, messages: [] } } }),
+    );
+    await page.goto(`/${organization}/work?chat=other-mention`);
+    await input.fill('@');
+    await expect(picker.getByText('Current Work', { exact: true })).toHaveCount(0);
+    await expect(picker.getByText('Recently referenced', { exact: true })).toBeVisible();
+    await expect(picker.getByRole('option', { name: /Report · v6/ })).toBeVisible();
+    await expect(picker.getByRole('option', { name: /Report · v7/ })).toHaveCount(0);
+    await picker.getByRole('option', { name: /Report · v6/ }).click();
+    await expect(composer.getByTestId('mention-chip')).toContainText('v6');
+    const knownClipboard = await page.evaluateHandle(
+        ref => {
+            const data = new DataTransfer();
+            const element = window.document.createElement('span');
+            element.setAttribute('data-dory-reference', JSON.stringify(ref));
+            element.textContent = '@orders · v6';
+            data.setData('text/html', element.outerHTML);
+            data.setData('text/plain', element.textContent);
+            return data;
+        },
+        { kind: 'report', id: document.id, title: 'orders', revision: 6 },
+    );
+    await input.evaluate((element, data) => element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })), knownClipboard);
+    await expect(composer.getByTestId('mention-chip')).toHaveCount(2);
+    await knownClipboard.dispose();
     await expectAppHealthy(appErrors);
 });

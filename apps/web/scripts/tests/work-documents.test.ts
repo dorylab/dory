@@ -58,7 +58,7 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
             creationKey: 'chat:request-1',
             title: 'Revenue',
             chatId: 'chat',
-            scope: { connectionIds: ['c1', 'c2'], databasesByConnection: { c1: 'sales', c2: 'ads' } },
+            scope: { connectionIds: ['c1', 'c2'], databasesByConnection: { c1: ['sales', 'analytics'], c2: 'ads' } },
             content,
         };
         const [first, retry] = await Promise.all([repository.create(input), repository.create(input)]);

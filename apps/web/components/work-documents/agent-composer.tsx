@@ -1,21 +1,23 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { FileUIPart } from 'ai';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
+import type { Editor } from '@tiptap/core';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { ArrowUp, FileText, Folder, Loader2, Paperclip, Plus, Square, X } from 'lucide-react';
+import { ArrowUp, AtSign, FileText, Folder, Loader2, Paperclip, Plus, Square, X } from 'lucide-react';
 
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Textarea } from '@/registry/new-york-v4/ui/textarea';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuShortcut, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { attachmentAccept, validateAttachmentSizes, validateAttachmentHeader, attachmentLimits, attachmentMediaType, AttachmentError } from '@/lib/chat-context/attachments';
-import { referenceKey, type ChatReference, type ChatSubmission } from '@/lib/chat-context/types';
+import { referenceKey, type ChatReference, type ChatSubmission, type MentionSpan } from '@/lib/chat-context/types';
 import { useMutation } from '@tanstack/react-query';
 import { storedAttachmentId } from '@/lib/chat-context/attachments';
-import { useChatReferences } from '@/lib/chat-context/use-references';
+import { useRecentReferences } from '@/lib/chat-context/use-recent-references';
+import { mentionLabel, referenceInScope } from '@/lib/chat-context/mentions';
+import { ResourceMentionEditor } from './resource-mention-editor';
 
 export function AgentComposer({
     text,
@@ -56,9 +58,12 @@ export function AgentComposer({
     const [reading, setReading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
-    const [mention, setMention] = useState<{ start: number; end: number; query: string } | null>(null);
-    const [active, setActive] = useState(0);
-    const textarea = useRef<HTMLTextAreaElement>(null);
+    const [mentionSpans, setMentionSpans] = useState<MentionSpan[]>([]);
+    const editorRef = useRef<Editor | null>(null);
+    const openPickerRef = useRef<(() => void) | null>(null);
+    const mentionMenuSelected = useRef(false);
+    const recents = useRecentReferences(organization);
+    const invalidReferences = references.some(reference => !referenceInScope(reference, scope));
     const fileInput = useRef<HTMLInputElement>(null);
     const folderInput = useRef<HTMLInputElement>(null);
     const sending = useRef(false);
@@ -78,7 +83,18 @@ export function AgentComposer({
         if (!restoreDraft || restoreDraft === restoredDraft.current) return;
         restoredDraft.current = restoreDraft;
         attemptId.current = restoreDraft.id ?? null;
-        onTextChange(restoreDraft.text);
+        let restoredText = restoreDraft.text;
+        const spans = [...(restoreDraft.mentionSpans ?? [])];
+        if (!restoreDraft.mentionSpans) {
+            for (const reference of restoreDraft.references ?? []) {
+                restoredText += restoredText ? ' ' : '';
+                const start = restoredText.length;
+                restoredText += mentionLabel(reference);
+                spans.push({ start, end: restoredText.length, referenceKey: referenceKey(reference) });
+            }
+        }
+        setMentionSpans(spans);
+        onTextChange(restoredText);
         setFiles(restoreDraft.files);
         setReferences(restoreDraft.references ?? []);
         setReport(restoreDraft.outputIntent === 'report');
@@ -109,51 +125,6 @@ export function AgentComposer({
             return body.file as FileUIPart;
         },
     });
-    const listId = useId();
-    const [search, setSearch] = useState<string | null>(null);
-    useEffect(() => {
-        const timer = setTimeout(() => setSearch(mention?.query ?? null), 180);
-        return () => clearTimeout(timer);
-    }, [mention?.query]);
-    const candidates = useChatReferences(organization, chatId, scope, search, runIds);
-    const options = (['table', 'report', 'artifact'] as const).flatMap(kind => candidates.options.filter(item => item.reference.kind === kind)).slice(0, 60);
-    const scopeKey = JSON.stringify(scope);
-    useEffect(() => {
-        const selectedScope = JSON.parse(scopeKey) as AnalysisScope;
-        setReferences(previous =>
-            previous.filter(
-                ref =>
-                    ref.kind !== 'table' ||
-                    selectedScope.connectionMode === 'auto' ||
-                    (!selectedScope.connectionMode && !selectedScope.connectionIds.length) ||
-                    (selectedScope.connectionIds.includes(ref.connectionId) &&
-                        (!selectedScope.databasesByConnection?.[ref.connectionId] || selectedScope.databasesByConnection[ref.connectionId] === ref.database)),
-            ),
-        );
-        setMention(null);
-    }, [scopeKey]);
-    const inspectCursor = (element: HTMLTextAreaElement) => {
-        const cursor = element.selectionStart;
-        const match = /(?:^|\s)@([^@\n]*)$/.exec(element.value.slice(0, cursor));
-        setMention(match ? { start: cursor - match[1].length - 1, end: cursor, query: match[1] } : null);
-        setActive(0);
-    };
-    const choose = (reference: ChatReference) => {
-        if (!mention) return;
-        attemptId.current = null;
-        if (references.length >= 20) {
-            setError(t('ReferenceLimit'));
-            return;
-        }
-        setReferences(previous => [...new Map([...previous, reference].map(item => [referenceKey(item), item])).values()]);
-        onTextChange(text.slice(0, mention.start) + text.slice(mention.end));
-        const cursor = mention.start;
-        setMention(null);
-        requestAnimationFrame(() => {
-            textarea.current?.focus();
-            textarea.current?.setSelectionRange(cursor, cursor);
-        });
-    };
     const addFiles = async (selected: FileList | null) => {
         if (!selected || busy || disabled) return;
         setReading(true);
@@ -197,16 +168,18 @@ export function AgentComposer({
         }
     };
     const submit = async () => {
-        if (sending.current || busy || disabled || !ready || reading || upload.isPending || (!text.trim() && !files.length && !references.length && !report)) return;
+        if (invalidReferences || sending.current || busy || disabled || !ready || reading || upload.isPending || (!text.trim() && !files.length && !references.length && !report))
+            return;
         sending.current = true;
         setSubmitting(true);
         setError('');
         attemptId.current ??= crypto.randomUUID();
         const draft = {
             id: attemptId.current,
-            text: text.trim() || (report ? t('ReportPrompt') : t('AttachmentPrompt')),
+            text: text.trim() ? text : report ? t('ReportPrompt') : t('AttachmentPrompt'),
             files,
             references,
+            mentionSpans,
             outputIntent: report ? ('report' as const) : ('answer' as const),
         };
         try {
@@ -219,12 +192,13 @@ export function AgentComposer({
             }
             const result = await onSubmit({ ...draft, files: uploaded });
             if (result !== false) {
+                if (result === true) recents.record(references);
                 attemptId.current = null;
                 onTextChange('');
                 setFiles([]);
                 setReferences([]);
                 setReport(false);
-                setMention(null);
+                setMentionSpans([]);
             }
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : t('SendFailed'));
@@ -246,7 +220,7 @@ export function AgentComposer({
             {children}
             <input ref={fileInput} type="file" multiple accept={attachmentAccept} hidden onChange={event => void addFiles(event.target.files)} />
             <input ref={folderInput} type="file" multiple hidden {...{ webkitdirectory: '' }} onChange={event => void addFiles(event.target.files)} />
-            {(report || references.length > 0 || files.length > 0) && (
+            {(report || files.length > 0) && (
                 <div className="flex flex-wrap gap-2 px-3 pt-3">
                     {report && (
                         <span className="inline-flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs">
@@ -268,29 +242,6 @@ export function AgentComposer({
                             </Button>
                         </span>
                     )}
-                    {references.map(reference => (
-                        <span
-                            key={referenceKey(reference)}
-                            className="inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-xs"
-                            title={reference.kind === 'table' ? `${reference.connectionId} / ${reference.database} / ${reference.table}` : reference.title}
-                        >
-                            <span className="truncate">@{reference.title}</span>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-5 shrink-0"
-                                aria-label={t('Remove', { name: reference.title })}
-                                disabled={locked}
-                                onClick={() => {
-                                    attemptId.current = null;
-                                    setReferences(previous => previous.filter(item => referenceKey(item) !== referenceKey(reference)));
-                                }}
-                            >
-                                <X className="size-3" />
-                            </Button>
-                        </span>
-                    ))}
                     {files.map((file, index) => (
                         <span key={`${file.filename}:${index}`} className="inline-flex max-w-full items-center gap-2 rounded-md border px-2 py-1 text-xs">
                             {file.mediaType.startsWith('image/') ? (
@@ -319,93 +270,31 @@ export function AgentComposer({
                     ))}
                 </div>
             )}
-            {mention && (
-                <div
-                    className="absolute bottom-full left-0 z-30 mb-2 max-h-72 w-full max-w-lg overflow-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
-                    role="listbox"
-                    id={listId}
-                    aria-label={t('References')}
-                >
-                    {candidates.loading && (
-                        <div className="p-2 text-sm text-muted-foreground">
-                            <Loader2 className="inline size-4 animate-spin" /> {t('Loading')}
-                        </div>
-                    )}
-                    {candidates.error && (
-                        <div role="alert" className="p-2 text-sm text-destructive">
-                            {t('SearchFailed')}{' '}
-                            <Button type="button" variant="ghost" size="sm" onClick={candidates.retry}>
-                                {t('Retry')}
-                            </Button>
-                        </div>
-                    )}
-                    {!candidates.loading && options.length === 0 && <div className="p-2 text-sm text-muted-foreground">{t('NoReferences')}</div>}
-                    {options.map((option, index) => (
-                        <div key={referenceKey(option.reference)}>
-                            {(index === 0 || options[index - 1].reference.kind !== option.reference.kind) && (
-                                <div className="px-2 py-1 text-xs font-medium text-muted-foreground">{t(`Kinds.${option.reference.kind}`)}</div>
-                            )}
-                            <button
-                                type="button"
-                                role="option"
-                                id={`${listId}-${index}`}
-                                aria-selected={index === active}
-                                onMouseDown={event => event.preventDefault()}
-                                onClick={() => choose(option.reference)}
-                                className={`flex w-full flex-col rounded px-2 py-2 text-left text-sm ${index === active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'}`}
-                            >
-                                <span className="max-w-full truncate">{option.reference.title}</span>
-                                <span className="max-w-full truncate text-xs text-muted-foreground">
-                                    {option.current ? `${t('CurrentChat')} · ` : ''}
-                                    {option.reference.kind === 'table'
-                                        ? [sourceNames[option.reference.connectionId] ?? option.reference.connectionId, option.reference.database, option.reference.schema]
-                                              .filter(Boolean)
-                                              .join(' / ')
-                                        : option.detail}
-                                </span>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
-            <Textarea
-                ref={textarea}
-                value={text}
-                aria-label={t('Question')}
-                placeholder={t('Placeholder')}
-                disabled={locked}
-                aria-autocomplete="list"
-                aria-controls={mention ? listId : undefined}
-                aria-activedescendant={mention && options[active] ? `${listId}-${active}` : undefined}
-                onChange={event => {
+            <ResourceMentionEditor
+                draft={{ text, references, mentionSpans }}
+                onChange={draft => {
                     attemptId.current = null;
-                    onTextChange(event.target.value);
-                    inspectCursor(event.target);
+                    onTextChange(draft.text);
+                    setReferences(draft.references);
+                    setMentionSpans(draft.mentionSpans);
                 }}
-                onClick={event => inspectCursor(event.currentTarget)}
-                onSelect={event => inspectCursor(event.currentTarget)}
-                onBlur={() => setMention(null)}
-                onKeyDown={event => {
-                    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-                    if (mention && ['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(event.key) && !event.shiftKey) {
-                        event.preventDefault();
-                        if (event.key === 'Escape') setMention(null);
-                        else if (event.key === 'Enter') {
-                            if (options[active]) choose(options[active].reference);
-                        } else {
-                            const next = (active + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % Math.max(options.length, 1);
-                            setActive(next);
-                            document.getElementById(`${listId}-${next}`)?.scrollIntoView({ block: 'nearest' });
-                        }
-                        return;
-                    }
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        void submit();
-                    }
-                }}
-                className="min-h-24 resize-none rounded-none border-0 bg-transparent px-4 pt-4 pb-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
+                onSubmit={() => void submit()}
+                onError={setError}
+                disabled={locked}
+                organization={organization}
+                chatId={chatId}
+                runIds={runIds}
+                scope={scope}
+                recent={recents.recent}
+                sourceNames={sourceNames}
+                editorRef={editorRef}
+                openPickerRef={openPickerRef}
             />
+            {invalidReferences && (
+                <p role="alert" className="px-3 pb-2 text-sm text-destructive">
+                    {t('Picker.OutOfScope')}
+                </p>
+            )}
             {error && (
                 <p role="alert" className="px-3 pb-2 text-sm text-destructive">
                     {error}
@@ -419,7 +308,25 @@ export function AgentComposer({
                                 <Plus className="size-5" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" side="top">
+                        <DropdownMenuContent
+                            align="start"
+                            side="top"
+                            onCloseAutoFocus={event => {
+                                if (!mentionMenuSelected.current) return;
+                                event.preventDefault();
+                                mentionMenuSelected.current = false;
+                                openPickerRef.current?.();
+                            }}
+                        >
+                            <DropdownMenuItem
+                                onSelect={() => {
+                                    mentionMenuSelected.current = true;
+                                }}
+                            >
+                                <AtSign className="size-4" />
+                                {t('MentionResource')}
+                                <DropdownMenuShortcut>@</DropdownMenuShortcut>
+                            </DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => fileInput.current?.click()}>
                                 <Paperclip className="size-4" />
                                 {t('AddFiles')}
@@ -432,7 +339,7 @@ export function AgentComposer({
                                 onSelect={() => {
                                     attemptId.current = null;
                                     setReport(true);
-                                    textarea.current?.focus();
+                                    editorRef.current?.commands.focus();
                                 }}
                             >
                                 <FileText className="size-4" />
@@ -456,7 +363,7 @@ export function AgentComposer({
                         size="icon"
                         className="rounded-full"
                         aria-label={t('Send')}
-                        disabled={locked || !ready || (!text.trim() && !files.length && !references.length && !report)}
+                        disabled={invalidReferences || locked || !ready || (!text.trim() && !files.length && !references.length && !report)}
                     >
                         {reading || upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                     </Button>
