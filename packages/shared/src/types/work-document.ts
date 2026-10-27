@@ -47,4 +47,4 @@ export type WorkDocumentView = {
     createdAt: string;
     updatedAt: string;
 };
-export type WorkDocumentSummary = Omit<WorkDocumentView, 'content'> & { sourceMessageId?: string | null; summary?: string };
+export type WorkDocumentSummary = Omit<WorkDocumentView, 'content'> & { sourceMessageId?: string | null; summary?: string; sourceLabels?: string[] };

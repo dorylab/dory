@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { NamingMetadata } from '@dory/shared/utils/sql-name';
 import { FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
 import {
     DndContext,
@@ -54,7 +56,7 @@ import { CreateFolderDialog } from './create-folder-dialog';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
 import { MoveToFolderDialog } from './move-to-folder-dialog';
 
-export type SavedQueryItem = {
+export type SavedQueryItem = NamingMetadata & {
     id: string;
     title: string;
     description?: string | null;
@@ -146,13 +148,7 @@ function createRestrictToContainer(containerRef: React.RefObject<HTMLDivElement 
     };
 }
 
-function SortableFolderWrapper({
-    id,
-    children,
-}: {
-    id: string;
-    children: (props: SortableRenderProps) => React.ReactNode;
-}) {
+function SortableFolderWrapper({ id, children }: { id: string; children: (props: SortableRenderProps) => React.ReactNode }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: getFolderDndId(id),
         data: {
@@ -168,15 +164,7 @@ function SortableFolderWrapper({
     );
 }
 
-function SortableQueryWrapper({
-    id,
-    folderId,
-    children,
-}: {
-    id: string;
-    folderId: string | null;
-    children: (props: SortableRenderProps) => React.ReactNode;
-}) {
+function SortableQueryWrapper({ id, folderId, children }: { id: string; folderId: string | null; children: (props: SortableRenderProps) => React.ReactNode }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: getQueryDndId(id),
         data: {
@@ -345,6 +333,30 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         },
         [t, connectionId, isAnonymous],
     );
+
+    const pendingNameIds = items
+        .filter(item => item.namingSource === 'pending')
+        .map(item => item.namingRequestId)
+        .sort();
+    const autoNames = useQuery({
+        queryKey: ['saved-query-auto-names', connectionId, pendingNameIds],
+        enabled: Boolean(connectionId) && !isAnonymous && isMyQueriesView && pendingNameIds.length > 0,
+        queryFn: ({ signal }) => executeActionClient<{ savedQueries: SavedQueryItem[] }>('savedQuery.list', { connectionId, limit }, { currentConnectionId: connectionId, signal }),
+        refetchInterval: query => (query.state.dataUpdateCount < 21 && query.state.data?.savedQueries.some(item => item.namingSource === 'pending') ? 1000 : false),
+        retry: false,
+        refetchOnWindowFocus: false,
+    });
+    useEffect(() => {
+        if (!autoNames.data) return;
+        setItems(previous =>
+            previous.map(item => {
+                const named = autoNames.data.savedQueries.find(row => row.id === item.id);
+                return named && named.sqlText === item.sqlText && item.namingSource === 'pending'
+                    ? { ...item, title: named.title, namingSource: named.namingSource, namingRequestId: named.namingRequestId }
+                    : item;
+            }),
+        );
+    }, [autoNames.data]);
 
     const fetchAll = useCallback(
         (nextLimit?: number) => {

@@ -14,7 +14,6 @@ import { columnsCacheAtom, currentConnectionAtom, schemaMetadataRefreshAtom } fr
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 import { clearQueryHistoryRestoredSession } from '../query-history-result-restore';
 
-type RequestAITabTitle = (tab: SQLTab, options?: { force?: boolean; sqlTextOverride?: string }) => Promise<void> | void;
 type QueryResultSetSummary = {
     sqlOp?: unknown;
     status?: unknown;
@@ -44,15 +43,13 @@ function notifyQueryHistoryUpdated(connectionId?: string | null) {
 
 export function useSqlQueryRunner({
     activeDatabase,
-    tabs,
     userId,
-    requestAITabTitle,
+    prepareTab,
     workspaceScope,
 }: {
     activeDatabase: string | null | undefined;
-    tabs: SQLTab[];
     userId: string | undefined;
-    requestAITabTitle: RequestAITabTitle;
+    prepareTab: (tabId: string, content: string) => Promise<unknown>;
     workspaceScope?: SqlWorkspaceScope;
 }) {
     const userReady = !!userId;
@@ -121,6 +118,7 @@ export function useSqlQueryRunner({
                     payload = isQueryExecutePayload(res.data) ? res.data : null;
                     notifySqlConsoleResultDataUpdated(payload);
                 } else {
+                    await prepareTab(tabId, sql);
                     await runSqlQueryStream({
                         input: {
                             sql: sqlText,
@@ -176,11 +174,6 @@ export function useSqlQueryRunner({
                     [tabId]: finalStatus,
                 }));
                 notifyQueryHistoryUpdated(queryConnectionId);
-
-                const latestTab = tabs.find(t => t.tabId === tabId);
-                if (latestTab && latestTab.tabType === 'sql') {
-                    void requestAITabTitle(latestTab, { sqlTextOverride: sqlText });
-                }
             } catch (e: unknown) {
                 console.error('[SQLConsoleClient.runQuery] error:', e);
                 if (e instanceof Error && e.name === 'AbortError') {
@@ -205,8 +198,7 @@ export function useSqlQueryRunner({
             setSchemaMetadataRefresh,
             setColumnsCache,
             userId,
-            tabs,
-            requestAITabTitle,
+            prepareTab,
             t,
             currentConnection?.connection?.id,
             normalizedWorkspaceScope,

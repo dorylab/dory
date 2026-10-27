@@ -7,6 +7,7 @@ import { executeActionClient, type ExecuteActionClientOptions } from '@/lib/acti
 import type { ResultSetMeta, ResultSetRemoteFilter, ResultSetRemoteSearch, ResultSetRemoteSort, ResultSetStatsV1, ResultSetViewState } from './type';
 import { normalizeSqlConsoleResultSnapshot, type SqlConsoleResultSnapshot, type SqlConsoleResultUpdatePayload } from './sql-console-result-snapshot';
 
+export const SQL_CONSOLE_NAMES_UPDATED_EVENT = 'sql-console-names-updated';
 export const SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT = 'sql-console-result-data-updated';
 
 export function notifySqlConsoleResultDataUpdated(payload?: SqlConsoleResultUpdatePayload | null) {
@@ -117,8 +118,31 @@ export function useSqlConsoleResultStore() {
             }
             setDataVersion(version => version + 1);
         };
+        const updateNames = (event: Event) => {
+            if (!(event instanceof CustomEvent)) return;
+            const payload = event.detail as { sessionId: string; resultSets: ResultSetMeta[] };
+            setSnapshotsBySession(previous => {
+                const snapshot = previous[payload.sessionId];
+                if (!snapshot) return previous;
+                return {
+                    ...previous,
+                    [payload.sessionId]: {
+                        ...snapshot,
+                        resultSets: snapshot.resultSets.map(set => {
+                            const named = payload.resultSets.find(item => item.setIndex === set.setIndex);
+                            return named ? { ...set, title: named.title, namingSource: named.namingSource, namingRequestId: named.namingRequestId } : set;
+                        }),
+                    },
+                };
+            });
+            setDataVersion(version => version + 1);
+        };
         window.addEventListener(SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT, bump);
-        return () => window.removeEventListener(SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT, bump);
+        window.addEventListener(SQL_CONSOLE_NAMES_UPDATED_EVENT, updateNames);
+        return () => {
+            window.removeEventListener(SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT, bump);
+            window.removeEventListener(SQL_CONSOLE_NAMES_UPDATED_EVENT, updateNames);
+        };
     }, []);
 
     const getSession = useCallback(

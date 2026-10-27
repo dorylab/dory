@@ -30,6 +30,7 @@ export function ArtifactWorkspaceDrawerContent({
     const organizationId = useOrganizationId();
     const artifactWorkspaceScope = useMemo<SqlWorkspaceScope>(() => ({ workspaceMode: 'artifact', artifactId, connectionId }), [artifactId, connectionId]);
     const query = useQuery({
+        refetchInterval: query => (query.state.dataUpdateCount < 21 && query.state.data?.namingSource === 'pending' ? 1000 : false),
         queryKey: ['artifact', organizationId, artifactId],
         queryFn: () => executeActionClient<ArtifactDetail>('artifact.get', { artifactId }, { organizationId }),
     });

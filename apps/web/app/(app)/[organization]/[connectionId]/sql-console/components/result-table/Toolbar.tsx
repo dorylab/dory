@@ -24,24 +24,31 @@ export type ExecMeta = {
 export function Toolbar(props: {
     className?: string;
     indices: number[];
+    titles?: Record<number, string | null | undefined>;
     /** -1=Overview，>=0=Result i */
     activeSet: number;
     onSetActiveSet: (n: number) => void;
 }) {
-    const { className, indices, activeSet, onSetActiveSet } = props;
+    const { className, indices, activeSet, onSetActiveSet, titles } = props;
     const t = useTranslations('SqlConsole');
 
     return (
         <div className={cn('flex flex-col', className)}>
             <div className="flex items-center justify-between w-full border bg-muted">
-                <Tabs value={String(activeSet)} onValueChange={v => onSetActiveSet(Number(v))} className="overflow-hidden">
-                    <TabsList>
+                <Tabs value={String(activeSet)} onValueChange={v => onSetActiveSet(Number(v))} className="min-w-0 overflow-x-auto">
+                    <TabsList className="w-max justify-start">
                         <TabsTrigger value="-1" className="px-2">
                             {t('Results.Overview')}
                         </TabsTrigger>
                         {indices.map(i => (
-                            <TabsTrigger key={i} value={String(i)} className="px-2">
-                                {t('Results.ResultTab', { index: i + 1 })}
+                            <TabsTrigger
+                                key={i}
+                                value={String(i)}
+                                className="max-w-48 px-2"
+                                title={titles?.[i] || undefined}
+                                aria-label={`${t('Results.ResultTab', { index: i + 1 })}${titles?.[i] ? `: ${titles[i]}` : ''}`}
+                            >
+                                <span className="truncate">{titles?.[i] || t('Results.ResultTab', { index: i + 1 })}</span>
                             </TabsTrigger>
                         ))}
                     </TabsList>

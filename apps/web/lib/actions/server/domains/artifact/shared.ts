@@ -34,6 +34,8 @@ const artifactSummarySchema = z.object({
     id: z.string(),
     type: artifactTypeSchema,
     title: z.string(),
+    namingSource: z.enum(['default', 'rule', 'pending', 'ai', 'manual']).optional(),
+    namingRequestId: z.string().nullable().optional(),
     status: z.string(),
     resourceId: z.string(),
     parentArtifactId: z.string().nullable(),

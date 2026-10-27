@@ -6,6 +6,7 @@ import { readWorkspace } from '../../policies';
 
 const inputSchema = z.object({
     sessionId: z.string().min(1),
+    includeProfile: z.boolean().optional(),
 });
 
 const outputSchema = z.object({
@@ -16,6 +17,8 @@ const outputSchema = z.object({
             sqlText: z.string(),
             sqlOp: z.string().nullable(),
             title: z.string().nullable(),
+            namingSource: z.enum(['default', 'rule', 'pending', 'ai', 'manual']).optional(),
+            namingRequestId: z.string().nullable().optional(),
             columns: z.array(z.unknown()),
             stats: z.unknown().nullable(),
             viewState: z.unknown().nullable(),
@@ -73,6 +76,7 @@ export const queryResultSetsListAction = defineWebAction({
             organizationId: ctx.organizationId,
             ...(await attachmentReadAccess(ctx)),
             sessionId: input.sessionId,
+            includeProfile: input.includeProfile,
         }),
     }),
 });

@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { Folder } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+import { buildSqlFallbackName, isDefaultSqlName } from '@dory/shared/utils/sql-name';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -16,7 +17,7 @@ import { SearchableSelect, type SelectOption } from '@/components/@dory/ui/searc
 import { useAtomValue } from 'jotai';
 import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { authClient } from '@/lib/auth-client';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { AuthLinkSheet } from '@/components/auth/auth-link-sheet';
@@ -32,6 +33,7 @@ type SaveSqlDialogProps = {
 
 export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, onSaved }: SaveSqlDialogProps) {
     const t = useTranslations('SqlConsole');
+    const locale = useLocale();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const currentConnection = useAtomValue(currentConnectionAtom);
@@ -51,13 +53,14 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const [error, setError] = useState<string | null>(null);
     const [authSheetOpen, setAuthSheetOpen] = useState(false);
     const descriptionEditedRef = useRef(false);
+    const wasOpenRef = useRef(false);
     const businessMeaningEditedRef = useRef(false);
     const isAnonymous = isAnonymousUser(session?.user);
 
     const resolvedDefaultTitle = useMemo(() => {
         const raw = defaultTitle?.trim();
-        return raw && raw.length > 0 ? raw : t('Tabs.NewQuery');
-    }, [defaultTitle, t]);
+        return raw && !isDefaultSqlName(raw) ? raw : '';
+    }, [defaultTitle]);
 
     const folderEmptyText = useMemo(() => {
         return loadingFolders ? t('SaveSql.LoadingFolders') : t('SaveSql.FolderEmpty');
@@ -69,7 +72,9 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const sqlTextForMetadata = useMemo(() => (open && addToBusinessKnowledge ? getSqlText().trim() : ''), [addToBusinessKnowledge, getSqlText, open]);
 
     useEffect(() => {
-        if (!open) return;
+        const opening = open && !wasOpenRef.current;
+        wasOpenRef.current = open;
+        if (!opening) return;
         setTitle(resolvedDefaultTitle);
         setDescription('');
         setFolderId('');
@@ -83,7 +88,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     }, [open, resolvedDefaultTitle]);
 
     const savedQueryMetadata = useQuery({
-        queryKey: ['saved-query-metadata', connectionId, resolvedDefaultTitle, sqlTextForMetadata],
+        queryKey: ['saved-query-metadata', connectionId, resolvedDefaultTitle, sqlTextForMetadata, locale],
         enabled: open && addToBusinessKnowledge && !isAnonymous && Boolean(connectionId) && Boolean(sqlTextForMetadata),
         queryFn: async ({ signal }) => {
             const controller = new AbortController();
@@ -96,7 +101,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                     'ai.savedQueryMetadata',
                     {
                         connectionId,
-                        title: resolvedDefaultTitle,
+                        title: resolvedDefaultTitle || buildSqlFallbackName(sqlTextForMetadata, locale),
                         sql: sqlTextForMetadata,
                         database: currentConnection?.connection?.database ?? null,
                     },
@@ -182,10 +187,6 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
             setError(t('SaveSql.Errors.SqlRequired'));
             return;
         }
-        if (!title.trim()) {
-            setError(t('SaveSql.Errors.TitleRequired'));
-            return;
-        }
         if (!connectionId) {
             const message = t('Tabs.MissingConnectionContext');
             setError(message);
@@ -205,11 +206,11 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
         setError(null);
 
         try {
-            await executeActionClient(
+            const savedQuery = await executeActionClient<{ id: string; title: string }>(
                 'savedQuery.create',
                 {
                     connectionId,
-                    title: title.trim(),
+                    title: title.trim() || undefined,
                     description: description.trim() ? description.trim() : null,
                     folderId: folderId || null,
                     sqlText,
@@ -232,7 +233,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                     {
                         knowledgeModelId: targetModelId,
                         sourceConnectionId: connectionId,
-                        title: title.trim(),
+                        title: savedQuery.title,
                         description: description.trim() ? description.trim() : undefined,
                         question: businessMeaning.trim(),
                         sql: sqlText,
@@ -263,7 +264,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                     <div className="grid gap-3">
                         <div className="grid gap-2">
                             <label className="text-sm font-medium">{t('SaveSql.NameLabel')}</label>
-                            <Input value={title} onChange={event => setTitle(event.target.value)} placeholder={t('SaveSql.NamePlaceholder')} />
+                            <Input value={title} onChange={event => setTitle(event.target.value)} placeholder={t('SaveSql.AutoNamePlaceholder')} />
                         </div>
                         <div className="grid gap-2">
                             <label className="text-sm font-medium">{t('SaveSql.DescriptionLabel')}</label>

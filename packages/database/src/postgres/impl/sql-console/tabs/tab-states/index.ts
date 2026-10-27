@@ -1,3 +1,4 @@
+import { isDefaultSqlName, type NamingMetadata } from '@dory/shared/utils/sql-name';
 import { tabs } from '@dory/database/postgres/schemas';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -39,6 +40,9 @@ export class PostgresTabStateRepository {
             content: string | null;
             tabName?: string | null;
             tabType: 'sql' | 'table';
+            nameEdited?: boolean;
+            namingSource?: NamingMetadata['namingSource'];
+            namingRequestId?: string | null;
             orderIndex?: number | null;
             createdAt?: string | Date | null;
             activeSubTab?: TableTabPayload['activeSubTab'] | null;
@@ -69,8 +73,21 @@ export class PostgresTabStateRepository {
             ...(hasOrderIndex ? { orderIndex: state.orderIndex! } : {}),
         };
 
-        if (typeof state.tabName === 'string') {
+        const staleAutomaticName =
+            existing &&
+            !state.nameEdited &&
+            ((isDefaultSqlName(state.tabName) && existing.namingSource !== 'default') ||
+                ((Boolean(existing.namingRequestId) || Boolean(state.namingRequestId)) && state.namingRequestId !== existing.namingRequestId) ||
+                (existing.namingRequestId === state.namingRequestId && existing.namingSource !== state.namingSource && existing.namingSource !== 'manual'));
+        if (typeof state.tabName === 'string' && !staleAutomaticName) {
             updateSet.tabName = state.tabName;
+        }
+        if (existing && (state.nameEdited || (!staleAutomaticName && state.tabName && state.tabName !== existing.tabName))) {
+            updateSet.namingSource = 'manual';
+            updateSet.namingRequestId = null;
+        } else if (existing?.namingSource === 'pending' && state.content !== existing.content) {
+            updateSet.namingSource = 'rule';
+            updateSet.namingRequestId = existing.namingRequestId;
         }
 
         await this.db
@@ -81,7 +98,8 @@ export class PostgresTabStateRepository {
                 connectionId,
                 workId: scopedWorkId,
                 tabType: state.tabType, // sql | table
-                tabName: state.tabName,
+                tabName: state.tabName ?? 'New Query',
+                namingSource: !isTable && !state.nameEdited && isDefaultSqlName(state.tabName) ? 'default' : 'manual',
                 content: isTable ? '' : (state.content ?? ''), // SQL text or empty string
 
                 // Only valid for table type; otherwise write null
@@ -97,14 +115,28 @@ export class PostgresTabStateRepository {
             } as unknown as any)
             .onConflictDoUpdate({
                 target: tabs.tabId,
-                set: updateSet,
+                set: {
+                    ...updateSet,
+                    tabName: state.nameEdited
+                        ? (state.tabName ?? existing?.tabName ?? 'New Query')
+                        : sql`case
+                        when ${tabs.namingRequestId} is distinct from ${existing?.namingRequestId ?? null}
+                          or (${tabs.namingSource} <> ${existing?.namingSource ?? 'default'} and ${tabs.namingSource} <> 'manual')
+                        then ${tabs.tabName} else ${updateSet.tabName ?? existing?.tabName ?? state.tabName ?? 'New Query'} end`,
+                    ...(state.nameEdited
+                        ? {}
+                        : {
+                              namingSource: sql`case when ${tabs.namingSource} = 'pending' and ${tabs.content} is distinct from ${state.content ?? ''} then 'rule' when ${tabs.namingRequestId} is distinct from ${existing?.namingRequestId ?? null} then ${tabs.namingSource} else ${updateSet.namingSource ?? existing?.namingSource ?? 'default'} end`,
+                              namingRequestId: sql`case when ${tabs.namingRequestId} is distinct from ${existing?.namingRequestId ?? null} then ${tabs.namingRequestId} else ${'namingRequestId' in updateSet ? updateSet.namingRequestId : (existing?.namingRequestId ?? null)} end`,
+                          }),
+                },
             });
     }
 
     async updateTabName({ tabId, userId, connectionId, workId, newName }: { tabId: string; userId: string; connectionId: string; workId?: string | null; newName: string }) {
         await this.db
             .update(tabs)
-            .set({ tabName: newName })
+            .set({ tabName: newName, namingSource: 'manual', namingRequestId: null, updatedAt: new Date() })
             .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), scopedWorkCondition(workId)));
     }
 

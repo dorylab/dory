@@ -1,3 +1,4 @@
+import type { NamingSource } from '@dory/shared/utils/sql-name';
 import { bigint, index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { newEntityId } from '@dory/shared/id';
@@ -23,6 +24,8 @@ export const artifacts = pgTable(
         organizationId: text('organization_id').notNull(),
         type: text('type').$type<ArtifactType>().notNull(),
         title: text('title').notNull(),
+        namingSource: text('naming_source').$type<NamingSource>().notNull().default('manual'),
+        namingRequestId: text('naming_request_id'),
         status: text('status').$type<ArtifactStatus>().notNull().default('ready'),
         resourceId: text('resource_id').notNull(),
         parentArtifactId: text('parent_artifact_id'),

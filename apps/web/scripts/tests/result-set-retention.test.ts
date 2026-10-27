@@ -100,6 +100,7 @@ async function initSchema() {
         )
     `);
     await db.execute(sql`CREATE TABLE "works" ("work_id" text PRIMARY KEY, "title" text NOT NULL)`);
+    await db.execute(sql`CREATE TABLE "work_query_sessions" ("work_id" text NOT NULL, "session_id" text NOT NULL, "database" text)`);
     await db.execute(sql`
         CREATE TABLE "query_runs" (
             "id" text PRIMARY KEY NOT NULL,
@@ -138,6 +139,7 @@ async function initSchema() {
             "source_query_run_id" text,
             "comparison_id" text,
             "comparison_run_id" text,
+            "attachment_source" jsonb,
             "source_type" text NOT NULL,
             "kind" text NOT NULL,
             "status" text NOT NULL,
@@ -187,6 +189,8 @@ async function initSchema() {
             "organization_id" text NOT NULL,
             "type" text NOT NULL,
             "title" text NOT NULL,
+            "naming_source" text NOT NULL DEFAULT 'manual',
+            "naming_request_id" text,
             "status" text NOT NULL DEFAULT 'ready',
             "resource_id" text NOT NULL,
             "parent_artifact_id" text,

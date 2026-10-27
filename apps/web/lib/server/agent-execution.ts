@@ -1,3 +1,4 @@
+import { createSqlNamer } from '@/lib/server/sql-naming';
 import { chatToolFailure } from '@dory/shared/types/chat-tool-error';
 import { attachmentQuerySchema, queryChatAttachments } from './chat-attachment-data';
 import { chatActionFingerprint, chatCheckpoints, isCheckpointControl, publishProgressSchema } from './chat-checkpoints';
@@ -183,7 +184,7 @@ const savedQueriesInputSchema = z
         operation: z.enum(['list', 'get', 'create', 'update', 'delete']),
         connectionId: z.string().min(1),
         id: z.string().min(1).optional(),
-        title: z.string().min(1).optional(),
+        title: z.string().optional(),
         description: z.string().nullable().optional(),
         folderId: z.string().nullable().optional(),
         sqlText: z.string().min(1).optional(),
@@ -988,7 +989,7 @@ async function applySqlWorkspaceAction(
         const tab = await executeInternal<{ tabId: string; tabName?: string | null }>(ctx, 'tab.create', {
             connectionId: input.connectionId,
             tabType: 'sql',
-            tabName: input.tabName ?? 'Agent query',
+            tabName: input.tabName,
             content: sql,
             resultMeta: input.resultMeta ?? null,
             workId: input.workId ?? null,
@@ -1013,6 +1014,7 @@ async function applySqlWorkspaceAction(
             ...existing,
             content,
             tabName,
+            nameEdited: typeof input.tabName === 'string',
             tabType: 'sql',
         },
         resultMeta: input.resultMeta ?? existing.resultMeta ?? null,
@@ -1059,6 +1061,15 @@ async function runReadonlySqlFacade(ctx: ActionContext<WebActionServices>, rawIn
         output.session.tabId = tabId;
     }
     const savedArtifacts = (await ctx.services.db.works.saveSqlSnapshot(work.workId, output)) ?? [];
+    const namer = createSqlNamer(ctx, input.database);
+    const tabNaming = await namer.tab(tabId, input.connectionId, work.workId);
+    if (tabNaming && 'tabName' in workspaceAction) workspaceAction.tabName = tabNaming.title;
+    for (const [index, artifact] of savedArtifacts.entries()) {
+        const resultSet = output.queryResultSets[index];
+        if (!resultSet) continue;
+        const naming = await namer.queue({ type: 'artifact', id: artifact.artifactId, organizationId: ctx.organizationId }, resultSet.sqlText);
+        if (naming) Object.assign(artifact, naming);
+    }
     work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId, sessionId: output.session.sessionId });
 
     return withWork(
@@ -1249,7 +1260,7 @@ async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInp
                 connectionId: input.connectionId,
                 workId: work.workId,
                 tabType: 'sql',
-                tabName: input.tabName ?? 'Agent query',
+                tabName: input.tabName,
                 content: requireString(input.sql, 'sql'),
             });
             work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId: tab.tabId });
@@ -1335,7 +1346,7 @@ async function savedQueriesFacade(ctx: ActionContext<WebActionServices>, rawInpu
                 await executeInternal(ctx, 'savedQuery.create', {
                     connectionId: input.connectionId,
                     id: input.id,
-                    title: requireString(input.title, 'title'),
+                    title: input.title,
                     description: input.description,
                     folderId: input.folderId,
                     sqlText: requireString(input.sqlText, 'sqlText'),
@@ -2027,6 +2038,7 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                             resolved.workId,
                             ctx.services.agentTurn?.requestId ?? (typeof parsed.requestId === 'string' ? parsed.requestId : undefined),
                             ctx.signal ?? ctx.services.req?.signal,
+                            createSqlNamer(ctx),
                         );
                     return readChatAttachment(ctx.services.db, { organizationId: ctx.organizationId, userId: ctx.userId }, chatId, parsed, ctx.signal ?? ctx.services.req?.signal);
                 });

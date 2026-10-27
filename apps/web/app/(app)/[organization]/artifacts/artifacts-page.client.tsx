@@ -180,6 +180,7 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
     const deferredQuery = useDeferredValue(state.q.trim());
     const types = state.type === 'all' ? TYPE_ORDER : [state.type];
     const query = useQuery({
+        refetchInterval: query => (query.state.dataUpdateCount < 21 && query.state.data?.rows.some(row => row.namingSource === 'pending') ? 1000 : false),
         queryKey: ['artifacts', organizationId, deferredQuery, state.type, state.pinned, state.page],
         queryFn: () =>
             executeActionClient<ArtifactListOutput>(

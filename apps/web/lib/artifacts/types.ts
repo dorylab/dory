@@ -1,3 +1,5 @@
+import type { NamingMetadata } from '@dory/shared/utils/sql-name';
+
 export type ArtifactType = 'result_set' | 'chart' | 'file';
 export type ArtifactStatus = 'ready' | 'unavailable';
 
@@ -29,7 +31,7 @@ export type ArtifactWorkspaceTarget =
           sql: string | null;
       };
 
-type ArtifactSummaryBase = {
+type ArtifactSummaryBase = NamingMetadata & {
     id: string;
     title: string;
     status: ArtifactStatus;

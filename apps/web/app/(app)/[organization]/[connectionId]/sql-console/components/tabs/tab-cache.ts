@@ -1,3 +1,4 @@
+import { isNamingSource } from '@dory/shared/utils/sql-name';
 import type { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
 
 const SQL_TABS_CACHE_VERSION = 1;
@@ -20,6 +21,9 @@ function normalizeCachedTab(value: unknown): UITabPayload | null {
         connectionId: value.connectionId,
         workId: typeof value.workId === 'string' ? value.workId : null,
         tabName: typeof value.tabName === 'string' ? value.tabName : undefined,
+        namingSource: isNamingSource(value.namingSource) ? value.namingSource : undefined,
+        namingRequestId: typeof value.namingRequestId === 'string' ? value.namingRequestId : null,
+        nameEdited: value.nameEdited === true,
         orderIndex: typeof value.orderIndex === 'number' ? value.orderIndex : undefined,
         createdAt: typeof value.createdAt === 'string' ? value.createdAt : undefined,
         updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : undefined,

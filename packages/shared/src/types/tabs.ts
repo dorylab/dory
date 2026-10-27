@@ -1,8 +1,10 @@
+import type { NamingMetadata } from '../utils/sql-name';
 import { QueryResult, SessionStatus } from './sql-console';
 
 export type TabType = 'sql' | 'table';
 
-export interface BaseTabPayload {
+export interface BaseTabPayload extends NamingMetadata {
+    nameEdited?: boolean;
     tabId: string;
 
     userId: string;

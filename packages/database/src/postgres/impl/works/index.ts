@@ -1557,6 +1557,7 @@ export class PostgresWorksRepository {
                         organizationId: work.organizationId,
                         type: 'result_set',
                         title: getString(resultSet.title) ?? `Result Set ${artifactId.slice(3, 11)}`,
+                        namingSource: resultSet.namingSource === 'rule' ? 'rule' : 'manual',
                         status: status === 'error' ? 'unavailable' : 'ready',
                         resourceId: artifactId,
                         sourceResultSetId: artifactId,
@@ -1641,7 +1642,7 @@ export class PostgresWorksRepository {
         const work = await this.getById(params);
         if (!work) return null;
 
-        const [tabRows, sessionRows, resultSetRows, chartRows] = await Promise.all([
+        const [tabRows, sessionRows, resultSetRows, chartRows, namedArtifacts] = await Promise.all([
             this.db
                 .select()
                 .from(tabs)
@@ -1650,11 +1651,21 @@ export class PostgresWorksRepository {
             this.db.select().from(workQuerySessions).where(eq(workQuerySessions.workId, params.workId)).orderBy(workQuerySessions.startedAt),
             this.db.select().from(workQueryResultSets).where(eq(workQueryResultSets.workId, params.workId)).orderBy(workQueryResultSets.sessionId, workQueryResultSets.setIndex),
             this.db.select().from(workChartStates).where(eq(workChartStates.workId, params.workId)),
+            this.db
+                .select({ resourceId: artifacts.resourceId, title: artifacts.title, namingSource: artifacts.namingSource, namingRequestId: artifacts.namingRequestId })
+                .from(artifacts)
+                .where(and(eq(artifacts.organizationId, params.organizationId), eq(artifacts.workId, params.workId), eq(artifacts.type, 'result_set'))),
         ]);
 
+        const namesByResultSet = new Map(namedArtifacts.map(artifact => [artifact.resourceId, artifact]));
         const sessions = await Promise.all(
             sessionRows.map(async session => {
-                const sets = resultSetRows.filter(resultSet => resultSet.sessionId === session.sessionId);
+                const sets = resultSetRows
+                    .filter(resultSet => resultSet.sessionId === session.sessionId)
+                    .map(resultSet => {
+                        const artifact = resultSet.resultSetId ? namesByResultSet.get(resultSet.resultSetId) : null;
+                        return { ...resultSet, ...(artifact ? { title: artifact.title, namingSource: artifact.namingSource, namingRequestId: artifact.namingRequestId } : {}) };
+                    });
                 return {
                     session,
                     queryResultSets: sets,

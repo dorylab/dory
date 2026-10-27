@@ -1558,6 +1558,7 @@
             }
         },
         "SaveSql": {
+            "AutoNamePlaceholder": "Leave blank to name automatically",
             "Title": "Save Query",
             "NameLabel": "Name",
             "NamePlaceholder": "Query name",
@@ -5461,7 +5462,7 @@
         "SourceOnly": "Some formatting cannot be edited losslessly in document mode. The original Markdown is preserved; continue in source mode.",
         "InvalidReference": "Invalid reference",
         "MoveVisual": "Drag to move chart or table",
-        "ExportMarkdown": "Markdown + assets",
+        "ExportMarkdown": "Markdown package",
         "SelectDefinition": "Select verified text in the report first.",
         "EvidenceDescription": "Saved query snapshots, SQL and Knowledge supporting this version.",
         "LatestMessages": "Go to latest messages",
@@ -5668,7 +5669,27 @@
             },
             "ChartNotReady": "The chart is still loading or has no saved data to export."
         },
-        "ContinueUnfinished": "Continue unfinished steps"
+        "ContinueUnfinished": "Continue unfinished steps",
+        "Export": "Export",
+        "BackToReports": "Back to Reports",
+        "VersionLabel": "Version {revision}",
+        "Saving": "Saving…",
+        "Library": {
+            "Filter": "Report status",
+            "Active": "Active",
+            "All": "All reports",
+            "NoSources": "No sources recorded",
+            "Actions": "Actions for {title}",
+            "Archived": "Report archived.",
+            "Restored": "Report restored.",
+            "Retry": "Try again",
+            "NoMatches": "No reports match your filters.",
+            "ClearFilters": "Clear filters",
+            "EmptyArchived": "No archived reports.",
+            "EmptyActive": "No active reports. Your archived reports are available in the status filter.",
+            "GoToWork": "Go to Work",
+            "UnavailableSource": "Unavailable data source"
+        }
     },
     "ChatComposer": {
         "Picker": {

@@ -1,3 +1,4 @@
+import type { NamingMetadata } from '@dory/shared/utils/sql-name';
 import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 
@@ -23,7 +24,7 @@ import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import type { PostgresDBClient } from '@dory/shared';
 
-export type ArtifactSummary = {
+export type ArtifactSummary = NamingMetadata & {
     id: string;
     type: ArtifactType;
     title: string;
@@ -120,10 +121,6 @@ function defaultTitle(type: ArtifactType, resourceId: string) {
     return `${label} ${resourceId.replace(/^[^_]+_/, '').slice(0, 8)}`;
 }
 
-function isSqlTitle(value: string) {
-    return /^(?:with\b[\s\S]+?\bselect\b|select\b|insert\b|update\b|delete\b|create\b|alter\b|drop\b)/i.test(value.trim());
-}
-
 export function formatSqlResultTitle(sql: string | null) {
     const normalized =
         sql
@@ -156,7 +153,7 @@ export function formatSqlResultTitle(sql: string | null) {
 }
 
 function displayTitle(input: { artifact: typeof artifacts.$inferSelect; resultSetSql: string | null }) {
-    return isSqlTitle(input.artifact.title) ? formatSqlResultTitle(input.resultSetSql) : input.artifact.title;
+    return input.artifact.title;
 }
 
 export class PostgresArtifactsRepository {
@@ -347,7 +344,7 @@ export class PostgresArtifactsRepository {
         if (!title) throw new DatabaseError('Artifact title is required', 400);
         const [row] = await this.db
             .update(artifacts)
-            .set({ title: title.slice(0, 160), updatedAt: new Date() })
+            .set({ title: title.slice(0, 160), namingSource: 'manual', namingRequestId: null, updatedAt: new Date() })
             .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
             .returning();
         if (!row) throw new DatabaseError('Artifact not found', 404);
@@ -486,6 +483,8 @@ export class PostgresArtifactsRepository {
         return {
             ...row.artifact,
             title: displayTitle({ artifact: row.artifact, resultSetSql: row.resultSetSql ?? null }),
+            namingSource: row.artifact.namingSource,
+            namingRequestId: row.artifact.namingRequestId,
             connectionName: row.connectionName,
             runTitle: row.runTitle,
             comparisonName: row.comparisonName,

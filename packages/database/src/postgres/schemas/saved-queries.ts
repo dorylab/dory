@@ -1,3 +1,4 @@
+import type { NamingSource } from '@dory/shared/utils/sql-name';
 import { pgTable, uuid, text, jsonb, timestamp, integer, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { newEntityId } from '@dory/shared/id';
@@ -5,20 +6,25 @@ import { newEntityId } from '@dory/shared/id';
 export const savedQueries = pgTable(
     'saved_queries',
     {
-        id: text('id').primaryKey().$defaultFn(() => newEntityId()),
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => newEntityId()),
 
         organizationId: text('organization_id').notNull(),
         userId: text('user_id').notNull(),
 
         title: text('title').notNull(),
+        namingSource: text('naming_source').$type<NamingSource>().notNull().default('manual'),
+        namingRequestId: text('naming_request_id'),
         description: text('description'),
 
         sqlText: text('sql_text').notNull(),
 
-        
         connectionId: text('connection_id').notNull(),
-        
-        context: jsonb('context').notNull().default(sql`'{}'::jsonb`),
+
+        context: jsonb('context')
+            .notNull()
+            .default(sql`'{}'::jsonb`),
 
         // text[]
         tags: text('tags')
@@ -36,11 +42,11 @@ export const savedQueries = pgTable(
 
         archivedAt: timestamp('archived_at', { withTimezone: true }),
     },
-    (t) => ([
+    t => [
         index('idx_saved_queries_organization_user').on(t.organizationId, t.userId),
         index('idx_saved_queries_updated_at').on(t.updatedAt),
         index('idx_saved_queries_folder_id').on(t.folderId),
-    ]),
+    ],
 );
 
 export type SavedQuery = typeof savedQueries.$inferSelect;

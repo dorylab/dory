@@ -96,7 +96,7 @@ export function OverviewTable(props: { items: OverviewItem[]; onOpenResultById?:
                                     <div className="flex min-w-0 flex-1 items-start gap-3 pr-2">
                                         <StatusBadge status={item.status} />
                                         <div className="min-w-0 flex-1">
-                                            <div className="text-xs font-semibold text-foreground">{t('Results.ResultTab', { index: item.setIndex + 1 })}</div>
+                                            <div className="text-xs font-semibold text-foreground">{item.title || t('Results.ResultTab', { index: item.setIndex + 1 })}</div>
                                             <div
                                                 className={cn(
                                                     'mt-1 line-clamp-2 font-mono text-xs font-normal text-muted-foreground',

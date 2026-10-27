@@ -138,7 +138,8 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Human-reviewed analysis' })).toBeVisible();
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'HTML', exact: true }).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'HTML', exact: true }).click();
     const file = await download;
     expect(file.suggestedFilename()).toBe('Human-reviewed analysis.html');
     const stream = await file.createReadStream();
@@ -338,14 +339,14 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     await expect(page.getByTestId('work-report')).toBeVisible();
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'HTML', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeDisabled();
     await selectReportVersion(page, 1);
     await expect(page.getByTestId('work-markdown')).toHaveText('Historical snapshot content');
     document.revision = 3;
     document.content.markdown = 'Latest generated content';
     await expect.poll(() => latestRead).toBe(3);
     await expect(page.getByTestId('work-markdown')).toHaveText('Historical snapshot content');
-    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v1');
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('Version 1');
     await page.getByRole('button', { name: 'Back to latest', exact: true }).click();
     await expect(page.getByTestId('work-markdown')).toHaveText('Latest generated content');
     await page.evaluate(() => (window as unknown as { finishReportStream: () => void }).finishReportStream());
@@ -888,7 +889,8 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     await expect(page.getByRole('dialog')).toContainText('September');
     await page.keyboard.press('Escape');
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'HTML', exact: true }).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'HTML', exact: true }).click();
     const stream = await (await download).createReadStream();
     let html = '';
     for await (const chunk of stream!) html += chunk.toString();
@@ -904,7 +906,7 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('version-dark-mobile.png'), fullPage: true });
     await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v3');
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('Version 3');
     expect(writes).toBe(1);
     await selectReportVersion(page, 1);
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
@@ -995,7 +997,7 @@ test('history requests cannot replace a newer selection and restore conflicts pr
     await selectReportVersion(page, 1);
     await expect.poll(() => Boolean(releaseFirst)).toBe(true);
     await expect(page.getByTestId('work-markdown')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'HTML', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeDisabled();
     await selectReportVersion(page, 2);
     await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
     releaseFirst!();
@@ -1007,7 +1009,7 @@ test('history requests cannot replace a newer selection and restore conflicts pr
     await expect(page.getByRole('heading', { name: 'Second version', includeHidden: true })).toBeVisible();
     conflict = false;
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v5');
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('Version 5');
     failHistory = true;
     await page.goto(url + '?revision=1');
     await expect(page.getByTestId('work-report').getByRole('alert')).toContainText('Version not found.');
@@ -1105,11 +1107,14 @@ test('selecting a different report clears the previous historical revision', asy
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/work?chat=report-chat&document=doc-report&panel=report&revision=1`);
-    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v1');
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('Version 1');
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
-    await page.getByRole('button', { name: 'Another report Ready' }).click();
+    await page
+        .getByRole('region', { name: 'Outputs', exact: true })
+        .getByRole('button', { name: /^Another report Report/ })
+        .click();
     await expect(page.getByRole('heading', { name: 'Another report' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('v3');
+    await expect(page.getByRole('button', { name: 'Report version', exact: true })).toHaveText('Version 3');
     await expect(page).not.toHaveURL(/revision=/);
 });
 
@@ -1591,7 +1596,8 @@ test('report pie charts retain source values on screen, after reload and in HTML
         if (i === 0) await page.reload();
     }
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'HTML', exact: true }).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'HTML', exact: true }).click();
     const stream = await (await download).createReadStream();
     let html = '';
     for await (const chunk of stream!) html += chunk.toString();
@@ -1798,6 +1804,7 @@ test('unified Data Sources supports database multi-select, full-group selection,
         if (actionId === 'schema.listTables')
             return route.fulfill({ json: { ok: true, data: { tables: [{ name: 'orders', value: 'orders', label: `Orders in ${input.database}` }] } } });
         if (actionId === 'schema.listViews') return route.fulfill({ json: { ok: true, data: { views: [] } } });
+        if (actionId === 'artifact.list') return route.fulfill({ json: { ok: true, data: { rows: [], total: 0 } } });
         return route.fallback();
     });
     await page.route('**/api/data-agent', route =>
@@ -2068,4 +2075,193 @@ test('Resource Mention Picker keeps inline identity, ranked results, pinned vers
     await expect(composer.getByTestId('mention-chip')).toHaveCount(2);
     await knownClipboard.dispose();
     await expectAppHealthy(appErrors);
+});
+
+test('Reports library filters, renames, archives and returns with its filters intact', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const active = { ...makeDocument(), sourceLabels: ['Orders', 'sales.csv'] };
+    const archived = { ...makeDocument(), id: 'doc-archived', title: 'Archived report', archivedAt: now, sourceLabels: [] as string[] };
+    const documents = [active, archived];
+    let failArchive = false;
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({ json: { connections: [{ id: connection.connection.id, name: 'Orders' }], models: [], sessions: [], works: [] } }),
+    );
+    await page.route('**/api/work-documents?*', route => {
+        const search = new URL(route.request().url()).searchParams;
+        const state = search.get('archiveState') ?? (search.get('archived') === 'true' ? 'all' : 'active');
+        const filtered = documents.filter(
+            document =>
+                (state === 'all' || (state === 'archived' ? Boolean(document.archivedAt) : !document.archivedAt)) &&
+                document.title.toLowerCase().includes((search.get('q') ?? '').toLowerCase()) &&
+                (!search.get('connectionId') || document.scope.connectionIds.includes(search.get('connectionId')!)),
+        );
+        return route.fulfill({ json: { documents: filtered } });
+    });
+    await page.route('**/api/work-documents/doc-*', async route => {
+        const id = new URL(route.request().url()).pathname.split('/').pop();
+        const document = documents.find(item => item.id === id)!;
+        if (route.request().method() === 'PATCH') {
+            const body = route.request().postDataJSON();
+            if (body.action === 'rename') {
+                document.title = body.title;
+                document.revision++;
+            } else {
+                if (failArchive) return route.fulfill({ status: 409, json: { error: 'Archive failed' } });
+                document.archivedAt = body.archived ? now : null;
+            }
+        }
+        return route.fulfill({ json: { document, versions: [{ revision: document.revision, source: 'user', createdAt: now }] } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/reports?archived=true`);
+    await expect(page.getByRole('combobox', { name: 'Report status' })).toHaveValue('all');
+    await expect(page.getByTestId('report-row')).toHaveCount(2);
+    await expect(page.getByRole('link', { name: 'Generate report', exact: true })).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'Report status' }).selectOption('active');
+    await expect(page.getByTestId('report-row')).toHaveCount(1);
+    await expect(page.getByTestId('report-row')).toContainText('Orders +1');
+    await page.getByText('Orders +1', { exact: true }).focus();
+    await expect(page.getByRole('tooltip')).toContainText('sales.csv');
+    await page.keyboard.press('Escape');
+    await page.getByRole('textbox', { name: 'Search reports…' }).fill('Revenue');
+    await page.getByRole('combobox', { name: 'Analysis scope' }).selectOption(connection.connection.id);
+    await page.getByRole('link', { name: 'Revenue analysis', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to Reports', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Search reports…' })).toHaveValue('Revenue');
+    await expect(page.getByRole('combobox', { name: 'Analysis scope' })).toHaveValue(connection.connection.id);
+    await page.getByRole('button', { name: 'Actions for Revenue analysis' }).click();
+    await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(title).toBeFocused();
+    await title.fill('Revenue reviewed');
+    await title.press('Enter');
+    await expect(page.getByRole('link', { name: 'Revenue reviewed' })).toBeVisible();
+    await page.getByRole('button', { name: 'Actions for Revenue reviewed' }).click();
+    await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+    await title.fill('Cancelled title');
+    await title.press('Escape');
+    await expect(page.getByRole('link', { name: 'Revenue reviewed' })).toBeVisible();
+    failArchive = true;
+    await page.getByRole('button', { name: 'Actions for Revenue reviewed' }).click();
+    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+    await expect(page.getByText('Archive failed', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Revenue reviewed' })).toBeVisible();
+    failArchive = false;
+    await page.getByRole('button', { name: 'Actions for Revenue reviewed' }).click();
+    await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+    await expect(page.getByText('No reports match your filters.')).toBeVisible();
+    await page.getByRole('combobox', { name: 'Report status' }).selectOption('archived');
+    await expect(page.getByRole('link', { name: 'Revenue reviewed' })).toBeVisible();
+    await page.getByRole('button', { name: 'Actions for Revenue reviewed' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Rename', exact: true })).toBeDisabled();
+    await page.getByRole('menuitem', { name: 'Unarchive', exact: true }).click();
+    await expect(page.getByText('No reports match your filters.')).toBeVisible();
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(page.getByRole('link', { name: 'Revenue reviewed' })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('reports-list-light.png'), animations: 'disabled' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.document.documentElement.classList.add('dark'));
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('reports-list-dark-mobile.png'), animations: 'disabled', fullPage: true });
+    await expectAppHealthy(appErrors);
+});
+
+test('Reports distinguish first visit, archived-only, filtered and failed states', async ({ page }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [], works: [] } }));
+    let hasArchived = false;
+    let failed = false;
+    await page.route('**/api/work-documents?*', route => {
+        if (failed) return route.fulfill({ status: 500, json: { error: 'Reports unavailable' } });
+        const all = new URL(route.request().url()).searchParams.get('archiveState') === 'all';
+        return route.fulfill({ json: { documents: all && hasArchived ? [{ ...makeDocument(), archivedAt: now }] : [] } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/reports`);
+    await expect(page.getByRole('link', { name: 'Go to Work', exact: true })).toBeVisible();
+    hasArchived = true;
+    await page.reload();
+    await expect(page.getByText('No active reports.', { exact: false })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Go to Work', exact: true })).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'Report status' }).selectOption('archived');
+    await expect(page.getByText('No archived reports.')).toBeVisible();
+    await page.getByRole('textbox', { name: 'Search reports…' }).fill('missing');
+    await expect(page.getByText('No reports match your filters.')).toBeVisible();
+    await expect(page).toHaveURL(/q=missing/);
+    failed = true;
+    await page.reload();
+    await expect(page.getByRole('alert').filter({ hasText: 'Reports unavailable' })).toBeVisible();
+    await expect(page.getByText('No reports match your filters.')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Go to Work', exact: true })).toHaveCount(0);
+    failed = false;
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByText('No reports match your filters.')).toBeVisible();
+});
+
+test('report navigation protects unsaved changes and exports a complete Markdown package and print snapshot', async ({ page }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    let document = makeDocument();
+    document.content.markdown += '\n\n| Label | Amount |\n| :--- | ---: |\n| ' + 'LongColumn'.repeat(35) + ' | 42 |';
+    let failSave = true;
+    let writes = 0;
+    await page.route('**/api/work-documents/doc-report', async route => {
+        if (route.request().method() === 'PATCH') {
+            writes++;
+            if (failSave) return route.fulfill({ status: 409, json: { error: 'Save conflict' } });
+            const body = route.request().postDataJSON();
+            document = { ...document, title: body.draft.title, revision: document.revision + 1 };
+        }
+        return route.fulfill({ json: { document, versions: [{ revision: document.revision, source: 'user', createdAt: now }] } });
+    });
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [document] } }));
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [], works: [] } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/reports/doc-report?q=Revenue&archiveState=all`);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Human changes');
+    await expect.poll(() => writes).toBe(1);
+    await page.getByRole('button', { name: 'Continue analysis', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Human changes');
+    await page.getByRole('button', { name: 'Back to Reports', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Save and continue', exact: true }).click();
+    await expect(page.getByRole('alertdialog').getByRole('alert')).toBeVisible();
+    await expect(page).toHaveURL(/reports\/doc-report/);
+    failSave = false;
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Save and continue', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Search reports…' })).toHaveValue('Revenue');
+    await expect(page.getByRole('combobox', { name: 'Report status' })).toHaveValue('all');
+    await page.getByRole('link', { name: 'Human changes', exact: true }).click();
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Markdown package', exact: true }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toBe('Human changes.zip');
+    const stream = await file.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+    const { unzipSync, strFromU8 } = await import('fflate');
+    const files = unzipSync(Buffer.concat(chunks));
+    expect(strFromU8(files['report.md'])).toContain('Human changes');
+    expect(Object.keys(files)).toContain('assets/chart.svg');
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Print / Save PDF', exact: true }).click();
+    const printFrame = page.frameLocator('iframe[title="Human changes"]');
+    await expect(printFrame.getByRole('heading', { name: 'Human changes', exact: true })).toHaveText('Human changes');
+    await expect(printFrame.locator('table')).toHaveCount(2);
+    await page.screenshot({ path: testInfo.outputPath('report-detail-light.png'), animations: 'disabled' });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.document.documentElement.classList.add('dark'));
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('report-detail-dark-mobile.png'), animations: 'disabled', fullPage: true });
+    failSave = true;
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Discard this');
+    await page.getByRole('button', { name: 'Back to Reports', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
+    await expect(page.getByRole('link', { name: 'Human changes' })).toBeVisible();
 });

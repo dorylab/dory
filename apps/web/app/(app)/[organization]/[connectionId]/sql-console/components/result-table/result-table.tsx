@@ -47,6 +47,7 @@ type ResultSetSummaryMeta = {
     sessionId: string;
     setIndex: number;
     sqlText: string;
+    title?: string | null;
     status: ResultSessionStatus;
     startedAt?: number | null;
     finishedAt?: number | null;
@@ -790,6 +791,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                         sessionId: m.sessionId,
                         setIndex: m.setIndex,
                         sqlText: m.sqlText ?? '',
+                        title: m.title,
                         status,
                         startedAt: m.startedAt ?? null,
                         finishedAt: m.finishedAt ?? null,
@@ -842,6 +844,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             return {
                 id: `${m.sessionId}:${m.setIndex}`,
                 setIndex: m.setIndex,
+                title: m.title ?? undefined,
                 sql: m.sqlText || `/* Result ${m.setIndex + 1} */`,
                 status,
                 startedAt: m.startedAt ?? undefined,
@@ -1245,6 +1248,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             {/* Top toolbar */}
             <Toolbar
                 indices={indices}
+                titles={Object.fromEntries(setsMeta.map(set => [set.setIndex, set.title]))}
                 activeSet={activeSet} // -1 = Overview，>=0 = Result i
                 onSetActiveSet={n => {
                     setActiveSet(n);

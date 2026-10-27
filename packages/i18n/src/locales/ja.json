@@ -1558,6 +1558,7 @@
             }
         },
         "SaveSql": {
+            "AutoNamePlaceholder": "空欄の場合は名前を自動生成",
             "Title": "クエリを保存",
             "NameLabel": "名前",
             "NamePlaceholder": "クエリ名",
@@ -5458,7 +5459,7 @@
         "SourceOnly": "一部の書式は損失なく編集できません。元の Markdown を保持しています。ソースモードで編集してください。",
         "InvalidReference": "無効な参照",
         "MoveVisual": "ドラッグして移動",
-        "ExportMarkdown": "Markdown と素材",
+        "ExportMarkdown": "Markdown パッケージ",
         "SelectDefinition": "検証済みのテキストを先に選択してください。",
         "EvidenceDescription": "この版のクエリ、SQL、Knowledge のスナップショット。",
         "LatestMessages": "最新のメッセージへ",
@@ -5665,7 +5666,27 @@
             },
             "ChartNotReady": "グラフを読み込み中か、書き出せる保存済みデータがありません。"
         },
-        "ContinueUnfinished": "未完了の手順を再開"
+        "ContinueUnfinished": "未完了の手順を再開",
+        "Export": "エクスポート",
+        "BackToReports": "レポート一覧に戻る",
+        "VersionLabel": "バージョン {revision}",
+        "Saving": "保存中…",
+        "Library": {
+            "Filter": "レポートの状態",
+            "Active": "未アーカイブ",
+            "All": "すべてのレポート",
+            "NoSources": "ソースの記録なし",
+            "Actions": "{title} の操作",
+            "Archived": "レポートをアーカイブしました。",
+            "Restored": "レポートを復元しました。",
+            "Retry": "再試行",
+            "NoMatches": "条件に一致するレポートはありません。",
+            "ClearFilters": "フィルターをクリア",
+            "EmptyArchived": "アーカイブ済みのレポートはありません。",
+            "EmptyActive": "未アーカイブのレポートはありません。状態フィルターからアーカイブ済みのレポートを確認できます。",
+            "GoToWork": "Work に移動",
+            "UnavailableSource": "利用できないデータソース"
+        }
     },
     "ChatComposer": {
         "Picker": {

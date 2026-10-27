@@ -92,6 +92,7 @@ export const tabCreateAction = defineWebAction({
                       activeSubTab: input.activeSubTab ?? 'data',
                       tabType,
                       tabName,
+                      nameEdited: typeof input.tabName === 'string' && Boolean(input.tabName.trim()),
                       orderIndex: input.orderIndex ?? null,
                       createdAt,
                   }
@@ -102,6 +103,7 @@ export const tabCreateAction = defineWebAction({
                       activeSubTab: null,
                       tabType,
                       tabName,
+                      nameEdited: typeof input.tabName === 'string' && Boolean(input.tabName.trim()),
                       orderIndex: input.orderIndex ?? null,
                       createdAt,
                   };

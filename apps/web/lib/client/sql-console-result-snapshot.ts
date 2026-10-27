@@ -1,3 +1,4 @@
+import { isNamingSource } from '@dory/shared/utils/sql-name';
 import type { ResultSetMeta } from './type';
 
 export type SqlConsoleResultUpdatePayload = {
@@ -113,6 +114,8 @@ export function normalizeSqlConsoleResultSnapshot(payload: SqlConsoleResultUpdat
                 sqlText: asString(resultSet.sqlText) ?? '',
                 sqlOp: asString(resultSet.sqlOp),
                 title: asString(resultSet.title),
+                namingSource: isNamingSource(resultSet.namingSource) ? resultSet.namingSource : undefined,
+                namingRequestId: asString(resultSet.namingRequestId),
                 columns: Array.isArray(resultSet.columns) ? (resultSet.columns as ResultSetMeta['columns']) : [],
                 stats: null,
                 viewState: null,

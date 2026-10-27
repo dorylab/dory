@@ -48,11 +48,9 @@ type RowsOutput = {
 
 function CompactMetadata({ artifact }: { artifact: ArtifactDetail }) {
     const t = useTranslations('Artifacts.Viewer');
-    const metadata = [
-        t(`Types.${artifact.type}`),
-        artifact.rowCount == null ? null : t('RowsCount', { count: artifact.rowCount.toLocaleString() }),
-        t('SnapshotStatus'),
-    ].filter(Boolean);
+    const metadata = [t(`Types.${artifact.type}`), artifact.rowCount == null ? null : t('RowsCount', { count: artifact.rowCount.toLocaleString() }), t('SnapshotStatus')].filter(
+        Boolean,
+    );
     return (
         <div className="text-sm text-muted-foreground">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -81,16 +79,17 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [addToKnowledgeOpen, setAddToKnowledgeOpen] = useState(false);
     const artifactQuery = useQuery({
+        refetchInterval: query => (query.state.dataUpdateCount < 21 && query.state.data?.namingSource === 'pending' ? 1000 : false),
         queryKey: ['artifact', organizationId, artifactId],
         queryFn: () => executeActionClient<ArtifactDetail>('artifact.get', { artifactId }, { organizationId }),
     });
     const artifact = artifactQuery.data;
     useEffect(() => {
         if (!artifact) return;
-        setTitle(artifact.title);
+        if (!editing) setTitle(artifact.title);
         setChartState(artifact.chartState);
         setShowChartBuilder(artifact.type === 'chart');
-    }, [artifact]);
+    }, [artifact, editing]);
 
     const chartRowsQuery = useQuery({
         queryKey: ['artifact-chart-rows', organizationId, artifact?.sourceResultSetId],
@@ -193,9 +192,7 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
     }
 
     const TypeIcon = artifact.type === 'result_set' ? Database : artifact.type === 'chart' ? BarChart3 : FileText;
-    const backHref = fromAgentRun
-        ? `/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(fromAgentRun)}`
-        : `/${encodeURIComponent(organization)}/artifacts`;
+    const backHref = fromAgentRun ? `/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(fromAgentRun)}` : `/${encodeURIComponent(organization)}/artifacts`;
     const backLabel = fromAgentRun ? `${agentRunsT('List.Title')} - ${artifact.runTitle ?? fromAgentRun}` : t('Back');
     return (
         <div className="h-dvh overflow-hidden bg-n8">
@@ -236,7 +233,9 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                                 </button>
                             )}
                             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                                <span>{t('CreatedAt')} · {new Date(artifact.createdAt).toLocaleString()}</span>
+                                <span>
+                                    {t('CreatedAt')} · {new Date(artifact.createdAt).toLocaleString()}
+                                </span>
                                 {artifact.connectionName ? (
                                     <>
                                         <span aria-hidden="true">·</span>
@@ -309,7 +308,10 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                                 {artifact.workId ? (
                                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('ProducedBy')}</span>
-                                        <Link href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(artifact.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`} className="font-medium text-primary hover:underline">
+                                        <Link
+                                            href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(artifact.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`}
+                                            className="font-medium text-primary hover:underline"
+                                        >
                                             {t('AgentRun', { title: artifact.runTitle ?? artifact.workId })}
                                         </Link>
                                     </div>
@@ -318,7 +320,11 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                                     <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('EvidenceFor')}</span>
                                     {artifact.usedBy.length ? (
                                         artifact.usedBy.map(finding => (
-                                            <Link key={finding.findingId} href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(finding.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`} className="text-primary hover:underline">
+                                            <Link
+                                                key={finding.findingId}
+                                                href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(finding.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`}
+                                                className="text-primary hover:underline"
+                                            >
                                                 {finding.title}
                                             </Link>
                                         ))
@@ -405,7 +411,15 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                     ) : null}
                 </div>
             </main>
-            <AddVerifiedQueryDialog open={addToKnowledgeOpen} onOpenChange={setAddToKnowledgeOpen} connectionId={artifact.connectionId} sql={artifact.resultSet?.sql} sourceType="artifact" sourceId={artifact.id} initialTitle={artifact.title} />
+            <AddVerifiedQueryDialog
+                open={addToKnowledgeOpen}
+                onOpenChange={setAddToKnowledgeOpen}
+                connectionId={artifact.connectionId}
+                sql={artifact.resultSet?.sql}
+                sourceType="artifact"
+                sourceId={artifact.id}
+                initialTitle={artifact.title}
+            />
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>

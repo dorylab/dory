@@ -10,6 +10,8 @@ import type { DBService } from '@dory/database';
 import { boundedAttachmentRows, materializeAttachment, queryAttachmentTables, type AttachmentTable } from '@dory/drivers/database/duckdb/attachments';
 import type { FileUIPart } from 'ai';
 import { z } from 'zod';
+import { buildSqlFallbackName } from '@dory/shared/utils/sql-name';
+import type { createSqlNamer } from './sql-naming';
 import { decodeAttachment, isStructuredAttachment, storedAttachmentId } from '@/lib/chat-context/attachments';
 import { resolveChatAttachment } from './chat-attachments';
 
@@ -94,7 +96,16 @@ export const attachmentQuerySchema = z.object({
     sql: z.string().min(1).max(100_000),
 });
 
-export async function queryChatAttachments(db: DBService, owner: ChatAttachmentOwner, chatId: string, raw: unknown, workId: string, requestId?: string, signal?: AbortSignal) {
+export async function queryChatAttachments(
+    db: DBService,
+    owner: ChatAttachmentOwner,
+    chatId: string,
+    raw: unknown,
+    workId: string,
+    requestId?: string,
+    signal?: AbortSignal,
+    namer?: ReturnType<typeof createSqlNamer>,
+) {
     const input = attachmentQuerySchema.parse(raw);
     const datasets: Dataset[] = [];
     for (const attachmentId of new Set(input.attachmentIds)) {
@@ -130,16 +141,20 @@ export async function queryChatAttachments(db: DBService, owner: ChatAttachmentO
             sqlText: input.sql,
             status: 'success',
             sqlOp: 'select',
+            title: namer?.fallback(input.sql) ?? buildSqlFallbackName(input.sql),
+            namingSource: 'rule',
             columns: result.columns,
             rowCount: result.rows.length,
             limited: result.limited,
             limit: result.limit,
         },
     });
+    const naming = await namer?.queue({ type: 'artifact', id: `artifact_${persisted.resultSetId}`, organizationId: owner.organizationId }, input.sql);
     if (requestId) await db.works.registerChatEvidence({ ...owner, workId, requestId, artifactId: `artifact_${persisted.resultSetId}` });
     const rows = boundedAttachmentRows(result.rows);
     return {
         ...result,
+        ...naming,
         rows,
         rowCount: result.rows.length,
         previewTruncated: rows.length < result.rows.length,

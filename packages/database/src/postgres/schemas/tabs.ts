@@ -1,3 +1,4 @@
+import type { NamingSource } from '@dory/shared/utils/sql-name';
 import { integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
 import { TabPayload, TabResultMetaPayload } from '@dory/shared/types/tabs';
@@ -8,6 +9,8 @@ export const tabs = pgTable('tabs', {
         .$defaultFn(() => newEntityId()),
     tabType: text('tab_type').notNull().default('sql'),
     tabName: text('tab_name').notNull().default('New Query'),
+    namingSource: text('naming_source').$type<NamingSource>().notNull().default('manual'),
+    namingRequestId: text('naming_request_id'),
     userId: text('user_id').notNull(),
     connectionId: text('connection_id').notNull(),
     workId: text('work_id'),

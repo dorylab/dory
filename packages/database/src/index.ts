@@ -1,3 +1,4 @@
+import { PostgresSqlNamingRepository } from './postgres/impl/sql-naming';
 import { PostgresWorkDocumentsRepository } from './postgres/impl/work-documents';
 import { getDatabaseProvider } from './provider';
 import { PostgresChatRepository } from './postgres/impl/chat';
@@ -29,6 +30,7 @@ import type { AiUsageRepository } from '@dory/shared';
  * Service bundle for Postgres
  */
 export type PostgresDBService = {
+    sqlNaming: PostgresSqlNamingRepository;
     tabState: PostgresTabStateRepository;
     chat: PostgresChatRepository;
     audit: ReturnType<typeof createPgAuditService>;
@@ -74,6 +76,8 @@ export async function getDBService(): Promise<DBService> {
     switch (dbType) {
         case 'pglite':
         case 'postgres': {
+            const sqlNaming = new PostgresSqlNamingRepository();
+            await sqlNaming.init();
             const tabStateRepo = new PostgresTabStateRepository();
             await tabStateRepo.init();
 
@@ -140,6 +144,7 @@ export async function getDBService(): Promise<DBService> {
             await knowledgeRepo.init();
 
             instance = {
+                sqlNaming,
                 tabState: tabStateRepo,
                 chat: chatRepo,
                 audit: createPgAuditService(),

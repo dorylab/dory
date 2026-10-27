@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
+import { useSqlNamingRefresh } from './useSqlNamingRefresh';
 import { useAtom } from 'jotai';
 import { authClient } from '@/lib/auth-client';
 import { activeDatabaseAtom } from '@/shared/stores/app.store';
@@ -21,8 +22,21 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
     const { data: session } = authClient.useSession();
     const userId = session?.user?.id;
 
-    const { tabs, activeTabId, setActiveTabId, isLoading, areTabsHydrated, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs, saveWorkspaceNow } =
-        useSQLTabs(normalizedWorkspaceScope);
+    const {
+        tabs,
+        activeTabId,
+        setActiveTabId,
+        isLoading,
+        areTabsHydrated,
+        updateTab,
+        addTab,
+        addTableTab,
+        closeTab,
+        closeOtherTabs,
+        reorderTabs,
+        saveWorkspaceNow,
+        applyTabNames,
+    } = useSQLTabs(normalizedWorkspaceScope);
     const activeTab = useMemo(() => tabs.find(t => t.tabId === activeTabId), [tabs, activeTabId]);
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
 
@@ -34,15 +48,16 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
         setActiveDatabase(activeTab.databaseName);
     }, [activeDatabase, activeTab, setActiveDatabase]);
 
-    const { requestAITabTitle, manualRenameTab } = useSqlAiTabTitle(activeDatabase, updateTab);
+    const { manualRenameTab } = useSqlAiTabTitle(activeDatabase, updateTab);
 
     const { editorRef, runQuery, cancelQuery, runningTabs } = useSqlQueryRunner({
         activeDatabase,
-        tabs,
         userId,
-        requestAITabTitle,
+        prepareTab: (tabId, content) => saveWorkspaceNow({ activeTabId: tabId, activeSqlContent: content }),
         workspaceScope: normalizedWorkspaceScope,
     });
+
+    useSqlNamingRefresh(tabs, runningTabs, normalizedWorkspaceScope, applyTabNames);
 
     const { handleOpenTableTab, handleCloseTab, handleCloseOthers } = useDataPreviewManager({
         tabs,

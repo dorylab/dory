@@ -20,6 +20,7 @@ export type SavedQueryCreateInput = {
     organizationId: string;
     userId: string;
     title: string;
+    autoName?: boolean;
     description?: string | null;
     folderId?: string | null;
     sqlText: string;
@@ -135,6 +136,7 @@ export class PostgresSavedQueriesRepository {
                 organizationId: input.organizationId,
                 userId: input.userId,
                 title: input.title,
+                namingSource: input.autoName ? 'rule' : 'manual',
                 description: input.description ?? null,
                 sqlText: input.sqlText,
                 context: (input.context ?? {}) as any,
@@ -220,7 +222,16 @@ export class PostgresSavedQueriesRepository {
             hasChanges = true;
         };
 
-        if (data.title !== undefined) assign('title', data.title);
+        if (data.title !== undefined) {
+            assign('title', data.title);
+            assign('namingSource', 'manual');
+            assign('namingRequestId', null);
+        }
+        if (data.sqlText !== undefined) {
+            // Cancel any in-flight name without scheduling another generation.
+            assign('namingSource', 'manual');
+            assign('namingRequestId', null);
+        }
         if (data.description !== undefined) assign('description', data.description);
         if (data.sqlText !== undefined) assign('sqlText', data.sqlText);
         if (data.context !== undefined) assign('context', data.context ?? {});

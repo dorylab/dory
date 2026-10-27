@@ -1562,6 +1562,7 @@
             }
         },
         "SaveSql": {
+            "AutoNamePlaceholder": "留空以自动生成名称",
             "Title": "保存查询",
             "NameLabel": "名称",
             "NamePlaceholder": "查询名称",
@@ -5465,7 +5466,7 @@
         "SourceOnly": "部分格式无法无损转换为文档编辑。原始 Markdown 已保留，请继续使用源码模式。",
         "InvalidReference": "无效引用",
         "MoveVisual": "拖动以移动图表或表格",
-        "ExportMarkdown": "Markdown 与资源",
+        "ExportMarkdown": "Markdown 文件包",
         "SelectDefinition": "请先选中报告中已验证的文本。",
         "EvidenceDescription": "查看当前版本的查询快照、SQL 和引用的 Knowledge。",
         "LatestMessages": "跳至最新消息",
@@ -5672,7 +5673,27 @@
             },
             "ChartNotReady": "图表尚未加载完成，或没有可导出的已保存数据。"
         },
-        "ContinueUnfinished": "继续未完成步骤"
+        "ContinueUnfinished": "继续未完成步骤",
+        "Export": "导出",
+        "BackToReports": "返回报告列表",
+        "VersionLabel": "版本 {revision}",
+        "Saving": "保存中…",
+        "Library": {
+            "Filter": "报告状态",
+            "Active": "未归档",
+            "All": "全部报告",
+            "NoSources": "未记录来源",
+            "Actions": "{title} 的操作",
+            "Archived": "报告已归档。",
+            "Restored": "报告已恢复。",
+            "Retry": "重试",
+            "NoMatches": "没有符合筛选条件的报告。",
+            "ClearFilters": "清除筛选",
+            "EmptyArchived": "暂无已归档报告。",
+            "EmptyActive": "暂无未归档报告。可通过状态筛选查看已归档报告。",
+            "GoToWork": "前往 Work",
+            "UnavailableSource": "不可用的数据源"
+        }
     },
     "ChatComposer": {
         "Picker": {

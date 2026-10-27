@@ -1,3 +1,4 @@
+import type { NamingMetadata, NamingSource } from '@dory/shared/utils/sql-name';
 import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -242,7 +243,7 @@ export type QuerySessionReadOutput = {
     source: string | null;
 };
 
-export type SessionResultSetMeta = {
+export type SessionResultSetMeta = NamingMetadata & {
     sessionId: string;
     setIndex: number;
     sqlText: string;
@@ -1155,6 +1156,7 @@ export class PostgresResultSetsRepository {
                 organizationId: input.organizationId,
                 resultSetId: artifactId,
                 title: getString(resultSet.title) ?? `${getString(resultSet.sqlOp) ?? 'Result Set'} ${artifactId.slice(3, 11)}`,
+                namingSource: resultSet.namingSource === 'rule' ? 'rule' : 'manual',
                 connectionId: input.connectionId ?? null,
                 workId: input.workId ?? null,
                 agentRunId: input.agentRunId ?? null,
@@ -1362,6 +1364,7 @@ export class PostgresResultSetsRepository {
                 organizationId: input.organizationId,
                 resultSetId: artifactId,
                 title: getString(resultSet.title) ?? `${getString(resultSet.sqlOp) ?? 'Result Set'} ${artifactId.slice(3, 11)}`,
+                namingSource: resultSet.namingSource === 'rule' ? 'rule' : 'manual',
                 connectionId: input.connectionId ?? null,
                 workId: input.workId ?? null,
                 agentRunId: input.agentRunId ?? null,
@@ -1829,7 +1832,13 @@ export class PostgresResultSetsRepository {
         };
     }
 
-    async listSessionResultSets(params: { userId?: string; chatId?: string | null; organizationId: string; sessionId: string }): Promise<SessionResultSetMeta[]> {
+    async listSessionResultSets(params: {
+        userId?: string;
+        chatId?: string | null;
+        organizationId: string;
+        sessionId: string;
+        includeProfile?: boolean;
+    }): Promise<SessionResultSetMeta[]> {
         this.assertInited();
 
         const [rows, runs] = await Promise.all([
@@ -1837,8 +1846,19 @@ export class PostgresResultSetsRepository {
                 .select({
                     resultSet: resultSetsTable,
                     fallbackConnectionType: connections.type,
+                    title: artifactCatalogTable.title,
+                    namingSource: artifactCatalogTable.namingSource,
+                    namingRequestId: artifactCatalogTable.namingRequestId,
                 })
                 .from(resultSetsTable)
+                .leftJoin(
+                    artifactCatalogTable,
+                    and(
+                        eq(artifactCatalogTable.organizationId, resultSetsTable.organizationId),
+                        eq(artifactCatalogTable.resourceId, resultSetsTable.id),
+                        eq(artifactCatalogTable.type, 'result_set'),
+                    ),
+                )
                 .leftJoin(connections, and(eq(connections.id, resultSetsTable.connectionId), eq(connections.organizationId, resultSetsTable.organizationId)))
                 .where(and(eq(resultSetsTable.organizationId, params.organizationId), eq(resultSetsTable.sessionId, params.sessionId)))
                 .orderBy(asc(resultSetsTable.setIndex), asc(resultSetsTable.createdAt)),
@@ -1857,15 +1877,17 @@ export class PostgresResultSetsRepository {
             rows.map(async joinedRow => {
                 const row = joinedRow.resultSet;
                 const [stats, legacySourceDatabaseName] = await Promise.all([
-                    this.readProfile({
-                        userId: params.userId,
-                        organizationId: params.organizationId,
-                        resultSetId: row.id,
-                        sampleRows: 200,
-                    })
-                        .then(profile => profile.stats)
-                        .catch(() => null),
-                    row.sourceDatabaseName
+                    params.includeProfile === false
+                        ? Promise.resolve(null)
+                        : this.readProfile({
+                              userId: params.userId,
+                              organizationId: params.organizationId,
+                              resultSetId: row.id,
+                              sampleRows: 200,
+                          })
+                              .then(profile => profile.stats)
+                              .catch(() => null),
+                    row.sourceDatabaseName || params.includeProfile === false
                         ? Promise.resolve(null)
                         : this.artifacts.resultSets
                               .readManifest(row.artifactRefJson as ResultSetArtifactRef)
@@ -1881,7 +1903,9 @@ export class PostgresResultSetsRepository {
                     setIndex: row.setIndex ?? 0,
                     sqlText: row.sql ?? '',
                     sqlOp: row.operation ?? null,
-                    title: null,
+                    title: joinedRow.title,
+                    namingSource: joinedRow.namingSource ?? undefined,
+                    namingRequestId: joinedRow.namingRequestId,
                     columns: row.schemaJson ?? [],
                     stats,
                     viewState: row.viewState ?? null,
@@ -2504,6 +2528,7 @@ export class PostgresResultSetsRepository {
         organizationId: string;
         resultSetId: string;
         title: string;
+        namingSource?: NamingSource;
         connectionId: string | null;
         workId: string | null;
         agentRunId: string | null;
@@ -2523,6 +2548,7 @@ export class PostgresResultSetsRepository {
                 organizationId: input.organizationId,
                 type: 'result_set',
                 title: input.title.slice(0, 160),
+                namingSource: input.namingSource ?? 'manual',
                 status: 'ready',
                 resourceId: input.resultSetId,
                 sourceResultSetId: input.resultSetId,

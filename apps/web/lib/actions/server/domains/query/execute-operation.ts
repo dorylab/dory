@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { buildSqlFallbackName } from '@dory/shared/utils/sql-name';
+import { createSqlNamer } from '@/lib/server/sql-naming';
 
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { splitSqlStatements } from '@/lib/server/sql-splitter';
@@ -72,12 +74,6 @@ export function parseSqlOp(s: string): string {
     if (['CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'RENAME'].includes(first)) return 'DDL';
     if (['BEGIN', 'START', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE'].includes(first)) return 'TXN';
     return first;
-}
-
-function makeTitle(s: string): string {
-    const op = parseSqlOp(s);
-    const preview = s.trim().slice(0, 40).replace(/\s+/g, ' ');
-    return `${op}: ${preview}`;
 }
 
 function errorField(error: unknown, field: string): unknown {
@@ -264,7 +260,12 @@ function isQuerySource(value?: string | null): value is QuerySource {
     );
 }
 
-async function executeOne(connection: BaseConnection, statement: string, context: { database?: string | null }, options?: { queryId?: string; statementIndex?: number }) {
+async function executeOne(
+    connection: BaseConnection,
+    statement: string,
+    context: { database?: string | null; locale?: string | null },
+    options?: { queryId?: string; statementIndex?: number },
+) {
     const startedAt = preciseDateNow();
     const perfStart = performance.now();
 
@@ -287,7 +288,8 @@ async function executeOne(connection: BaseConnection, statement: string, context
             qrs: {
                 sqlText: statement,
                 sqlOp: parseSqlOp(statement),
-                title: makeTitle(statement),
+                title: buildSqlFallbackName(statement, context.locale),
+                namingSource: 'rule',
                 columns: result.columns ?? null,
                 rowCount,
                 limited: result.limited ?? false,
@@ -314,7 +316,8 @@ async function executeOne(connection: BaseConnection, statement: string, context
             qrs: {
                 sqlText: statement,
                 sqlOp: parseSqlOp(statement),
-                title: makeTitle(statement),
+                title: buildSqlFallbackName(statement, context.locale),
+                namingSource: 'rule',
                 columns: null,
                 rowCount: 0,
                 affectedRows: null,
@@ -340,7 +343,7 @@ async function executeOne(connection: BaseConnection, statement: string, context
 async function executeOneStream(
     connection: BaseConnection,
     statement: string,
-    context: { database?: string | null },
+    context: { database?: string | null; locale?: string | null },
     options?: { queryId?: string; statementIndex?: number; signal?: AbortSignal },
 ) {
     const startedAt = preciseDateNow();
@@ -367,7 +370,8 @@ async function executeOneStream(
             qrs: {
                 sqlText: statement,
                 sqlOp: parseSqlOp(statement),
-                title: makeTitle(statement),
+                title: buildSqlFallbackName(statement, context.locale),
+                namingSource: 'rule',
                 columns: toResultSetColumns(result),
                 rowCount: result.rowCount ?? null,
                 limited: Boolean(result.metadata.limited),
@@ -394,7 +398,8 @@ async function executeOneStream(
             qrs: {
                 sqlText: statement,
                 sqlOp: parseSqlOp(statement),
-                title: makeTitle(statement),
+                title: buildSqlFallbackName(statement, context.locale),
+                namingSource: 'rule',
                 columns: null,
                 rowCount: 0,
                 affectedRows: null,
@@ -438,6 +443,7 @@ async function runSqlExecution(
         throw new Error('Missing connectionId.');
     }
 
+    const namer = createSqlNamer(ctx, input.database);
     const stopOnError = input.stopOnError ?? false;
     const sessionId = input.sessionId || randomUUID();
     const auditSource = queryAuditSource(ctx, input.source);
@@ -445,9 +451,8 @@ async function runSqlExecution(
     const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);
     const sourceConnectionType = entry.instance.config.type;
     const limitDialect = getSelectLimitDialect(sourceConnectionType);
-    const statements = (await splitSqlStatements(input.sql, sourceConnectionType))
-        .filter(statement => !!statement.trim())
-        .map(statement => applyLimitToStatement(statement, input.limit, limitDialect));
+    const originalStatements = (await splitSqlStatements(input.sql, sourceConnectionType)).filter(statement => !!statement.trim());
+    const statements = originalStatements.map(statement => applyLimitToStatement(statement, input.limit, limitDialect));
 
     if (!statements.length) {
         const now = Math.round(performance.timeOrigin + performance.now());
@@ -485,6 +490,8 @@ async function runSqlExecution(
     }
 
     const sourceDatabaseName = input.database ?? entry.instance.config.database ?? null;
+    await namer.tab(input.tabId, connectionId, input.workId);
+
     return runWithSqlAudit(
         {
             organizationId: ctx.organizationId,
@@ -564,8 +571,13 @@ async function runSqlExecution(
                 });
 
                 const execOne = useStreaming
-                    ? await executeOneStream(entry.instance, statement, { database: input.database }, { queryId: sessionId, statementIndex: i, signal: options?.signal })
-                    : await executeOne(entry.instance, statement, { database: input.database }, { queryId: sessionId, statementIndex: i });
+                    ? await executeOneStream(
+                          entry.instance,
+                          statement,
+                          { database: input.database, locale: ctx.locale },
+                          { queryId: sessionId, statementIndex: i, signal: options?.signal },
+                      )
+                    : await executeOne(entry.instance, statement, { database: input.database, locale: ctx.locale }, { queryId: sessionId, statementIndex: i });
                 let qrs: Record<string, unknown> = {
                     sessionId,
                     setIndex: i,
@@ -635,6 +647,14 @@ async function runSqlExecution(
                         };
                     }
 
+                    if (resultStatus === 'success') {
+                        const naming = await namer.queue(
+                            { type: 'artifact', id: `artifact_${persistedResult.resultSetId}`, organizationId: ctx.organizationId },
+                            statement,
+                            originalStatements[i],
+                        );
+                        if (naming) qrs = { ...qrs, ...naming };
+                    }
                     await publishResult(qrs, persistedResult.previewRows);
                 };
 

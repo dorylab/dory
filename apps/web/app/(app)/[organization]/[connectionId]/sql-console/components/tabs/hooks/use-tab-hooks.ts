@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { v4 as uuidv4 } from 'uuid';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
+import { isDefaultSqlName } from '@dory/shared/utils/sql-name';
 
 import { activeTabIdByConnectionAtom, currentConnectionAtom, DEFAULT_CONNECTION_KEY, tabsByConnectionAtom } from '@/shared/stores/app.store';
 import { sessionIdByTabAtom } from '../../../sql-console.store';
@@ -44,6 +45,9 @@ function toPersistedTabPayload(tab: UITabPayload, index: number, connectionId: s
         connectionId: tab.connectionId ?? connectionId,
         workId,
         content: tab.content ?? '',
+        namingSource: tab.namingSource,
+        namingRequestId: tab.namingRequestId,
+        nameEdited: tab.nameEdited,
         status: tab.status,
         resultMeta: tab.resultMeta,
     };
@@ -150,7 +154,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
                 workId,
                 tabId: tab.tabId,
                 tabType: tab.tabType,
-                tabName: tab.tabName,
+                tabName: tab.tabType === 'sql' && !tab.nameEdited && isDefaultSqlName(tab.tabName) ? undefined : tab.tabName,
                 content: tab.tabType === 'sql' ? (tab.content ?? '') : undefined,
                 databaseName: tab.tabType === 'table' ? (tab.databaseName ?? null) : null,
                 tableName: tab.tabType === 'table' ? (tab.tableName ?? null) : null,
@@ -417,7 +421,11 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
             setTabs(prevTabs => {
                 const nextTabs = prevTabs.map(t => {
                     if (t.tabId !== tabId) return t;
-                    updated = { ...t, ...patch } as UITabPayload;
+                    updated = {
+                        ...t,
+                        ...patch,
+                        ...(typeof patch.tabName === 'string' ? { nameEdited: true, namingSource: 'manual' as const, namingRequestId: null } : {}),
+                    } as UITabPayload;
                     return updated;
                 });
                 return nextTabs;
@@ -429,7 +437,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
                 return;
             }
 
-            if (options?.immediate) {
+            if (options?.immediate || typeof patch.tabName === 'string') {
                 saveTabToServer(tabId, updated).catch(err => {
                     console.error('immediate save tab error', err);
                 });
@@ -513,6 +521,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
             tabId,
             tabType: 'sql',
             tabName: payload?.tabName ?? t('Tabs.NewQuery'),
+            nameEdited: typeof payload?.tabName === 'string' && Boolean(payload.tabName.trim()),
             content: payload?.content ?? '',
             status: 'idle',
             userId: '',
@@ -684,6 +693,20 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
         [isWorkspaceDraft, persistOrder, setTabs, tabs],
     );
 
+    const applyTabNames = useCallback(
+        (serverTabs: UITabPayload[]) => {
+            setTabs(previous =>
+                previous.map(tab => {
+                    const serverTab = serverTabs.find(item => item.tabId === tab.tabId);
+                    if (!serverTab || tab.nameEdited || tab.tabType !== 'sql' || serverTab.tabType !== 'sql' || tab.content !== serverTab.content) return tab;
+                    if (tab.tabName === serverTab.tabName && tab.namingSource === serverTab.namingSource && tab.namingRequestId === serverTab.namingRequestId) return tab;
+                    return { ...tab, tabName: serverTab.tabName, namingSource: serverTab.namingSource, namingRequestId: serverTab.namingRequestId };
+                }),
+            );
+        },
+        [setTabs],
+    );
+
     return {
         tabs,
         activeTabId,
@@ -697,5 +720,6 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
         closeOtherTabs,
         reorderTabs,
         saveWorkspaceNow,
+        applyTabNames,
     };
 }

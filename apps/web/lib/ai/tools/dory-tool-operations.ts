@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { buildSqlFallbackName } from '@dory/shared/utils/sql-name';
 
 import { getDBService } from '@dory/database';
 import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
@@ -543,7 +544,8 @@ export async function runReadonlySqlOperation(
             setIndex: index,
             sqlText: statement,
             sqlOp: statement.trim().split(/\s+/)[0]?.toUpperCase() ?? 'SQL',
-            title: statement.trim().slice(0, 80),
+            title: buildSqlFallbackName(statement, context.locale),
+            namingSource: 'rule',
             columns: result.columns ?? null,
             rowCount: result.rowCount ?? rows.length,
             limited: rows.length < (result.rows?.length ?? rows.length) || (result.limited ?? false),

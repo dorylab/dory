@@ -13,7 +13,7 @@ import { Pool } from 'pg';
 import { parseWorkRevision } from '@/lib/work-documents/revision';
 import { markdownExportFiles } from '@/lib/work-documents/export';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
-import { renderWorkHtml, workChartSvg } from '@/lib/work-documents/render';
+import { renderWorkHtml, renderWorkMarkdown, workChartSvg } from '@/lib/work-documents/render';
 import { applyMarkdownEdits, workDraftSchema } from '@/lib/work-documents/schema';
 
 const content: WorkDocumentContent = {
@@ -100,6 +100,51 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         const renamed = await repository.rename({ ...target, expectedRevision: 3, title: 'Reviewed revenue' });
         assert.equal(renamed.revision, 4);
         assert.deepEqual(renamed.content.evidence, content.evidence);
+        // Put archived reports behind more than a page of newer active reports.
+        const listOwner = { organizationId: 'list-org', userId: 'alice' };
+        const attachmentEvidence = {
+            ...content.evidence[0],
+            connectionName: null,
+            connectionId: null,
+            attachmentSource: { chatId: 'chat', userId: 'alice', files: [{ attachmentId: 'file-1', filename: 'sales.csv', sheet: 'Orders', sha256: 'fixture', table: 'orders' }] },
+        };
+        const archiveOnly = await repository.create({ ...input, ...listOwner, creationKey: 'archived', title: 'Archived revenue' });
+        await repository.archive({ ...listOwner, documentId: archiveOnly.id, archived: true });
+        for (let i = 0; i < 105; i++) {
+            await repository.create({ ...input, ...listOwner, creationKey: `active-${i}`, title: `Active ${i}` });
+        }
+        assert.equal((await repository.list(listOwner)).length, 100);
+        const archived = await repository.list({ ...listOwner, archiveState: 'archived' });
+        assert.deepEqual(
+            archived.map(item => item.id),
+            [archiveOnly.id],
+        );
+        assert.ok((await repository.list({ ...listOwner, archiveState: 'active', archived: true })).every(item => !item.archivedAt));
+        assert.deepEqual(
+            (await repository.list({ ...listOwner, archiveState: 'archived', query: 'revenue', connectionId: 'c2' })).map(item => item.id),
+            [archiveOnly.id],
+        );
+        assert.deepEqual(await repository.list({ ...listOwner, archiveState: 'archived', connectionId: 'missing' }), []);
+        assert.deepEqual(await repository.list({ ...listOwner, userId: 'outsider', archiveState: 'all' }), []);
+        assert.equal((await repository.list({ ...listOwner, archived: true })).length, 100);
+        assert.deepEqual(
+            (await repository.list({ ...listOwner, archived: true, query: 'Archived revenue' })).map(item => item.id),
+            [archiveOnly.id],
+        );
+        const withSources = await repository.create({
+            ...input,
+            ...listOwner,
+            creationKey: 'sources',
+            title: 'Sources fixture',
+            content: { ...content, evidence: [...content.evidence, ...content.evidence, attachmentEvidence] },
+        });
+        const summary = (await repository.list({ ...listOwner, query: 'Sources fixture' }))[0];
+        assert.equal(summary.id, withSources.id);
+        assert.deepEqual(summary.sourceLabels, ['Orders', 'sales.csv']);
+        assert.ok(!('content' in summary));
+        assert.doesNotMatch(JSON.stringify(summary), /secret_table|attachmentId|rowCount/);
+        await repository.create({ ...input, ...listOwner, creationKey: 'no-sources', title: 'No sources fixture', content: { ...content, evidence: [] } });
+        assert.deepEqual((await repository.list({ ...listOwner, query: 'No sources fixture' }))[0].sourceLabels, []);
     } finally {
         await db?.close();
         await postgres?.end();
@@ -256,4 +301,11 @@ test('report pie and area visuals validate and share the same deterministic expo
             visuals: [{ id: 'pie', type: 'chart', title: 'Invalid', evidenceId: 'art-1', chart: { type: 'pie', xKey: 'month', yKeys: [{ key: 'revenue' }, { key: 'orders' }] } }],
         }),
     );
+});
+
+test('report tables scroll independently and preserve explicit Markdown alignment', () => {
+    const html = renderWorkMarkdown({ ...content, markdown: '| Label | Amount | Share |\n| :--- | ---: | :---: |\n| Revenue | 42 | 50% |' });
+    assert.match(html, /class="work-table-scroll" tabindex="0"/);
+    assert.match(html, /<th align="right">Amount<\/th>/);
+    assert.match(html, /<td align="center">50%<\/td>/);
 });

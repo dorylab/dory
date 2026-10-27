@@ -40,6 +40,10 @@ export async function documentHttp(req: NextRequest, documentId?: string) {
                     connectionId: search.get('connectionId') ?? undefined,
                     chatId: search.get('chatId') ?? undefined,
                     archived: search.get('archived') === 'true',
+                    archiveState: z
+                        .enum(['active', 'archived', 'all'])
+                        .optional()
+                        .parse(search.get('archiveState') ?? undefined),
                 }),
             });
         }

@@ -8,6 +8,8 @@ function toSavedQueryPayload(record: any) {
     return {
         id: record.id,
         title: record.title,
+        namingSource: record.namingSource,
+        namingRequestId: record.namingRequestId,
         description: record.description ?? null,
         folderId: record.folderId ?? null,
         sqlText: record.sqlText,

@@ -653,5 +653,18 @@
     "bps": true,
     "folderMillis": 1793059200000,
     "hash": "09aec25ffb656662f233b941f81b5f37e5d8d9f928469cf70977fb67364bd068"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"tabs\" ADD COLUMN \"naming_source\" text DEFAULT 'manual' NOT NULL;\n",
+      "\nALTER TABLE \"tabs\" ADD COLUMN \"naming_request_id\" text;\n",
+      "\nALTER TABLE \"saved_queries\" ADD COLUMN \"naming_source\" text DEFAULT 'manual' NOT NULL;\n",
+      "\nALTER TABLE \"saved_queries\" ADD COLUMN \"naming_request_id\" text;\n",
+      "\nALTER TABLE \"artifacts\" ADD COLUMN \"naming_source\" text DEFAULT 'manual' NOT NULL;\n",
+      "\nALTER TABLE \"artifacts\" ADD COLUMN \"naming_request_id\" text;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1793145600000,
+    "hash": "3dd80692da7c705ebd0f45fa6b1791739107a546c9c8b0f48e28c859f1ec6524"
   }
 ]

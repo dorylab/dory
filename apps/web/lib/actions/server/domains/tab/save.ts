@@ -39,20 +39,14 @@ export const tabSaveAction = defineWebAction({
                 activeSubTab: isTable ? (input.state.activeSubTab ?? 'data') : (input.state.activeSubTab ?? null),
                 tabType: input.state.tabType ?? input.state.type,
                 tabName: input.state.tabName ?? null,
+                nameEdited: input.state.nameEdited === true,
+                namingSource: input.state.namingSource,
+                namingRequestId: input.state.namingRequestId,
                 orderIndex: input.state.orderIndex,
                 createdAt: input.state.createdAt,
             },
             resultMeta: input.resultMeta ?? input.state.resultMeta ?? null,
         });
-        if (typeof input.state.tabName === 'string') {
-            await ctx.services.db.tabState.updateTabName({
-                tabId: input.tabId,
-                userId: ctx.userId,
-                connectionId: resolveConnectionId(ctx, input),
-                workId: input.workId ?? input.state.workId ?? null,
-                newName: input.state.tabName,
-            });
-        }
         return { ok: true };
     },
 });

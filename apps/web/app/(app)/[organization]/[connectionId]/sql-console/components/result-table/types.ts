@@ -32,6 +32,7 @@ export interface OverviewProps {
 }
 
 export type OverviewItem = {
+    title?: string;
     id: string;
     setIndex: number;
     sql: string;

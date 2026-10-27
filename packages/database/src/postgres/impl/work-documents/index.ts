@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -21,9 +21,11 @@ export class PostgresWorkDocumentsRepository {
         if (!row) throw new DatabaseError('Report not found.', 404);
         return row;
     }
-    async list(input: Owner & { query?: string; connectionId?: string; chatId?: string; archived?: boolean }) {
+    async list(input: Owner & { query?: string; connectionId?: string; chatId?: string; archived?: boolean; archiveState?: 'active' | 'archived' | 'all' }) {
         const conditions = [eq(workDocuments.organizationId, input.organizationId), eq(workDocuments.userId, input.userId)];
-        if (!input.archived) conditions.push(isNull(workDocuments.archivedAt));
+        const archiveState = input.archiveState ?? (input.archived ? 'all' : 'active');
+        if (archiveState === 'active') conditions.push(isNull(workDocuments.archivedAt));
+        if (archiveState === 'archived') conditions.push(isNotNull(workDocuments.archivedAt));
         if (input.query) conditions.push(ilike(workDocuments.title, `%${input.query.replace(/[\\%_]/g, '\\$&')}%`));
         if (input.chatId) conditions.push(eq(workDocuments.chatId, input.chatId));
         if (input.connectionId) conditions.push(sql`${workDocuments.scope}->'connectionIds' @> ${JSON.stringify([input.connectionId])}::jsonb`);
@@ -34,6 +36,19 @@ export class PostgresWorkDocumentsRepository {
                     string | null
                 >`case when left(${workDocuments.creationKey}, length(${workDocuments.chatId}) + 1) = ${workDocuments.chatId} || ':' then substring(${workDocuments.creationKey} from length(${workDocuments.chatId}) + 2) else null end`,
                 summary: sql<string>`left(${workDocuments.content}->>'markdown', 280)`,
+                sourceLabels: sql<string[]>`coalesce((
+                    select jsonb_agg(label order by label) from (
+                        select distinct btrim(label) as label
+                        from jsonb_array_elements(coalesce(${workDocuments.content}->'evidence', '[]'::jsonb)) as evidence
+                        cross join lateral (
+                            select evidence->>'connectionName' as label
+                            union all
+                            select file->>'filename'
+                            from jsonb_array_elements(coalesce(evidence->'attachmentSource'->'files', '[]'::jsonb)) as file
+                        ) labels
+                        where nullif(btrim(label), '') is not null
+                    ) sources
+                ), '[]'::jsonb)`,
                 title: workDocuments.title,
                 chatId: workDocuments.chatId,
                 scope: workDocuments.scope,

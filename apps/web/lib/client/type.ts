@@ -1,3 +1,4 @@
+import type { NamingMetadata } from '@dory/shared/utils/sql-name';
 import type { AIResultContextPayload, ResultColumnMeta, ResultSetStatsV1, ResultSetViewState } from './result-set-ai';
 
 export type ResultSetRemoteSort = {
@@ -21,7 +22,7 @@ export type ResultSetRemoteSearch = {
     columns?: string[];
 };
 
-export type ResultSetMeta = {
+export type ResultSetMeta = NamingMetadata & {
     sessionId: string;
     setIndex: number;
     sqlText: string;

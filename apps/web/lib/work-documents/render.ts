@@ -1,4 +1,4 @@
-import { Marked } from 'marked';
+import { Marked, Renderer } from 'marked';
 import type { WorkVisual, WorkDocumentView, WorkEvidence } from '@dory/shared/types/work-document';
 export function escapeHtml(value: unknown): string {
     return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
@@ -78,7 +78,7 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
         .join('')}</svg>`;
 }
 export function workTableHtml(evidence: WorkEvidence) {
-    return `<table><thead><tr>${evidence.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${evidence.rows.map(row => `<tr>${evidence.columns.map(column => `<td>${escapeHtml(formatWorkValue(row[column]))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    return `<div class="work-table-scroll" tabindex="0"><table><thead><tr>${evidence.columns.map(column => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead><tbody>${evidence.rows.map(row => `<tr>${evidence.columns.map(column => `<td>${escapeHtml(formatWorkValue(row[column]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 
 export function workVisualHtml(visual: WorkVisual, evidence: WorkEvidence, includeSources = true): string {
@@ -95,6 +95,9 @@ export function renderWorkMarkdown(content: WorkDocumentView['content'], include
     parser.use({
         renderer: {
             html: ({ text }) => escapeHtml(text),
+            table(token) {
+                return `<div class="work-table-scroll" tabindex="0">${Renderer.prototype.table.call(this, token)}</div>`;
+            },
             paragraph({ tokens }) {
                 const body = this.parser.parseInline(tokens);
                 return tokens.some(token => token.type === 'image' && token.href.startsWith('dory://visual/')) ? body + '\n' : `<p>${body}</p>\n`;

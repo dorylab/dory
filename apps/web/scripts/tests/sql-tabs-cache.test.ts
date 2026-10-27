@@ -13,6 +13,9 @@ test('round-trips the SQL needed for an immediate refresh render without cached 
         tabName: 'Cell Towers query',
         content: 'SELECT * FROM cell_towers LIMIT 1000000',
         status: 'success',
+        namingSource: 'manual',
+        namingRequestId: null,
+        nameEdited: true,
         userId: 'user-1',
         connectionId: 'connection-1',
         orderIndex: 0,
@@ -34,6 +37,9 @@ test('round-trips the SQL needed for an immediate refresh render without cached 
     assert.equal(restored[0]?.content, tab.content);
     assert.equal(restored[0]?.tabName, tab.tabName);
     assert.equal(restored[0]?.result, undefined);
+    assert.equal(restored[0]?.namingSource, 'manual');
+    assert.equal(restored[0]?.namingRequestId, null);
+    assert.equal(restored[0]?.nameEdited, true);
     assert.equal(serialized.includes('shouldNotBeCached'), false);
 });
 

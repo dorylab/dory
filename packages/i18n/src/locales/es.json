@@ -1558,6 +1558,7 @@
             }
         },
         "SaveSql": {
+            "AutoNamePlaceholder": "Dejar vacío para generar el nombre",
             "Title": "Guardar consulta",
             "NameLabel": "Nombre",
             "NamePlaceholder": "Nombre de la consulta",
@@ -5452,7 +5453,7 @@
         "SourceOnly": "Algunos formatos no se pueden editar sin pérdidas. Se conserva el Markdown original; continúa en modo fuente.",
         "InvalidReference": "Referencia inválida",
         "MoveVisual": "Arrastra para mover",
-        "ExportMarkdown": "Markdown y recursos",
+        "ExportMarkdown": "Paquete Markdown",
         "SelectDefinition": "Selecciona primero el texto verificado.",
         "EvidenceDescription": "Instantáneas de consultas, SQL y Knowledge de esta versión.",
         "LatestMessages": "Ir a los últimos mensajes",
@@ -5659,7 +5660,27 @@
             },
             "ChartNotReady": "El gráfico aún se está cargando o no tiene datos guardados para exportar."
         },
-        "ContinueUnfinished": "Continuar pasos pendientes"
+        "ContinueUnfinished": "Continuar pasos pendientes",
+        "Export": "Exportar",
+        "BackToReports": "Volver a Informes",
+        "VersionLabel": "Versión {revision}",
+        "Saving": "Guardando…",
+        "Library": {
+            "Filter": "Estado del informe",
+            "Active": "Sin archivar",
+            "All": "Todos los informes",
+            "NoSources": "Sin fuentes registradas",
+            "Actions": "Acciones para {title}",
+            "Archived": "Informe archivado.",
+            "Restored": "Informe restaurado.",
+            "Retry": "Reintentar",
+            "NoMatches": "Ningún informe coincide con los filtros.",
+            "ClearFilters": "Borrar filtros",
+            "EmptyArchived": "No hay informes archivados.",
+            "EmptyActive": "No hay informes sin archivar. Puedes consultar los archivados con el filtro de estado.",
+            "GoToWork": "Ir a Work",
+            "UnavailableSource": "Fuente de datos no disponible"
+        }
     },
     "ChatComposer": {
         "Picker": {
