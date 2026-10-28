@@ -124,7 +124,9 @@ export function applyCheckpointCommand(state: ChatCheckpoints, requestId: string
             if ((state.issueAttempts[issue] ?? 0) >= 2) return stop('Recovery limit reached for this issue. Explain the unfinished step and preserve results.');
             state.issueAttempts[issue] = (state.issueAttempts[issue] ?? 0) + 1;
         }
-        if (state.recoveryIssue) {
+        // Successful inspection/query steps prepare a repair; they are not retries.
+        // Count actual retries here, while every action still consumes maxActions.
+        if (state.recoveryIssue && failed?.state === 'failed') {
             if ((state.recoveryActions ?? 0) >= 4) return stop('Turn recovery limit reached. Explain unfinished work.');
             state.recoveryActions = (state.recoveryActions ?? 0) + 1;
         }

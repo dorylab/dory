@@ -68,6 +68,6 @@ test('real model analyzes the complete CSV and adds a pie to the same report nex
         .last()
         .getByRole('button', { name: /View report|查看报告/ })
         .click();
-    await expect(page.locator('svg[data-chart-type="pie"]')).toBeVisible();
+    await expect(page.locator(`[data-visual="${visual.id}"] .recharts-pie-sector`).first()).toBeVisible();
     await testInfo.attach('saved-pie-report', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 });

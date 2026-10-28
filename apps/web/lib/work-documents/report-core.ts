@@ -48,6 +48,22 @@ export function parseReport(body: string, visuals: WorkVisual[]) {
         if (body.length > 200000) throw new Error('Report body exceeds 200,000 characters.');
         tree = parser.parse(body);
         const visit = (node: Nodes, parent?: Nodes) => {
+            // Existing agents can mix legacy visual links with restricted MDX.
+            // Resolve only registered standalone visuals; never arbitrary images.
+            if (node.type === 'image' && node.url.startsWith('dory://visual/')) {
+                const visual = visuals.find(item => node.url === `dory://visual/${item.id}`);
+                if (!visual || parent?.type !== 'paragraph' || parent.children.length !== 1) {
+                    error(node, 'Unknown or non-standalone visual reference. Use a registered visual ID.');
+                } else if (node.position) {
+                    replacements.push({
+                        start: node.position.start.offset!,
+                        end: node.position.end.offset!,
+                        value: `![${visual.title.replace(/[\[\]\\]/g, '')}](dory://visual/${visual.id})`,
+                        visualId: visual.id,
+                    });
+                }
+                return;
+            }
             if (node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') {
                 const type = tags[node.name as keyof typeof tags];
                 const attr = node.attributes[0];

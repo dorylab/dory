@@ -1843,6 +1843,9 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                     reportRevision: existing.revision,
                     report: {
                         title: existing.title,
+                        format: existing.content.format,
+                        body: existing.content.body,
+                        diagnostics: existing.content.diagnostics,
                         markdown: existing.content.markdown,
                         visuals: existing.content.visuals,
                         evidence: existing.content.evidence.map(item => ({ ...item, rows: item.rows.slice(0, 10) })),

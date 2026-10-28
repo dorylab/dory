@@ -652,10 +652,10 @@ body {
 }
 
 /* Work documents share the product's existing semantic theme tokens. */
-.work-prose { overflow-wrap: anywhere; line-height: 1.75; }
+.work-prose { overflow-wrap: anywhere; font-size: .875rem; line-height: 1.6; }
 .work-prose h1 { font-size: 1.5rem; font-weight: 650; margin: 1.5rem 0 .75rem; }
-.work-prose h2 { font-size: 1.4rem; font-weight: 600; margin: 1.5rem 0 .75rem; }
-.work-prose h3 { font-size: 1.15rem; font-weight: 600; margin: 1.25rem 0 .5rem; }
+.work-prose h2 { font-size: 1.25rem; font-weight: 600; margin: 1.5rem 0 .75rem; }
+.work-prose h3 { font-size: 1.125rem; font-weight: 600; margin: 1.25rem 0 .5rem; }
 .work-prose p { margin: .75rem 0; }
 .work-prose ul { list-style: disc; padding-left: 1.5rem; }
 .work-prose ol { list-style: decimal; padding-left: 1.5rem; }
@@ -673,14 +673,15 @@ body {
 .work-prose [align="left"] { text-align: left; }
 .work-prose figure { margin: 1.5rem 0; }
 .work-prose figcaption { font-weight: 600; }
-.work-prose svg { width: 100%; max-height: 400px; }
+.work-prose svg[data-chart-type] { width: 100%; max-height: 400px; }
 .work-prose svg[data-multiple-series] { max-height: none; }
 .work-prose .metric { font-size: 2rem; }
 .work-prose .source { color: var(--muted-foreground); font-size: .75rem; }
 
 /* Reports share the application's typography and theme tokens. */
-.work-prose .report-prose { max-width: 840px; margin-inline: auto; font-size: 16px; }
-.work-prose .report-wide { max-width: 1160px; margin-inline: auto; }
+.work-prose .report-prose, .work-prose .report-wide { width: 100%; max-width: 100%; margin-inline: auto; }
+.work-prose .report-wide { line-height: 1.5; }
+.work-prose .report-wide p { margin: 0; }
 .work-prose .report-wide th, .work-prose .report-wide td { white-space: nowrap; }
 
 /* Report controls respond to the report pane, including embedded Work panels. */

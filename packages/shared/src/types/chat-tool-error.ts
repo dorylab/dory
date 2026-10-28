@@ -13,7 +13,7 @@ export function chatToolFailure(error: unknown, toolName: string): ChatToolFailu
     const denied = value.code === 403 || value.status === 403 || /access denied|outside.*scope|another conversation|unavailable\.$|not found|not authorized/i.test(raw);
     const code: ChatToolFailure['code'] = denied
         ? 'ACCESS_DENIED'
-        : /WORK_REFERENCE_INVALID|TOOL_INPUT_INVALID|InvalidToolInput|JSONParseError|invalid input/i.test(raw)
+        : /WORK_REFERENCE_INVALID|TOOL_INPUT_INVALID|InvalidToolInput|JSONParseError|invalid input|Chart columns do not match its evidence/i.test(raw)
           ? 'INVALID_FIELDS'
           : /changed|version|revision|anchor/i.test(raw)
             ? 'REPORT_CONFLICT'
@@ -35,7 +35,7 @@ export function chatToolFailure(error: unknown, toolName: string): ChatToolFailu
         EVIDENCE_REQUIRED: 'Select the relevant returned artifactId. Use queryAttachment for attachment data, sqlRunner only for database data. Ask if several sources match.',
         REPORT_CONFLICT: 'Read the latest report and its saved receipt before retrying. Reconcile the requested change; preserve human edits.',
         INVALID_FIELDS: /WORK_REFERENCE_INVALID/.test(raw)
-            ? 'Read the existing draft if a document ID was returned. Replace invalid references with report visuals backed by verified artifacts, then save the corrected report.'
+            ? 'Read the existing draft if a document ID was returned. Use the available evidence columns in the diagnostic to correct visual keys, or rerun the query if the required data is missing. Save the corrected report with verified artifact references.'
             : 'Read the selected evidence columns and correct the chart or query. Never invent rows or silently change the requested chart type.',
         EMPTY_RESULT: 'Explain that the selected query returned no data. Do not claim a chart was created.',
         TRANSIENT: 'Check current source or report state before retrying. Do not repeat a write whose outcome is unknown.',

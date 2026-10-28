@@ -2,22 +2,22 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/registry/new-york-v4/ui/alert-dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
-import type { WorkDocumentView, WorkEvidence } from '@dory/shared/types/work-document';
+import type { WorkDocumentView } from '@dory/shared/types/work-document';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { createSerializer, parseAsInteger, parseAsString, useQueryState, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
+import { executeActionClient } from '@/lib/actions/client';
+import type { ArtifactDetail } from '@/lib/artifacts/types';
+import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
 import { workRequest } from '@/lib/work-documents/client';
 import { reportListParsers, serializeReportList } from '@/lib/work-documents/list-state';
 import { renderWorkHtml } from '@/lib/work-documents/render';
 import { editableReport, reportEmbeds } from '@/lib/work-documents/report-core';
-import { AddVerifiedQueryDialog } from '@/components/knowledge/add-verified-query-dialog';
 
 import { AddDefinitionDialog } from './add-definition-dialog';
 import { ReportBody } from './report-body';
@@ -103,12 +103,10 @@ export function WorkReport({
     };
     const [saveError, setSaveError] = useState(false);
     const [definition, setDefinition] = useState<{ title: string; text: string } | null>(null);
-    const [knowledge, setKnowledge] = useState<WorkEvidence | null>(null);
     useEffect(() => {
         onEditingChange?.(Boolean(editing));
         return () => onEditingChange?.(false);
     }, [editing, onEditingChange]);
-    const [evidenceId, setEvidenceId] = useState<string | null>(null);
     const editRef = useRef(editing);
     editRef.current = editing;
     const mutation = useMutation({
@@ -172,13 +170,24 @@ export function WorkReport({
         setSaveError(false);
         navigate();
     };
+    const workspace = useMutation({
+        mutationFn: (artifactId: string) => executeActionClient<ArtifactDetail>('artifact.get', { artifactId }),
+        onSuccess: artifact => {
+            const href = artifact.workspaceTarget
+                ? buildArtifactWorkspacePath(organization, artifact.id, artifact.workspaceTarget.connectionId)
+                : `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`;
+            router.push(href, { scroll: false });
+        },
+        onError: () => toast.error(reportT('OriginalUnavailable')),
+    });
+    const openEvidence = (artifactId: string) => {
+        if (!workspace.isPending) void leaveReport(() => workspace.mutate(artifactId));
+    };
     const switchVersion = async (revision: number | null) => {
         if (!(await requestLeave())) return;
         setEditing(null);
         setDirty(false);
         setSaveError(false);
-        setEvidenceId(null);
-        setKnowledge(null);
         setDefinition(null);
         await setSelectedPublication(null);
         await setSelectedRevision(revision);
@@ -189,7 +198,6 @@ export function WorkReport({
         setEditing(null);
         setDirty(false);
         setSaveError(false);
-        setEvidenceId(null);
         setRestoreOpen(false);
         void setSelectedRevision(null);
         void setSelectedPublication(null);
@@ -409,7 +417,6 @@ export function WorkReport({
                                 void setSelectedPublication(value.slice(12));
                             });
                     }}
-                    onDetails={() => setEvidenceId('all')}
                     onRestore={() => {
                         restore.reset();
                         setRestoreOpen(true);
@@ -417,7 +424,7 @@ export function WorkReport({
                     onExport={format => void exportReport(format)}
                     onInsert={type => editorRef.current?.insert(type)}
                 />
-                <div className="mx-auto w-full max-w-[1160px] px-4 pb-6" data-testid="report-content">
+                <div className="mx-auto w-full max-w-[960px] px-4 pb-8 sm:px-6" data-testid="report-content">
                     <AlertDialog
                         open={restoreOpen}
                         onOpenChange={open => {
@@ -482,7 +489,8 @@ export function WorkReport({
                                     const target = event.target instanceof Element ? event.target.closest('[data-evidence], a[href^="dory://evidence/"]') : null;
                                     if (target) {
                                         event.preventDefault();
-                                        setEvidenceId(target.getAttribute('data-evidence') ?? target.getAttribute('href')?.slice('dory://evidence/'.length) ?? null);
+                                        const id = target.getAttribute('data-evidence') ?? target.getAttribute('href')?.slice('dory://evidence/'.length);
+                                        if (id) openEvidence(id);
                                     }
                                 }}
                             >
@@ -492,17 +500,14 @@ export function WorkReport({
                                         content={document.content}
                                         title={document.title}
                                         onChange={content => change({ ...document, content })}
-                                        onEvidence={setEvidenceId}
+                                        onEvidence={openEvidence}
                                     />
                                 ) : (
-                                    <ReportBody key={document.revision} content={document.content} title={document.title} onEvidence={setEvidenceId} />
+                                    <ReportBody key={document.revision} content={document.content} title={document.title} onEvidence={openEvidence} />
                                 )}
                             </div>
                             {!isEditing ? (
                                 <div className="mt-5 flex gap-2">
-                                    <Button variant="outline" onClick={() => setEvidenceId(document.content.evidence[0]?.artifactId ?? 'all')}>
-                                        {t('Evidence')}
-                                    </Button>
                                     <Button
                                         variant="ghost"
                                         onMouseDown={event => event.preventDefault()}
@@ -518,112 +523,7 @@ export function WorkReport({
                             ) : null}
                         </>
                     )}
-                    <Sheet
-                        open={!viewUnavailable && Boolean(evidenceId)}
-                        onOpenChange={open => {
-                            if (!open) setEvidenceId(null);
-                        }}
-                    >
-                        <SheetContent className="overflow-auto sm:max-w-xl">
-                            <SheetHeader>
-                                <SheetTitle>{reportT('Details')}</SheetTitle>
-                                <SheetDescription>{t('EvidenceDescription')}</SheetDescription>
-                            </SheetHeader>
-                            <div className="space-y-5 px-4 pb-6">
-                                <dl className="space-y-3 text-sm">
-                                    <div>
-                                        <dt className="text-muted-foreground">{t('Title')}</dt>
-                                        <dd className="break-words">{document.title}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-muted-foreground">{t('Sources')}</dt>
-                                        <dd>{[...new Set(document.content.evidence.map(item => item.connectionName ?? item.title))].join(', ') || '—'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-muted-foreground">{reportT('Updated')}</dt>
-                                        <dd>{new Date(document.updatedAt).toLocaleString()}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-muted-foreground">{reportT('Coverage')}</dt>
-                                        <dd>
-                                            {document.content.evidence.length && document.content.evidence.every(item => item.dataRange)
-                                                ? document.content.evidence
-                                                      .map(item => `${item.title}: ${item.dataRange?.from ?? '…'} – ${item.dataRange?.through ?? '…'}`)
-                                                      .join('; ')
-                                                : reportT('RangeUnknown')}
-                                        </dd>
-                                    </div>
-                                    {document.chatId && (
-                                        <div>
-                                            <dt className="text-muted-foreground">{reportT('SourceWork')}</dt>
-                                            <dd>
-                                                <Link
-                                                    className="text-primary underline"
-                                                    href={continueUrl(`/${organization}/work`, { document: document.id, revision: document.revision, chat: document.chatId })}
-                                                >
-                                                    {reportT('SourceWork')}
-                                                </Link>
-                                            </dd>
-                                        </div>
-                                    )}
-                                </dl>
-                                {document.content.evidence.map(item => (
-                                    <details key={item.artifactId} open={evidenceId === item.artifactId} className="rounded border p-3 text-sm">
-                                        <summary className="cursor-pointer font-medium">
-                                            {item.title} ·{' '}
-                                            {item.connectionName ??
-                                                item.attachmentSource?.files.map(file => (file.sheet ? `${file.filename} / ${file.sheet}` : file.filename)).join(', ')}
-                                        </summary>
-                                        <p className="my-2 text-xs text-muted-foreground">
-                                            {t('CapturedAt')}: {item.capturedAt}
-                                            {' · '}
-                                            {item.dataRange ? `${item.dataRange.from ?? '…'} – ${item.dataRange.through ?? '…'}` : reportT('RangeUnknown')}
-                                            {item.truncated ? ` · ${t('Preview')}` : ''}
-                                        </p>
-                                        <pre className="my-3 overflow-auto whitespace-pre-wrap rounded bg-muted p-3 text-xs">{item.sql}</pre>
-                                        <pre className="max-h-64 overflow-auto text-xs">{JSON.stringify(item.rows.slice(0, 10), null, 2)}</pre>
-                                        <div className="mt-3 flex gap-2">
-                                            {item.runId ? (
-                                                <Link className="text-primary underline" href={`/${organization}/agent-runs/${item.runId}`}>
-                                                    {t('Run')}
-                                                </Link>
-                                            ) : null}
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setEvidenceId(null);
-                                                    setKnowledge(item);
-                                                }}
-                                            >
-                                                {t('AddKnowledge')}
-                                            </Button>
-                                        </div>
-                                    </details>
-                                ))}
-                                {document.content.knowledge.map(item => (
-                                    <details className="rounded border p-3" key={`${item.ref}:${item.revision}`}>
-                                        <summary>{item.title}</summary>
-                                        <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">{item.content}</pre>
-                                    </details>
-                                ))}
-                            </div>
-                        </SheetContent>
-                    </Sheet>
                     {definition ? <AddDefinitionDialog {...definition} connectionIds={document.scope.connectionIds} onClose={() => setDefinition(null)} /> : null}
-                    {knowledge ? (
-                        <AddVerifiedQueryDialog
-                            open
-                            onOpenChange={open => {
-                                if (!open) setKnowledge(null);
-                            }}
-                            connectionId={knowledge.connectionId}
-                            sql={knowledge.sql}
-                            sourceType="work_document"
-                            sourceId={document.id}
-                            initialTitle={knowledge.title}
-                        />
-                    ) : null}
                 </div>
             </div>
         </article>

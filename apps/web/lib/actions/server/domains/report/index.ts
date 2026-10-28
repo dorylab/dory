@@ -169,6 +169,12 @@ const reportPublish = defineWebAction({
     audit: { allowInputFields: ['documentId', 'expectedRevision', 'requestId'] },
     handler: async (ctx, input) => {
         await writableReport(ctx, input.documentId);
+        if (ctx.services.agentTurn) {
+            const { workId, requestId } = ctx.services.agentTurn;
+            const work = await ctx.services.db.works.assertChatTurn({ ...owner(ctx), workId, requestId });
+            if (!(work.metadata?.chatTurn as { reportPublishAllowed?: boolean } | undefined)?.reportPublishAllowed)
+                throw new DatabaseError('Publication requires an explicit user request.', 403);
+        }
         return { document: bounded(await publishWorkReport(ctx.services.db, { ...owner(ctx), ...input })) };
     },
 });

@@ -10,6 +10,7 @@ import { createDoryArtifactStore } from '@dory/artifacts';
 import type { DBService } from '@dory/database';
 import { PostgresArtifactsRepository } from '@dory/database/postgres/impl/artifacts';
 import { PostgresResultSetsRepository } from '@dory/database/postgres/impl/result-sets';
+import { PostgresSqlNamingRepository } from '@dory/database/postgres/impl/sql-naming';
 import { PostgresChatRepository } from '@dory/database/postgres/impl/chat';
 import { PostgresTabStateRepository } from '@dory/database/postgres/impl/sql-console/tabs/tab-states';
 import { PostgresWorksRepository } from '@dory/database/postgres/impl/works';
@@ -75,7 +76,9 @@ async function fixture(progressCheckpoints = false) {
     const resultSets = new PostgresResultSetsRepository(store);
     Object.defineProperty(artifacts, 'db', { value: database });
     Object.defineProperty(resultSets, 'db', { value: database });
-    const db = { works, chat, tabState, artifacts, resultSets } as DBService;
+    const sqlNaming = new PostgresSqlNamingRepository();
+    Object.defineProperty(sqlNaming, 'db', { value: database });
+    const db = { works, chat, tabState, artifacts, resultSets, sqlNaming } as DBService;
     await database.insert(schema.user).values({ id: 'user', name: 'User', email: 'user@example.test' });
     await chat.createGlobalSession({ ...scope, id: 'chat', connectionId: 'connection' });
     const start = (requestId: string, connectionIds?: string[], databasesByConnection?: Record<string, string | string[]>) =>
@@ -1096,6 +1099,12 @@ test('requested reports save before completion and an execution limit preserves 
                     }
                     assert.equal(options.toolChoice?.type, 'required');
                     assert.ok(!options.tools?.some(tool => tool.name === 'finishAnalysis'));
+                    for (const name of ['createWorkReport', 'readWorkReport', 'updateWorkReport', 'sqlRunner']) {
+                        assert.ok(
+                            options.tools?.some(tool => tool.name === name),
+                            `${name} must remain available while report status is ${reportStatus}`,
+                        );
+                    }
                     return {
                         content: [{ type: 'tool-call', toolCallId: `report-${current}`, toolName: current === 0 ? 'createWorkReport' : 'updateWorkReport', input: '{}' }],
                         finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
@@ -1105,6 +1114,9 @@ test('requested reports save before completion and an execution limit preserves 
                 },
             }),
             tools: {
+                readWorkReport: tool({ inputSchema: z.object({}), execute: async () => ({ status: reportStatus }) }),
+                sqlRunner: tool({ inputSchema: z.object({}), execute: async () => ({ ok: true }) }),
+                finishAnalysis: tool({ inputSchema: z.object({}), execute: async () => ({ ok: true }) }),
                 createWorkReport: tool({
                     inputSchema: z.object({}),
                     execute: async () => {
@@ -1157,6 +1169,17 @@ test('server recovery rejects unchanged failures, caps retries and preserves exe
     assert.equal(applyCheckpointCommand(budget, 'budget', { kind: 'reserve', id: '1', toolName: 'readAttachment', stage: 'reference' }).duplicate, true);
     assert.equal(applyCheckpointCommand(budget, 'budget', { kind: 'reserve', id: '2', toolName: 'queryAttachment', stage: 'query' }).accepted, true);
     assert.equal(applyCheckpointCommand(budget, 'budget', { kind: 'reserve', id: '3', toolName: 'chartBuilder', stage: 'output' }).stopped, true);
+    const repair = initialChatCheckpoints();
+    const command = (input: import('@dory/shared/types/chat-checkpoints').CheckpointCommand) => applyCheckpointCommand(repair, 'repair', input);
+    command({ kind: 'reserve', id: 'create', toolName: 'createWorkReport', stage: 'output', fingerprint: 'invalid' });
+    command({ kind: 'settle', id: 'create', failed: true, result: 'invalid component', failure: chatToolFailure(new Error('WORK_REFERENCE_INVALID'), 'createWorkReport') });
+    for (let i = 0; i < 5; i++) {
+        assert.equal(command({ kind: 'reserve', id: `read-${i}`, toolName: 'readWorkReport', stage: 'output' }).accepted, true);
+        command({ kind: 'settle', id: `read-${i}`, failed: false, result: 'latest report' });
+    }
+    assert.equal(command({ kind: 'reserve', id: 'save', toolName: 'updateWorkReport', stage: 'output', fingerprint: 'corrected' }).accepted, true);
+    assert.equal(repair.recoveryActions ?? 0, 0);
+    assert.equal(repair.actionAttempts, 7);
 });
 
 test('MCP automatically admits stages and progress mistakes do not stop real tool work', async t => {

@@ -131,6 +131,21 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     await filter.fill('category-59');
     await expect(page.getByRole('cell', { name: 'category-59', exact: true })).toBeVisible();
     expect(originalRequests).toBe(0);
+    const widths = await page.getByTestId('work-markdown').evaluate(element => {
+        const prose = element.querySelector('.report-prose')!;
+        const visuals = [...element.querySelectorAll('figure[data-visual]')];
+        return {
+            prose: prose.getBoundingClientRect().width,
+            visuals: visuals.map(visual => ({ width: visual.getBoundingClientRect().width, border: getComputedStyle(visual).borderTopWidth })),
+        };
+    });
+    for (const visual of widths.visuals) {
+        expect(visual.width).toBeCloseTo(widths.prose, 0);
+        expect(visual.border).toBe('0px');
+    }
+    await expect(page.getByRole('button', { name: 'View source', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open ResultSet', exact: true })).toHaveCount(0);
+
     const surface = page.getByTestId('work-report');
     expect(
         await surface.evaluate(element => {
@@ -167,7 +182,7 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     await component.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.getByRole('button', { name: 'Done', exact: true }).click();
 
-    await page.getByRole('button', { name: 'Open ResultSet' }).first().click();
+    await page.getByRole('button', { name: 'Open Workspace' }).first().click();
     await expect(page.getByText('Original source unavailable.', { exact: false })).toBeVisible();
     await page.getByRole('button', { name: 'Report versions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Publish version', exact: true }).click();
@@ -238,11 +253,9 @@ test('Compact report toolbar handles long titles, empty sources, archives and sa
     await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', document.title);
     expect(await page.getByTestId('report-toolbar').evaluate(element => element.getBoundingClientRect().height)).toBe(44);
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Report details', exact: true }).click();
-    await expect(page.getByRole('dialog')).toContainText('Data coverage not specified');
-    await expect(page.getByRole('dialog')).toContainText(document.title);
-    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'More actions', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Report details', exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-slot="sheet-content"]')).toHaveCount(0);
     document.archivedAt = null;
     await page.reload();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -251,3 +264,30 @@ test('Compact report toolbar handles long titles, empty sources, archives and sa
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Keep my unsaved title');
     await expectAppHealthy(appErrors);
 });
+
+for (const chartType of ['bar', 'line', 'area', 'pie'] as const) {
+    test(`report ${chartType} renders boolean categories from saved evidence`, async ({ page, appErrors }) => {
+        const document = fixture();
+        document.content.evidence[0].rows = [
+            { category: true, value: 200 },
+            { category: false, value: 1800 },
+        ];
+        document.content.evidence[0].rowCount = 2;
+        document.content.visuals = [
+            { id: 'chart', type: 'chart', title: 'Active customers', evidenceId: 'report-result', chart: { type: chartType, xKey: 'category', yKey: 'value' } },
+        ];
+        document.content.body = '<Chart source="chart" />';
+        document.content.embeds = reportEmbeds(document.content.visuals, document.content.evidence);
+        document.content.markdown = parseReport(document.content.body, document.content.visuals).presentation;
+        await mockWorkbenchApis(page, { initialConnections: [connection] });
+        await page.route('**/api/work-documents/report-v2*', route => route.fulfill({ json: { document, versions: [], publications: [] } }));
+        await page.goto('/');
+        const organization = new URL(page.url()).pathname.split('/')[1];
+        await page.goto(`/${organization}/reports/report-v2`);
+        const shape = { bar: '.recharts-bar-rectangle', line: '.recharts-line-curve', area: '.recharts-area-area', pie: '.recharts-pie-sector' }[chartType];
+        await expect(page.locator(`[data-visual="chart"] ${shape}`).first()).toBeVisible();
+        if (chartType === 'bar' || chartType === 'pie') await expect(page.locator(`[data-visual="chart"] ${shape}`)).toHaveCount(2);
+        expect(document.content.evidence[0].rows[0].category).toBe(true);
+        await expectAppHealthy(appErrors);
+    });
+}

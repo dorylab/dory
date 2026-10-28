@@ -309,6 +309,14 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             }
         });
         await t.test('report creation saves all chart series and rejects an invalid secondary evidence column', async t => {
+            const assertTurn = db.works.assertChatTurn.bind(db.works);
+            t.mock.method(db.works, 'assertChatTurn', async (input: Parameters<typeof assertTurn>[0]) => {
+                const active = await assertTurn(input);
+                return {
+                    ...active,
+                    metadata: { ...active.metadata, chatTurn: { ...(active.metadata?.chatTurn as object), reportRequirements: { requireChart: true, chartType: 'line' } } },
+                };
+            });
             t.mock.method(db.resultSets, 'readRows', async () => ({
                 columns: [{ name: 'month' }, { name: 'net_revenue' }, { name: 'order_count' }],
                 rows: [{ month: '2026-06', net_revenue: 181273.27, order_count: 421 }],
@@ -346,18 +354,195 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                     },
                 ],
             });
+            await assert.rejects(
+                tools.tools.createWorkReport.execute!({ ...input, markdown: 'No chart yet.', visuals: [] }, call) as Promise<unknown>,
+                /requested chart must be embedded/,
+            );
             const invalid = structuredClone(input);
             const invalidChart = invalid.visuals[0].chart;
             assert.ok(invalidChart && 'yKeys' in invalidChart);
             invalidChart.yKeys[1].key = 'invented';
-            await assert.rejects(tools.tools.createWorkReport.execute!(invalid, call) as Promise<unknown>, /Chart columns do not match/);
-            const saved = await tools.tools.createWorkReport.execute!(input, call);
+            await assert.rejects(tools.tools.createWorkReport.execute!(invalid, call) as Promise<unknown>, error => {
+                assert.ok(error instanceof Error);
+                assert.match(error.message, /Chart columns do not match/);
+                assert.match(error.message, /"visualId":"revenue_trend"/);
+                assert.match(error.message, /"evidenceId":"orders"/);
+                assert.match(error.message, /"missingKeys":\["invented"\]/);
+                assert.match(error.message, /"availableColumns":\["month","net_revenue","order_count"\]/);
+                return true;
+            });
+            const pending = await db.workDocuments.findByCreationKey({ ...owner, creationKey: 'reports:multi-metric' });
+            assert.ok(pending);
+            const latest = await tools.tools.readWorkReport.execute!({ documentId: pending.id }, call);
+            assert.ok('revision' in latest);
+            const saved = await tools.tools.updateWorkReport.execute!(
+                {
+                    documentId: pending.id,
+                    expectedRevision: latest.revision,
+                    patch: { edits: [{ oldText: '', newText: input.markdown }], visuals: input.visuals, status: 'ready' },
+                },
+                call,
+            );
             assert.ok('id' in saved);
             assert.equal(saved.status, 'ready');
             assert.deepEqual(saved.content.visuals, input.visuals);
             assert.equal(saved.content.evidence[0].rows[0].order_count, 421);
             assert.equal(await tools.completionStatus(), 'ready');
             assert.deepEqual((await db.workDocuments.get({ ...owner, documentId: saved.id })).content.visuals, input.visuals);
+            await assert.rejects(
+                tools.tools.updateWorkReport.execute!(
+                    {
+                        documentId: saved.id,
+                        expectedRevision: saved.revision,
+                        patch: { edits: [], visuals: invalid.visuals, status: 'ready' },
+                    },
+                    call,
+                ) as Promise<unknown>,
+                /"missingKeys":\["invented"\]/,
+            );
+            const preserved = await db.workDocuments.get({ ...owner, documentId: saved.id });
+            assert.equal(preserved.revision, saved.revision);
+            assert.deepEqual(preserved.content.visuals, saved.content.visuals);
+            await db.workDocuments.archive({ ...owner, documentId: saved.id, archived: true });
+        });
+        await t.test('chart saves validate numeric series and require complete pie aggregates', async t => {
+            let rows: Array<{ category: string; count: string | number }> = [{ category: 'active', count: 'invalid' }];
+            let truncated = false;
+            t.mock.method(db.resultSets, 'readRows', async () => ({
+                columns: [{ name: 'category' }, { name: 'count' }],
+                rows,
+                rowCount: rows.length,
+                dataAvailability: truncated ? 'preview-only' : 'full',
+            }));
+            const tools = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:numeric-pie',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            const input = {
+                title: 'Verified pie',
+                format: 'restricted-mdx' as const,
+                markdown: '<Chart source="pie" />',
+                status: 'ready' as const,
+                visuals: [
+                    {
+                        id: 'pie',
+                        type: 'chart' as const,
+                        title: 'Counts',
+                        evidenceId: 'orders',
+                        allowSubset: true,
+                        chart: { type: 'pie' as const, xKey: 'category', yKey: 'count' },
+                    },
+                ],
+            };
+            await assert.rejects(tools.tools.createWorkReport.execute!(input, call) as Promise<unknown>, /numeric values/);
+            rows = [{ category: 'active', count: -1 }];
+            await assert.rejects(tools.tools.createWorkReport.execute!(input, call) as Promise<unknown>, /non-negative/);
+            rows = [
+                { category: 'active', count: '200' },
+                { category: 'inactive', count: 1800 },
+            ];
+            truncated = true;
+            await assert.rejects(tools.tools.createWorkReport.execute!(input, call) as Promise<unknown>, /complete aggregate result/);
+            truncated = false;
+            const saved = await tools.tools.createWorkReport.execute!(input, call);
+            assert.ok('id' in saved);
+            assert.equal(saved.status, 'ready');
+            assert.deepEqual(saved.content.evidence[0].rows, rows);
+            assert.equal(saved.content.evidence[0].truncated, false);
+            await db.workDocuments.archive({ ...owner, documentId: saved.id, archived: true });
+        });
+        await t.test('requested cards and tables cannot be replaced by prose statistics', async t => {
+            const assertTurn = db.works.assertChatTurn.bind(db.works);
+            t.mock.method(db.works, 'assertChatTurn', async (input: Parameters<typeof assertTurn>[0]) => {
+                const active = await assertTurn(input);
+                return {
+                    ...active,
+                    metadata: { ...active.metadata, chatTurn: { ...(active.metadata?.chatTurn as object), reportRequirements: { visualTypes: ['metric', 'table'] } } },
+                };
+            });
+            t.mock.method(db.resultSets, 'readRows', async () => ({ columns: [{ name: 'revenue' }], rows: [{ revenue: 42 }], rowCount: 1, dataAvailability: 'full' }));
+            const tools = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:required-components',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            const draft = { title: 'Required components', markdown: 'Revenue is 42.', visuals: [], status: 'ready' as const };
+            await assert.rejects(tools.tools.createWorkReport.execute!(draft, call) as Promise<unknown>, /Requested report components are missing: metric, table/);
+            const saved = await tools.tools.createWorkReport.execute!(
+                {
+                    ...draft,
+                    visuals: [
+                        { id: 'rows', type: 'table', title: 'Rows', evidenceId: 'orders' },
+                        { id: 'metric', type: 'metric', title: 'Revenue', evidenceId: 'orders', metric: { column: 'revenue', rowIndex: 0 } },
+                    ],
+                },
+                call,
+            );
+            assert.ok('id' in saved);
+            assert.match(saved.content.body!, /<Metric source="metric"/);
+            assert.match(saved.content.body!, /<DataTable source="rows"/);
+            await assert.rejects(
+                tools.tools.publishWorkReport.execute!({ documentId: saved.id, expectedRevision: saved.revision, requestId: 'not-authorized' }, call) as Promise<unknown>,
+                /explicit user request/,
+            );
+            await db.workDocuments.archive({ ...owner, documentId: saved.id, archived: true });
+        });
+        await t.test('MDX updates default to the saved body and automatically embed new visuals', async t => {
+            t.mock.method(db.resultSets, 'readRows', async () => ({ columns: [{ name: 'revenue' }], rows: [{ revenue: 42 }], rowCount: 1, dataAvailability: 'full' }));
+            const tools = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:mdx-update',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            const body = '## Results\n\n<DataTable source="rows" />';
+            const created = await tools.tools.createWorkReport.execute!(
+                { title: 'MDX', format: 'restricted-mdx', markdown: body, visuals: [{ id: 'rows', type: 'table', title: 'Rows', evidenceId: 'orders' }], status: 'ready' },
+                call,
+            );
+            assert.ok('id' in created);
+            await assert.rejects(
+                tools.tools.updateWorkReport.execute!(
+                    {
+                        documentId: created.id,
+                        expectedRevision: created.revision,
+                        patch: { edits: [{ oldText: body, newText: body + '\n\n<Metrics source="rows" />' }], status: 'draft' },
+                    },
+                    call,
+                ) as Promise<unknown>,
+                /WORK_REFERENCE_INVALID: Line 5:.*Offending text:.*Metrics.*No changes were saved/,
+            );
+            const preserved = await db.workDocuments.get({ ...owner, documentId: created.id });
+            assert.equal(preserved.revision, created.revision);
+            assert.equal(preserved.content.body, body);
+            const saved = await tools.tools.updateWorkReport.execute!(
+                {
+                    documentId: created.id,
+                    expectedRevision: created.revision,
+                    patch: {
+                        edits: [{ oldText: body, newText: body + '\n\nReviewed.' }],
+                        visuals: [{ id: 'total', type: 'metric', title: 'Total', evidenceId: 'orders', metric: { column: 'revenue', rowIndex: 0 } }],
+                        status: 'ready',
+                    },
+                },
+                call,
+            );
+            assert.ok('id' in saved);
+            assert.match(saved.content.body!, /<Metric source="total"/);
+            assert.match(saved.content.body!, /Reviewed/);
+            assert.equal(saved.content.visuals.length, 2);
             await db.workDocuments.archive({ ...owner, documentId: saved.id, archived: true });
         });
         expired = true;
@@ -390,7 +575,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             },
             call,
         );
-        assert.ok('content' in edited && edited.content.markdown.endsWith('Human note'));
+        assert.ok('content' in edited && edited.content.markdown.trimEnd().endsWith('Human note'));
         assert.equal(edited.content.visuals.length, 2);
         assert.equal(edited.content.visuals.find(item => item.id === 'orders')?.title, 'Orders reviewed');
         assert.deepEqual(
@@ -452,9 +637,11 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             findings: [],
             steps: ['Read latest Work'],
             report: { documentId: partial.reportDocumentId, read: true },
-        })) as { reportRevision: number; report: { markdown: string } };
+        })) as { reportRevision: number; report: { markdown: string; body: string; format: string } };
         assert.equal(read.reportRevision, partial.reportRevision);
         assert.equal(read.report.markdown, '');
+        assert.equal(read.report.body, '');
+        assert.equal(read.report.format, 'restricted-mdx');
         assert.equal((await db.workDocuments.versions({ ...owner, documentId: partial.reportDocumentId })).length, 1);
         expired = false;
         dataAvailability = 'none';

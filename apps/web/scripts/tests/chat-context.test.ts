@@ -132,3 +132,37 @@ test('report target resolution respects explicit references and never guesses be
     assert.deepEqual(selectReportTarget(null, [], ['only']), { documentId: 'only', ambiguous: false });
     assert.deepEqual(selectReportTarget(null, [], []), { documentId: null, ambiguous: false });
 });
+
+test('saving resolves one workflow for open, referenced, unfinished, new and ambiguous reports', async () => {
+    const { resolveReportWorkflow, requestsReportChart } = await import('@/lib/chat-context/output-intent');
+    const context = chatContextSchema.parse({});
+    for (const text of ['帮我保存报告', '保存这份报告', '继续完成', '重试保存', 'Save this report', 'Finish the report']) {
+        assert.equal(resolveReportWorkflow(context, text, null, []).outputIntent, 'report', text);
+        assert.equal(resolveReportWorkflow(context, text, 'open', []).requireUpdate, true, text);
+        assert.equal(resolveReportWorkflow(context, text, null, ['draft']).documentId, 'draft', text);
+        const ambiguous = resolveReportWorkflow(context, text, null, ['one', 'two']);
+        assert.equal(ambiguous.readOnly, true);
+        assert.equal(ambiguous.ambiguous, true);
+        assert.equal(ambiguous.outputIntent, 'answer');
+    }
+    assert.equal(resolveReportWorkflow(context, '保存报告', null, []).outputIntent, 'report');
+    assert.equal(resolveReportWorkflow(context, '创建另一份报告', 'open', ['open']).outputIntent, 'report');
+    assert.equal(resolveReportWorkflow(context, '创建另一份报告', 'open', ['open']).documentId, null);
+    const referenced = chatContextSchema.parse({ references: [{ kind: 'report', id: 'referenced', title: 'Report' }] });
+    assert.equal(resolveReportWorkflow(referenced, '保存报告', 'open', []).documentId, 'referenced');
+    for (const text of ['解释报告', '如何保存报告', '不要修改报告', '别修改报告', 'Never update the report', '> 保存报告', '```\n保存报告\n```']) {
+        const flow = resolveReportWorkflow(context, text, 'open', []);
+        assert.equal(flow.readOnly, true, text);
+        assert.equal(flow.requireUpdate, false, text);
+    }
+    assert.equal(requestsReportChart('生成报告，不要图表'), false);
+    assert.equal(requestsReportChart('生成包含柱状图的报告'), true);
+});
+
+test('saving never authorizes publication and chart replacement selects the requested new type', async () => {
+    const { isReportPublishRequest, requestedChartType } = await import('@/lib/chat-context/output-intent');
+    for (const text of ['帮我保存报告', 'Save report', '不要发布报告', '如何发布报告', '`publish report`']) assert.equal(isReportPublishRequest(text), false);
+    assert.equal(isReportPublishRequest('发布这份报告'), true);
+    assert.equal(requestedChartType('将柱状图改成折线图，保留饼图'), 'line');
+    assert.equal(requestedChartType('不要饼图，添加柱状图'), 'bar');
+});

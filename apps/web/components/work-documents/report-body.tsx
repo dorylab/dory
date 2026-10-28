@@ -2,17 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
-import { useMutation } from '@tanstack/react-query';
 import { flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable, type SortingState } from '@tanstack/react-table';
-import { Pencil } from 'lucide-react';
+import { ArrowUpRight, Pencil } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { executeActionClient } from '@/lib/actions/client';
 import { reportMetrics } from '@/lib/work-documents/format';
 import { formatWorkValue, renderWorkMarkdown } from '@/lib/work-documents/render';
 import { editableReport, parseReport, resolvedReport } from '@/lib/work-documents/report-core';
@@ -121,14 +118,9 @@ function ReportVisual({
     previewOnly?: boolean;
 }) {
     const t = useTranslations('WorkDocuments.Report');
-    const { organization } = useParams<{ organization: string }>();
-    const router = useRouter();
-    const open = useMutation({
-        mutationFn: () => executeActionClient('artifact.get', { artifactId: evidence.artifactId }),
-        onSuccess: () => router.push(`/${organization}/artifacts/${encodeURIComponent(evidence.artifactId)}`),
-    });
+    const workspaceT = useTranslations('AgentRuns.Actions');
     return (
-        <figure className="report-wide group relative rounded-lg border bg-card p-4" data-visual={visual.id}>
+        <figure className="report-wide group relative min-w-0 space-y-3" data-visual={visual.id}>
             {onEditComponent && (
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -145,12 +137,12 @@ function ReportVisual({
                     <TooltipContent>{t('EditComponent')}</TooltipContent>
                 </Tooltip>
             )}
-            {visual.type !== 'chart' && <figcaption>{visual.title}</figcaption>}
+            <figcaption className="pr-12 text-sm font-medium leading-6">{visual.title}</figcaption>
             {visual.type === 'metric' ? (
-                <div className="report-metric-grid grid gap-4 py-3">
+                <div className="report-metric-grid grid gap-4 py-2">
                     {reportMetrics(visual, evidence).map((item, index) => (
                         <div key={index}>
-                            <p className="text-sm text-muted-foreground">{item.label}</p>
+                            {visual.metric?.items?.length || item.label !== visual.title ? <div className="mb-1 text-xs text-muted-foreground">{item.label}</div> : null}
                             <strong className="text-3xl tabular-nums">{item.value}</strong>
                             {item.comparison && (
                                 <p>
@@ -169,13 +161,12 @@ function ReportVisual({
                 <span>
                     {evidence.connectionName ?? evidence.title} · {t(evidence.truncated ? 'Subset' : 'Complete')} · {t('Rows', { count: evidence.rows.length })}
                 </span>
-                <Button className={previewOnly ? 'hidden' : undefined} variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId)}>
-                    {t('ViewSource')}
-                </Button>
-                <Button className={previewOnly ? 'hidden' : undefined} variant="ghost" size="sm" onClick={() => open.mutate()} disabled={open.isPending}>
-                    {t('OpenResult')}
-                </Button>
-                {open.error && <span role="status">{t('OriginalUnavailable')}</span>}
+                {!previewOnly && (
+                    <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId)}>
+                        {evidence.connectionId ? workspaceT('OpenWorkspace') : t('OpenResult')}
+                        <ArrowUpRight className="size-3.5" />
+                    </Button>
+                )}
             </div>
         </figure>
     );

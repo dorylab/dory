@@ -426,7 +426,9 @@ export class PostgresWorksRepository {
             reportCreationKey: input.metadata?.reportCreationKey,
             outputIntent: input.metadata?.outputIntent,
             reportTarget: input.metadata?.reportTarget,
+            reportRequirements: input.metadata?.reportRequirements,
             reportReadOnly: input.metadata?.reportReadOnly,
+            reportPublishAllowed: input.metadata?.reportPublishAllowed,
             progressCheckpoints: input.metadata?.progressCheckpoints === true,
         };
         const [row] = await this.db

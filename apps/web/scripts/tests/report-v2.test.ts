@@ -229,3 +229,13 @@ test('MDX export strips source links without changing code examples', () => {
     assert.match(body, /See source/);
     assert.match(body, /```md\n\[source\]\(dory:\/\/evidence\/artifact\)/);
 });
+
+test('restricted MDX accepts only registered standalone legacy visual links', () => {
+    const table = { id: 'rows', type: 'table' as const, title: 'Rows', evidenceId: 'result' };
+    const parsed = parseReport('## Result\n\n![Rows](dory://visual/rows)', [table]);
+    assert.equal(parsed.diagnostics.length, 0);
+    assert.equal(parsed.components[0].visualId, 'rows');
+    assert.ok(parseReport('![Unknown](dory://visual/missing)', [table]).diagnostics.length);
+    assert.ok(parseReport('text ![Rows](dory://visual/rows)', [table]).diagnostics.length);
+    assert.ok(parseReport('![External](https://example.com/image.png)', [table]).diagnostics.length);
+});

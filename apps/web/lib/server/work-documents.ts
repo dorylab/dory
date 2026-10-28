@@ -72,9 +72,23 @@ export async function saveWorkDraft(
             throw new DatabaseError(error instanceof Error ? error.message : 'Invalid reference.', 400);
         }
     }
-    const body = draft.format === 'restricted-mdx' ? (draft.body ?? draft.markdown) : legacyToMdx(draft.markdown, draft.visuals);
-    const parsed = parseReport(body, draft.visuals);
-    if (parsed.diagnostics.length && input.source === 'agent' && draft.status === 'ready') throw new DatabaseError(parsed.diagnostics.map(item => item.message).join('; '), 400);
+    let body = draft.format === 'restricted-mdx' ? (draft.body ?? draft.markdown) : legacyToMdx(draft.markdown, draft.visuals);
+    let parsed = parseReport(body, draft.visuals);
+    if (input.source === 'agent' && draft.status === 'ready' && !parsed.diagnostics.length) {
+        const unembedded = draft.visuals.filter(
+            visual => !existing.content.visuals.some(prior => prior.id === visual.id) && !parsed.components.some(component => component.visualId === visual.id),
+        );
+        if (unembedded.length) {
+            body += unembedded.map(visual => `\n\n${reportTagSource(visual)}`).join('');
+            parsed = parseReport(body, draft.visuals);
+            draft.format = 'restricted-mdx';
+        }
+    }
+    if (parsed.diagnostics.length && input.source === 'agent')
+        throw new DatabaseError(
+            `WORK_REFERENCE_INVALID: ${parsed.diagnostics.map(item => `Line ${item.line ?? 1}: ${item.message} Offending text: ${JSON.stringify(body.split('\n')[(item.line ?? 1) - 1]?.slice(0, 240))}`).join('; ')}. No changes were saved. Correct or remove the invalid syntax. Component source must be a visual ID, not an artifact ID. Available visuals: ${JSON.stringify(draft.visuals.map(({ id, type, evidenceId }) => ({ id, type, evidenceId })))}. Read the latest report, then use patch.embedVisualIds with these visual IDs to embed components without writing tags manually.`,
+            400,
+        );
     draft.markdown = parsed.diagnostics.length ? existing.content.markdown : draft.format ? parsed.presentation : draft.markdown;
     if (parsed.diagnostics.length) draft.status = 'draft';
     const previousWrite = existing.content.agentWrite;
@@ -90,14 +104,26 @@ export async function saveWorkDraft(
         const work = await db.works.assertChatTurn({ ...input, workId: input.runId, requestId: input.requestId });
         const target = (work.metadata?.chatTurn as { reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean } } | undefined)?.reportTarget;
         if (target && target.documentId !== input.documentId) throw new DatabaseError('Update the selected report.', 403);
+        const requirements =
+            (work.metadata?.chatTurn as { reportRequirements?: { requireChart?: boolean; chartType?: string; visualTypes?: Array<'chart' | 'metric' | 'table'> } } | undefined)
+                ?.reportRequirements ?? target;
+        const requiredTypes = (work.metadata?.chatTurn as { reportRequirements?: { visualTypes?: string[] } } | undefined)?.reportRequirements?.visualTypes ?? [];
+        if (draft.status === 'ready') {
+            const missingTypes = requiredTypes.filter(type => !draft.visuals.some(visual => visual.type === type && draft.markdown.includes(`dory://visual/${visual.id}`)));
+            if (missingTypes.length)
+                throw new DatabaseError(
+                    `WORK_REFERENCE_INVALID: Requested report components are missing: ${missingTypes.join(', ')}. Register these visuals with actual evidence and embed them before saving as ready.`,
+                    400,
+                );
+        }
         if (
-            target?.requireChart &&
+            requirements?.requireChart &&
             draft.status === 'ready' &&
             !draft.visuals.some(
                 visual =>
                     changedVisualIds.includes(visual.id) &&
                     visual.chart &&
-                    (!target.chartType || visual.chart.type === target.chartType) &&
+                    (!requirements.chartType || visual.chart.type === requirements.chartType) &&
                     draft.markdown.includes(`dory://visual/${visual.id}`),
             )
         )
@@ -166,7 +192,15 @@ export async function saveWorkDraft(
     );
     for (const visual of parsed.diagnostics.length ? [] : visuals) {
         const snapshot = evidence.find(item => item.artifactId === visual.evidenceId);
-        if (draft.format && snapshot?.truncated && !visual.allowSubset)
+        const retainedSnapshot = existing.content.visuals.some(
+            prior =>
+                prior.id === visual.id &&
+                prior.evidenceId === visual.evidenceId &&
+                prior.type === visual.type &&
+                JSON.stringify(prior.chart) === JSON.stringify(visual.chart) &&
+                JSON.stringify(prior.metric) === JSON.stringify(visual.metric),
+        );
+        if (draft.format && snapshot?.truncated && !visual.allowSubset && !retainedSnapshot)
             throw new DatabaseError('Result exceeds the report snapshot range. Aggregate the query or explicitly select allowSubset.', 400);
         if (visual.metric) {
             for (const cell of [visual.metric, ...(visual.metric.items ?? []), ...(visual.metric.comparison ? [visual.metric.comparison] : [])]) {
@@ -176,8 +210,17 @@ export async function saveWorkDraft(
         if (visual.chart) {
             const source = evidence.find(item => item.artifactId === visual.evidenceId);
             const yKeys = visual.chart.yKeys ? visual.chart.yKeys.map(series => series.key) : [visual.chart.yKey];
-            if (!source?.columns.includes(visual.chart.xKey) || yKeys.some(key => !source.columns.includes(key)))
-                throw new DatabaseError('Chart columns do not match its evidence.', 400);
+            const missingKeys = [visual.chart.xKey, ...yKeys].filter(key => !source?.columns.includes(key));
+            if (!source || missingKeys.length)
+                throw new DatabaseError(
+                    `WORK_REFERENCE_INVALID: Chart columns do not match its evidence. ${JSON.stringify({
+                        visualId: visual.id,
+                        evidenceId: visual.evidenceId,
+                        missingKeys: [...new Set(missingKeys)],
+                        availableColumns: source?.columns ?? [],
+                    })} Use exact column names from this evidence for xKey and yKey/yKeys; labels are display text only. If the required data is absent, rerun the query and use its returned artifactId.`,
+                    400,
+                );
             if (source.rows.some(row => yKeys.some(key => row[key] != null && row[key] !== '' && reportNumber(row[key]) === null)))
                 throw new DatabaseError('Chart series must contain numeric values or null.', 400);
             if (visual.chart.type === 'pie') {
@@ -326,6 +369,12 @@ export async function patchWorkDocument(
         return existing;
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const patch = workPatchSchema.parse(input.patch);
+    // Older callers omit format even when emitting the registered MDX components.
+    // Legacy dory://visual edits keep using the presentation Markdown contract.
+    if (!patch.format && !patch.edits.some(edit => /dory:\/\/visual\//.test(edit.oldText + edit.newText))) {
+        patch.format = existing.content.format;
+    }
+    if (!patch.format && patch.edits.some(edit => /<(?:Chart|DataTable|Metric)\s+source=/.test(edit.newText))) patch.format = 'restricted-mdx';
     let markdown: string;
     try {
         markdown = applyMarkdownEdits(
@@ -338,7 +387,8 @@ export async function patchWorkDocument(
     const visuals = new Map(existing.content.visuals.map(visual => [visual.id, visual]));
     if (patch.visuals && new Set(patch.visuals.map(visual => visual.id)).size !== patch.visuals.length) throw new DatabaseError('Visual IDs must be unique.', 400);
     for (const visual of patch.visuals ?? []) visuals.set(visual.id, visual);
-    for (const id of new Set(patch.embedVisualIds ?? [])) {
+    const newVisualIds = (patch.visuals ?? []).filter(visual => !existing.content.visuals.some(prior => prior.id === visual.id)).map(visual => visual.id);
+    for (const id of new Set([...(patch.embedVisualIds ?? []), ...newVisualIds])) {
         if (!visuals.has(id)) throw new DatabaseError('The visual to embed does not exist in this report. Supply its visual configuration.', 400);
         if (patch.format) {
             if (!parseReport(markdown, [...visuals.values()]).components.some(item => item.visualId === id)) markdown += `\n\n${reportTagSource(visuals.get(id)!)}`;

@@ -13,6 +13,7 @@ const DEFAULT_CHART_COLORS = ['var(--primary)', 'var(--chart-1)', 'var(--chart-2
 export type ChartResultCardProps = {
     result: ChartResultPart;
     source?: 'tool' | 'auto';
+    variant?: 'card' | 'bare';
     onFollowUp?: (prompt: string) => void;
 };
 
@@ -65,9 +66,14 @@ function getFirstKey(row?: Record<string, unknown>) {
     return keys.length ? keys[0] : undefined;
 }
 
-export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartResultCardProps) {
+export function ChartResultCard({ result, source = 'tool', onFollowUp, variant = 'card' }: ChartResultCardProps) {
     const t = useTranslations('DoryUI');
-    const { chartType, data, title, description, xKey, yKeys, categoryKey, valueKey, options } = result;
+    const { chartType, data: sourceData, title, description, xKey, yKeys, categoryKey, valueKey, options } = result;
+    // Recharts categorical axes accept strings/numbers, not boolean SQL columns.
+    const data = useMemo(() => {
+        const key = xKey ?? categoryKey ?? getFirstKey(sourceData?.[0]);
+        return key && Array.isArray(sourceData) ? sourceData.map(row => (typeof row[key] === 'boolean' ? { ...row, [key]: String(row[key]) } : row)) : sourceData;
+    }, [sourceData, xKey, categoryKey]);
 
     const hasData = Array.isArray(data) && data.length > 0;
 
@@ -276,8 +282,8 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
     };
 
     return (
-        <div className="mt-2">
-            <div className="rounded-lg border border-border/50 bg-background/35 px-2 py-2 shadow-none">
+        <div className={variant === 'bare' ? undefined : 'mt-2'}>
+            <div className={variant === 'bare' ? 'min-w-0' : 'rounded-lg border border-border/50 bg-background/35 px-2 py-2 shadow-none'}>
                 {result.source?.truncated && <p className="px-1 pb-1 text-xs text-muted-foreground">{t('ChartResult.Preview')}</p>}
                 {description ? <div className="px-1 pb-1 text-xs text-muted-foreground">{description}</div> : null}
                 {onFollowUp ? (

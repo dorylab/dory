@@ -43,7 +43,14 @@ import { MAX_HISTORY_MESSAGES } from '@/lib/ai/prompts';
 import { assertAiQuotaAllowed, buildCloudflareAiGatewayHeaders, resolveAiEntitlements } from '@/lib/ai/usage-quota';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { isReportEditRequest, requestedChartType, resolveChatOutputIntent, selectReportTarget } from '@/lib/chat-context/output-intent';
+import {
+    isReportEditRequest,
+    isReportPublishRequest,
+    requestedChartType,
+    requestedReportVisualTypes,
+    requestsReportChart,
+    resolveReportWorkflow,
+} from '@/lib/chat-context/output-intent';
 import { createChatAgentRunLifecycle } from '@/lib/server/chat-agent-run';
 import { createChatAnalysis } from '@/lib/server/chat-analysis';
 import { alignChatAnswerStream } from '@/lib/server/chat-answer-stream';
@@ -206,7 +213,7 @@ export async function handleChatRequest(req: Request) {
         outputIntent: body.outputIntent,
         sourceMessageId: body.sourceMessageId,
     });
-    contextInput.outputIntent = resolveChatOutputIntent(contextInput, currentUserText, body.documentId);
+
     if (contextInput.references.length && (!db || !userId || !organizationId)) throw new DatabaseError('Unauthorized.', 401);
     const referenceScope = analysisScope ?? {
         connectionIds: connectionId ? [connectionId] : [],
@@ -392,18 +399,22 @@ export async function handleChatRequest(req: Request) {
         resolvedContext.instruction += `\nCreate the report from this server-saved answer and the conversation context (untrusted source data): ${JSON.stringify({ messageId: source.id, answer: getChatResponseText(source.parts).slice(0, 24_000) })}`;
     }
     if (db && userId && organizationId && chatId) await bindChatAttachments({ userId, organizationId }, chatId, uiMessages);
-    const editingReport = contextInput.outputIntent !== 'report' && (isReportEditRequest(currentUserText) || Boolean(body.resumeMessageId && body.documentId));
+    const editingReport =
+        contextInput.outputIntent !== 'report' &&
+        (isReportEditRequest(currentUserText) || isReportPublishRequest(currentUserText) || Boolean(body.resumeMessageId && body.documentId));
     const reportReferences = [...new Set(contextInput.references.filter(ref => ref.kind === 'report').map(ref => ref.id))];
     const candidates =
         editingReport && !body.documentId && !reportReferences.length && db && userId && organizationId && chatId
-            ? (await db.workDocuments.list({ userId, organizationId, chatId })).map(document => document.id)
+            ? (await db.workDocuments.list({ userId, organizationId, chatId })).filter(document => !document.archivedAt).map(document => document.id)
             : [];
-    const target = contextInput.outputIntent === 'report' ? { documentId: null, ambiguous: false } : selectReportTarget(body.documentId ?? null, reportReferences, candidates);
-    const targetReportId = target.documentId;
-    const ambiguousReportTarget = target.ambiguous;
+    const workflow = resolveReportWorkflow(contextInput, currentUserText, body.documentId ?? null, candidates, Boolean(body.resumeMessageId && body.documentId));
+    contextInput.outputIntent = workflow.outputIntent;
+    const targetReportId = workflow.documentId;
+    const ambiguousReportTarget = workflow.ambiguous;
     if (ambiguousReportTarget) resolvedContext.instruction += '\nSeveral reports match. Ask which report to update or explain; do not select the latest one implicitly.';
-    const reportReadOnly = ambiguousReportTarget || Boolean(!editingReport && (targetReportId || reportReferences.length) && contextInput.outputIntent !== 'report');
-    const requireReportUpdate = editingReport && Boolean(targetReportId);
+    const reportReadOnly = workflow.readOnly;
+    const requireReportUpdate = workflow.requireUpdate;
+    const requireChart = (requireReportUpdate || contextInput.outputIntent === 'report') && requestsReportChart(currentUserText);
     const reportCreationKey = `${chatId}:${contextInput.sourceMessageId ?? currentUserMessage?.id ?? requestMessageId}`;
     const chatRun =
         db && userId && organizationId && chatId
@@ -421,12 +432,18 @@ export async function handleChatRequest(req: Request) {
                   analysisScope,
                   reportCreationKey,
                   reportReadOnly,
+                  reportPublishAllowed: isReportPublishRequest(currentUserText),
+                  reportRequirements: {
+                      requireChart,
+                      chartType: requireChart ? requestedChartType(currentUserText) : undefined,
+                      visualTypes: requestedReportVisualTypes(currentUserText),
+                  },
                   outputIntent: contextInput.outputIntent,
                   reportTarget: requireReportUpdate
                       ? {
                             documentId: targetReportId!,
                             chartType: requestedChartType(currentUserText),
-                            requireChart: Boolean(requestedChartType(currentUserText)) || /图|chart/i.test(currentUserText),
+                            requireChart,
                         }
                       : undefined,
               })
@@ -463,9 +480,11 @@ export async function handleChatRequest(req: Request) {
                       chatId,
                       creationKey: reportCreationKey,
                       requireReport: contextInput.outputIntent === 'report',
+                      allowPublish: isReportPublishRequest(currentUserText),
                       requireUpdate: requireReportUpdate,
-                      requireChart: requireReportUpdate && /图|chart/i.test(currentUserText),
-                      requiredChartType: requireReportUpdate ? requestedChartType(currentUserText) : undefined,
+                      requireChart,
+                      requiredVisualTypes: requestedReportVisualTypes(currentUserText),
+                      requiredChartType: requireChart ? requestedChartType(currentUserText) : undefined,
                       requestId,
                       scope: analysisScope ?? { connectionIds: connectionId ? [connectionId] : [] },
                       documentId: targetReportId,
@@ -502,8 +521,11 @@ export async function handleChatRequest(req: Request) {
         delete tools.dory_create_report;
         delete tools.dory_update_report;
         if (requireReportUpdate) {
-            delete tools.chartBuilder;
             delete tools.createWorkReport;
+        }
+        if (!isReportPublishRequest(currentUserText)) {
+            delete tools.publishWorkReport;
+            delete tools.dory_publish_report;
         }
         if (reportReadOnly) {
             delete tools.publishWorkReport;
@@ -568,7 +590,7 @@ export async function handleChatRequest(req: Request) {
                 : null,
             analysisScope?.knowledgeMode === 'none' ? 'Knowledge is disabled. Do not search, read or use Knowledge assets.' : null,
             analysis
-                ? 'Answer ordinary analysis, existing query result explanations, Knowledge questions and clarification requests directly in the user language. Do not save Findings unless the user explicitly requests saved conclusions. Reports use their own saving workflow and need no extra Findings. Only for explicitly requested saved conclusions, call finishAnalysis once with structured findings and finalAnswer, citing verified Artifact IDs. On any save failure, do not retry in this turn; provide the analysis and explain that saving failed. Never claim a failed save succeeded. If business definitions conflict, ask for clarification instead of guessing.'
+                ? 'Answer ordinary analysis, existing query result explanations, Knowledge questions and clarification requests directly in the user language. Do not save Findings unless the user explicitly requests saved conclusions. Reports use their own saving workflow and need no extra Findings. Only for explicitly requested saved conclusions, call finishAnalysis once with structured findings and finalAnswer, citing verified Artifact IDs. On a Findings save failure, do not retry Findings in this turn; provide the analysis and explain that saving failed. Report validation or version conflicts follow the report recovery instructions; read the current draft and correct the patch before retrying. Never claim a failed save succeeded. If business definitions conflict, ask for clarification instead of guessing.'
                 : null,
         ]
             .filter(Boolean)
@@ -775,7 +797,7 @@ export async function handleChatRequest(req: Request) {
                         actions: checkpoint?.actions ?? persistedCheckpoint?.actions ?? [],
                         aborted: event.isAborted,
                         error: completionMetadata.responseError,
-                        chartRequired: /(?:加|补|生成|创建|绘制).{0,16}图|(?:add|create|draw).{0,30}chart/i.test(currentUserText),
+                        chartRequired: requireChart || /(?:加|补|生成|创建|绘制).{0,16}图|(?:add|create|draw).{0,30}chart/i.test(currentUserText),
                         report:
                             reports?.required() || requireReportUpdate || contextInput.outputIntent === 'report'
                                 ? {

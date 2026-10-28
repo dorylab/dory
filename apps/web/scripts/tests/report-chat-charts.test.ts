@@ -22,3 +22,13 @@ test('an invalid reference with a draft revision is not mislabeled as a version 
     assert.equal(failure.code, 'INVALID_FIELDS');
     assert.match(failure.recovery, /draft/);
 });
+
+test('a chart column failure remains an argument error when creation returns a draft revision', () => {
+    for (const prefix of ['', 'WORK_REFERENCE_INVALID: ']) {
+        const failure = chatToolFailure(new Error(`${prefix}Chart columns do not match its evidence. Draft exists: documentId=doc-1, revision=1.`), 'createWorkReport');
+        assert.equal(failure.code, 'INVALID_FIELDS');
+        assert.equal(failure.retryable, true);
+    }
+    const conflict = chatToolFailure(new Error('Report changed. Read the latest version before editing. Draft exists: documentId=doc-1, revision=1.'), 'createWorkReport');
+    assert.equal(conflict.code, 'REPORT_CONFLICT');
+});

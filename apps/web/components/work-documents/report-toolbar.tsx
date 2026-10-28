@@ -42,7 +42,6 @@ type Props = {
     onTitle: (title: string) => void;
     onPublish: () => void;
     onVersion: (value: string) => void;
-    onDetails: () => void;
     onRestore: () => void;
     onExport: (format: 'html' | 'pdf' | 'markdown' | 'mdx') => void;
     onInsert: (type: WorkVisual['type']) => void;
@@ -221,55 +220,54 @@ export function ReportToolbar(p: Props) {
                 </IconHint>
                 <DropdownMenuContent align="end">{exports}</DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
-                <IconHint label={r('More')}>
-                    <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="ghost" className="size-7 shrink-0" data-report-more aria-label={r('More')}>
-                            <MoreHorizontal className="size-3.5" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                </IconHint>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem disabled={p.unavailable} onSelect={p.onDetails}>
-                        {r('Details')}
-                    </DropdownMenuItem>
-                    <div className="report-toolbar-overflow" style={{ display: compact ? undefined : 'none' }}>
-                        <DropdownMenuItem disabled={p.disabled} onSelect={p.onContinue}>
-                            {t('Continue')}
-                        </DropdownMenuItem>
-                        {!p.editing && (
-                            <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onEdit}>
-                                {t('Edit')}
+            {(compact || p.historical) && (
+                <DropdownMenu>
+                    <IconHint label={r('More')}>
+                        <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" className="size-7 shrink-0" data-report-more aria-label={r('More')}>
+                                <MoreHorizontal className="size-3.5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                    </IconHint>
+                    <DropdownMenuContent align="end">
+                        <div className="report-toolbar-overflow" style={{ display: compact ? undefined : 'none' }}>
+                            <DropdownMenuItem disabled={p.disabled} onSelect={p.onContinue}>
+                                {t('Continue')}
                             </DropdownMenuItem>
-                        )}
-                        {p.editing && (
+                            {!p.editing && (
+                                <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onEdit}>
+                                    {t('Edit')}
+                                </DropdownMenuItem>
+                            )}
+                            {p.editing && (
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>{r('InsertComponent')}</DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent>
+                                        {(['metric', 'chart', 'table'] as const).map(type => (
+                                            <DropdownMenuItem key={type} onSelect={() => p.onInsert(type)}>
+                                                {r(type === 'metric' ? 'Metric' : type === 'chart' ? 'Chart' : 'Table')}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                            )}
                             <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>{r('InsertComponent')}</DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent>
-                                    {(['metric', 'chart', 'table'] as const).map(type => (
-                                        <DropdownMenuItem key={type} onSelect={() => p.onInsert(type)}>
-                                            {r(type === 'metric' ? 'Metric' : type === 'chart' ? 'Chart' : 'Table')}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuSubContent>
+                                <DropdownMenuSubTrigger disabled={!p.canExport}>{t('Export')}</DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>{exports}</DropdownMenuSubContent>
                             </DropdownMenuSub>
+                        </div>
+                        {p.historical && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onRestore}>
+                                    {t('VersionHistory.Restore')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => p.onVersion('draft')}>{t('VersionHistory.BackToLatest')}</DropdownMenuItem>
+                            </>
                         )}
-                        <DropdownMenuSub>
-                            <DropdownMenuSubTrigger disabled={!p.canExport}>{t('Export')}</DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent>{exports}</DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                    </div>
-                    {p.historical && (
-                        <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onRestore}>
-                                {t('VersionHistory.Restore')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => p.onVersion('draft')}>{t('VersionHistory.BackToLatest')}</DropdownMenuItem>
-                        </>
-                    )}
-                </DropdownMenuContent>
-            </DropdownMenu>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
         </header>
     );
 }

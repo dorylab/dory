@@ -13,7 +13,7 @@ export default function ReportChart({ visual, evidence }: { visual: WorkVisual; 
     const series = chart.yKeys ?? [{ key: chart.yKey!, label: chart.yKey! }];
     const data = evidence.rows.map(row => ({ ...row, ...Object.fromEntries(series.map(item => [item.key, reportNumber(row[item.key])])) }));
     return (
-        <div>
+        <div className="space-y-3">
             {series.length > 1 && (
                 <div className="flex flex-wrap gap-2" aria-label={visual.title}>
                     {series.map(item => (
@@ -34,6 +34,7 @@ export default function ReportChart({ visual, evidence }: { visual: WorkVisual; 
                 .map(item => (
                     <ChartResultCard
                         key={item.key}
+                        variant="bare"
                         result={{
                             type: 'chart',
                             chartType: chart.type,

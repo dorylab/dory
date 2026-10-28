@@ -20,6 +20,8 @@ export function createChatAgentRunLifecycle(options: {
     progressCheckpoints?: boolean;
     reportCreationKey?: string;
     reportReadOnly?: boolean;
+    reportPublishAllowed?: boolean;
+    reportRequirements?: { requireChart: boolean; chartType?: string; visualTypes?: Array<'chart' | 'metric' | 'table'> };
     outputIntent?: 'answer' | 'report';
     reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean };
     analysisScope?: AnalysisScope;
@@ -66,6 +68,8 @@ export function createChatAgentRunLifecycle(options: {
                 metadata: {
                     reportCreationKey: options.reportCreationKey,
                     reportReadOnly: options.reportReadOnly,
+                    reportPublishAllowed: options.reportPublishAllowed,
+                    reportRequirements: options.reportRequirements,
                     outputIntent: options.outputIntent,
                     reportTarget: options.reportTarget,
                     chatId: options.chatId,

@@ -128,8 +128,7 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                 toolChoice: reportPending ? ('required' as const) : ('auto' as const),
                 ...(reportStatus
                     ? {
-                          activeTools: (reportStatus === 'missing' ? ['createWorkReport'] : Object.keys(options.tools).filter(name => name !== 'finishAnalysis')) as (keyof TOOLS &
-                              string)[],
+                          activeTools: Object.keys(options.tools).filter(name => name !== 'finishAnalysis') as (keyof TOOLS & string)[],
                       }
                     : {}),
                 instructions: `${options.instructions}${reportInstruction}`,
