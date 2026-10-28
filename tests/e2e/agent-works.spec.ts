@@ -4,6 +4,11 @@ import { expect, type Page } from '@playwright/test';
 import { test, expectAppHealthy } from './fixtures';
 import { mockWorkbenchApis } from './helpers/workbench';
 
+async function chooseOutput(page: Page, title: string) {
+    await page.getByRole('combobox', { name: 'Choose an output', exact: true }).click();
+    await page.getByRole('option', { name: title, exact: false }).click();
+}
+
 const now = '2026-10-26T04:00:00Z';
 const document = {
     id: 'report-1',
@@ -182,16 +187,19 @@ test('Works shows status and outputs, searches output names, and shares a report
     await expect(sidebar.getByText('Retention analysis')).toHaveCount(0);
     await sidebar.getByRole('button', { name: /Monthly revenue analysis/ }).click();
     await header.getByRole('button', { name: 'Share', exact: true }).click();
-    await page.getByLabel('Choose an output', { exact: true }).selectOption('report-1');
+    await chooseOutput(page, 'Revenue report');
     await expect(page.getByTestId('work-share-preview').locator('iframe').contentFrame().getByRole('heading', { name: 'Revenue report' })).toBeVisible();
     const { download, bytes } = await downloadText(page);
     expect(download.suggestedFilename()).toBe('Revenue report.html');
     expect(bytes.toString()).toContain('Revenue increased.');
     expect(bytes.toString()).toContain('<svg');
     expect(bytes.toString()).not.toMatch(/Private database|private-|SELECT|dory:\/\//);
+    await chooseOutput(page, 'Choose an output');
+    await expect(page.getByTestId('work-share-preview')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Export file', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await header.getByRole('button', { name: 'Share', exact: true }).click();
-    await page.getByLabel('Choose an output', { exact: true }).selectOption('draft');
+    await chooseOutput(page, 'Draft report');
     await expect(page.getByRole('button', { name: 'Export file', exact: true })).toBeDisabled();
     await expect(page.getByText('This output is a draft', { exact: false })).toBeVisible();
     await expectAppHealthy(appErrors);
@@ -201,7 +209,7 @@ for (const availability of ['full', 'preview-only'])
     test(`Share exports ${availability} CSV with explicit row scope`, async ({ page, appErrors }) => {
         await setupWorks(page, availability);
         await page.getByTestId('work-header').getByRole('button', { name: 'Share', exact: true }).click();
-        await page.getByLabel('Choose an output', { exact: true }).selectOption('result-1');
+        await chooseOutput(page, 'Order anomaly results');
         await expect(page.getByTestId('work-share-preview')).toContainText(availability === 'full' ? 'Full saved data · 2 rows' : 'Preview data · 2 saved rows');
         const { download, bytes } = await downloadText(page);
         expect(download.suggestedFilename()).toBe(`Order anomaly results-2-rows${availability === 'full' ? '' : '-preview'}.csv`);
@@ -215,8 +223,11 @@ test('Share exports persisted report and chat charts as PNG and works on mobile 
     await expect(page.getByText('Analysis saved.', { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('works-light-desktop.png'), animations: 'disabled', fullPage: true });
     await page.getByTestId('work-header').getByRole('button', { name: 'Share', exact: true }).click();
-    for (const id of ['report-1:trend', 'chart-1']) {
-        await page.getByLabel('Choose an output', { exact: true }).selectOption(id);
+    for (const [id, title] of [
+        ['report-1:trend', 'Revenue trend'],
+        ['chart-1', 'Saved chat chart'],
+    ]) {
+        await chooseOutput(page, title);
         await expect(page.getByTestId('work-share-preview').locator('svg').first()).toBeVisible();
         const { download, bytes } = await downloadText(page);
         expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
@@ -278,7 +289,7 @@ test('CSV export includes every saved page without rerunning the query', async (
         });
     });
     await page.getByTestId('work-header').getByRole('button', { name: 'Share', exact: true }).click();
-    await page.getByLabel('Choose an output', { exact: true }).selectOption('result-1');
+    await chooseOutput(page, 'Order anomaly results');
     await expect(page.getByTestId('work-share-preview')).toContainText('Full saved data · 5,001 rows');
     const { bytes } = await downloadText(page);
     expect(offsets).toEqual([0, 5000]);
@@ -297,7 +308,7 @@ test('Share retries failed reads and protects unsaved report edits', async ({ pa
     });
     const header = page.getByTestId('work-header');
     await header.getByRole('button', { name: 'Share', exact: true }).click();
-    await page.getByLabel('Choose an output', { exact: true }).selectOption('report-1');
+    await chooseOutput(page, 'Revenue report');
     await expect(page.getByRole('button', { name: 'Export file', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByTestId('work-share-preview')).toBeVisible();
@@ -340,7 +351,7 @@ for (const chartType of ['bar', 'heatmap'])
         });
         await page.reload({ waitUntil: 'domcontentloaded' });
         await page.getByTestId('work-header').getByRole('button', { name: 'Share', exact: true }).click();
-        await page.getByLabel('Choose an output', { exact: true }).selectOption('saved-chart');
+        await chooseOutput(page, 'Saved order chart');
         const preview = page.getByTestId('work-share-preview');
         await expect(preview.locator(chartType === 'heatmap' ? '[style*="grid-template-columns"]' : 'svg.recharts-surface')).toBeVisible();
         await expect(preview.getByRole('button', { name: 'Chart settings' })).toHaveCount(0);

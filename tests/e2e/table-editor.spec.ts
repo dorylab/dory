@@ -453,8 +453,17 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await secondActiveCell.click({ modifiers: ['Shift'] });
     await secondActiveCell.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Set selected cells (2)' }).click();
-    const bulkBooleanEditor = secondActiveCell.locator('select');
-    await bulkBooleanEditor.selectOption('false');
+    const bulkBooleanEditor = secondActiveCell.getByRole('combobox', { name: 'active' });
+    await bulkBooleanEditor.click();
+    await page.keyboard.press('Escape');
+    await expect(bulkBooleanEditor).toHaveCount(0);
+    await expect(firstActiveCell).toContainText('true');
+    await expect(secondActiveCell).toContainText('false');
+    await expect(page.getByRole('button', { name: 'Changes (0)', exact: true })).toBeVisible();
+    await secondActiveCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Set selected cells (2)' }).click();
+    await bulkBooleanEditor.click();
+    await page.getByRole('option', { name: 'false', exact: true }).click();
     await bulkBooleanEditor.press('Enter');
     await expect(firstActiveCell).toContainText('false');
     await expect(secondActiveCell).toContainText('false');
@@ -547,7 +556,8 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(page.locator('[data-cell="0@@count"]')).toContainText('10');
 
     const activeField = inspectorPanel.locator('[data-testid="row-editor-field"][data-column="active"]');
-    await activeField.getByLabel('active').selectOption('false');
+    await activeField.getByLabel('active').click();
+    await page.getByRole('option', { name: 'False', exact: true }).click();
     await activeField.getByLabel('active').press('Enter');
     await expect(page.locator('[data-cell="0@@active"]')).toContainText('false');
     await activeField.getByRole('button', { name: 'Revert active' }).click();

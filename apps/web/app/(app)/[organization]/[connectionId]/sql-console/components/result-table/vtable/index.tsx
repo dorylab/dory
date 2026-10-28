@@ -8,6 +8,7 @@ import { VTableProps, ColWidths, CellKey, VTableCellChange, VTableCellTarget, ck
 import { formatTooltip, formatValue } from './utils';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/registry/new-york-v4/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { buildEqualsFilterFromCell, mapDbTypeToTwoKinds } from './filter';
 import { useTranslations } from 'next-intl';
 import { useVTableFilterUi, useVTableFilters, VTableFilters } from './VTableFilters';
@@ -738,6 +739,7 @@ export default function VTable({
         targets: VTableCellTarget[];
     } | null>(null);
     const editingCancelledRef = useRef(false);
+    const booleanSelectOpenRef = useRef(false);
     const focusCellEditorAtEnd = useCallback((editor: HTMLInputElement | null) => {
         if (!editor || editor.type !== 'text') return;
 
@@ -823,6 +825,7 @@ export default function VTable({
             if (!state.editable) return;
             const value = getDisplayRow(row)?.rowData?.[column];
             editingCancelledRef.current = false;
+            booleanSelectOpenRef.current = false;
             setEditingCell({
                 row,
                 col: column,
@@ -1729,43 +1732,61 @@ export default function VTable({
                     <span className="block h-3 w-20 max-w-[70%] rounded-sm bg-muted" />
                 ) : isEditing ? (
                     cellEditState.kind === 'boolean' ? (
-                        <select
-                            autoFocus
+                        <Select
                             value={editingCell.draft}
-                            className="absolute inset-0 h-full w-full min-w-0 box-border border-0 bg-transparent px-2 text-sm outline-none"
-                            onMouseDown={event => event.stopPropagation()}
-                            onChange={event => setEditingCell(current => (current ? { ...current, draft: event.target.value, error: null } : current))}
-                            onBlur={() => {
-                                if (editingCancelledRef.current) {
-                                    editingCancelledRef.current = false;
-                                    return;
-                                }
-                                commitCellEdit();
+                            onOpenChange={open => {
+                                booleanSelectOpenRef.current = open;
                             }}
-                            onKeyDown={event => {
-                                event.stopPropagation();
-                                if (event.key === 'Escape') {
+                            onValueChange={value => setEditingCell(current => (current ? { ...current, draft: value, error: null } : current))}
+                        >
+                            <SelectTrigger
+                                autoFocus
+                                aria-label={colKeyName}
+                                aria-invalid={Boolean(editingCell.error)}
+                                title={editingCell.error ?? undefined}
+                                className="absolute inset-0 h-full w-full min-w-0 box-border rounded-none border-0 bg-transparent px-2 text-sm shadow-none"
+                                onMouseDown={event => event.stopPropagation()}
+                                onBlur={() => {
+                                    if (booleanSelectOpenRef.current) return;
+                                    if (editingCancelledRef.current) {
+                                        editingCancelledRef.current = false;
+                                        return;
+                                    }
+                                    commitCellEdit();
+                                }}
+                                onKeyDown={event => {
+                                    event.stopPropagation();
+                                    if (event.key === 'Escape') {
+                                        event.preventDefault();
+                                        editingCancelledRef.current = true;
+                                        setEditingCell(null);
+                                        gridContainerRef.current?.focus({ preventScroll: true });
+                                    } else if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        commitCellEdit();
+                                    } else if (event.key === 'Tab') {
+                                        event.preventDefault();
+                                        commitCellEdit(event.shiftKey ? 'previous' : 'next');
+                                    }
+                                }}
+                            >
+                                <SelectValue placeholder="NULL" />
+                            </SelectTrigger>
+                            <SelectContent
+                                onMouseDown={event => event.stopPropagation()}
+                                onKeyDown={event => event.stopPropagation()}
+                                onPointerDownOutside={() => commitCellEdit()}
+                                onEscapeKeyDown={event => {
                                     event.preventDefault();
                                     editingCancelledRef.current = true;
                                     setEditingCell(null);
                                     gridContainerRef.current?.focus({ preventScroll: true });
-                                } else if (event.key === 'Enter') {
-                                    event.preventDefault();
-                                    commitCellEdit();
-                                } else if (event.key === 'Tab') {
-                                    event.preventDefault();
-                                    commitCellEdit(event.shiftKey ? 'previous' : 'next');
-                                }
-                            }}
-                        >
-                            {editingCell.draft === '' ? (
-                                <option value="" disabled>
-                                    NULL
-                                </option>
-                            ) : null}
-                            <option value="true">true</option>
-                            <option value="false">false</option>
-                        </select>
+                                }}
+                            >
+                                <SelectItem value="true">true</SelectItem>
+                                <SelectItem value="false">false</SelectItem>
+                            </SelectContent>
+                        </Select>
                     ) : (
                         <input
                             ref={focusCellEditorAtEnd}

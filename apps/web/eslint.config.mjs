@@ -22,6 +22,13 @@ const eslintConfig = defineConfig([
             'react-hooks/refs': 'off',
             'react-hooks/set-state-in-effect': 'off',
             'react-hooks/static-components': 'off',
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: 'JSXOpeningElement[name.name="select"]',
+                    message: 'Use the shared shadcn/ui Select components from @/registry/new-york-v4/ui/select instead of a native select.',
+                },
+            ],
             'no-restricted-imports': [
                 'error',
                 {

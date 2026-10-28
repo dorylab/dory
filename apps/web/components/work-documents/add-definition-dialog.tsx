@@ -8,6 +8,7 @@ import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 
 export function AddDefinitionDialog({ title, text, connectionIds, onClose }: { title: string; text: string; connectionIds: string[]; onClose: () => void }) {
@@ -67,26 +68,31 @@ export function AddDefinitionDialog({ title, text, connectionIds, onClose }: { t
                 </DialogHeader>
                 {models.error ? <p role="alert">{models.error.message}</p> : null}
                 {!models.isPending && !options.length ? <p>{w('DefinitionNeedsKnowledge')}</p> : null}
-                <select
-                    className="h-9 rounded-md border bg-background px-3 text-sm"
-                    aria-label={w('Knowledge')}
-                    value={selected}
-                    onChange={event => setSelection(event.target.value)}
-                >
-                    {options.map(option => (
-                        <option key={option.value} value={option.value}>
-                            {option.label}
-                        </option>
-                    ))}
-                </select>
+                <Select value={selected} onValueChange={setSelection} disabled={!options.length}>
+                    <SelectTrigger className="w-full" aria-label={w('Knowledge')}>
+                        <SelectValue placeholder={w('Knowledge')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {options.map(option => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Input aria-label={w('Title')} value={name} maxLength={160} onChange={event => setName(event.target.value)} />
-                <select className="h-9 rounded-md border bg-background px-3 text-sm" aria-label={w('DefinitionKind')} value={kind} onChange={event => setKind(event.target.value)}>
-                    {['entity', 'metric', 'measure', 'dimension'].map(value => (
-                        <option key={value} value={value}>
-                            {t(`Kinds.${value}`)}
-                        </option>
-                    ))}
-                </select>
+                <Select value={kind} onValueChange={setKind}>
+                    <SelectTrigger className="w-full" aria-label={w('DefinitionKind')}>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {['entity', 'metric', 'measure', 'dimension'].map(value => (
+                            <SelectItem key={value} value={value}>
+                                {t(`Kinds.${value}`)}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
                 <Input value={source} onChange={event => setSource(event.target.value)} placeholder={t('SourceTablePlaceholder')} />
                 <Input value={expression} onChange={event => setExpression(event.target.value)} placeholder={t('CalculationPlaceholder')} />
                 <Textarea aria-label={w('Text')} value={description} maxLength={4000} onChange={event => setDescription(event.target.value)} />

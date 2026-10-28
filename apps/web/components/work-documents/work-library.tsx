@@ -11,12 +11,14 @@ import { toast } from 'sonner';
 import type { WorkDocumentSummary } from '@dory/shared/types/work-document';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { workRequest } from '@/lib/work-documents/client';
 import { reportListParsers, serializeReportList } from '@/lib/work-documents/list-state';
 
 type Reports = { documents: WorkDocumentSummary[] };
+const ALL_SOURCES = '__all_sources__';
 
 export function WorkLibrary() {
     const t = useTranslations('WorkDocuments');
@@ -88,35 +90,38 @@ export function WorkLibrary() {
                     }}
                     placeholder={t('Search')}
                 />
-                <select
-                    className="h-9 max-w-full rounded-md border bg-background px-3 text-sm"
-                    aria-label={t('Scope')}
-                    value={state.connectionId}
-                    onChange={event => {
+                <Select
+                    value={state.connectionId || ALL_SOURCES}
+                    onValueChange={value => {
                         setRenaming(null);
-                        void setState({ connectionId: event.target.value });
+                        void setState({ connectionId: value === ALL_SOURCES ? null : value });
                     }}
                 >
-                    <option value="">{t('AllSources')}</option>
-                    {state.connectionId && !sources.data?.connections.some(source => source.id === state.connectionId) ? (
-                        <option value={state.connectionId}>{t('Library.UnavailableSource')}</option>
-                    ) : null}
-                    {sources.data?.connections.map(source => (
-                        <option key={source.id} value={source.id}>
-                            {source.name}
-                        </option>
-                    ))}
-                </select>
-                <select
-                    className="h-9 rounded-md border bg-background px-3 text-sm"
-                    aria-label={t('Library.Filter')}
-                    value={archiveState}
-                    onChange={event => changeArchiveState(event.target.value as typeof archiveState)}
-                >
-                    <option value="active">{t('Library.Active')}</option>
-                    <option value="archived">{t('Archived')}</option>
-                    <option value="all">{t('Library.All')}</option>
-                </select>
+                    <SelectTrigger className="max-w-full" aria-label={t('Scope')}>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={ALL_SOURCES}>{t('AllSources')}</SelectItem>
+                        {state.connectionId && !sources.data?.connections.some(source => source.id === state.connectionId) ? (
+                            <SelectItem value={state.connectionId}>{t('Library.UnavailableSource')}</SelectItem>
+                        ) : null}
+                        {sources.data?.connections.map(source => (
+                            <SelectItem key={source.id} value={source.id}>
+                                {source.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={archiveState} onValueChange={value => changeArchiveState(value as typeof archiveState)}>
+                    <SelectTrigger aria-label={t('Library.Filter')}>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="active">{t('Library.Active')}</SelectItem>
+                        <SelectItem value="archived">{t('Archived')}</SelectItem>
+                        <SelectItem value="all">{t('Library.All')}</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
             {query.isError ? (
                 <div role="alert" className="space-y-2 rounded-lg border p-6">

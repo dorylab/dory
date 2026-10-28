@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { loadSharePreview } from '@/lib/work-documents/share-client';
 import { downloadShare, shareCsv, shareFilename } from '@/lib/work-documents/share';
@@ -19,6 +20,7 @@ const Charts = dynamic(() => import('@/app/(app)/[organization]/[connectionId]/s
 });
 
 const chartSelector = 'svg.recharts-surface,svg[role="img"],canvas,[data-share-artifact-chart] [style*="grid-template-columns"]';
+const NO_OUTPUT = '__no_output__';
 
 export function WorkShareDialog({ work, onClose }: { work: AgentWorkSummary; onClose: () => void }) {
     const t = useTranslations('WorkDocuments.Works');
@@ -92,24 +94,27 @@ export function WorkShareDialog({ work, onClose }: { work: AgentWorkSummary; onC
                 </DialogHeader>
                 <label className="space-y-2 text-sm">
                     <span>{t('ChooseOutput')}</span>
-                    <select
-                        aria-label={t('ChooseOutput')}
-                        className="h-10 w-full rounded-md border bg-background px-3 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        value={selectedId}
-                        onChange={event => {
-                            setSelectedId(event.target.value);
+                    <Select
+                        value={selectedId || NO_OUTPUT}
+                        onValueChange={value => {
+                            setSelectedId(value === NO_OUTPUT ? '' : value);
                             setExportError(false);
                         }}
                         disabled={exporting}
                     >
-                        <option value="">{t('ChooseOutput')}</option>
-                        {work.outputs.map(item => (
-                            <option key={item.id} value={item.id}>
-                                {item.title} · {t(`Types.${item.type}`)}
-                                {item.available ? '' : ` · ${t('Unavailable')}`}
-                            </option>
-                        ))}
-                    </select>
+                        <SelectTrigger aria-label={t('ChooseOutput')} className="h-10 w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={NO_OUTPUT}>{t('ChooseOutput')}</SelectItem>
+                            {work.outputs.map(item => (
+                                <SelectItem key={item.id} value={item.id}>
+                                    {item.title} · {t(`Types.${item.type}`)}
+                                    {item.available ? '' : ` · ${t('Unavailable')}`}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </label>
                 {!work.outputs.length ? <p className="text-sm text-muted-foreground">{t('NoShareableOutputs')}</p> : null}
                 {output && !output.available ? (

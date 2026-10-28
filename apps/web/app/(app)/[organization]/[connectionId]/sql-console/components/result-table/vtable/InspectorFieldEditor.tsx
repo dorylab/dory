@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { cn } from '@dory/web-utils';
 import { getCellEditorKind, getDateInputType, parseEditDraft, toDateEditDraft, toEditDraft } from './cell-editing';
 
@@ -47,6 +48,7 @@ export function InspectorFieldEditor({ rowIndex, column, value, state, onChange,
     const [dirty, setDirty] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const cancelledRef = useRef(false);
+    const booleanSelectOpenRef = useRef(false);
     const nullable = state.nullable ?? column.nullable ?? false;
     const readOnly = !state.editable || kind === 'complex';
     const helperText = error ?? (!state.editable && state.readOnlyReason ? state.readOnlyReason : '');
@@ -83,7 +85,7 @@ export function InspectorFieldEditor({ rowIndex, column, value, state, onChange,
         commitDraft();
     };
 
-    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
         if (event.key === 'Escape') {
             event.preventDefault();
             cancelledRef.current = true;
@@ -142,28 +144,43 @@ export function InspectorFieldEditor({ rowIndex, column, value, state, onChange,
                     {pretty(value) || (value === null ? 'NULL' : '')}
                 </pre>
             ) : kind === 'boolean' ? (
-                <select
-                    id={inputId}
+                <Select
                     value={draft}
                     disabled={readOnly}
-                    aria-invalid={Boolean(error)}
-                    className={cn(
-                        commonClassName,
-                        'w-full rounded-md border px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
-                    )}
-                    title={state.readOnlyReason}
-                    onChange={event => {
-                        setDraft(event.target.value);
+                    onOpenChange={open => {
+                        booleanSelectOpenRef.current = open;
+                    }}
+                    onValueChange={nextValue => {
+                        setDraft(nextValue);
                         setDirty(true);
                         setError(null);
                     }}
-                    onBlur={handleBlur}
-                    onKeyDown={handleKeyDown}
                 >
-                    {value === null ? <option value="">NULL</option> : null}
-                    <option value="true">{t('VTable.Inspector.BooleanTrue')}</option>
-                    <option value="false">{t('VTable.Inspector.BooleanFalse')}</option>
-                </select>
+                    <SelectTrigger
+                        id={inputId}
+                        size="sm"
+                        aria-invalid={Boolean(error)}
+                        className={cn(commonClassName, 'w-full px-2')}
+                        title={state.readOnlyReason}
+                        onBlur={() => {
+                            if (!booleanSelectOpenRef.current) handleBlur();
+                        }}
+                        onKeyDown={handleKeyDown}
+                    >
+                        <SelectValue placeholder="NULL" />
+                    </SelectTrigger>
+                    <SelectContent
+                        onPointerDownOutside={handleBlur}
+                        onEscapeKeyDown={() => {
+                            setDraft(initialDraft);
+                            setDirty(false);
+                            setError(null);
+                        }}
+                    >
+                        <SelectItem value="true">{t('VTable.Inspector.BooleanTrue')}</SelectItem>
+                        <SelectItem value="false">{t('VTable.Inspector.BooleanFalse')}</SelectItem>
+                    </SelectContent>
+                </Select>
             ) : (
                 <Input
                     id={inputId}
