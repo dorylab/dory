@@ -22,6 +22,17 @@ export function buildChatTimeline<T extends ChatMessageTool>(items: ChatTimeline
     const byCall = new Map(activities.filter(row => row.message).map(row => [row.message!.toolCallId, row]));
     const used = new Set<string>();
     const groups: ChatTimelineGroup<T>[] = [];
+    // Automatic discovery is a recorded preflight, completed before streaming.
+    // Only place explicitly identified preflight events here; legacy events with
+    // no provenance remain unplaced rather than being guessed into the timeline.
+    const preflight = activities.filter(
+        activity => !activity.message && activity.toolName === 'search_assets' && activity.events.some(event => event.inputSummary?.activitySource === 'automatic'),
+    );
+    const preflightIds = new Set(preflight.map(activity => activity.id));
+    for (const activity of preflight) {
+        used.add(activity.id);
+        groups.push({ id: activity.id, kind: 'tools', activities: [activity] });
+    }
     for (const item of items) {
         if (item.kind === 'content') {
             groups.push(item);
@@ -31,7 +42,7 @@ export function buildChatTimeline<T extends ChatMessageTool>(items: ChatTimeline
         if (!activity || used.has(activity.id)) continue;
         used.add(activity.id);
         const prior = groups.at(-1);
-        if (prior?.kind === 'tools') prior.activities.push(activity);
+        if (prior?.kind === 'tools' && !preflightIds.has(prior.id)) prior.activities.push(activity);
         else groups.push({ id: item.id, kind: 'tools', activities: [activity] });
     }
     return { groups, unplaced: activities.filter(row => !used.has(row.id)), count: activities.length };

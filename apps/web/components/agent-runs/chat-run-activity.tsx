@@ -46,7 +46,7 @@ export function ChatAnalysisProcess({
 }) {
     const t = useTranslations('AgentRuns');
     const timelineId = useId();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(!ended);
     const [mountedAt] = useState(Date.now);
     const [now, setNow] = useState(mountedAt);
     const previous = useRef<string | null>(null);
@@ -59,7 +59,7 @@ export function ChatAnalysisProcess({
         return () => clearInterval(timer);
     }, [ended]);
     useEffect(() => {
-        if (previous.current !== null && previous.current !== phase) setOpen(false);
+        if (previous.current !== null && previous.current !== phase) setOpen(phase === 'running');
         previous.current = phase;
     }, [phase]);
     return (
@@ -96,7 +96,10 @@ export function ChatAnalysisProcess({
 function ToolGroup({ activities, ended, ...props }: Actions & { activities: ChatToolActivity<ChatMessageToolRow>[]; ended: boolean; workId?: string }) {
     const t = useTranslations('AgentRuns');
     const running = !ended && activities.some(row => ['input-available', 'input-streaming'].includes(chatToolActivityState(row, row.message?.state)));
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(!ended);
+    useEffect(() => {
+        if (ended) setExpanded(false);
+    }, [ended]);
     const categoryKeys = {
         read_asset: 'ReadKnowledge',
         search_assets: 'SearchKnowledge',

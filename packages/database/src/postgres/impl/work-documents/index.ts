@@ -1,13 +1,25 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 import type { PostgresDBClient } from '@dory/shared';
-import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+
 import { getClient } from '../../client';
-import { workDocuments, workDocumentVersions } from '../../schemas/work-documents';
+import { reportPublications, reportSnapshots, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
 
 type Owner = { organizationId: string; userId: string };
 type Target = Owner & { documentId: string };
 type Record = typeof workDocuments.$inferSelect;
+function canonical(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === 'object')
+        return Object.fromEntries(
+            Object.entries(value)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, item]) => [key, canonical(item)]),
+        );
+    return value;
+}
 export class PostgresWorkDocumentsRepository {
     private db!: PostgresDBClient;
     async init(client?: PostgresDBClient) {
@@ -136,6 +148,110 @@ export class PostgresWorkDocumentsRepository {
             return this.withVersion(created, tx);
         });
     }
+    private async snapshotContent(documentId: string, content: WorkDocumentContent, tx: Pick<PostgresDBClient, 'insert'>): Promise<WorkDocumentContent> {
+        if (!content.format) return content;
+        const evidence = await Promise.all(
+            content.evidence.map(async item => {
+                const { snapshotId: _previous, ...payload } = item;
+                const snapshotId = `snap_${createHash('sha256')
+                    .update(JSON.stringify(canonical([documentId, payload])))
+                    .digest('hex')}`;
+                const frozen = { ...payload, snapshotId };
+                await tx.insert(reportSnapshots).values({ id: snapshotId, documentId, evidence: frozen }).onConflictDoNothing();
+                return frozen;
+            }),
+        );
+        const embeds =
+            content.embeds &&
+            Object.fromEntries(
+                Object.entries(content.embeds).map(([key, embed]) => [
+                    key,
+                    {
+                        ...embed,
+                        snapshotId: evidence.find(item => item.artifactId === embed.artifactId)?.snapshotId ?? '',
+                    },
+                ]),
+            );
+        return { ...content, evidence, ...(embeds ? { embeds } : {}) };
+    }
+    async publications(input: Target) {
+        await this.getRow(input);
+        return this.db
+            .select({ id: reportPublications.id, number: reportPublications.number, revision: reportPublications.revision, publishedAt: reportPublications.publishedAt })
+            .from(reportPublications)
+            .where(eq(reportPublications.documentId, input.documentId))
+            .orderBy(desc(reportPublications.number));
+    }
+    async getPublication(input: Target & { publicationId: string }) {
+        const current = await this.getRow(input);
+        const [publication] = await this.db
+            .select()
+            .from(reportPublications)
+            .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.id, input.publicationId)));
+        if (!publication) throw new DatabaseError('Published report not found.', 404);
+        return {
+            ...current,
+            title: publication.title,
+            content: publication.content,
+            scope: publication.scope,
+            chatId: publication.chatId,
+            revision: publication.revision,
+            version: publication.number,
+            updatedAt: publication.publishedAt,
+            publication: { id: publication.id, number: publication.number, publishedAt: publication.publishedAt.toISOString() },
+        };
+    }
+    async publish(input: Target & { expectedRevision: number; requestId: string }) {
+        const publicationId = await this.db.transaction(async tx => {
+            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            const [retry] = await tx
+                .select()
+                .from(reportPublications)
+                .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.requestId, input.requestId)));
+            if (retry) {
+                if (retry.revision !== input.expectedRevision) throw new DatabaseError('Publication request key was already used for another revision.', 409);
+                return retry.id;
+            }
+            if (current.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest draft before publishing.', 409);
+            const [already] = await tx
+                .select()
+                .from(reportPublications)
+                .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.revision, current.revision)));
+            if (already) return already.id;
+            if (!current.content.markdown.trim() || current.content.diagnostics?.length) throw new DatabaseError('Fix report diagnostics before publishing.', 400);
+            if (current.content.format !== 'restricted-mdx') throw new DatabaseError('Save this report in the new format before publishing.', 400);
+            for (const embed of Object.values(current.content.embeds ?? {})) {
+                const [snapshot] = await tx
+                    .select()
+                    .from(reportSnapshots)
+                    .where(and(eq(reportSnapshots.id, embed.snapshotId), eq(reportSnapshots.documentId, current.id)));
+                if (!snapshot || snapshot.evidence.artifactId !== embed.artifactId) throw new DatabaseError('Missing report snapshot.', 409);
+            }
+            const [latest] = await tx
+                .select({ number: reportPublications.number })
+                .from(reportPublications)
+                .where(eq(reportPublications.documentId, current.id))
+                .orderBy(desc(reportPublications.number))
+                .limit(1);
+            const [published] = await tx
+                .insert(reportPublications)
+                .values({
+                    documentId: current.id,
+                    number: (latest?.number ?? 0) + 1,
+                    revision: current.revision,
+                    requestId: input.requestId,
+                    title: current.title,
+                    content: current.content,
+                    scope: current.scope,
+                    chatId: current.chatId,
+                })
+                .returning();
+            await tx.update(workDocuments).set({ publishedVersionId: published.id }).where(this.owned(input));
+            return published.id;
+        });
+        return this.getPublication({ ...input, publicationId });
+    }
     private version(row: Record, source: 'user' | 'agent' | 'restore') {
         return { documentId: row.id, revision: row.revision, title: row.title, content: row.content, scope: row.scope, status: row.status, source };
     }
@@ -150,9 +266,10 @@ export class PostgresWorkDocumentsRepository {
         },
     ) {
         return this.db.transaction(async tx => {
+            const content = await this.snapshotContent(input.documentId, input.content, tx);
             const [row] = await tx
                 .update(workDocuments)
-                .set({ title: input.title, content: input.content, scope: input.scope, status: input.status, revision: sql`${workDocuments.revision} + 1`, updatedAt: new Date() })
+                .set({ title: input.title, content, scope: input.scope, status: input.status, revision: sql`${workDocuments.revision} + 1`, updatedAt: new Date() })
                 .where(and(this.owned(input), eq(workDocuments.revision, input.expectedRevision), isNull(workDocuments.archivedAt)))
                 .returning();
             if (!row) throw new DatabaseError('Report changed or was archived. Reload the latest version before saving.', 409);

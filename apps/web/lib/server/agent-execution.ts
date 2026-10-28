@@ -1,14 +1,9 @@
-import { createSqlNamer } from '@/lib/server/sql-naming';
-import { chatToolFailure } from '@dory/shared/types/chat-tool-error';
-import { attachmentQuerySchema, queryChatAttachments } from './chat-attachment-data';
-import { chatActionFingerprint, chatCheckpoints, isCheckpointControl, publishProgressSchema } from './chat-checkpoints';
-import { readChatEvidence, revalidateChatFindingEvidence } from '@/lib/server/chat-evidence';
-import { attachmentReadSchema, readChatAttachment } from '@/lib/server/chat-attachments';
 import type { ActionContext, ActionDefinition, ActionId, ActionProjection } from '@dory/actions';
 import { DEFAULT_ACTION_PROJECTION_BY_ACTOR, hasActionScope, toActionError } from '@dory/actions';
 import type { WorkEventCreateInput, WorkSqlSnapshotPayload } from '@dory/database/postgres/impl/works';
 import { newEntityId } from '@dory/shared/id';
 import { getDesktopProtocolSchemeForServer } from '@dory/shared/runtime';
+import { chatToolFailure } from '@dory/shared/types/chat-tool-error';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
 import { z } from 'zod';
 
@@ -19,10 +14,16 @@ import { getChatResponseText } from '@/lib/agent-runs/chat-response';
 import { AGENT_RUN_FINDING_INSTRUCTIONS } from '@/lib/agent-runs/finding-instructions';
 import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
+import { attachmentReadSchema, readChatAttachment } from '@/lib/server/chat-attachments';
+import { readChatEvidence, revalidateChatFindingEvidence } from '@/lib/server/chat-evidence';
 import { recordSemanticModelUsage, resolveSemanticModelContext, type SemanticModelContextResult } from '@/lib/server/semantic-model-context';
+import { createSqlNamer } from '@/lib/server/sql-naming';
 import { assertDocumentWrite, emptyWorkContent, patchWorkDocument, saveWorkDraft } from '@/lib/server/work-documents';
 import { applyAnalysisDatabase } from '@/lib/work-documents/analysis-scope';
 import { workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
+
+import { attachmentQuerySchema, queryChatAttachments } from './chat-attachment-data';
+import { chatActionFingerprint, chatCheckpoints, isCheckpointControl, publishProgressSchema } from './chat-checkpoints';
 
 const DEFAULT_APPEND_SEPARATOR = '\n\n';
 const DEFAULT_WORK_TITLE = 'Agent Run';
@@ -2010,6 +2011,18 @@ export function structuredMcpFacadeError(error: unknown) {
 
 export function getAgentExecutionTools(): McpFacadeTool[] {
     const tools: McpFacadeTool[] = [
+        ...webActionRegistry
+            .list()
+            .filter(action => action.domain === 'report')
+            .map(action => ({
+                name: action.exposure.mcp!.name,
+                title: action.exposure.mcp!.title,
+                description: action.exposure.mcp!.description,
+                inputSchema: action.inputSchema,
+                outputSchema: unknownObjectOutputSchema,
+                annotations: { readOnlyHint: action.kind === 'query', idempotentHint: action.kind === 'query', openWorldHint: false },
+                execute: async (ctx: ActionContext<WebActionServices>, input: unknown) => (await executeAction(ctx, action.id, input)).data,
+            })),
         ...(['dory_read_attachment', 'dory_search_attachment', 'dory_query_attachment'] as const).map(name => ({
             name,
             title: name === 'dory_query_attachment' ? 'Query chat attachments' : name === 'dory_read_attachment' ? 'Read chat attachment' : 'Search chat attachment',

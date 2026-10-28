@@ -10,10 +10,10 @@ import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
 import { Pool } from 'pg';
 
-import { parseWorkRevision } from '@/lib/work-documents/revision';
 import { markdownExportFiles } from '@/lib/work-documents/export';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
 import { renderWorkHtml, renderWorkMarkdown, workChartSvg } from '@/lib/work-documents/render';
+import { parseWorkRevision } from '@/lib/work-documents/revision';
 import { applyMarkdownEdits, workDraftSchema } from '@/lib/work-documents/schema';
 
 const content: WorkDocumentContent = {
@@ -49,6 +49,9 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
     assert.equal(localMigration, migration);
     if (postgres) await postgres.query(migration);
     else await db!.exec(migration);
+    const publicationMigration = await readFile('../../packages/database/src/postgres/migrations/0041_report_publications.sql', 'utf8');
+    if (postgres) await postgres.query(publicationMigration);
+    else await db!.exec(publicationMigration);
     const repository = new PostgresWorkDocumentsRepository();
     await repository.init((postgres ? drizzlePg(postgres) : drizzle(db!)) as unknown as PostgresDBClient);
     const owner = { organizationId: 'org', userId: 'alice' };
@@ -175,8 +178,8 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         assert.equal(intermediate.version, 1);
         assert.equal(intermediate.content.markdown, 'Section 3');
         const view: WorkDocumentView = { ...latest, createdAt: latest.createdAt.toISOString(), updatedAt: latest.updatedAt.toISOString(), archivedAt: null };
-        assert.match(renderWorkHtml(view), /<p>v1 ·/);
-        assert.match(new TextDecoder().decode(markdownExportFiles(view)['report.md']), /\nv1 ·/);
+        assert.match(renderWorkHtml(view), /<p>r5 ·/);
+        assert.match(new TextDecoder().decode(markdownExportFiles(view)['report.md']), /\nDraft r5 ·/);
         for (let revision = 6; revision <= 7; revision++) {
             latest = await repository.update({
                 ...generatedTarget,

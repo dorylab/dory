@@ -175,6 +175,51 @@ async function downloadText(page: Page) {
     return { download, bytes: Buffer.concat(chunks) };
 }
 
+test('a running Work keeps its controls available and continues when switching Works', async ({ page }) => {
+    await setupWorks(page);
+    await page.evaluate(() => {
+        const original = window.fetch.bind(window);
+        window.fetch = async (input, init) => {
+            const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+            if (!new URL(url, location.origin).pathname.endsWith('/api/chat') || init?.method !== 'POST') return original(input, init);
+            const encoder = new TextEncoder();
+            return new Response(
+                new ReadableStream({
+                    start(controller) {
+                        const send = (chunk: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+                        send({ type: 'start', messageId: 'running-answer' });
+                        send({ type: 'text-start', id: 'answer-text' });
+                        send({ type: 'text-delta', id: 'answer-text', delta: 'Still working.' });
+                        (window as unknown as { finishWork: () => void }).finishWork = () => {
+                            send({ type: 'text-delta', id: 'answer-text', delta: ' Finished.' });
+                            send({ type: 'text-end', id: 'answer-text' });
+                            send({ type: 'finish', finishReason: 'stop' });
+                            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                            controller.close();
+                        };
+                    },
+                }),
+                { headers: { 'content-type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' } },
+            );
+        };
+    });
+    const composer = page.getByTestId('agent-composer');
+    await composer.getByRole('textbox').fill('Analyze revenue');
+    await composer.getByRole('textbox').press('Enter');
+    await expect(page.getByText('Still working.')).toBeVisible();
+    await expect(composer.getByRole('button', { name: 'Add' })).toBeEnabled();
+    await composer.getByRole('textbox').fill('Draft follow-up');
+    await expect(page.getByTestId('work-header').getByRole('button', { name: 'Share' })).toBeEnabled();
+    const sidebar = page.getByRole('complementary', { name: 'Works' });
+    await sidebar.getByRole('button', { name: /Retention analysis/ }).click();
+    await expect(page.getByTestId('work-header')).toContainText('Retention analysis');
+    await sidebar.getByRole('button', { name: /Monthly revenue analysis/ }).click();
+    await expect(page.getByText('Still working.')).toBeVisible();
+    await expect(composer.getByRole('button', { name: 'Stop' })).toBeVisible();
+    await page.evaluate(() => (window as unknown as { finishWork: () => void }).finishWork());
+    await expect(page.getByText('Still working. Finished.')).toBeVisible();
+});
+
 test('Works shows status and outputs, searches output names, and shares a report without source metadata', async ({ page, appErrors }) => {
     await setupWorks(page);
     const header = page.getByTestId('work-header');

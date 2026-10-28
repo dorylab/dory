@@ -669,3 +669,48 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
     expect(await emptyViewer.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
+
+for (const scenario of ['no sources', 'unselected source', 'selected source'] as const) {
+    test(`AI suggestions can be generated and saved with ${scenario}`, async ({ page }) => {
+        const source = { id: 'source-1', fileName: 'metrics.md', format: 'markdown', connectionId: null };
+        const expectedIds = scenario === 'selected source' ? [source.id] : [];
+        let generatedInput: Record<string, unknown> | undefined;
+        let linkedInput: Record<string, unknown> | undefined;
+        let releaseGeneration!: () => void;
+        const generationGate = new Promise<void>(resolve => (releaseGeneration = resolve));
+
+        await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
+        await page.route('**/api/actions/execute', async route => {
+            const body = route.request().postDataJSON() as { actionId: string; input: Record<string, unknown> };
+            if (body.actionId === 'knowledge.get') return actionResponse(route, model);
+            if (body.actionId === 'knowledge.listVerifiedQueries') return actionResponse(route, { queries: [] });
+            if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: scenario === 'no sources' ? [] : [source] });
+            if (body.actionId === 'knowledge.getGraph') return actionResponse(route, { queryDefinitionEdges: [], sourceAssetEdges: [] });
+            if (body.actionId === 'connection.list') return actionResponse(route, { connections: [] });
+            if (body.actionId === 'knowledge.generateSuggestions') {
+                generatedInput = body.input;
+                await generationGate;
+                return actionResponse(route, { suggestions: [{ ...definition, id: 'suggestion-1', name: 'Suggested distance' }] });
+            }
+            if (body.actionId === 'knowledge.saveDefinitions') return actionResponse(route, { ...model, model: { definitions: body.input.definitions } });
+            if (body.actionId === 'knowledge.replaceAssetSources') {
+                linkedInput = body.input;
+                return actionResponse(route, { ok: true });
+            }
+            await route.fallback();
+        });
+
+        await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+        await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Ask AI' });
+        if (scenario === 'no sources') await expect(dialog.getByText('Knowledge sources are optional. Add one to provide additional context.')).toBeVisible();
+        if (scenario === 'selected source') await dialog.getByRole('checkbox', { name: source.fileName }).check();
+        await dialog.getByRole('button', { name: 'Generate suggestions' }).click();
+        await expect.poll(() => generatedInput).toMatchObject({ knowledgeSourceIds: expectedIds });
+        await expect(dialog.getByRole('button', { name: 'Analyzing…' })).toBeDisabled();
+        releaseGeneration();
+        await expect(dialog.getByText('Suggested distance')).toBeVisible();
+        await dialog.getByRole('button', { name: /Review and add/i }).click();
+        await expect.poll(() => linkedInput).toMatchObject({ assetId: 'suggestion-1', sourceIds: expectedIds, relationType: 'generated' });
+    });
+}

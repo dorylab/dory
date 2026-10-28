@@ -39,6 +39,7 @@ type BuildDoryAgentContextOptions = {
     copilotEnvelope?: CopilotEnvelopeV1 | null;
     locale?: Locale;
     question?: string | null;
+    includeSemanticContext?: boolean;
 };
 
 function normalizeSchemaTableRef(value: unknown): DoryAgentSchemaTableRef | null {
@@ -121,19 +122,21 @@ export async function buildDoryAgentContext(options: BuildDoryAgentContextOption
             columnSampleLimit: defaults.column,
         });
 
-        try {
-            const resolved = await resolveSemanticModelContext(await getDBService(), {
-                organizationId: options.organizationId,
-                connectionId: options.connectionId,
-                question: options.question,
-                table: options.table,
-                candidateTables: schemaContextTables,
-                dialect: options.connectionType === 'snowflake' ? 'SNOWFLAKE' : 'ANSI_SQL',
-            });
-            semanticContext = resolved.context;
-            semanticModelsUsed = resolved.models;
-        } catch (error) {
-            console.error('[chat] failed to build semantic model context', error);
+        if (options.includeSemanticContext !== false) {
+            try {
+                const resolved = await resolveSemanticModelContext(await getDBService(), {
+                    organizationId: options.organizationId,
+                    connectionId: options.connectionId,
+                    question: options.question,
+                    table: options.table,
+                    candidateTables: schemaContextTables,
+                    dialect: options.connectionType === 'snowflake' ? 'SNOWFLAKE' : 'ANSI_SQL',
+                });
+                semanticContext = resolved.context;
+                semanticModelsUsed = resolved.models;
+            } catch (error) {
+                console.error('[chat] failed to build semantic model context', error);
+            }
         }
     }
 

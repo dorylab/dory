@@ -1,9 +1,13 @@
+import type { WorkDocumentView } from '@dory/shared/types/work-document';
 import { strToU8, zipSync } from 'fflate';
 import { Marked, type Token } from 'marked';
-import type { WorkDocumentView } from '@dory/shared/types/work-document';
-import { escapeHtml, formatWorkValue, workChartSvg } from './render';
+
+import { reportMetrics } from './format';
+import { escapeHtml, formatWorkValue, reportPresentation, workChartSvg } from './render';
+import { editableReport, parseReport, resolvedReport } from './report-core';
 
 export function markdownExportFiles(document: WorkDocumentView): Record<string, Uint8Array> {
+    document = { ...document, content: reportPresentation(document.content, document.title) };
     const files: Record<string, Uint8Array> = {};
     const parser = new Marked({ gfm: true });
     const cell = (value: unknown) =>
@@ -20,12 +24,19 @@ export function markdownExportFiles(document: WorkDocumentView): Record<string, 
                 files[path] = strToU8(workChartSvg(visual, evidence));
                 return `![${cell(visual.title)}](${path})`;
             }
-            if (visual.type === 'metric') return `**${cell(visual.title)}: ${cell(evidence.rows[visual.metric!.rowIndex]?.[visual.metric!.column])}**`;
-            return [
-                '| ' + evidence.columns.map(cell).join(' | ') + ' |',
-                '| ' + evidence.columns.map(() => '---').join(' | ') + ' |',
-                ...evidence.rows.map(row => '| ' + evidence.columns.map(column => cell(row[column])).join(' | ') + ' |'),
-            ].join('\n');
+            if (visual.type === 'metric')
+                return reportMetrics(visual, evidence)
+                    .map(item => `**${cell(item.label)}: ${cell(item.value)}**${item.comparison ? ` (${cell(item.comparison)})` : ''}`)
+                    .join('\n\n');
+            const csvPath = `data/${visual.id}.csv`;
+            files[csvPath] = strToU8(snapshotCsv(evidence));
+            return (
+                [
+                    '| ' + evidence.columns.map(cell).join(' | ') + ' |',
+                    '| ' + evidence.columns.map(() => '---').join(' | ') + ' |',
+                    ...evidence.rows.slice(0, 50).map(row => '| ' + evidence.columns.map(column => cell(row[column])).join(' | ') + ' |'),
+                ].join('\n') + `\n\n[Snapshot CSV](${csvPath}) · ${evidence.rows.length} saved rows${evidence.truncated ? ' · Data subset / 数据子集' : ''}`
+            );
         }
         if (token.type === 'link' && token.href.startsWith('dory://evidence/')) {
             const index = document.content.evidence.findIndex(item => `dory://evidence/${item.artifactId}` === token.href);
@@ -66,10 +77,71 @@ export function markdownExportFiles(document: WorkDocumentView): Record<string, 
         .map((e, index) => `${index + 1}. ${cell(e.connectionName ?? e.connectionId)} — ${cell(e.title)} — ${e.capturedAt}${e.truncated ? ' (Preview / 数据预览)' : ''}`)
         .join('\n');
     files['report.md'] = strToU8(
-        `# ${cell(document.title)}\n\nv${document.version ?? document.revision} · ${document.updatedAt}\n\n${markdown}\n\n## Sources / 来源\n\n${sources}\n`,
+        `# ${cell(document.title)}\n\n${document.publication ? `Published v${document.publication.number}` : `Draft r${document.revision}`} · ${document.updatedAt}\n\n${markdown}\n\n## Sources / 来源\n\n${sources}\n`,
     );
     return files;
 }
 export function exportMarkdownZip(document: WorkDocumentView): Uint8Array {
     return zipSync(markdownExportFiles(document));
+}
+
+export function snapshotCsv(evidence: WorkDocumentView['content']['evidence'][number]) {
+    const cell = (value: unknown) => {
+        let text = formatWorkValue(value);
+        // Spreadsheet programs must not interpret user data as formulas.
+        if (typeof value !== 'number' && /^\s*[=+@-]/.test(text)) text = "'" + text;
+        return '"' + text.replaceAll('"', '""') + '"';
+    };
+    return [evidence.columns.map(cell).join(','), ...evidence.rows.map(row => evidence.columns.map(key => cell(row[key])).join(','))].join('\r\n');
+}
+export function exportDoryMdxZip(document: WorkDocumentView): Uint8Array {
+    const content = editableReport(document.content);
+    resolvedReport(content);
+    const evidence = content.evidence.map(item => ({
+        snapshotId: item.snapshotId,
+        artifactId: item.artifactId,
+        title: item.title,
+        connectionName: item.connectionName,
+        capturedAt: item.capturedAt,
+        columns: item.columns,
+        columnTypes: item.columnTypes,
+        rows: item.rows,
+        rowCount: item.rowCount,
+        truncated: item.truncated,
+    }));
+    let body = content.body!;
+    const tree = parseReport(body, content.visuals).tree!;
+    const removals: Array<{ start: number; end: number; value: string }> = [];
+    const stripSources = (node: import('mdast').Nodes) => {
+        if ((node.type === 'link' || node.type === 'definition') && node.url.startsWith('dory://')) {
+            removals.push({
+                start: node.position!.start.offset!,
+                end: node.position!.end.offset!,
+                value: node.type === 'link' ? node.children.map(child => ('value' in child ? child.value : '')).join('') : '',
+            });
+            return;
+        }
+        if ('children' in node) node.children.forEach(stripSources);
+    };
+    stripSources(tree);
+    for (const removal of removals.reverse()) body = body.slice(0, removal.start) + removal.value + body.slice(removal.end);
+    return zipSync({
+        'report.mdx': strToU8(body),
+        'manifest.json': strToU8(
+            JSON.stringify(
+                {
+                    schemaVersion: 1,
+                    format: 'restricted-mdx',
+                    title: document.title,
+                    revision: document.revision,
+                    publication: document.publication ?? null,
+                    exportedAt: new Date().toISOString(),
+                    embeds: content.embeds,
+                    snapshots: evidence,
+                },
+                null,
+                2,
+            ),
+        ),
+    });
 }

@@ -91,7 +91,13 @@ async function fixture(progressCheckpoints = false) {
                 ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
             },
         });
-    const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string | string[]>) => {
+    const makeAnalysis = (
+        requestId: string,
+        signal = new AbortController().signal,
+        connectionIds?: string[],
+        databasesByConnection?: Record<string, string | string[]>,
+        knowledgeMode?: 'none',
+    ) => {
         // Match the request-local lifecycle: resolving an old Run must not restart its turn.
         let work: ReturnType<typeof start> | undefined;
         return createChatAnalysis({
@@ -101,7 +107,15 @@ async function fixture(progressCheckpoints = false) {
             chatId: 'chat',
             requestId,
             connectionId: connectionIds ? null : 'connection',
-            ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
+            ...(connectionIds || knowledgeMode
+                ? {
+                      analysisScope: {
+                          connectionIds: connectionIds ?? ['connection'],
+                          ...(databasesByConnection ? { databasesByConnection } : {}),
+                          ...(knowledgeMode ? { knowledgeMode } : {}),
+                      },
+                  }
+                : {}),
             locale: 'en',
             requestOrigin: 'https://dory.test',
             signal,
@@ -208,7 +222,7 @@ test('built-in analysis closes the Knowledge → SQL → chart → Findings loop
     try {
         const work = await f.start('turn-1');
         const analysis = f.makeAnalysis('turn-1');
-        assert.match(await analysis.prepareKnowledge('月度净收入与订单数'), /net-revenue/);
+        assert.match(JSON.stringify(await analysis.tools.search_assets!.execute!({ query: '月度净收入与订单数' }, call('knowledge-search'))), /net-revenue/);
         let step = 0;
         const answer = 'February net revenue was 160,000; orders were 350. Revenue fell from January. Currency is not established.';
         const model = new MockLanguageModelV4({
@@ -308,7 +322,7 @@ test('built-in analysis closes the Knowledge → SQL → chart → Findings loop
         const responses = await f.works.listChatResponses({ ...scope, workId: work.workId });
         assert.equal(getChatResponseText(responses[0]?.parts), answer);
         const events = await f.works.listEvents({ ...scope, workId: work.workId });
-        assert.equal(events.find(event => event.toolName === 'dory_search_assets')?.inputSummary?.activitySource, 'automatic');
+        assert.equal(events.find(event => event.toolName === 'dory_search_assets')?.inputSummary?.activitySource, 'tool');
         for (const [toolName, toolCallId] of [
             ['dory_read_asset', 'call-1'],
             ['dory_run_readonly_sql', 'call-2'],
@@ -345,7 +359,9 @@ test('missing Knowledge, failed SQL, invalid evidence, cancellation and stale tu
         t.mock.method(catalogSearchAction, 'handler', async () => ({ assets: [], total: 0, nextCursor: null }));
         const work = await f.start('errors');
         const analysis = f.makeAnalysis('errors');
-        assert.match(await analysis.prepareKnowledge('unknown metric'), /"assets":\[\]/);
+        assert.match(JSON.stringify(await analysis.tools.search_assets!.execute!({ query: 'unknown metric' }, call('empty-search'))), /"assets":\[\]/);
+        const disabled = f.makeAnalysis('errors', undefined, undefined, undefined, 'none');
+        await assert.rejects(disabled.tools.search_assets!.execute!({ query: 'revenue' }, call('disabled-search')) as Promise<unknown>, /Knowledge is disabled/);
         t.mock.method(queryReadOnlyExecuteAction, 'handler', async () => {
             throw new Error('Only read-only SQL is allowed');
         });
@@ -424,13 +440,14 @@ test('Knowledge failure is distinct from no hits and running activity keeps the 
             await wait;
             throw new Error('Search unavailable');
         });
-        const pending = f.makeAnalysis('search').prepareKnowledge('monthly revenue');
+        const pending = f.makeAnalysis('search').tools.search_assets!.execute!({ query: 'monthly revenue' }, call('search-call')) as Promise<unknown>;
+        const failure = assert.rejects(pending, /Search unavailable/);
         await ready;
         const running = await f.works.listEvents({ ...scope, workId: work.workId });
         assert.equal(running.length, 1);
         assert.equal(running[0]?.status, 'running');
         release();
-        assert.match(await pending, /failed[\s\S]*Do not claim no Knowledge/);
+        await failure;
         const events = await f.works.listEvents({ ...scope, workId: work.workId });
         assert.equal(events.length, 1);
         assert.equal(events[0]?.eventId, running[0]?.eventId);

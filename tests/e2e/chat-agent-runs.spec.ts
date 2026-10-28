@@ -276,6 +276,10 @@ test('chat replays Knowledge activities and the saved final answer after refresh
     await expect(response.locator('[data-tool-name="sqlRunner"]')).toHaveCount(1);
     await expect(response.locator('[data-tool-name="read_asset"]')).toHaveCount(1);
     await expect(response.locator('[data-tool-name="finishAnalysis"]')).toHaveCount(1);
+    const searchBeforeRead = await response.locator('[data-tool-name="search_assets"]').evaluate(element =>
+        Boolean(element.compareDocumentPosition(document.querySelector('[data-tool-name="read_asset"]')!) & Node.DOCUMENT_POSITION_FOLLOWING),
+    );
+    expect(searchBeforeRead).toBe(true);
     await response.getByRole('button', { name: /Loaded business definitions/ }).click();
     await expect(response.getByText('Commerce', { exact: true })).toBeVisible();
     await expect(response.getByText('Operations', { exact: true })).toBeVisible();
@@ -301,6 +305,11 @@ test('chat replays Knowledge activities and the saved final answer after refresh
     await expect(page.getByRole('link', { name: 'View Agent Run' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Continue in SQL workspace' })).toBeVisible();
     await expect(page.getByText('Read Knowledge source', { exact: true })).not.toBeVisible();
+    await page.getByTestId('chat-analysis-process').locator('summary').first().click();
+    await expandActionGroups(page);
+    expect(await page.getByTestId('chat-response-timeline').locator('[data-tool-name="search_assets"]').evaluate(element =>
+        Boolean(element.compareDocumentPosition(document.querySelector('[data-tool-name="read_asset"]')!) & Node.DOCUMENT_POSITION_FOLLOWING),
+    )).toBe(true);
     expect(appErrors.filter(error => !/posthog/i.test(error))).toEqual([]);
 });
 
@@ -393,8 +402,7 @@ test('running steps remain visible and collapse automatically when the answer fi
     await page.getByRole('textbox').last().fill('Compare the previous two months');
     await page.getByRole('textbox').last().press('Enter');
     const process = page.getByTestId('chat-analysis-process').last();
-    await expect(process).toHaveJSProperty('open', false);
-    await process.locator('summary').first().click();
+    await expect(process).toHaveJSProperty('open', true);
     await expect(page.getByText('Checking the relevant business definitions.', { exact: true })).toBeVisible();
     await expandActionGroups(page);
     const readRow = process.locator('[data-tool-name="read_asset"]');

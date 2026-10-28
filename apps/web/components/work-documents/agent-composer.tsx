@@ -126,7 +126,7 @@ export function AgentComposer({
         },
     });
     const addFiles = async (selected: FileList | null) => {
-        if (!selected || busy || disabled) return;
+        if (!selected || disabled) return;
         setReading(true);
         setError('');
         try {
@@ -207,7 +207,7 @@ export function AgentComposer({
             setSubmitting(false);
         }
     };
-    const locked = disabled || busy || reading || submitting;
+    const locked = disabled || reading || submitting;
     return (
         <form
             onSubmit={event => {

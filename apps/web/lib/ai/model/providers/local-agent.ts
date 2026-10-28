@@ -1,5 +1,3 @@
-import { createLocalAgentProgressParser } from '@dory/shared/utils/local-agent-progress';
-import type { ChatProgressEntry } from '@dory/shared/types/chat-progress';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -15,6 +13,8 @@ import type {
 } from '@ai-sdk/provider';
 import { getDBService } from '@dory/database';
 import type { LocalAiAgentProvider } from '@dory/ee/ai/provider-options';
+import type { ChatProgressEntry } from '@dory/shared/types/chat-progress';
+import { createLocalAgentProgressParser } from '@dory/shared/utils/local-agent-progress';
 
 import { createAndWaitForLocalAiBridgeJob, localAiBridgeSupportsDoryMcpTools, parseLocalAiBridgeTarget } from '@/lib/server/local-ai/bridge';
 import { assertLocalAiAgentAvailable } from '@/lib/server/local-ai/detection';
@@ -62,6 +62,8 @@ export const DORY_CODEX_WORK_ID_HEADER = 'x-dory-local-agent-work-id';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
+    'dory_get_report',
+    'dory_publish_report',
     'dory_publish_progress',
     'dory_read',
     'dory_write',
@@ -268,7 +270,7 @@ function toolInstructions(options: LanguageModelV4CallOptions, context: LocalAge
         return [
             'Dory MCP tools are available to Codex for this request.',
             context.workId
-                ? 'The host already created the Run and searched Knowledge. Read relevant candidates with dory_read_asset, then use the existing Run for SQL. Answer ordinary questions directly without dory_finish_work. Call dory_finish_work only when the user explicitly requests saved conclusions or a report. Reports need no extra Findings. If a conclusion save fails, do not retry in this turn: answer with the available analysis and explain that saving failed. After a successful explicit save, repeat finalAnswer verbatim as your reply. Use the requestId above. Do not call the host-only finishAnalysis tool. Always pass the current workId.'
+                ? 'The host already created the Run. Search Knowledge only when the task needs an unestablished business definition or the user explicitly asks for it, and read relevant candidates with dory_read_asset before using them. Reuse sufficient verified context for report edits and other follow-ups. Use the existing Run for SQL. Answer ordinary questions directly without dory_finish_work. Call dory_finish_work only when the user explicitly requests saved conclusions or a report. Reports need no extra Findings. If a conclusion save fails, do not retry in this turn: answer with the available analysis and explain that saving failed. After a successful explicit save, repeat finalAnswer verbatim as your reply. Use the requestId above. Do not call the host-only finishAnalysis tool. Always pass the current workId.'
                 : 'For database questions, call dory_create_work once first with the current connectionId, original userQuestion and a stable externalSessionId for this conversation. Reuse that externalSessionId for retries and later turns. Read and apply its semanticContext before planning SQL, then pass the returned work.workId to later Dory tools and dory_finish_work.',
             'For non-query Dory read operations, use dory_read with the actionId. For create, update, or delete operations such as connection.create, use dory_write with the actionId instead of expecting a separate tool for every action.',
             'When the user asks for query results, write read-only SQL and call dory_run_readonly_sql. Answer from the tool result; do not claim a query was run without tool output.',

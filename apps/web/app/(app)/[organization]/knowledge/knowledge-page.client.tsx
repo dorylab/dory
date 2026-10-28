@@ -1560,7 +1560,7 @@ function AskAiDialog({
                     {suggestions.length ? (
                         <Button onClick={accept}>{t('ReviewAndAdd', { count: suggestions.length })}</Button>
                     ) : (
-                        <Button onClick={() => generate.mutate()} disabled={generate.isPending || sourceIds.length === 0}>
+                        <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
                             {generate.isPending ? t('Analyzing') : t('GenerateSuggestions')}
                         </Button>
                     )}

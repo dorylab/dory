@@ -78,7 +78,7 @@ export function WorkMenu({ work, actions, disabled }: { work: AgentWorkSummary; 
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => actions.open(work, 'rename')}>{t('Rename')}</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive" onSelect={() => actions.open(work, 'delete')}>
+                <DropdownMenuItem className="text-destructive" disabled={work.status === 'running'} onSelect={() => actions.open(work, 'delete')}>
                     {t('Delete')}
                 </DropdownMenuItem>
             </DropdownMenuContent>

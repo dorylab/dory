@@ -10,6 +10,7 @@ import type {
     ActionPermissionRequirement,
 } from '@dory/actions';
 import type { z } from 'zod';
+
 import { defaultActionAuditPolicy } from './policies';
 import type { WebActionServices } from './types';
 
@@ -50,7 +51,7 @@ function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<unknown, unknow
         return 'local-workspace';
     }
 
-    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'resultSet', 'artifact', 'comparison', 'knowledge', 'catalog', 'work'].includes(action.domain)) {
+    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'resultSet', 'artifact', 'comparison', 'knowledge', 'catalog', 'work', 'report'].includes(action.domain)) {
         return 'local-workspace';
     }
 

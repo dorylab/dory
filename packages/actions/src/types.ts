@@ -1,5 +1,5 @@
-import type { OrganizationPermissionMap, OrganizationPermissionResource } from '@dory/shared/types/organization';
 import type { DoryRuntime } from '@dory/shared/runtime';
+import type { OrganizationPermissionMap, OrganizationPermissionResource } from '@dory/shared/types/organization';
 import type { z } from 'zod';
 
 export type ActionActorType = 'user' | 'agent' | 'mcp' | 'automation';
@@ -17,7 +17,8 @@ export type ActionDomain =
     | 'comparison'
     | 'knowledge'
     | 'catalog'
-    | 'work';
+    | 'work'
+    | 'report';
 export type ActionKind = 'query' | 'command';
 export type ActionRisk = 'read' | 'low' | 'write' | 'destructive';
 export type ActionId = `${ActionDomain}.${string}`;

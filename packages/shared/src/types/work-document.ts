@@ -1,4 +1,5 @@
 import type { ChatAttachmentSource } from './chat-attachment';
+
 export type AnalysisScope = {
     connectionMode?: 'auto' | 'manual';
     knowledgeMode?: 'auto' | 'manual' | 'none';
@@ -7,6 +8,9 @@ export type AnalysisScope = {
     databasesByConnection?: Record<string, string | string[]>;
 };
 export type WorkEvidence = {
+    snapshotId?: string;
+    columnTypes?: Array<{ name: string; type: string }>;
+    dataRange?: { from?: string; through?: string };
     attachmentSource?: ChatAttachmentSource;
     artifactId: string;
     title: string;
@@ -26,9 +30,31 @@ export type WorkVisual = {
     title: string;
     evidenceId: string;
     chart?: { type: 'bar' | 'line' | 'area' | 'pie'; xKey: string } & ({ yKey: string; yKeys?: never } | { yKey?: never; yKeys: Array<{ key: string; label?: string }> });
-    metric?: { column: string; rowIndex: number };
+    metric?: {
+        column: string;
+        rowIndex: number;
+        format?: 'number' | 'percent' | 'currency';
+        precision?: number;
+        currency?: string;
+        percentScale?: 'ratio' | 'whole';
+        unit?: string;
+        comparison?: { column: string; rowIndex: number };
+        items?: Array<{ column: string; rowIndex: number; label: string }>;
+    };
+    allowSubset?: boolean;
 };
+export type ReportEmbed =
+    | { type: 'metric'; artifactId: string; snapshotId: string; config: { title: string; metric: NonNullable<WorkVisual['metric']>; allowSubset?: boolean } }
+    | { type: 'chart'; artifactId: string; snapshotId: string; config: { title: string; chart: NonNullable<WorkVisual['chart']>; allowSubset?: boolean } }
+    | { type: 'table'; artifactId: string; snapshotId: string; config: { title: string; allowSubset?: boolean } };
+export type ReportDiagnostic = { message: string; line?: number; column?: number };
 export type WorkDocumentContent = {
+    sourceWorkId?: string;
+    format?: 'restricted-mdx';
+    schemaVersion?: 1;
+    body?: string;
+    embeds?: Record<string, ReportEmbed>;
+    diagnostics?: ReportDiagnostic[];
     agentWrite?: { requestId: string; revision: number; visualIds: string[]; writeKey?: string };
     markdown: string;
     visuals: WorkVisual[];
@@ -42,8 +68,10 @@ export type WorkDocumentView = {
     scope: AnalysisScope;
     content: WorkDocumentContent;
     revision: number;
-    /** Public version; multiple internal revisions can belong to one agent turn. */
+    /** Legacy history grouping; explicit publications use publication.number. */
     version?: number;
+    publishedVersionId?: string | null;
+    publication?: { id: string; number: number; publishedAt: string };
     status: 'draft' | 'ready';
     archivedAt: string | null;
     createdAt: string;

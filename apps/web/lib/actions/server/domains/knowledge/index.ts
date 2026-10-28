@@ -657,7 +657,7 @@ export const knowledgeGenerateSuggestionsAction = defineWebAction({
     inputSchema: modelIdInput.extend({
         operation: z.enum(['generate_definitions', 'analyze_context', 'analyze_schema', 'find_relationships', 'suggest_metrics']),
         prompt: z.string().max(4000).optional(),
-        knowledgeSourceIds: z.array(z.string().min(1)).min(1).max(10),
+        knowledgeSourceIds: z.array(z.string().min(1)).max(10),
     }),
     outputSchema: z.object({ suggestions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })) }),
     permissions: readWorkspace,

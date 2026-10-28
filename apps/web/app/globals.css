@@ -677,3 +677,48 @@ body {
 .work-prose svg[data-multiple-series] { max-height: none; }
 .work-prose .metric { font-size: 2rem; }
 .work-prose .source { color: var(--muted-foreground); font-size: .75rem; }
+
+/* Reports share the application's typography and theme tokens. */
+.work-prose .report-prose { max-width: 840px; margin-inline: auto; font-size: 16px; }
+.work-prose .report-wide { max-width: 1160px; margin-inline: auto; }
+.work-prose .report-wide th, .work-prose .report-wide td { white-space: nowrap; }
+
+/* Report controls respond to the report pane, including embedded Work panels. */
+.report-surface { container: report / inline-size; }
+.report-editor-columns { grid-template-columns: minmax(0, 1fr); }
+.report-toolbar .report-save-error { max-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-component-dialog { container: report-dialog / inline-size; }
+.report-dialog-columns { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); }
+.report-dialog-tabs { display: none; }
+.report-dialog-config { border-inline-end: 1px solid var(--border); }
+.report-component-dialog .report-wide { margin-top: 0; }
+@container report (min-width: 960px) {
+    .report-editor-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@container report (max-width: 719px) {
+    .report-toolbar-secondary { display: none; }
+    .report-toolbar { padding-inline: .5rem; gap: .25rem; }
+    .report-toolbar .report-status { max-width: 7.5rem; }
+}
+@container report-dialog (max-width: 699px) {
+    .report-dialog-tabs { display: block; }
+    .report-dialog-columns { display: flex; flex-direction: column; }
+    .report-dialog-columns > div { flex: 1; min-height: 0; }
+    .report-dialog-columns[data-tab="configuration"] .report-dialog-preview,
+    .report-dialog-columns[data-tab="preview"] .report-dialog-config { display: none; }
+    .report-dialog-config { border-inline-end: 0; }
+}
+@media (hover: hover) and (pointer: fine) {
+    .report-component-edit { opacity: 0; }
+    .group:hover > [data-slot="tooltip-trigger"].report-component-edit,
+    .report-component-edit:focus-visible, .group:focus-within > .report-component-edit { opacity: 1; }
+}
+@media print { .report-toolbar, .report-component-edit { display: none !important; } }
+
+.report-surface [data-testid="work-markdown"] > .report-prose:first-child > :first-child,
+.report-surface [data-testid="work-markdown"].report-prose > :first-child,
+.report-surface [data-testid="work-markdown"] > .report-wide:first-child { margin-top: 0; }
+
+.report-component-dialog [data-slot="dialog-close"] { display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; top: .75rem; right: .75rem; }
+
+.report-metric-grid { grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); }

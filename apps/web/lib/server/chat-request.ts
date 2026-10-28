@@ -1,21 +1,21 @@
-import { chatContinuity } from './chat-continuity';
-import { getChatResumeRequest, summarizeChatCompletion } from '@/lib/ai/chat-response-state';
-import { CHAT_CHECKPOINT_INSTRUCTIONS, runChatStageAction } from './chat-checkpoints';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
-import { AttachmentError } from '@/lib/chat-context/attachments';
-import { prepareStoredAttachments, bindChatAttachments } from '@/lib/server/chat-attachments';
-import { chatContextSchema, type ChatContext } from '@/lib/chat-context/types';
-import { resolveChatContext } from '@/lib/server/chat-context';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
 
 import { formatChatToolError } from '@/lib/ai/agents/work-tool-input';
+import { getChatResumeRequest, summarizeChatCompletion } from '@/lib/ai/chat-response-state';
+import { AttachmentError } from '@/lib/chat-context/attachments';
+import { chatContextSchema, type ChatContext } from '@/lib/chat-context/types';
+import { bindChatAttachments, prepareStoredAttachments } from '@/lib/server/chat-attachments';
+import { resolveChatContext } from '@/lib/server/chat-context';
 import { createWorkDocumentTools } from '@/lib/server/work-document-tools';
 import { validateAnalysisScope } from '@/lib/server/work-documents';
 
-import 'server-only';
-import { after } from 'next/server';
-import { generateAgentWorkTitle } from './agent-work-title';
+import { CHAT_CHECKPOINT_INSTRUCTIONS, runChatStageAction } from './chat-checkpoints';
+import { chatContinuity } from './chat-continuity';
 
+import 'server-only';
+
+import { after } from 'next/server';
 import { getDBService } from '@dory/database';
 import { isLocalAiAgentProvider } from '@dory/ee/ai/provider-options';
 import type { Locale } from '@dory/i18n/routing';
@@ -28,10 +28,9 @@ import { getChatResponseText, prepareChatHistory } from '@/lib/agent-runs/chat-r
 import { buildDoryChatAgent } from '@/lib/ai/agents/chat-agent';
 import { buildDoryAgentContext, type DoryAgentSchemaTableRef } from '@/lib/ai/agents/context';
 import { resolveDoryAgentModel } from '@/lib/ai/agents/model';
+import { buildChatCompletionMetadata } from '@/lib/ai/chat-response-state';
 import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
-import { buildChatCompletionMetadata } from '@/lib/ai/chat-response-state';
-import { isReportEditRequest, requestedChartType, resolveChatOutputIntent, selectReportTarget } from '@/lib/chat-context/output-intent';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import {
     DORY_CODEX_CHAT_ID_HEADER,
@@ -44,6 +43,7 @@ import { MAX_HISTORY_MESSAGES } from '@/lib/ai/prompts';
 import { assertAiQuotaAllowed, buildCloudflareAiGatewayHeaders, resolveAiEntitlements } from '@/lib/ai/usage-quota';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
+import { isReportEditRequest, requestedChartType, resolveChatOutputIntent, selectReportTarget } from '@/lib/chat-context/output-intent';
 import { createChatAgentRunLifecycle } from '@/lib/server/chat-agent-run';
 import { createChatAnalysis } from '@/lib/server/chat-analysis';
 import { alignChatAnswerStream } from '@/lib/server/chat-answer-stream';
@@ -55,6 +55,8 @@ import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId
 import { createChartBuilderTool } from '@/app/api/chat/tools/chart-builder';
 import { buildUserLanguageInstruction, extractMessageText, normalizeMessage } from '@/app/api/chat/utils';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
+
+import { generateAgentWorkTitle } from './agent-work-title';
 
 type ChatRequestBody = {
     id: string;
@@ -496,11 +498,16 @@ export async function handleChatRequest(req: Request) {
                 };
             }
         }
+        // Built-in report writes use the turn-bound wrappers, which also track completion.
+        delete tools.dory_create_report;
+        delete tools.dory_update_report;
         if (requireReportUpdate) {
             delete tools.chartBuilder;
             delete tools.createWorkReport;
         }
         if (reportReadOnly) {
+            delete tools.publishWorkReport;
+            delete tools.dory_publish_report;
             delete tools.createWorkReport;
             delete tools.updateWorkReport;
         }
@@ -519,8 +526,6 @@ export async function handleChatRequest(req: Request) {
                       ...reportEvidenceIds,
                   ])
                 : '';
-        const knowledgeDiscovery = await analysis?.prepareKnowledge(currentUserText);
-
         const agentContext = await buildDoryAgentContext({
             baseSystem: compiledSystem ?? '',
             userLanguageInstruction: buildUserLanguageInstruction(currentUserText, locale),
@@ -537,6 +542,7 @@ export async function handleChatRequest(req: Request) {
             copilotEnvelope,
             locale,
             question: currentUserText,
+            includeSemanticContext: !analysisScope,
         });
         const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
         const agentInstructions = [
@@ -557,7 +563,9 @@ export async function handleChatRequest(req: Request) {
                 ? `Analysis scope: ${JSON.stringify(analysisScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
                 : null,
             currentTurnExecutionInstruction,
-            knowledgeDiscovery,
+            analysisScope?.knowledgeMode !== 'none'
+                ? 'Search Knowledge when the user explicitly requests it, or when a business metric, rule, filter or join requires a definition that is not already established by reliable in-scope context. Read relevant search results before using them. For formatting, adding a chart to an existing report, or other work adequately supported by the existing report and evidence, do not search merely because Knowledge is enabled. If Knowledge is needed but unavailable or inconclusive, explain the limitation and ask for clarification when the definition is material; never invent it.'
+                : null,
             analysisScope?.knowledgeMode === 'none' ? 'Knowledge is disabled. Do not search, read or use Knowledge assets.' : null,
             analysis
                 ? 'Answer ordinary analysis, existing query result explanations, Knowledge questions and clarification requests directly in the user language. Do not save Findings unless the user explicitly requests saved conclusions. Reports use their own saving workflow and need no extra Findings. Only for explicitly requested saved conclusions, call finishAnalysis once with structured findings and finalAnswer, citing verified Artifact IDs. On any save failure, do not retry in this turn; provide the analysis and explain that saving failed. Never claim a failed save succeeded. If business definitions conflict, ask for clarification instead of guessing.'

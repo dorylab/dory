@@ -7,6 +7,7 @@ import test from 'node:test';
 import type { ToolExecutionOptions } from 'ai';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
+import { z } from 'zod';
 
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
@@ -224,6 +225,89 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         assert.equal(ready.content.evidence.length, 2);
         assert.equal(ready.content.evidence[0].truncated, true);
         assert.deepEqual(ready.content.evidence[0].rows, [{ revenue: 42 }]);
+        await t.test('saving a conversation chart resolves its original evidence and enforces its scope', async t => {
+            t.mock.method(db.resultSets, 'readRows', async () => ({
+                columns: [{ name: 'month' }, { name: 'revenue' }],
+                rows: [{ month: '2026-06', revenue: 42 }],
+                rowCount: 1,
+                dataAvailability: 'full',
+            }));
+            const chart = {
+                type: 'tool-chartBuilder',
+                toolCallId: 'chart-call',
+                state: 'output-available',
+                output: {
+                    type: 'chart',
+                    chartType: 'bar',
+                    title: 'Revenue',
+                    xKey: 'month',
+                    yKeys: [{ key: 'revenue' }],
+                    source: { artifactId: 'orders' },
+                    dataState: 'ready',
+                    data: [{ month: 'forged', revenue: 999 }],
+                },
+            };
+            t.mock.method(db.chat, 'listMessages', async () => [{ role: 'assistant', parts: [chart] }] as never);
+            const tools = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:chat-chart',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            const createdChart = await tools.tools.createWorkReport.execute!(
+                { title: 'Saved chart', markdown: '## Results\n\n![Chart](dory://chart/chart-call)', visuals: [], status: 'ready' },
+                call,
+            );
+            assert.ok('content' in createdChart);
+            assert.equal(createdChart.status, 'ready');
+            assert.equal(createdChart.content.visuals[0].evidenceId, 'orders');
+            assert.match(createdChart.content.markdown, /dory:\/\/visual\/chat-chart-/);
+            assert.deepEqual(createdChart.content.evidence[0].rows, [{ month: '2026-06', revenue: 42 }]);
+            const denied = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:denied-chart',
+                scope: { connectionIds: ['ads'] },
+                runId: async () => run.workId,
+            });
+            await assert.rejects(
+                denied.tools.createWorkReport.execute!({ title: 'Denied', markdown: '![Chart](dory://chart/chart-call)', visuals: [], status: 'ready' }, call) as Promise<unknown>,
+                /outside the selected analysis scope/,
+            );
+            const unknown = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:unknown-chart',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            await assert.rejects(
+                unknown.tools.createWorkReport.execute!({ title: 'Unknown', markdown: '![Chart](dory://chart/missing)', visuals: [], status: 'ready' }, call) as Promise<unknown>,
+                /WORK_REFERENCE_INVALID/,
+            );
+            const updated = await tools.tools.updateWorkReport.execute!(
+                {
+                    documentId: createdChart.id,
+                    expectedRevision: createdChart.revision,
+                    patch: { format: 'restricted-mdx', edits: [{ oldText: '## Results', newText: '## Results updated\n\n![Chart](dory://chart/chart-call)' }], status: 'ready' },
+                },
+                call,
+            );
+            assert.ok('content' in updated);
+            assert.match(updated.content.body ?? '', /<Chart source="chat-chart-/);
+            for (const creationKey of ['reports:chat-chart', 'reports:denied-chart', 'reports:unknown-chart']) {
+                const document = await db.workDocuments.findByCreationKey({ ...owner, creationKey });
+                assert.ok(document);
+                await db.workDocuments.archive({ ...owner, documentId: document.id, archived: true });
+            }
+        });
         await t.test('report creation saves all chart series and rejects an invalid secondary evidence column', async t => {
             t.mock.method(db.resultSets, 'readRows', async () => ({
                 columns: [{ name: 'month' }, { name: 'net_revenue' }, { name: 'order_count' }],
@@ -525,6 +609,68 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         });
         context.services.agentTurn = { ...context.services.agentTurn, requestId: 'missing-report', responseMessageId: 'msg_missing-report' };
         await assert.rejects(finish.execute(context, { workId: localTurn.workId, status: 'completed', findings: [], steps: ['Finish'], finalAnswer: 'Done' }), /requested report/);
+        await t.test('external MCP report lifecycle keeps drafts separate from publications and requires write scope', async () => {
+            const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
+            const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+            const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+            const { registerDoryMcpTools } = await import('@/lib/server/mcp/tools');
+            const server = new McpServer({ name: 'report-publications-test', version: '1' });
+            registerDoryMcpTools(server, { ...owner, tokenId: 'report-token', scopes: ['read', 'write'], access });
+            const client = new Client({ name: 'report-client', version: '1' });
+            const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+            try {
+                await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+                const args = {
+                    requestId: 'external-report',
+                    title: 'External report',
+                    body: '## Overview\n\nVerified findings.',
+                    visuals: [],
+                    scope: { connectionMode: 'auto', connectionIds: [] },
+                };
+                const first = await client.callTool({ name: 'dory_create_report', arguments: args });
+                assert.notEqual(first.isError, true, JSON.stringify(first));
+                const initial = z.object({ document: z.object({ id: z.string(), revision: z.number() }) }).parse(first.structuredContent).document;
+                const retry = await client.callTool({ name: 'dory_create_report', arguments: args });
+                assert.equal(z.object({ document: z.object({ id: z.string() }) }).parse(retry.structuredContent).document.id, initial.id);
+                const target = { ...owner, documentId: initial.id };
+                assert.equal((await db.workDocuments.publications(target)).length, 0);
+                const invalid = await client.callTool({
+                    name: 'dory_update_report',
+                    arguments: { documentId: initial.id, expectedRevision: initial.revision, title: args.title, body: '{process.exit()}', visuals: [] },
+                });
+                assert.notEqual(invalid.isError, true);
+                const invalidDraft = await db.workDocuments.get(target);
+                assert.ok(invalidDraft.content.diagnostics?.length);
+                const blocked = await client.callTool({
+                    name: 'dory_publish_report',
+                    arguments: { documentId: initial.id, expectedRevision: invalidDraft.revision, requestId: 'invalid-publication' },
+                });
+                assert.equal(blocked.isError, true);
+                await client.callTool({
+                    name: 'dory_update_report',
+                    arguments: { documentId: initial.id, expectedRevision: invalidDraft.revision, title: args.title, body: args.body, visuals: [] },
+                });
+                const valid = await db.workDocuments.get(target);
+                const publishArgs = { documentId: initial.id, expectedRevision: valid.revision, requestId: 'external-publication' };
+                const published = await client.callTool({ name: 'dory_publish_report', arguments: publishArgs });
+                assert.notEqual(published.isError, true, JSON.stringify(published));
+                const duplicate = await client.callTool({ name: 'dory_publish_report', arguments: publishArgs });
+                assert.deepEqual(published.structuredContent, duplicate.structuredContent);
+                assert.equal((await db.workDocuments.publications(target)).length, 1);
+                const readOnly = { ...context, actor: { type: 'mcp' as const, scopes: ['read'] }, services: { db } };
+                await assert.rejects(
+                    tools
+                        .find(tool => tool.name === 'dory_update_report')!
+                        .execute(readOnly, { documentId: initial.id, expectedRevision: valid.revision, title: args.title, body: 'Forbidden', visuals: [] }),
+                    /scope/,
+                );
+                const foreign = { ...readOnly, userId: 'another-user' };
+                await assert.rejects(tools.find(tool => tool.name === 'dory_get_report')!.execute(foreign, { documentId: initial.id }), /not found/);
+            } finally {
+                await client.close();
+                await server.close();
+            }
+        });
         await t.test('MCP transport preserves the advertised schema and guards malformed saves before validation', async () => {
             const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
             const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');

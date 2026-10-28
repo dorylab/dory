@@ -45,9 +45,32 @@ export const workVisualSchema = z
             .describe(
                 'Required for chart. Use xKey and either yKey for one metric or yKeys:[{key,label?}] for multiple metrics. Every key must be an exact evidence column. Multiple metrics have separately labeled scales. Omit for table.',
             ),
-        metric: z.object({ column: z.string(), rowIndex: z.number().int().min(0).max(499) }).optional(),
+        allowSubset: z.boolean().optional(),
+        metric: z
+            .object({
+                column: z.string(),
+                rowIndex: z.number().int().min(0).max(499),
+                format: z.enum(['number', 'percent', 'currency']).optional(),
+                precision: z.number().int().min(0).max(12).optional(),
+                currency: z
+                    .string()
+                    .regex(/^[A-Z]{3}$/)
+                    .optional(),
+                percentScale: z.enum(['ratio', 'whole']).optional(),
+                unit: z.string().max(40).optional(),
+                comparison: z.object({ column: z.string(), rowIndex: z.number().int().min(0).max(499) }).optional(),
+                items: z
+                    .array(z.object({ column: z.string(), rowIndex: z.number().int().min(0).max(499), label: z.string().max(160) }))
+                    .max(12)
+                    .optional(),
+            })
+            .strict()
+            .optional(),
     })
+    .strict()
     .superRefine((value, ctx) => {
+        if (value.type !== 'chart' && value.chart) ctx.addIssue({ code: 'custom', message: 'Chart configuration is only allowed for charts.' });
+        if (value.type !== 'metric' && value.metric) ctx.addIssue({ code: 'custom', message: 'Metric configuration is only allowed for metrics.' });
         if (value.type === 'chart' && !value.chart) ctx.addIssue({ code: 'custom', message: 'Chart configuration is required.' });
         if (value.chart?.type === 'pie' && 'yKeys' in value.chart && value.chart.yKeys && value.chart.yKeys.length !== 1)
             ctx.addIssue({ code: 'custom', message: 'A pie chart requires exactly one numeric series.' });
@@ -57,6 +80,8 @@ export const workDraftSchema = z
     .object({
         title: z.string().trim().min(1).max(160),
         markdown: z.string().max(200000),
+        format: z.literal('restricted-mdx').optional(),
+        body: z.string().max(200000).optional(),
         visuals: z.array(workVisualSchema).max(100),
         status: z.enum(['draft', 'ready']),
     })
@@ -65,6 +90,7 @@ export const workDraftSchema = z
 export const workPatchSchema = z
     .object({
         title: z.string().trim().min(1).max(160).optional(),
+        format: z.literal('restricted-mdx').optional(),
         edits: z.array(z.object({ oldText: z.string().max(200000), newText: z.string().max(200000) })).max(100),
         visuals: z
             .array(workVisualSchema)

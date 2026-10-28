@@ -27,6 +27,31 @@ test('timeline keeps source order when tool completion and server events arrive 
     assert.equal(result.unplaced.length, 1);
 });
 
+test('recorded automatic preflight is before streamed steps, while explicit and unknown events keep their positions', () => {
+    const automatic = { eventId: 'preflight', toolName: 'dory_search_assets', inputSummary: { activitySource: 'automatic' } };
+    const unknown = { eventId: 'legacy', toolName: 'dory_search_assets' };
+    const explicit = { eventId: 'explicit', toolName: 'dory_search_assets', inputSummary: { toolCallId: 'search', activitySource: 'tool' } };
+    const update = { eventId: 'update', toolName: 'updateWorkReport', inputSummary: { toolCallId: 'report' } };
+    const items: ChatTimelineItem[] = [
+        { id: 'report-step', kind: 'tool', toolCallId: 'report' },
+        { id: 'search-step', kind: 'tool', toolCallId: 'search' },
+    ];
+    const tools = [
+        { toolCallId: 'report', toolName: 'updateWorkReport' },
+        { toolCallId: 'search', toolName: 'search_assets' },
+    ];
+    const result = buildChatTimeline(items, tools, [update, automatic, explicit, unknown, automatic]);
+    assert.deepEqual(
+        result.groups.map(group => group.kind === 'tools' && group.activities.map(row => row.id)),
+        [['event:preflight'], ['call:report', 'call:search']],
+    );
+    assert.deepEqual(
+        result.unplaced.map(row => row.id),
+        ['event:legacy'],
+    );
+    assert.equal(result.count, 4);
+});
+
 test('inline charts keep their original positions as later text and charts arrive and progress collapses', () => {
     const tools = ['chart-1', 'chart-2'].map(toolCallId => ({ toolCallId, toolName: 'chartBuilder' }));
     const first: ChatTimelineItem[] = [

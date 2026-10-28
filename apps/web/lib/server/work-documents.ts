@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto';
-import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
 import type { DBService } from '@dory/database';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
 import type { AnalysisScope, WorkDocumentContent, WorkEvidence } from '@dory/shared/types/work-document';
 import { isAnalysisDatabaseAllowed } from '@dory/shared/utils/analysis-scope';
 import { z } from 'zod';
 
 import { canWriteWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
+import { reportNumber } from '@/lib/work-documents/format';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
+import { legacyToMdx, parseReport, reportEmbeds, reportTagSource, resolvedReport } from '@/lib/work-documents/report-core';
 import { analysisScopeSchema, applyMarkdownEdits, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
+import { resolveReportChatCharts } from './report-chat-charts';
 
 type Owner = { organizationId: string; userId: string };
 export const emptyWorkContent = (): WorkDocumentContent => ({ markdown: '', visuals: [], evidence: [], knowledge: [] });
@@ -47,12 +50,33 @@ export async function saveWorkDraft(
         requestId?: string;
         writeKey?: string;
         scope?: AnalysisScope;
+        chatMessages?: readonly unknown[];
     },
 ) {
     await assertDocumentWrite(input);
     const existing = await db.workDocuments.get(input);
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const draft = workDraftSchema.parse(input.draft);
+    const sourceBody = draft.format === 'restricted-mdx' ? (draft.body ?? draft.markdown) : draft.markdown;
+    if (input.source === 'agent' && existing.chatId && sourceBody.includes('dory://chart/')) {
+        const history = await db.chat.listMessages({ ...input, sessionId: existing.chatId });
+        const converted = resolveReportChatCharts(sourceBody, draft.visuals, [...history, ...(input.chatMessages ?? [])], Boolean(draft.format));
+        draft.visuals = converted.visuals;
+        if (draft.format) draft.body = converted.body;
+        else draft.markdown = converted.body;
+    }
+    if (!draft.format) {
+        try {
+            referencedEvidence(draft.markdown, draft.visuals);
+        } catch (error) {
+            throw new DatabaseError(error instanceof Error ? error.message : 'Invalid reference.', 400);
+        }
+    }
+    const body = draft.format === 'restricted-mdx' ? (draft.body ?? draft.markdown) : legacyToMdx(draft.markdown, draft.visuals);
+    const parsed = parseReport(body, draft.visuals);
+    if (parsed.diagnostics.length && input.source === 'agent' && draft.status === 'ready') throw new DatabaseError(parsed.diagnostics.map(item => item.message).join('; '), 400);
+    draft.markdown = parsed.diagnostics.length ? existing.content.markdown : draft.format ? parsed.presentation : draft.markdown;
+    if (parsed.diagnostics.length) draft.status = 'draft';
     const previousWrite = existing.content.agentWrite;
     const changedVisualIds = draft.visuals
         .filter(
@@ -80,12 +104,14 @@ export async function saveWorkDraft(
             throw new DatabaseError('The requested chart must be embedded in the report before saving it as ready.', 400);
     }
     const scope = input.scope ?? existing.scope;
-    if (input.source === 'agent' && existing.status === 'ready' && draft.status === 'draft') {
+    if (input.source === 'agent' && existing.status === 'ready' && draft.status === 'draft' && !parsed.diagnostics.length) {
         throw new DatabaseError('The update is incomplete. The previous report is preserved. Explain the missing sources in chat, then retry.', 409);
     }
     let references: ReturnType<typeof referencedEvidence>;
     try {
-        references = referencedEvidence(draft.markdown, draft.visuals);
+        references = parsed.diagnostics.length
+            ? { ids: existing.content.evidence.map(item => item.artifactId), visuals: draft.visuals }
+            : referencedEvidence(draft.markdown, draft.visuals);
     } catch (error) {
         throw new DatabaseError(error instanceof Error ? error.message : 'Invalid references.', 400);
     }
@@ -130,19 +156,30 @@ export async function saveWorkDraft(
                 sql: artifact.resultSet.sql,
                 capturedAt: new Date(artifact.createdAt).toISOString(),
                 columns: result.columns.map(column => column.name),
+                columnTypes: result.columns.map(column => ({ name: column.name, type: String(column.databaseType ?? column.logicalType ?? 'unknown') })),
                 rows,
-                rowCount: artifact.rowCount,
-                truncated: result.dataAvailability === 'preview-only' || (artifact.rowCount ?? rows.length) > rows.length,
+                rowCount: result.rowCount ?? artifact.rowCount,
+                truncated: result.dataAvailability === 'preview-only' || (result.rowCount ?? artifact.rowCount ?? rows.length) > rows.length,
                 runId: artifact.workId,
             };
         }),
     );
-    for (const visual of visuals) {
+    for (const visual of parsed.diagnostics.length ? [] : visuals) {
+        const snapshot = evidence.find(item => item.artifactId === visual.evidenceId);
+        if (draft.format && snapshot?.truncated && !visual.allowSubset)
+            throw new DatabaseError('Result exceeds the report snapshot range. Aggregate the query or explicitly select allowSubset.', 400);
+        if (visual.metric) {
+            for (const cell of [visual.metric, ...(visual.metric.items ?? []), ...(visual.metric.comparison ? [visual.metric.comparison] : [])]) {
+                if (!snapshot?.columns.includes(cell.column) || !snapshot.rows[cell.rowIndex]) throw new DatabaseError('Metric cell does not exist in its evidence.', 400);
+            }
+        }
         if (visual.chart) {
             const source = evidence.find(item => item.artifactId === visual.evidenceId);
             const yKeys = visual.chart.yKeys ? visual.chart.yKeys.map(series => series.key) : [visual.chart.yKey];
             if (!source?.columns.includes(visual.chart.xKey) || yKeys.some(key => !source.columns.includes(key)))
                 throw new DatabaseError('Chart columns do not match its evidence.', 400);
+            if (source.rows.some(row => yKeys.some(key => row[key] != null && row[key] !== '' && reportNumber(row[key]) === null)))
+                throw new DatabaseError('Chart series must contain numeric values or null.', 400);
             if (visual.chart.type === 'pie') {
                 const key = yKeys[0];
                 if (
@@ -157,7 +194,7 @@ export async function saveWorkDraft(
             }
         }
     }
-    for (const visual of visuals) {
+    for (const visual of parsed.diagnostics.length ? [] : visuals) {
         const source = evidence.find(item => item.artifactId === visual.evidenceId);
         if (visual.metric && (!source?.columns.includes(visual.metric.column) || !source.rows[visual.metric.rowIndex]))
             throw new DatabaseError('Metric cell does not exist in its evidence.', 400);
@@ -176,6 +213,12 @@ export async function saveWorkDraft(
         }
     }
     const content: WorkDocumentContent = {
+        sourceWorkId: existing.content.sourceWorkId ?? input.runId,
+        format: 'restricted-mdx',
+        schemaVersion: 1,
+        body,
+        embeds: reportEmbeds(visuals, evidence),
+        diagnostics: parsed.diagnostics,
         markdown: draft.markdown,
         visuals,
         evidence,
@@ -191,7 +234,7 @@ export async function saveWorkDraft(
               }
             : {}),
     };
-    if (JSON.stringify(content).length > 4_000_000) throw new DatabaseError('Report snapshot is too large. Use smaller aggregated results.', 400);
+    if (Buffer.byteLength(JSON.stringify(content), 'utf8') > 4_000_000) throw new DatabaseError('Report snapshot is too large. Use smaller aggregated results.', 400);
     return db.workDocuments.update({
         ...input,
         title: draft.title,
@@ -259,7 +302,15 @@ export async function createWorkFromRun(db: DBService, input: Owner & { runId: s
 
 export async function patchWorkDocument(
     db: DBService,
-    input: Owner & { documentId: string; expectedRevision: number; patch: z.infer<typeof workPatchSchema>; runId: string; requestId?: string; scope: AnalysisScope },
+    input: Owner & {
+        documentId: string;
+        expectedRevision: number;
+        patch: z.infer<typeof workPatchSchema>;
+        runId: string;
+        requestId?: string;
+        scope: AnalysisScope;
+        chatMessages?: readonly unknown[];
+    },
 ) {
     await assertDocumentWrite(input);
     const existing = await db.workDocuments.get(input);
@@ -277,7 +328,10 @@ export async function patchWorkDocument(
     const patch = workPatchSchema.parse(input.patch);
     let markdown: string;
     try {
-        markdown = applyMarkdownEdits(existing.content.markdown, patch.edits);
+        markdown = applyMarkdownEdits(
+            patch.format ? (existing.content.body ?? legacyToMdx(existing.content.markdown, existing.content.visuals)) : existing.content.markdown,
+            patch.edits,
+        );
     } catch (error) {
         throw new DatabaseError(error instanceof Error ? error.message : 'Invalid edit.', 409);
     }
@@ -286,12 +340,30 @@ export async function patchWorkDocument(
     for (const visual of patch.visuals ?? []) visuals.set(visual.id, visual);
     for (const id of new Set(patch.embedVisualIds ?? [])) {
         if (!visuals.has(id)) throw new DatabaseError('The visual to embed does not exist in this report. Supply its visual configuration.', 400);
-        if (!markdown.includes(`dory://visual/${id}`)) markdown += `\n\n![Chart](dory://visual/${id})`;
+        if (patch.format) {
+            if (!parseReport(markdown, [...visuals.values()]).components.some(item => item.visualId === id)) markdown += `\n\n${reportTagSource(visuals.get(id)!)}`;
+        } else if (!markdown.includes(`dory://visual/${id}`)) markdown += `\n\n![Chart](dory://visual/${id})`;
     }
     return saveWorkDraft(db, {
         ...input,
         source: 'agent',
         writeKey,
-        draft: { title: patch.title ?? existing.title, markdown, visuals: [...visuals.values()], status: patch.status },
+        draft: {
+            title: patch.title ?? existing.title,
+            format: patch.format,
+            body: patch.format ? markdown : undefined,
+            markdown,
+            visuals: [...visuals.values()],
+            status: patch.status,
+        },
     });
+}
+
+/** Publishing never executes SQL or resolves a newer Artifact. */
+export async function publishWorkReport(db: DBService, input: Owner & { documentId: string; expectedRevision: number; requestId: string }) {
+    await assertDocumentWrite(input);
+    const existing = await db.workDocuments.get(input);
+    // Retries are resolved in the repository against the original immutable publication.
+    if (existing.revision === input.expectedRevision) resolvedReport(existing.content);
+    return db.workDocuments.publish(input);
 }

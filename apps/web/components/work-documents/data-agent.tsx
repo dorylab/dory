@@ -5,27 +5,27 @@ import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
-import { useChat } from '@ai-sdk/react';
-import type { AnalysisScope, WorkDocumentSummary, WorkDocumentView } from '@dory/shared/types/work-document';
+import { Chat, useChat } from '@ai-sdk/react';
 import type { AgentWorkSummary } from '@dory/shared/types/agent-work';
+import type { AnalysisScope, WorkDocumentSummary, WorkDocumentView } from '@dory/shared/types/work-document';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChatCompletion } from '@/lib/ai/chat-response-state';
 import type { UIMessage } from 'ai';
 import { ListTree, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsArrayOf, parseAsInteger, parseAsJson, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
-import { databaseSelectionsSchema } from '@/lib/work-documents/schema';
 
-import { workRequest } from '@/lib/work-documents/client';
-import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
-import { AgentComposer } from './agent-composer';
-import { AgentMessageReports } from './agent-message-reports';
+import { getChatCompletion } from '@/lib/ai/chat-response-state';
 import type { ChatSubmission } from '@/lib/chat-context/types';
+import { workRequest } from '@/lib/work-documents/client';
+import { databaseSelectionsSchema } from '@/lib/work-documents/schema';
+import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import { apiFetchSessionDetail } from '@/app/(app)/[organization]/[connectionId]/chatbot/core/api';
 import type { ChatSessionItem } from '@/app/(app)/[organization]/[connectionId]/chatbot/core/types';
 import MessageRenderer from '@/app/(app)/[organization]/[connectionId]/chatbot/thread/message-render';
 
+import { AgentComposer } from './agent-composer';
+import { AgentMessageReports } from './agent-message-reports';
 import { AgentArtifactPreview, AgentQueryPreview } from './agent-resource-preview';
 import { AgentResources } from './agent-resources';
 import { AgentScopePicker, useAgentDatabases, type AgentConnection, type AgentKnowledge } from './agent-scope-picker';
@@ -66,6 +66,7 @@ export function DataAgent() {
     });
     const [newId, setNewId] = useState(() => crypto.randomUUID());
     const [busy, setBusy] = useState(false);
+    const chats = useRef(new Map<string, Chat<UIMessage>>());
     const [sharing, setSharing] = useState(false);
     const options = useQuery({
         queryKey: ['data-agent', organization],
@@ -77,7 +78,10 @@ export function DataAgent() {
         enabled: Boolean(state.document),
         queryFn: () => workRequest<{ document: WorkDocumentView }>(`/api/work-documents/${state.document}`),
     });
-    const chatId = state.chat ?? openDocument.data?.document.chatId ?? newId;
+    const candidateChatId = state.chat ?? openDocument.data?.document.chatId;
+    const chatId = candidateChatId && (!options.isSuccess || options.data.sessions.some(item => item.id === candidateChatId)) ? candidateChatId : newId;
+    const activeChatId = useRef(chatId);
+    activeChatId.current = chatId;
     const session = options.data?.sessions.find(item => item.id === chatId);
     const savedScope = openDocument.data?.document.scope ?? sessionScope(session);
     const selectedScope: AnalysisScope =
@@ -129,7 +133,8 @@ export function DataAgent() {
         databases: value.databasesByConnection ?? {},
     });
     const newChat = () => {
-        if (busy || editingReport) return;
+        if (editingReport) return;
+        setBusy(false);
         setPrompt(null);
         setLiveMessages([]);
         setNewId(crypto.randomUUID());
@@ -177,14 +182,18 @@ export function DataAgent() {
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground md:flex-row md:rounded-xl" data-testid="data-agent">
             <AgentSessionSidebar
-                works={works.map(item => (item.id === chatId && busy ? { ...item, status: 'running' as const } : item))}
+                works={works.map(item => {
+                    const status = chats.current.get(item.id)?.status;
+                    return (item.id === chatId && busy) || status === 'submitted' || status === 'streaming' ? { ...item, status: 'running' as const } : item;
+                })}
                 loading={options.isPending}
                 chatId={chatId}
-                disabled={busy || editingReport}
+                disabled={editingReport}
                 onCreate={newChat}
                 actions={actions}
                 onSelect={id => {
-                    if (busy || editingReport) return;
+                    if (editingReport) return;
+                    setBusy(false);
                     setPrompt(null);
                     setLiveMessages([]);
                     void setState({
@@ -230,14 +239,14 @@ export function DataAgent() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={!currentWork || busy}
+                                disabled={!currentWork}
                                 onClick={async () => {
                                     if (await navigatePanel('closed')) setSharing(true);
                                 }}
                             >
                                 {workT('Share')}
                             </Button>
-                            {currentWork ? <WorkMenu work={currentWork} actions={actions} disabled={busy || editingReport || actions.mutation.isPending} /> : null}
+                            {currentWork ? <WorkMenu work={currentWork} actions={actions} disabled={editingReport || actions.mutation.isPending} /> : null}
                         </div>
                     </header>
                     <div className="flex min-h-0 min-w-0 flex-1">
@@ -253,17 +262,19 @@ export function DataAgent() {
                                 <AgentConversation
                                     key={chatId}
                                     chatId={chatId}
+                                    chats={chats.current}
                                     initialMessages={history.data?.messages ?? []}
                                     scope={scope}
                                     sourceNames={Object.fromEntries((options.data?.connections ?? []).map(connection => [connection.id, connection.name]))}
                                     documentId={state.document}
+                                    reportRevision={state.revision}
                                     prompt={prompt}
                                     blocked={editingReport}
                                     ready={databases.ready && !options.isError}
-                                    onBusy={setBusy}
-                                    onFinished={() => {
-                                        void setState({ chat: chatId });
+                                    onBusy={value => {
+                                        if (activeChatId.current === chatId) setBusy(value);
                                     }}
+                                    onStarted={() => void setState({ chat: chatId })}
                                     reports={reports.data?.documents ?? []}
                                     onOpenReport={id => void navigatePanel('report', { document: id })}
                                     scopePicker={
@@ -272,9 +283,9 @@ export function DataAgent() {
                                             models={options.data?.models ?? []}
                                             scope={scope}
                                             databases={databases}
-                                            disabled={busy || editingReport || options.isPending}
+                                            disabled={editingReport || options.isPending}
                                             onChange={value => {
-                                                if (!busy && !editingReport) void setState(scopeState(value));
+                                                if (!editingReport) void setState(scopeState(value));
                                             }}
                                         />
                                     }
@@ -319,14 +330,14 @@ export function DataAgent() {
                                     documentId={state.document}
                                     busy={busy}
                                     onEditingChange={setEditingReport}
-                                    onContinue={text => setPrompt({ id: crypto.randomUUID(), text, files: [] })}
+                                    onContinue={(text, report) => setPrompt({ id: crypto.randomUUID(), text, files: [], references: [{ kind: 'report', ...report }] })}
                                 />
                             ) : null}
                         </AgentResources>
                     </div>
                 </div>
             </Popover>
-            <WorkActionDialog actions={actions} disabled={busy || editingReport} />
+            <WorkActionDialog actions={actions} disabled={editingReport} />
             {sharing && currentWork ? <WorkShareDialog key={chatId} work={currentWork} onClose={() => setSharing(false)} /> : null}
         </div>
     );
@@ -334,9 +345,11 @@ export function DataAgent() {
 
 function AgentConversation({
     chatId,
+    chats,
     initialMessages,
     scope,
     documentId,
+    reportRevision,
     prompt,
     blocked,
     ready,
@@ -344,14 +357,16 @@ function AgentConversation({
     sourceNames,
     onMessages,
     onBusy,
-    onFinished,
+    onStarted,
     reports,
     onOpenReport,
 }: {
     chatId: string;
+    chats: Map<string, Chat<UIMessage>>;
     initialMessages: UIMessage[];
     scope: AnalysisScope;
     documentId: string | null;
+    reportRevision: number | null;
     prompt: ChatSubmission | null;
     blocked: boolean;
     ready: boolean;
@@ -359,7 +374,7 @@ function AgentConversation({
     sourceNames: Record<string, string>;
     onMessages: (messages: UIMessage[]) => void;
     onBusy: (busy: boolean) => void;
-    onFinished: () => void;
+    onStarted: () => void;
     reports: WorkDocumentSummary[];
     onOpenReport: (id: string) => void;
 }) {
@@ -370,22 +385,23 @@ function AgentConversation({
     const [text, setText] = useState('');
     const lastPrompt = useRef<string | null>(null);
     const sendLock = useRef(false);
-    const sendFailed = useRef(false);
-    const { messages, sendMessage, status, error, stop } = useChat({
-        id: chatId,
-        messages: initialMessages,
-        onError: () => {
-            sendFailed.current = true;
-        },
-        onFinish: () => {
-            onFinished();
-            void client.invalidateQueries({ queryKey: ['data-agent', organization] });
-            void client.invalidateQueries({ queryKey: ['agent-resource-run', organization] });
-            void client.invalidateQueries({ queryKey: ['agent-history', organization, chatId] });
-            void client.invalidateQueries({ queryKey: ['work-documents', organization] });
-            void client.invalidateQueries({ queryKey: ['work-document', organization] });
-        },
-    });
+    if (!chats.has(chatId)) {
+        chats.set(
+            chatId,
+            new Chat({
+                id: chatId,
+                messages: initialMessages,
+                onFinish: () => {
+                    void client.invalidateQueries({ queryKey: ['data-agent', organization] });
+                    void client.invalidateQueries({ queryKey: ['agent-resource-run', organization] });
+                    void client.invalidateQueries({ queryKey: ['agent-history', organization, chatId] });
+                    void client.invalidateQueries({ queryKey: ['work-documents', organization] });
+                    void client.invalidateQueries({ queryKey: ['work-document', organization] });
+                },
+            }),
+        );
+    }
+    const { messages, sendMessage, status, error, stop } = useChat({ chat: chats.get(chatId)! });
     useEffect(() => {
         onMessages(messages);
     }, [messages, onMessages]);
@@ -397,16 +413,20 @@ function AgentConversation({
         async (message: ChatSubmission) => {
             if (busy || blocked || !ready || sendLock.current) return false;
             sendLock.current = true;
-            sendFailed.current = false;
             onBusy(true);
             try {
                 const metadata = {
-                    references: message.references ?? [],
+                    references: message.references?.length
+                        ? message.references
+                        : documentId && reportRevision
+                          ? [{ kind: 'report' as const, id: documentId, title: reports.find(item => item.id === documentId)?.title ?? 'Report', revision: reportRevision }]
+                          : [],
                     mentionSpans: message.mentionSpans,
                     outputIntent: message.outputIntent ?? 'answer',
                     sourceMessageId: message.sourceMessageId,
                 };
-                await sendMessage(
+                onStarted();
+                void sendMessage(
                     {
                         id: message.id ?? crypto.randomUUID(),
                         messageId: message.id && messages.some(item => item.id === message.id) ? message.id : undefined,
@@ -415,14 +435,20 @@ function AgentConversation({
                         metadata,
                     },
                     { body: { chatId, analysisScope: scope, documentId, ...metadata } },
-                );
-                return !sendFailed.current;
-            } finally {
+                )
+                    .catch(() => undefined)
+                    .finally(() => {
+                        sendLock.current = false;
+                        onBusy(false);
+                    });
+                return true;
+            } catch (error) {
                 sendLock.current = false;
                 onBusy(false);
+                throw error;
             }
         },
-        [busy, blocked, ready, scope, sendMessage, chatId, documentId, onBusy, messages],
+        [busy, blocked, ready, scope, sendMessage, chatId, documentId, reportRevision, reports, onBusy, onStarted, messages],
     );
     useEffect(() => {
         if (prompt && prompt.id !== lastPrompt.current && !busy && !blocked && ready) {
