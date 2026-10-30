@@ -21,7 +21,7 @@ interface SQLTabsProps {
     closeOtherTabs: (tabId: string) => void | Promise<void>;
     updateTab: (tabId: string, patch: Partial<SQLTab>, options?: { immediate?: boolean }) => Promise<void> | void;
     reorderTabs: (sourceId: string, targetId: string, options?: { persist?: boolean }) => void;
-    onRequestAITitle: (tab: SQLTab) => Promise<void> | void;
+    onRequestAITitle?: (tab: SQLTab) => Promise<void> | void;
     onHeightChange?: (height: number) => void;
     headerAccessory?: ReactNode;
 }
@@ -82,7 +82,7 @@ export function SQLTabs({
 
     const handleRequestAITitle = useCallback(
         (tab: SQLTab) => {
-            if (tab.tabType !== 'sql') return;
+            if (tab.tabType !== 'sql' || !onRequestAITitle) return;
 
             setRenamingTabs(prev => ({ ...prev, [tab.tabId]: true }));
             Promise.resolve(onRequestAITitle(tab))
@@ -126,16 +126,18 @@ export function SQLTabs({
                         <Pencil className="w-4 h-4 mr-2" />
                         {t('Tabs.Rename')}
                     </Item>
-                    <Item
-                        disabled={isRenaming || tab.tabType !== 'sql'}
-                        onSelect={() => {
-                            setActiveTabId(tab.tabId);
-                            handleRequestAITitle(tab);
-                        }}
-                    >
-                        {isRenaming ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                        {t('Tabs.GenerateAiTitle')}
-                    </Item>
+                    {onRequestAITitle && (
+                        <Item
+                            disabled={isRenaming || tab.tabType !== 'sql'}
+                            onSelect={() => {
+                                setActiveTabId(tab.tabId);
+                                handleRequestAITitle(tab);
+                            }}
+                        >
+                            {isRenaming ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                            {t('Tabs.GenerateAiTitle')}
+                        </Item>
+                    )}
                     <Separator />
                     <Item onSelect={() => handleCloseTab(tab.tabId)} className="text-destructive focus:text-destructive">
                         <X className="w-4 h-4 mr-2" />
@@ -154,7 +156,7 @@ export function SQLTabs({
                 </>
             );
         },
-        [handleCloseOthers, openRenameDialog, handleRequestAITitle, handleCloseTab, renamingTabs, setActiveTabId, t, tabs],
+        [handleCloseOthers, openRenameDialog, handleRequestAITitle, handleCloseTab, renamingTabs, setActiveTabId, t, tabs, onRequestAITitle],
     );
 
     const handleAddTab = useCallback(async () => {

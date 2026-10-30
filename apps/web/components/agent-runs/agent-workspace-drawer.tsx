@@ -11,6 +11,9 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/registr
 
 export function AgentWorkspaceDrawer({
     children,
+    headerActions,
+    onBeforeClose,
+    preferBack = true,
     closeHref,
     title,
     description,
@@ -18,6 +21,9 @@ export function AgentWorkspaceDrawer({
     closeLabel,
 }: {
     children: ReactNode;
+    headerActions?: ReactNode;
+    onBeforeClose?: () => boolean | Promise<boolean>;
+    preferBack?: boolean;
     closeHref: string;
     title?: string;
     description?: string;
@@ -31,13 +37,14 @@ export function AgentWorkspaceDrawer({
     const resolvedBackLabel = backLabel ?? t('WorkspaceDrawer.Back');
     const resolvedCloseLabel = closeLabel ?? t('WorkspaceDrawer.Close');
 
-    const closeDrawer = useCallback(() => {
-        if (window.history.length > 1) {
+    const closeDrawer = useCallback(async () => {
+        if (onBeforeClose && !(await onBeforeClose())) return;
+        if (preferBack && window.history.length > 1) {
             router.back();
             return;
         }
         router.replace(closeHref, { scroll: false });
-    }, [closeHref, router]);
+    }, [closeHref, preferBack, router, onBeforeClose]);
 
     return (
         <Drawer direction="bottom" dismissible={false} handleOnly open onOpenChange={open => !open && closeDrawer()}>
@@ -51,6 +58,7 @@ export function AgentWorkspaceDrawer({
                         <DrawerTitle className="truncate text-sm font-medium">{resolvedTitle}</DrawerTitle>
                         <DrawerDescription className="sr-only">{resolvedDescription}</DrawerDescription>
                     </div>
+                    {headerActions}
                     <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" onClick={closeDrawer} aria-label={resolvedCloseLabel} title={resolvedCloseLabel}>
                         <X className="h-4 w-4" aria-hidden="true" />
                     </Button>

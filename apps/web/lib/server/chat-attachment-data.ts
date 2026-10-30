@@ -10,10 +10,12 @@ import type { DBService } from '@dory/database';
 import { boundedAttachmentRows, materializeAttachment, queryAttachmentTables, type AttachmentTable } from '@dory/drivers/database/duckdb/attachments';
 import type { FileUIPart } from 'ai';
 import { z } from 'zod';
+import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { buildSqlFallbackName } from '@dory/shared/utils/sql-name';
 import type { createSqlNamer } from './sql-naming';
 import { decodeAttachment, isStructuredAttachment, storedAttachmentId } from '@/lib/chat-context/attachments';
 import { resolveChatAttachment } from './chat-attachments';
+import { assertReportAttachmentDataset } from '@/lib/work-documents/workspace-evidence';
 
 const READER_VERSION = 'duckdb-1.5.2-v1';
 type Dataset = { attachmentId: string; filename: string; sha256: string; directory: string; tables: AttachmentTable[] };
@@ -164,4 +166,49 @@ export async function queryChatAttachments(
         attachmentSource,
         untrusted: true,
     };
+}
+
+/** Resolve only server-issued provenance; callers must load it from an owned report. */
+export async function prepareReportAttachments(db: DBService, owner: ChatAttachmentOwner, source: ChatAttachmentSource, signal?: AbortSignal) {
+    if (!canReadAttachmentSource(source, owner.userId)) throw new Error('Private attachment result unavailable.');
+    const datasets: Dataset[] = [];
+    for (const attachmentId of new Set(source.files.map(file => file.attachmentId))) {
+        const file = await resolveChatAttachment(db, owner, source.chatId, { attachmentId });
+        const data = await dataset(owner, source.chatId, file, signal);
+        assertReportAttachmentDataset(source, data);
+        datasets.push(data);
+    }
+    return datasets.flatMap(data =>
+        data.tables
+            .filter(table => source.files.some(file => file.attachmentId === data.attachmentId && file.table === table.name))
+            .map(table => ({ ...table, directory: data.directory, filename: data.filename })),
+    );
+}
+
+export async function runReportAttachments(db: DBService, owner: ChatAttachmentOwner, source: ChatAttachmentSource, sql: string, sessionId: string, signal?: AbortSignal) {
+    const tables = await prepareReportAttachments(db, owner, source, signal);
+    const result = await queryAttachmentTables(tables, sql, signal);
+    signal?.throwIfAborted();
+    const persisted = await db.resultSets.persistQueryResultSet({
+        ...owner,
+        sessionId,
+        source: 'sql-console',
+        sourceConnectionType: 'duckdb',
+        attachmentSource: source,
+        sessionSqlText: sql,
+        rows: result.rows,
+        resultSet: {
+            sessionId,
+            setIndex: 0,
+            sqlText: sql,
+            status: 'success',
+            sqlOp: 'select',
+            title: buildSqlFallbackName(sql),
+            columns: result.columns,
+            rowCount: result.rows.length,
+            limited: result.limited,
+            limit: result.limit,
+        },
+    });
+    return { ...result, resultSetId: persisted.resultSetId };
 }

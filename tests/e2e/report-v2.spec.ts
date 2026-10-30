@@ -1,3 +1,5 @@
+import { initialWorkingState, materializeWorkingContent } from '../../apps/web/lib/work-documents/working-draft';
+import type { ReportWorkingDraft } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentView, WorkVisual } from '@dory/shared/types/work-document';
 import { expect } from '@playwright/test';
 
@@ -67,9 +69,72 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     const history = new Map([[1, structuredClone(document)]]);
     const publications: WorkDocumentView[] = [];
     let originalRequests = 0;
+    const drafts = new Map<number, ReportWorkingDraft>();
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.route('**/api/actions/execute', async route => {
-        const { actionId } = route.request().postDataJSON();
+        const { actionId, input } = route.request().postDataJSON();
+        if (actionId === 'report.workspace.analysis') {
+            const base = history.get(input.revision)!;
+            if (!drafts.has(input.revision))
+                drafts.set(input.revision, {
+                    userId: 'fixture',
+                    documentId: document.id,
+                    baseRevision: input.revision,
+                    expectedReportRevision: document.revision,
+                    revision: 1,
+                    results: {},
+                    state: initialWorkingState(base.title, base.content),
+                });
+            return route.fulfill({
+                json: {
+                    ok: true,
+                    data: {
+                        draft: drafts.get(input.revision),
+                        sources: base.content.evidence.map(evidence => ({
+                            reference: { ...input, artifactId: evidence.artifactId, snapshotId: evidence.snapshotId },
+                            title: base.title,
+                            evidence,
+                            source: { kind: 'unavailable', reason: 'Original source unavailable.' },
+                        })),
+                    },
+                },
+            });
+        }
+        if (actionId === 'report.workspace.saveDraft') {
+            const draft = drafts.get(input.baseRevision)!;
+            draft.state = {
+                ...draft.state,
+                title: input.title,
+                tabs: input.tabs,
+                activeTabId: input.activeTabId,
+                content: { ...draft.state.content, body: input.body, visuals: input.visuals },
+            };
+            draft.state.content = materializeWorkingContent(draft.state, draft.results);
+            draft.revision++;
+            return route.fulfill({ json: { ok: true, data: draft } });
+        }
+        if (actionId === 'report.workspace.saveVersion') {
+            const draft = drafts.get(input.baseRevision)!;
+            document = { ...document, revision: document.revision + 1, title: draft.state.title, content: draft.state.content };
+            const published = { ...structuredClone(document), publication: { id: `pub-${publications.length + 1}`, number: publications.length + 1, publishedAt: now } };
+            publications.push(published);
+            document.publishedVersionId = published.publication.id;
+            history.set(document.revision, structuredClone(document));
+            return route.fulfill({ json: { ok: true, data: published } });
+        }
+        if (actionId === 'report.workspace.context')
+            return route.fulfill({
+                json: {
+                    ok: true,
+                    data: {
+                        reference: input,
+                        title: document.title,
+                        evidence: history.get(input.revision)!.content.evidence[0],
+                        source: { kind: 'unavailable', reason: 'Original source unavailable.' },
+                    },
+                },
+            });
+        if (actionId === 'report.workspace.source') return route.fulfill({ json: { ok: true, data: { available: false, reason: 'Original source unavailable.', tables: [] } } });
         if (actionId === 'artifact.list') return route.fulfill({ json: { ok: true, data: { rows: [], total: 0 } } });
         if (actionId === 'artifact.get') {
             originalRequests++;
@@ -144,7 +209,7 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
         expect(visual.border).toBe('0px');
     }
     await expect(page.getByRole('button', { name: 'View source', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Open ResultSet', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'View query and results', exact: true })).toHaveCount(3);
 
     const surface = page.getByTestId('work-report');
     expect(
@@ -176,16 +241,15 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     await editMetric.click();
     await component.getByRole('textbox', { name: 'Component title', exact: true }).fill('Reviewed revenue');
     await component.getByRole('button', { name: 'Apply', exact: true }).click();
-    await expect.poll(() => document.content.visuals[0].title).toBe('Reviewed revenue');
+    await expect.poll(() => drafts.get(1)?.state.content.visuals[0].title).toBe('Reviewed revenue');
     await page.getByRole('button', { name: 'Edit Reviewed revenue', exact: true }).click();
     await expect(component.getByRole('textbox', { name: 'Component title', exact: true })).toHaveValue('Reviewed revenue');
     await component.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
-
-    await page.getByRole('button', { name: 'Open Workspace' }).first().click();
+    await page.getByRole('button', { name: 'Report preview', exact: true }).last().click();
     await expect(page.getByText('Original source unavailable.', { exact: false })).toBeVisible();
-    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Publish version', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Report snapshot', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Save new version', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Save new version', exact: true }).click();
     await expect.poll(() => publications.length).toBe(1);
     await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Published v1');
     await page.getByRole('button', { name: 'More actions', exact: true }).click();
@@ -195,11 +259,9 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     const source = page.getByTestId('markdown-source').locator('textarea').first();
     await source.press('ControlOrMeta+Home');
     await page.keyboard.insertText('Updated summary.\n\n');
-    await expect.poll(() => document.content.body).toContain('Updated summary.');
-    await expect(page.getByRole('button', { name: 'Done', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
-    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Publish version', exact: true }).click();
+    await expect.poll(() => drafts.get(document.revision)?.state.content.body).toContain('Updated summary.');
+    await page.getByRole('button', { name: 'Save new version', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Save new version', exact: true }).click();
     await expect.poll(() => publications.length).toBe(2);
     await page.getByRole('button', { name: 'Report versions', exact: true }).click();
     await page.getByRole('menuitemradio', { name: 'Published v1', exact: true }).click();

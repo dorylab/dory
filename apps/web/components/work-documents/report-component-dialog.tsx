@@ -25,12 +25,14 @@ const selectStyle = 'h-9 w-full';
 export default function ReportComponentDialog({
     ref,
     initial,
+    restrictSources = false,
     content,
     onApply,
     onClose,
 }: {
     ref?: Ref<ComponentDialogHandle>;
     initial: WorkVisual;
+    restrictSources?: boolean;
     content: WorkDocumentContent;
     onApply: (visual: WorkVisual) => void;
     onClose: () => void;
@@ -49,6 +51,7 @@ export default function ReportComponentDialog({
     const evidence = content.evidence.find(item => item.artifactId === source);
     const artifacts = useQuery({
         queryKey: ['report-artifacts', organization, search],
+        enabled: !restrictSources,
         queryFn: () => executeActionClient<{ rows: Array<{ id: string; title: string }> }>('artifact.list', { types: ['result_set'], query: search, limit: 100 }),
     });
     const artifact = useQuery({
@@ -60,7 +63,7 @@ export default function ReportComponentDialog({
     const columns = allColumns.filter(name => name.toLocaleLowerCase().includes(fieldSearch.toLocaleLowerCase()) || JSON.stringify(visual).includes(JSON.stringify(name)));
     const choices = [
         ...content.evidence.map(item => ({ id: item.artifactId, title: item.title })),
-        ...(artifacts.data?.rows ?? []).filter(item => !content.evidence.some(saved => saved.artifactId === item.id)),
+        ...(restrictSources ? [] : (artifacts.data?.rows ?? [])).filter(item => !content.evidence.some(saved => saved.artifactId === item.id)),
     ];
     const parsed = workVisualSchema.safeParse(visual);
     const keys = visual.chart
@@ -139,7 +142,7 @@ export default function ReportComponentDialog({
                             </label>
                             <label className="block text-sm">
                                 {t('Source')}
-                                <ReportSelect value={source} onValueChange={value => patch({ ...visual, evidenceId: value })}>
+                                <ReportSelect disabled={restrictSources} value={source} onValueChange={value => patch({ ...visual, evidenceId: value })}>
                                     <SelectItem value="__none">{t('SelectSource')}</SelectItem>
                                     {choices.map(item => (
                                         <SelectItem key={item.id} value={item.id}>

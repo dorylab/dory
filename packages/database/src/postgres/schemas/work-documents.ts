@@ -80,3 +80,22 @@ export const reportPublications = pgTable(
         uniqueIndex('report_publications_revision').on(table.documentId, table.revision),
     ],
 );
+
+/** Personal editing state; saving here never changes an immutable report version. */
+export const reportWorkingDrafts = pgTable(
+    'report_working_drafts',
+    {
+        documentId: text('document_id')
+            .notNull()
+            .references(() => workDocuments.id, { onDelete: 'cascade' }),
+        organizationId: text('organization_id').notNull(),
+        userId: text('user_id').notNull(),
+        baseRevision: integer('base_revision').notNull(),
+        expectedReportRevision: integer('expected_report_revision').notNull(),
+        revision: integer('revision').notNull().default(1),
+        state: jsonb('state').$type<import('@dory/shared/types/report-workspace').ReportWorkingState>().notNull(),
+        results: jsonb('results').$type<import('@dory/shared/types/report-workspace').ReportWorkingDraft['results']>().notNull().default({}),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [primaryKey({ columns: [table.documentId, table.userId, table.baseRevision] })],
+);

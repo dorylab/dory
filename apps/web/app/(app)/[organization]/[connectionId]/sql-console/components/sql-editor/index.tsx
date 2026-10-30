@@ -1,5 +1,6 @@
 'use client';
 
+import type { ConnectionType } from '@dory/shared/types/connections';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { useAtomValue } from 'jotai';
 import { useTheme } from 'next-themes';
@@ -36,6 +37,7 @@ declare global {
 }
 
 interface SQLEditorProps {
+    sourceContext?: { connectionId?: string; dialect: ConnectionType };
     tabs: UITabPayload[];
     activeTab: UITabPayload | undefined;
     workspaceActive: boolean;
@@ -64,6 +66,7 @@ export interface SQLEditorHandle {
 const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
     (
         {
+            sourceContext,
             tabs,
             activeTab,
             workspaceActive,
@@ -103,8 +106,9 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
             workspaceActive,
             editorTheme,
             editorSettings,
-            currentConnectionId: currentConnection?.connection?.id,
-            currentConnectionType: currentConnection?.connection?.type,
+            disableOccurrenceHighlight: Boolean(sourceContext),
+            currentConnectionId: sourceContext ? sourceContext.connectionId : currentConnection?.connection?.id,
+            currentConnectionType: sourceContext?.dialect ?? currentConnection?.connection?.type,
             containerRef,
             onContentChange: handleContentChange,
             onRunQuery,
@@ -116,7 +120,7 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         useMonacoTheme(monacoRef, editorTheme);
         const { hasSelection, handleCopy, handlePaste, handleCut, handleFormat, handleToggleCase, handleExecuteSelection, handleExecuteSql } = useSqlEditorActions({
             editorRef,
-            currentConnectionType: currentConnection?.connection?.type,
+            currentConnectionType: sourceContext?.dialect ?? currentConnection?.connection?.type,
             onRunQuery,
             formatHandlerRef,
         });

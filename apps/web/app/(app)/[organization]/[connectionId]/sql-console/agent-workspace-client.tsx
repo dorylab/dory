@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
+import { WorkspacePanels } from '@/components/agent-runs/workspace-panels';
+import { Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
 import { Bot, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -721,7 +722,8 @@ export default function AgentWorkspaceClient({
     return (
         <main className="relative h-full w-full min-w-0 max-w-full overflow-hidden" style={workspaceStyle}>
             <div className="absolute inset-y-0 left-0 right-[var(--workspace-rail-width)] transition-[right] duration-200 ease-out xl:right-[var(--workspace-reserved-right-width)]">
-                <Group
+                <WorkspacePanels
+                    mode="agent"
                     orientation="horizontal"
                     id="agent-workspace-horizontal"
                     defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
@@ -833,7 +835,7 @@ export default function AgentWorkspaceClient({
                             )}
                         </div>
                     </Panel>
-                </Group>
+                </WorkspacePanels>
             </div>
 
             <SqlConsoleOverlayHost topOffset={isLoading || tabs.length === 0 ? 0 : tabHeaderHeight} />

@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import type { ReportWorkingState, ReportWorkingDraft } from '@dory/shared/types/report-workspace';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { getClient } from '../../client';
-import { reportPublications, reportSnapshots, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
+import { reportWorkingDrafts, reportPublications, reportSnapshots, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
 
 type Owner = { organizationId: string; userId: string };
 type Target = Owner & { documentId: string };
@@ -116,6 +117,25 @@ export class PostgresWorkDocumentsRepository {
         const versions = new Map(history.map(snapshot => [`${snapshot.documentId}:${snapshot.revision}`, snapshot.version]));
         return rows.map(row => ({ ...row, version: versions.get(`${row.id}:${row.revision}`) ?? 1 }));
     }
+    async listReferencingArtifact(input: Owner & { artifactId: string }) {
+        const reference = JSON.stringify([{ artifactId: input.artifactId }]);
+        return this.db
+            .select({ id: workDocuments.id, title: workDocuments.title })
+            .from(workDocuments)
+            .where(
+                and(
+                    eq(workDocuments.organizationId, input.organizationId),
+                    eq(workDocuments.userId, input.userId),
+                    sql`(
+                    ${workDocuments.content}->'evidence' @> ${reference}::jsonb
+                    or exists (select 1 from ${workDocumentVersions} v where v.document_id = ${workDocuments.id} and v.content->'evidence' @> ${reference}::jsonb)
+                    or exists (select 1 from ${reportPublications} p where p.document_id = ${workDocuments.id} and p.content->'evidence' @> ${reference}::jsonb)
+                )`,
+                ),
+            )
+            .orderBy(desc(workDocuments.updatedAt));
+    }
+
     async findByCreationKey(input: Owner & { creationKey: string }) {
         const [row] = await this.db
             .select()
@@ -174,6 +194,139 @@ export class PostgresWorkDocumentsRepository {
             );
         return { ...content, evidence, ...(embeds ? { embeds } : {}) };
     }
+
+    private draftOwned(input: Target & { baseRevision: number }) {
+        return and(
+            eq(reportWorkingDrafts.documentId, input.documentId),
+            eq(reportWorkingDrafts.organizationId, input.organizationId),
+            eq(reportWorkingDrafts.userId, input.userId),
+            eq(reportWorkingDrafts.baseRevision, input.baseRevision),
+        );
+    }
+    async workingDraft(input: Target & { baseRevision: number }) {
+        await this.getRow(input);
+        const [row] = await this.db.select().from(reportWorkingDrafts).where(this.draftOwned(input));
+        return row ?? null;
+    }
+    async initializeWorkingDraft(input: Target & { baseRevision: number; state: ReportWorkingState }) {
+        return this.db.transaction(async tx => {
+            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            const [base] = await tx
+                .select()
+                .from(workDocumentVersions)
+                .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.baseRevision)));
+            if (!base) throw new DatabaseError('Version not found.', 404);
+            await tx
+                .insert(reportWorkingDrafts)
+                .values({
+                    documentId: input.documentId,
+                    organizationId: input.organizationId,
+                    userId: input.userId,
+                    baseRevision: input.baseRevision,
+                    expectedReportRevision: current.revision,
+                    state: input.state,
+                })
+                .onConflictDoNothing();
+            const [draft] = await tx.select().from(reportWorkingDrafts).where(this.draftOwned(input));
+            return draft;
+        });
+    }
+    async saveWorkingDraft(input: Target & { baseRevision: number; expectedDraftRevision: number; state: ReportWorkingState }) {
+        await this.getRow(input);
+        const [row] = await this.db
+            .update(reportWorkingDrafts)
+            .set({ state: input.state, revision: sql`${reportWorkingDrafts.revision} + 1`, updatedAt: new Date() })
+            .where(and(this.draftOwned(input), eq(reportWorkingDrafts.revision, input.expectedDraftRevision)))
+            .returning();
+        if (!row) throw new DatabaseError('This working draft changed in another window. Your local edits have been retained.', 409);
+        return row;
+    }
+    // Executions append trusted records independently of autosave; they never apply themselves.
+    async recordWorkingResult(input: Target & { baseRevision: number; resultId: string; result: ReportWorkingDraft['results'][string] }) {
+        await this.getRow(input);
+        const [row] = await this.db
+            .update(reportWorkingDrafts)
+            .set({ results: sql`${reportWorkingDrafts.results} || ${JSON.stringify({ [input.resultId]: input.result })}::jsonb` })
+            .where(this.draftOwned(input))
+            .returning();
+        if (!row) throw new DatabaseError('Working draft not found.', 404);
+    }
+    async savedWorkingVersion(input: Target & { requestId: string; baseRevision: number; expectedDraftRevision: number }) {
+        await this.getRow(input);
+        const [row] = await this.db
+            .select()
+            .from(reportPublications)
+            .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.requestId, `workspace:${input.requestId}`)));
+        if (!row) return null;
+        if (row.content.workspaceOrigin?.baseRevision !== input.baseRevision || row.content.workspaceOrigin?.draftRevision !== input.expectedDraftRevision)
+            throw new DatabaseError('Save request already used for another draft.', 409);
+        return this.getPublication({ ...input, publicationId: row.id });
+    }
+    async saveWorkingVersion(input: Target & { baseRevision: number; expectedDraftRevision: number; requestId: string; content: WorkDocumentContent }) {
+        const publicationId = await this.db.transaction(async tx => {
+            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            // Idempotency is checked before the revision check, including after a lost response.
+            const requestKey = `workspace:${input.requestId}`;
+            const [retry] = await tx
+                .select()
+                .from(reportPublications)
+                .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.requestId, requestKey)));
+            if (retry) {
+                if (retry.content.workspaceOrigin?.baseRevision !== input.baseRevision || retry.content.workspaceOrigin?.draftRevision !== input.expectedDraftRevision)
+                    throw new DatabaseError('Save request already used for another draft.', 409);
+                return retry.id;
+            }
+            const [draft] = await tx.select().from(reportWorkingDrafts).where(this.draftOwned(input)).for('update');
+            if (!draft || draft.revision !== input.expectedDraftRevision || current.revision !== draft.expectedReportRevision)
+                throw new DatabaseError('The report or working draft changed. Your draft is preserved; open the latest version to resolve the conflict.', 409);
+            if (draft.state.proseNeedsReview) throw new DatabaseError('Review the report text after applying new data.', 400);
+            const [base] = await tx
+                .select()
+                .from(workDocumentVersions)
+                .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.baseRevision)));
+            if (!base) throw new DatabaseError('Base version unavailable.', 404);
+            const content = await this.snapshotContent(
+                input.documentId,
+                { ...input.content, workspaceOrigin: { baseRevision: input.baseRevision, draftRevision: input.expectedDraftRevision } },
+                tx,
+            );
+            const [row] = await tx
+                .update(workDocuments)
+                .set({ content, scope: base.scope, title: draft.state.title, revision: current.revision + 1, status: 'ready', updatedAt: new Date() })
+                .where(this.owned(input))
+                .returning();
+            await tx.insert(workDocumentVersions).values(this.version(row, 'user'));
+            const [latest] = await tx
+                .select({ number: reportPublications.number })
+                .from(reportPublications)
+                .where(eq(reportPublications.documentId, input.documentId))
+                .orderBy(desc(reportPublications.number))
+                .limit(1);
+            const [publication] = await tx
+                .insert(reportPublications)
+                .values({
+                    documentId: row.id,
+                    number: (latest?.number ?? 0) + 1,
+                    revision: row.revision,
+                    requestId: requestKey,
+                    title: row.title,
+                    content,
+                    scope: row.scope,
+                    chatId: row.chatId,
+                })
+                .returning();
+            await tx.update(workDocuments).set({ publishedVersionId: publication.id }).where(this.owned(input));
+            await tx
+                .update(reportWorkingDrafts)
+                .set({ expectedReportRevision: row.revision, revision: draft.revision + 1 })
+                .where(this.draftOwned(input));
+            return publication.id;
+        });
+        return this.getPublication({ ...input, publicationId });
+    }
+
     async publications(input: Target) {
         await this.getRow(input);
         return this.db

@@ -88,6 +88,19 @@ test('DuckDB attachments read full files, preserve types, and restrict SQL to au
             }
             assert.deepEqual((await queryAttachmentTables(csv, 'SELECT 1 AS ok')).rows, [{ ok: 1 }]);
         });
+        await t.test('the 60-second deadline interrupts native execution and releases the connection', async t => {
+            const timeout = AbortSignal.timeout.bind(AbortSignal);
+            const deadline = t.mock.method(AbortSignal, 'timeout', (milliseconds: number) => {
+                assert.equal(milliseconds, 60_000);
+                return timeout(25);
+            });
+            try {
+                await assert.rejects(queryAttachmentTables(csv, 'SELECT sum(a.i * b.i) FROM range(10000000) a(i), range(10000000) b(i)'), /interrupt|timeout/i);
+            } finally {
+                deadline.mock.restore();
+            }
+            assert.deepEqual((await queryAttachmentTables(csv, 'SELECT 1 AS ok')).rows, [{ ok: 1 }]);
+        });
         await t.test('XLSX multi-sheet reading uses the bundled extension with auto-install disabled', async () => {
             await copyFile(new URL('../../../../test-fixtures/open-files/dory-open-files-test.xlsx', import.meta.url), path.join(directory, 'sheets.xlsx'));
             const tables = await make('sheets.xlsx');

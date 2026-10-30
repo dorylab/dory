@@ -31,6 +31,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
+import { ArtifactProvenance } from '@/components/artifacts/artifact-provenance';
 import { ArtifactResultTable } from './artifact-result-table';
 import { AddVerifiedQueryDialog } from '@/components/knowledge/add-verified-query-dialog';
 
@@ -304,35 +305,7 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                     </div>
                     <Card>
                         <CardContent className={artifact.resultSet?.sql ? 'grid gap-6 p-4 text-sm lg:grid-cols-2' : 'grid gap-4 p-4 text-sm'}>
-                            <div className="grid content-start gap-4">
-                                {artifact.workId ? (
-                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('ProducedBy')}</span>
-                                        <Link
-                                            href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(artifact.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`}
-                                            className="font-medium text-primary hover:underline"
-                                        >
-                                            {t('AgentRun', { title: artifact.runTitle ?? artifact.workId })}
-                                        </Link>
-                                    </div>
-                                ) : null}
-                                <div className="grid gap-2">
-                                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('EvidenceFor')}</span>
-                                    {artifact.usedBy.length ? (
-                                        artifact.usedBy.map(finding => (
-                                            <Link
-                                                key={finding.findingId}
-                                                href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(finding.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`}
-                                                className="text-primary hover:underline"
-                                            >
-                                                {finding.title}
-                                            </Link>
-                                        ))
-                                    ) : (
-                                        <span className="text-muted-foreground">{t('NoEvidence')}</span>
-                                    )}
-                                </div>
-                            </div>
+                            <ArtifactProvenance artifact={artifact} organization={organization} />
                             {artifact.resultSet?.sql ? (
                                 <div className="min-w-0 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
                                     <SmartCodeBlock label={t('SourceQuery')} value={artifact.resultSet.sql} type="sql" maxHeightClassName="max-h-64" variant="bare" />

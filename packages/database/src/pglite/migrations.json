@@ -680,5 +680,13 @@
     "bps": true,
     "folderMillis": 1793232000000,
     "hash": "4fe5c33c9f159d6715e8034075bbdabb95204a636720354c2f722a5ac89774c2"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"report_working_drafts\" (\n    \"document_id\" text NOT NULL REFERENCES \"work_documents\"(\"id\") ON DELETE CASCADE,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"base_revision\" integer NOT NULL,\n    \"expected_report_revision\" integer NOT NULL,\n    \"revision\" integer NOT NULL DEFAULT 1,\n    \"state\" jsonb NOT NULL,\n    \"results\" jsonb NOT NULL DEFAULT '{}'::jsonb,\n    \"updated_at\" timestamp with time zone NOT NULL DEFAULT now(),\n    PRIMARY KEY (\"document_id\", \"user_id\", \"base_revision\")\n);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1793318400000,
+    "hash": "e794a85a25f69f8893fe4da85c220673be6a22587802bcb7509048e66f8e25a6"
   }
 ]

@@ -118,7 +118,6 @@ function ReportVisual({
     previewOnly?: boolean;
 }) {
     const t = useTranslations('WorkDocuments.Report');
-    const workspaceT = useTranslations('AgentRuns.Actions');
     return (
         <figure className="report-wide group relative min-w-0 space-y-3" data-visual={visual.id}>
             {onEditComponent && (
@@ -163,7 +162,7 @@ function ReportVisual({
                 </span>
                 {!previewOnly && (
                     <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId)}>
-                        {evidence.connectionId ? workspaceT('OpenWorkspace') : t('OpenResult')}
+                        {t('OpenResult')}
                         <ArrowUpRight className="size-3.5" />
                     </Button>
                 )}

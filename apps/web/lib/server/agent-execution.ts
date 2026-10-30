@@ -2016,7 +2016,7 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
     const tools: McpFacadeTool[] = [
         ...webActionRegistry
             .list()
-            .filter(action => action.domain === 'report')
+            .filter(action => action.domain === 'report' && action.exposure.mcp && action.exposure.actors.includes('agent'))
             .map(action => ({
                 name: action.exposure.mcp!.name,
                 title: action.exposure.mcp!.title,

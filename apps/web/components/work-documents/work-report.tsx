@@ -11,9 +11,7 @@ import { useTranslations } from 'next-intl';
 import { createSerializer, parseAsInteger, parseAsString, useQueryState, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
-import { executeActionClient } from '@/lib/actions/client';
-import type { ArtifactDetail } from '@/lib/artifacts/types';
-import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
+import { buildReportWorkspacePath } from '@/lib/work-documents/workspace-url';
 import { workRequest } from '@/lib/work-documents/client';
 import { reportListParsers, serializeReportList } from '@/lib/work-documents/list-state';
 import { renderWorkHtml } from '@/lib/work-documents/render';
@@ -51,6 +49,7 @@ export function WorkReport({
     const { organization } = useParams<{ organization: string }>();
     const t = useTranslations('WorkDocuments');
     const reportT = useTranslations('WorkDocuments.Report');
+    const analysisT = useTranslations('WorkDocuments.Analysis');
     const router = useRouter();
     const [listState] = useQueryStates(reportListParsers);
     const client = useQueryClient();
@@ -170,18 +169,25 @@ export function WorkReport({
         setSaveError(false);
         navigate();
     };
-    const workspace = useMutation({
-        mutationFn: (artifactId: string) => executeActionClient<ArtifactDetail>('artifact.get', { artifactId }),
-        onSuccess: artifact => {
-            const href = artifact.workspaceTarget
-                ? buildArtifactWorkspacePath(organization, artifact.id, artifact.workspaceTarget.connectionId)
-                : `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`;
-            router.push(href, { scroll: false });
-        },
-        onError: () => toast.error(reportT('OriginalUnavailable')),
-    });
     const openEvidence = (artifactId: string) => {
-        if (!workspace.isPending) void leaveReport(() => workspace.mutate(artifactId));
+        void leaveReport(() => {
+            const selected = (historical ? historyQuery.data : client.getQueryData<Detail>(key))?.document;
+            const evidence = selected?.content.evidence.find(item => item.artifactId === artifactId);
+            if (!selected || !evidence) {
+                toast.error(reportT('OriginalUnavailable'));
+                return;
+            }
+            router.push(
+                buildReportWorkspacePath(organization, {
+                    documentId,
+                    artifactId,
+                    revision: selected.revision,
+                    publicationId: selectedPublication ?? undefined,
+                    snapshotId: evidence.snapshotId,
+                }),
+                { scroll: false },
+            );
+        });
     };
     const switchVersion = async (revision: number | null) => {
         if (!(await requestLeave())) return;
@@ -390,6 +396,20 @@ export function WorkReport({
                     }
                     onTitle={title => change({ ...document, title })}
                     onEdit={() => {
+                        if (document.content.evidence.length && !isEditing) {
+                            const evidence = document.content.evidence[0];
+                            router.push(
+                                buildReportWorkspacePath(organization, {
+                                    documentId,
+                                    artifactId: evidence.artifactId,
+                                    revision: document.revision,
+                                    publicationId: selectedPublication ?? undefined,
+                                    snapshotId: evidence.snapshotId,
+                                }) + '&view=report',
+                                { scroll: false },
+                            );
+                            return;
+                        }
                         if (historical) {
                             setRestoreOpen(true);
                             return;
@@ -483,6 +503,9 @@ export function WorkReport({
                         </div>
                     ) : (
                         <>
+                            {document.content.workspaceOrigin && (
+                                <p className="mb-3 text-xs text-muted-foreground">{analysisT('BasedOn', { version: document.content.workspaceOrigin.baseRevision })}</p>
+                            )}
                             <div
                                 className="work-prose"
                                 onClick={event => {

@@ -6,19 +6,21 @@ import { Select, SelectContent, SelectTrigger, SelectValue } from '@/registry/ne
 
 export function ReportSelect({
     value,
+    disabled,
     onValueChange,
     children,
     className,
     'aria-label': label,
 }: {
     value: string;
+    disabled?: boolean;
     onValueChange: (value: string) => void;
     children: ReactNode;
     className?: string;
     'aria-label'?: string;
 }) {
     return (
-        <Select value={value || '__none'} onValueChange={value => onValueChange(value === '__none' ? '' : value)}>
+        <Select disabled={disabled} value={value || '__none'} onValueChange={value => onValueChange(value === '__none' ? '' : value)}>
             <SelectTrigger className={className} aria-label={label}>
                 <SelectValue />
             </SelectTrigger>

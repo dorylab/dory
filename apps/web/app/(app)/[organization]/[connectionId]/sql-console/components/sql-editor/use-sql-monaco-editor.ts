@@ -40,6 +40,7 @@ interface UseSqlMonacoEditorProps {
     editorTheme: string;
     editorSettings: SqlEditorSettings;
     currentConnectionId?: string;
+    disableOccurrenceHighlight?: boolean;
     currentConnectionType?: ConnectionType;
     containerRef: RefObject<HTMLDivElement | null>;
     onContentChange: ContentChangeHandler;
@@ -445,6 +446,7 @@ export function useSqlMonacoEditor({
     editorTheme,
     editorSettings,
     currentConnectionId,
+    disableOccurrenceHighlight = false,
     currentConnectionType,
     containerRef,
     onContentChange,
@@ -593,6 +595,8 @@ export function useSqlMonacoEditor({
                     showVariables: true,
                 },
                 ...editorOptions,
+                // Monaco's delayed word highlighter rejects on rapid model/source switches.
+                ...(disableOccurrenceHighlight ? { occurrencesHighlight: 'off' as const } : {}),
             });
 
             void parserPromise
@@ -754,7 +758,7 @@ export function useSqlMonacoEditor({
             editorRef.current = null;
             monacoRef.current = null;
         };
-    }, [containerRef, currentConnectionId, currentConnectionType, fetchColumnsForCompletion, setSelectionByTab, t]);
+    }, [containerRef, currentConnectionId, currentConnectionType, disableOccurrenceHighlight, fetchColumnsForCompletion, setSelectionByTab, t]);
 
     useEffect(() => {
         const editor = editorRef.current;

@@ -17,12 +17,14 @@ export type ReportEditorHandle = { requestLeave: () => Promise<boolean>; insert:
 export default function ReportEditor({
     ref,
     content,
+    restrictSources,
     title,
     onChange,
     onEvidence,
 }: {
     ref?: Ref<ReportEditorHandle>;
     content: WorkDocumentContent;
+    restrictSources?: boolean;
     title: string;
     onChange: (content: WorkDocumentContent) => void;
     onEvidence: (id: string) => void;
@@ -107,6 +109,7 @@ export default function ReportEditor({
             </div>
             {session && (
                 <ComponentDialog
+                    restrictSources={restrictSources}
                     ref={dialog}
                     initial={session.visual}
                     content={current}

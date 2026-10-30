@@ -9,6 +9,7 @@ export type AnalysisScope = {
 };
 export type WorkEvidence = {
     snapshotId?: string;
+    sourceDatabaseName?: string | null;
     columnTypes?: Array<{ name: string; type: string }>;
     dataRange?: { from?: string; through?: string };
     attachmentSource?: ChatAttachmentSource;
@@ -49,6 +50,7 @@ export type ReportEmbed =
     | { type: 'table'; artifactId: string; snapshotId: string; config: { title: string; allowSubset?: boolean } };
 export type ReportDiagnostic = { message: string; line?: number; column?: number };
 export type WorkDocumentContent = {
+    workspaceOrigin?: { baseRevision: number; draftRevision: number };
     sourceWorkId?: string;
     format?: 'restricted-mdx';
     schemaVersion?: 1;

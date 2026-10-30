@@ -24,7 +24,7 @@ const { getDBService } = await import('@dory/database');
 const schema = await import('@dory/database/postgres/schemas');
 const { getDoryArtifactStore } = await import('@dory/artifacts');
 const { readChatAttachment, bindChatAttachments, validatedAttachmentStream, readAttachmentText } = await import('@/lib/server/chat-attachments');
-const { queryChatAttachments } = await import('@/lib/server/chat-attachment-data');
+const { queryChatAttachments, prepareReportAttachments, runReportAttachments } = await import('@/lib/server/chat-attachment-data');
 const { createChatAnalysis } = await import('@/lib/server/chat-analysis');
 const { createWorkDocumentTools } = await import('@/lib/server/work-document-tools');
 const { getAgentExecutionTools } = await import('@/lib/server/agent-execution');
@@ -97,6 +97,27 @@ test('private attachments produce reusable full-data evidence, charts and report
         assert.equal((await db.connections.list(owner.organizationId)).length, 0);
         const artifact = await db.artifacts.get({ ...owner, artifactId: result.artifactId });
         assert.equal(artifact.resultSet?.attachmentSource?.chatId, chat.id);
+        const originalSource = artifact.resultSet!.attachmentSource!;
+        const reportTables = await prepareReportAttachments(db, owner, originalSource);
+        assert.equal(reportTables[0].name, inspected.tables[0].name);
+        const rerun = await runReportAttachments(db, owner, originalSource, `SELECT * FROM "${inspected.tables[0].name}"`, 'report-user-rerun');
+        assert.equal(rerun.rows.length, 1000);
+        assert.equal(rerun.limited, true);
+        const rerunArtifact = await db.artifacts.get({ ...owner, artifactId: `artifact_${rerun.resultSetId}` });
+        assert.equal(rerunArtifact.workId, null, 'manual report result must not impersonate an Agent Run');
+        await assert.rejects(runReportAttachments(db, { ...owner, userId: 'other-user' }, originalSource, sql, 'forbidden'), /unavailable|denied/);
+        await assert.rejects(
+            runReportAttachments(db, owner, { ...originalSource, files: originalSource.files.map(f => ({ ...f, sha256: 'changed' })) }, sql, 'changed-file'),
+            /changed/,
+        );
+        await assert.rejects(
+            runReportAttachments(db, owner, originalSource, `DELETE FROM "${inspected.tables[0].name}"`, 'write'),
+            /SELECT|read.only|Can only delete from base table/i,
+        );
+        const cancel = new AbortController();
+        cancel.abort();
+        await assert.rejects(runReportAttachments(db, owner, originalSource, sql, 'cancelled', cancel.signal));
+
         assert.equal((await db.resultSets.readRows({ ...owner, resultSetId: result.resultSetId })).rows[0].ratio, 0.256);
         const exported = await db.resultSets.createExport({ ...owner, resultSetId: result.resultSetId, format: 'csv' });
         assert.ok(exported);

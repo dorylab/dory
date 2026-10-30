@@ -179,6 +179,7 @@ export async function saveWorkDraft(
                 title: artifact.title,
                 connectionId: artifact.connectionId,
                 connectionName: artifact.connectionName,
+                sourceDatabaseName: artifact.resultSet.sourceDatabaseName,
                 sql: artifact.resultSet.sql,
                 capturedAt: new Date(artifact.createdAt).toISOString(),
                 columns: result.columns.map(column => column.name),

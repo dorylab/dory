@@ -11,6 +11,7 @@ import { strFromU8, unzipSync } from 'fflate';
 import { exportDoryMdxZip, markdownExportFiles } from '@/lib/work-documents/export';
 import { formatReportMetric, reportMetrics } from '@/lib/work-documents/format';
 import { renderWorkHtml, workChartSvg } from '@/lib/work-documents/render';
+import { selectReportEvidence } from '@/lib/work-documents/workspace-evidence';
 import { editableReport, legacyToMdx, parseReport, reportEmbeds, resolvedReport } from '@/lib/work-documents/report-core';
 
 const visual: WorkVisual = {
@@ -147,6 +148,19 @@ test('publication freezes the selected revision, is idempotent, retains snapshot
         };
         assert.match(renderWorkHtml(view), /123.45/);
         assert.equal((await db.query<{ count: number }>('select count(*)::int as count from report_snapshots')).rows[0].count, 1);
+        assert.deepEqual(await repo.listReferencingArtifact({ ...owner, artifactId: 'artifact' }), [{ id: first.id, title: historical.title }]);
+        assert.deepEqual(await repo.listReferencingArtifact({ ...owner, userId: 'bob', artifactId: 'artifact' }), []);
+        await repo.archive({ ...target, archived: false });
+        await repo.update({
+            ...target,
+            expectedRevision: 4,
+            title: 'No current evidence',
+            content: { ...content(), evidence: [], visuals: [], embeds: {}, body: 'No data' },
+            scope: first.scope,
+            status: 'draft',
+            source: 'user',
+        });
+        assert.equal((await repo.listReferencingArtifact({ ...owner, artifactId: 'artifact' })).length, 1, 'historical references remain discoverable once each');
         const archive = unzipSync(exportDoryMdxZip(view));
         assert.doesNotMatch(strFromU8(archive['manifest.json']), /confidential|private_table|"sql"|connectionId/);
         assert.match(strFromU8(archive['report.mdx']), /Metric/);
@@ -238,4 +252,17 @@ test('restricted MDX accepts only registered standalone legacy visual links', ()
     assert.ok(parseReport('![Unknown](dory://visual/missing)', [table]).diagnostics.length);
     assert.ok(parseReport('text ![Rows](dory://visual/rows)', [table]).diagnostics.length);
     assert.ok(parseReport('![External](https://example.com/image.png)', [table]).diagnostics.length);
+});
+
+test('Workspace selects the exact version snapshot, validates attachment ownership and supports legacy evidence', () => {
+    const reference = { documentId: 'doc', artifactId: 'artifact', revision: 2, snapshotId: 'saved' };
+    const document = { revision: 2, chatId: 'chat', content: { ...content(), evidence: [{ ...evidence, snapshotId: 'saved' }] } };
+    assert.deepEqual(selectReportEvidence(document, reference, 'alice').rows, evidence.rows);
+    assert.throws(() => selectReportEvidence(document, { ...reference, revision: 3 }, 'alice'), /version/);
+    assert.throws(() => selectReportEvidence(document, { ...reference, snapshotId: 'other' }, 'alice'), /snapshot/);
+    assert.throws(() => selectReportEvidence(document, { ...reference, artifactId: 'other' }, 'alice'), /snapshot/);
+    assert.equal(selectReportEvidence({ ...document, content: content() }, { ...reference, snapshotId: undefined }, 'alice'), evidence);
+    document.content.evidence[0] = { ...document.content.evidence[0], attachmentSource: { userId: 'alice', chatId: 'chat', files: [] } };
+    assert.throws(() => selectReportEvidence(document, reference, 'bob'), /Private/);
+    assert.throws(() => selectReportEvidence({ ...document, chatId: 'another' }, reference, 'alice'), /Private/);
 });
