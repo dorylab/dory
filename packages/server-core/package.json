@@ -49,7 +49,7 @@
         "@dory/shared": "0.1.0",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "drizzle-orm": "^0.45.2",
-        "zod": "^4.3.6"
+        "zod": "^4.6.6"
     },
     "devDependencies": {
         "@types/node": "^25.5.2",
