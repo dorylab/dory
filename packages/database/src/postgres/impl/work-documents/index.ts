@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
 import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { ReportWorkingState, ReportWorkingDraft } from '@dory/shared/types/report-workspace';
@@ -7,6 +8,7 @@ import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from 'driz
 
 import { getClient } from '../../client';
 import { reportWorkingDrafts, reportPublications, reportSnapshots, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
+import { reportArtifactReference, retainReportEvidence, validateReportPublicationEvidence } from './evidence-retention';
 
 type Owner = { organizationId: string; userId: string };
 type Target = Owner & { documentId: string };
@@ -23,6 +25,7 @@ function canonical(value: unknown): unknown {
 }
 export class PostgresWorkDocumentsRepository {
     private db!: PostgresDBClient;
+    constructor(private readonly artifactStore: DoryArtifactStore = getDoryArtifactStore()) {}
     async init(client?: PostgresDBClient) {
         this.db = client ?? (await getClient());
     }
@@ -119,21 +122,36 @@ export class PostgresWorkDocumentsRepository {
     }
     async listReferencingArtifact(input: Owner & { artifactId: string }) {
         const reference = JSON.stringify([{ artifactId: input.artifactId }]);
-        return this.db
-            .select({ id: workDocuments.id, title: workDocuments.title })
+        const rows = await this.db
+            .select({
+                id: workDocuments.id,
+                title: workDocuments.title,
+                revision: sql<number | null>`case
+                    when ${workDocuments.content}->'evidence' @> ${reference}::jsonb then ${workDocuments.revision}
+                    else (select max(v.revision) from ${workDocumentVersions} v
+                        where v.document_id = ${workDocuments.id} and v.content->'evidence' @> ${reference}::jsonb)
+                    end`,
+                publicationId: sql<string | null>`(select p.id from ${reportPublications} p
+                    where p.document_id = ${workDocuments.id} and p.content->'evidence' @> ${reference}::jsonb
+                    order by p.number desc limit 1)`,
+            })
             .from(workDocuments)
             .where(
                 and(
                     eq(workDocuments.organizationId, input.organizationId),
                     eq(workDocuments.userId, input.userId),
-                    sql`(
-                    ${workDocuments.content}->'evidence' @> ${reference}::jsonb
-                    or exists (select 1 from ${workDocumentVersions} v where v.document_id = ${workDocuments.id} and v.content->'evidence' @> ${reference}::jsonb)
-                    or exists (select 1 from ${reportPublications} p where p.document_id = ${workDocuments.id} and p.content->'evidence' @> ${reference}::jsonb)
-                )`,
+                    reportArtifactReference(input.organizationId, input.artifactId, workDocuments.id),
                 ),
             )
             .orderBy(desc(workDocuments.updatedAt));
+        // Pending SQL candidates are retained for recovery but are not report citations yet.
+        return rows.flatMap<{ id: string; title: string; revision?: number; publicationId?: string }>(row =>
+            row.revision !== null
+                ? [{ id: row.id, title: row.title, revision: row.revision }]
+                : row.publicationId
+                  ? [{ id: row.id, title: row.title, revision: undefined, publicationId: row.publicationId }]
+                  : [],
+        );
     }
 
     async findByCreationKey(input: Owner & { creationKey: string }) {
@@ -152,6 +170,12 @@ export class PostgresWorkDocumentsRepository {
     }
     async create(input: Owner & { creationKey: string; chatId?: string | null; title: string; scope: AnalysisScope; content: WorkDocumentContent }) {
         return this.db.transaction(async tx => {
+            const [retry] = await tx
+                .select()
+                .from(workDocuments)
+                .where(and(eq(workDocuments.organizationId, input.organizationId), eq(workDocuments.userId, input.userId), eq(workDocuments.creationKey, input.creationKey)));
+            if (retry) return this.withVersion(retry, tx);
+            await retainReportEvidence(tx, input.organizationId, input.content.evidence);
             const [created] = await tx
                 .insert(workDocuments)
                 .values({ ...input, chatId: input.chatId ?? null })
@@ -217,6 +241,7 @@ export class PostgresWorkDocumentsRepository {
                 .from(workDocumentVersions)
                 .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.baseRevision)));
             if (!base) throw new DatabaseError('Version not found.', 404);
+            await retainReportEvidence(tx, input.organizationId, input.state.content.evidence, input.documentId);
             await tx
                 .insert(reportWorkingDrafts)
                 .values({
@@ -233,24 +258,32 @@ export class PostgresWorkDocumentsRepository {
         });
     }
     async saveWorkingDraft(input: Target & { baseRevision: number; expectedDraftRevision: number; state: ReportWorkingState }) {
-        await this.getRow(input);
-        const [row] = await this.db
-            .update(reportWorkingDrafts)
-            .set({ state: input.state, revision: sql`${reportWorkingDrafts.revision} + 1`, updatedAt: new Date() })
-            .where(and(this.draftOwned(input), eq(reportWorkingDrafts.revision, input.expectedDraftRevision)))
-            .returning();
-        if (!row) throw new DatabaseError('This working draft changed in another window. Your local edits have been retained.', 409);
-        return row;
+        return this.db.transaction(async tx => {
+            const [document] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!document || document.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            await retainReportEvidence(tx, input.organizationId, input.state.content.evidence, input.documentId);
+            const [row] = await tx
+                .update(reportWorkingDrafts)
+                .set({ state: input.state, revision: sql`${reportWorkingDrafts.revision} + 1`, updatedAt: new Date() })
+                .where(and(this.draftOwned(input), eq(reportWorkingDrafts.revision, input.expectedDraftRevision)))
+                .returning();
+            if (!row) throw new DatabaseError('This working draft changed in another window. Your local edits have been retained.', 409);
+            return row;
+        });
     }
     // Executions append trusted records independently of autosave; they never apply themselves.
     async recordWorkingResult(input: Target & { baseRevision: number; resultId: string; result: ReportWorkingDraft['results'][string] }) {
-        await this.getRow(input);
-        const [row] = await this.db
-            .update(reportWorkingDrafts)
-            .set({ results: sql`${reportWorkingDrafts.results} || ${JSON.stringify({ [input.resultId]: input.result })}::jsonb` })
-            .where(this.draftOwned(input))
-            .returning();
-        if (!row) throw new DatabaseError('Working draft not found.', 404);
+        await this.db.transaction(async tx => {
+            const [document] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!document || document.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            await retainReportEvidence(tx, input.organizationId, [input.result.evidence], input.documentId);
+            const [row] = await tx
+                .update(reportWorkingDrafts)
+                .set({ results: sql`${reportWorkingDrafts.results} || ${JSON.stringify({ [input.resultId]: input.result })}::jsonb` })
+                .where(this.draftOwned(input))
+                .returning();
+            if (!row) throw new DatabaseError('Working draft not found.', 404);
+        });
     }
     async savedWorkingVersion(input: Target & { requestId: string; baseRevision: number; expectedDraftRevision: number }) {
         await this.getRow(input);
@@ -282,11 +315,13 @@ export class PostgresWorkDocumentsRepository {
             if (!draft || draft.revision !== input.expectedDraftRevision || current.revision !== draft.expectedReportRevision)
                 throw new DatabaseError('The report or working draft changed. Your draft is preserved; open the latest version to resolve the conflict.', 409);
             if (draft.state.proseNeedsReview) throw new DatabaseError('Review the report text after applying new data.', 400);
+            if (input.content.evidenceGroups?.some(group => group.needsReview)) throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
             const [base] = await tx
                 .select()
                 .from(workDocumentVersions)
                 .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.baseRevision)));
             if (!base) throw new DatabaseError('Base version unavailable.', 404);
+            await validateReportPublicationEvidence(tx, this.artifactStore, input.organizationId, input.content.evidence, input.documentId);
             const content = await this.snapshotContent(
                 input.documentId,
                 { ...input.content, workspaceOrigin: { baseRevision: input.baseRevision, draftRevision: input.expectedDraftRevision } },
@@ -374,6 +409,8 @@ export class PostgresWorkDocumentsRepository {
             if (already) return already.id;
             if (!current.content.markdown.trim() || current.content.diagnostics?.length) throw new DatabaseError('Fix report diagnostics before publishing.', 400);
             if (current.content.format !== 'restricted-mdx') throw new DatabaseError('Save this report in the new format before publishing.', 400);
+            if (current.content.evidenceGroups?.some(group => group.needsReview)) throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
+            await validateReportPublicationEvidence(tx, this.artifactStore, input.organizationId, current.content.evidence, input.documentId);
             for (const embed of Object.values(current.content.embeds ?? {})) {
                 const [snapshot] = await tx
                     .select()
@@ -419,6 +456,10 @@ export class PostgresWorkDocumentsRepository {
         },
     ) {
         return this.db.transaction(async tx => {
+            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!current || current.archivedAt || current.revision !== input.expectedRevision)
+                throw new DatabaseError('Report changed or was archived. Reload the latest version before saving.', 409);
+            await retainReportEvidence(tx, input.organizationId, input.content.evidence, input.documentId);
             const content = await this.snapshotContent(input.documentId, input.content, tx);
             const [row] = await tx
                 .update(workDocuments)

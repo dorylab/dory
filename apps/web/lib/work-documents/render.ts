@@ -151,6 +151,13 @@ export function renderWorkMarkdown(content: WorkDocumentView['content'], include
             },
             link({ href, tokens }) {
                 const label = this.parser.parseInline(tokens);
+                const groupId = /^dory:\/\/evidence-group\/([a-zA-Z0-9_-]+)$/.exec(href)?.[1];
+                if (groupId) {
+                    const group = content.evidenceGroups?.find(item => item.id === groupId);
+                    return includeSources && group
+                        ? `<a href="#evidence-group-${escapeHtml(groupId)}" data-evidence-group="${escapeHtml(groupId)}">${label} · ${group.references.length}</a>`
+                        : '';
+                }
                 const id = /^dory:\/\/evidence\/([a-zA-Z0-9_-]+)$/.exec(href)?.[1];
                 if (id) return includeSources ? `<a href="#evidence-${escapeHtml(id)}" data-evidence="${escapeHtml(id)}">${label}</a>` : label;
                 return /^(https?:\/\/|mailto:|#)/i.test(href) ? `<a href="${escapeHtml(href)}" rel="noopener noreferrer">${label}</a>` : label;
@@ -168,6 +175,12 @@ export function renderWorkHtml(document: WorkDocumentView): string {
         )
         .join('');
     // Export references resolve within the document; SQL is intentionally absent.
+    const groups = (document.content.evidenceGroups ?? [])
+        .map(
+            group =>
+                `<li id="evidence-group-${escapeHtml(group.id)}">${group.references.map(reference => `<a href="#evidence-${escapeHtml(reference.artifactId)}">${escapeHtml(document.content.evidence.find(item => item.artifactId === reference.artifactId)?.title ?? reference.artifactId)}</a>${reference.explanation ? `: ${escapeHtml(reference.explanation)}` : ''}`).join('; ')}</li>`,
+        )
+        .join('');
     const body = renderWorkMarkdown(document.content, true, document.title).replace(/href="dory:\/\/evidence\/([^"<>]+)"/g, 'href="#evidence-$1"');
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>${workPrintStyles}</style></head><body><header><h1>${escapeHtml(document.title)}</h1><p>${document.publication ? `v${document.publication.number}` : `r${document.revision}`} · ${escapeHtml(document.updatedAt)}${document.publication ? ' · Published / 已发布' : ' · Draft / 草稿'}</p></header>${body}<footer><h2>Sources / 来源</h2><ul>${sources}</ul></footer></body></html>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>${workPrintStyles}</style></head><body><header><h1>${escapeHtml(document.title)}</h1><p>${document.publication ? `v${document.publication.number}` : `r${document.revision}`} · ${escapeHtml(document.updatedAt)}${document.publication ? ' · Published / 已发布' : ' · Draft / 草稿'}</p></header>${body}<footer><h2>Sources / 来源</h2><ul>${groups}${sources}</ul></footer></body></html>`;
 }

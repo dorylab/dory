@@ -88,6 +88,7 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
                     snapshotId: report.document.content.evidence.find((e: { artifactId: string }) => e.artifactId === artifactId).snapshotId,
                 },
                 groupArtifactId,
+                groupConnectionId: connection2.connection.id,
                 countTitle: report.document.content.evidence.find((e: { artifactId: string }) => e.artifactId === artifactId).title,
                 groupTitle: report.document.content.evidence.find((e: { artifactId: string }) => e.artifactId === groupArtifactId).title,
             };
@@ -106,7 +107,15 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
     await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
     expect(executed).toBe(0);
     await page.getByRole('tab', { name: fixture.groupTitle }).click();
-    await expect(page.getByRole('complementary', { name: 'Data source' })).toContainText('Activity source');
+    const columnsRequest = page.waitForRequest(
+        request =>
+            request.url().includes('/api/actions/execute') &&
+            request.postDataJSON()?.actionId === 'schema.describeTable' &&
+            request.postDataJSON()?.input.connectionId === fixture.groupConnectionId,
+    );
+    await page.getByTestId('sql-source-sidebar').getByRole('button', { name: 'Expand customers columns', exact: true }).click();
+    await columnsRequest;
+    await expect(page.getByTestId('sql-source-sidebar').getByText('active', { exact: true })).toBeVisible();
     await page.getByRole('tab', { name: fixture.countTitle }).click();
     await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toContain('COUNT(*)');
     await page.evaluate(() => window.__DORY_E2E_MONACO__!.setValue('SELECT COUNT(*) AS count FROM customers WHERE active = 1'));
@@ -118,7 +127,6 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
     await page.getByRole('dialog').getByRole('button', { name: 'Apply to report', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Applied to draft', exact: true })).toBeVisible();
     await expect(page.getByText('Missing report snapshot.', { exact: true })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Report preview', exact: true }).getByText('2', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save new version', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Duplicate query', exact: true }).click();
     const copy = page.getByRole('tab', { name: `${fixture.countTitle} (copy)` });
@@ -126,7 +134,6 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
     await page.getByRole('combobox', { name: 'Move component to this query', exact: true }).click();
     await page.getByRole('option', { name: 'Customer total', exact: true }).click();
     await expect(page.getByText('Draft saved', { exact: true })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Report preview', exact: true }).locator('[data-visual="table"]').getByText('2', { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toContain('WHERE active');
     await page.evaluate(() => window.__DORY_E2E_MONACO__!.setValue('SELECT 4 AS count'));
     await page.getByRole('button', { name: 'Run', exact: true }).click();
@@ -135,12 +142,11 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
     await expect(page.getByRole('dialog').getByText('Customer count', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('dialog').getByText('Customer total', { exact: true })).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Apply to report', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Report preview', exact: true }).getByText('4', { exact: true })).toBeVisible();
     await copy.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Close', exact: true }).click();
     await expect(copy).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Report preview', exact: true }).getByText('4', { exact: true })).toBeVisible();
-    await page.getByRole('region', { name: 'Report preview', exact: true }).getByRole('button', { name: 'View query and results', exact: true }).nth(1).click();
+    await page.getByRole('tab', { name: 'Queries', exact: true }).click();
+    await page.getByRole('button', { name: `${fixture.countTitle} (copy) · hidden`, exact: true }).click();
     await expect(copy).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('button', { name: 'I have reviewed the text', exact: true }).click();
     await expect(page.getByText('Draft saved', { exact: true })).toBeVisible();

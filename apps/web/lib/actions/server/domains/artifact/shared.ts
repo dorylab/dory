@@ -80,6 +80,8 @@ export const artifactDetailOutputSchema = artifactSummarySchema.extend({
             id: z.string(),
             columns: z.array(z.unknown()),
             dataAvailability: z.string(),
+            status: z.string().optional(),
+            limited: z.boolean().optional(),
             sql: z.string().nullable(),
             previewRowCount: z.number().int().nonnegative(),
         })

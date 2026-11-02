@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import type { ToolExecutionOptions } from 'ai';
+import { eq } from 'drizzle-orm';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { z } from 'zod';
@@ -172,6 +173,17 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         await assert.rejects(reports.assertReady(), /still a draft/);
         // The SDK validates tool outputs as JSON before sending the next model step.
         assert.deepEqual(created, JSON.parse(JSON.stringify(created)));
+        // Transport mocks below vary previews, while retention validates real persisted sources.
+        for (const artifactId of ['orders', 'ads']) {
+            const saved = await db.resultSets.persistQueryResultSet({
+                ...owner,
+                sessionId: `report-fixture-${artifactId}`,
+                sessionSqlText: `SELECT revenue FROM ${artifactId}`,
+                resultSet: { sessionId: `report-fixture-${artifactId}`, setIndex: 0, sqlText: `SELECT revenue FROM ${artifactId}`, status: 'success' },
+                rows: [{ revenue: 42 }],
+            });
+            await database.update(schema.artifacts).set({ id: artifactId }).where(eq(schema.artifacts.sourceResultSetId, saved.resultSetId));
+        }
         let expired = false;
         t.mock.method(db.artifacts, 'get', async ({ artifactId }: { artifactId: string }) => {
             if (expired) throw new Error('Expired');
@@ -225,6 +237,47 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         assert.equal(ready.content.evidence.length, 2);
         assert.equal(ready.content.evidence[0].truncated, true);
         assert.deepEqual(ready.content.evidence[0].rows, [{ revenue: 42 }]);
+        await t.test('paragraph evidence uses only report or current Work results, validates scope and preserves human review ownership', async t => {
+            const current = await db.workDocuments.get({ ...owner, documentId: ready.id });
+            const artifact = await db.artifacts.get({ ...owner, artifactId: 'orders' });
+            t.mock.method(db.artifacts, 'listByWork', async () => ['work-result', 'cross-scope'].map(id => ({ ...artifact, id })));
+            const getArtifact = db.artifacts.get.bind(db.artifacts);
+            t.mock.method(db.artifacts, 'get', async (input: Parameters<typeof getArtifact>[0]) => {
+                const result = await getArtifact({ ...input, artifactId: 'orders' });
+                return { ...result, id: input.artifactId, connectionId: input.artifactId === 'cross-scope' ? 'private' : result.connectionId };
+            });
+            const update = t.mock.method(db.workDocuments, 'update', async (input: Parameters<typeof db.workDocuments.update>[0]) => ({
+                ...current,
+                content: input.content,
+                title: input.title,
+                status: input.status,
+                revision: current.revision + 1,
+            }));
+            const evidenceDraft = (artifactId: string) => ({
+                title: 'Supported conclusion',
+                format: 'restricted-mdx' as const,
+                markdown: 'Revenue changed. [Evidence](dory://evidence-group/revenue)',
+                visuals: [],
+                evidenceGroups: [{ id: 'revenue', references: [{ artifactId, explanation: 'Compared revenue.' }] }],
+                status: 'draft' as const,
+            });
+            const target = { ...owner, documentId: ready.id, expectedRevision: current.revision, source: 'user' as const };
+            const existingSource = await saveWorkDraft(db, { ...target, draft: evidenceDraft('orders') });
+            assert.equal(existingSource.content.evidenceGroups?.[0].references[0].artifactId, 'orders');
+            assert.equal(existingSource.content.evidenceGroups?.[0].needsReview, false);
+            const workSource = await saveWorkDraft(db, { ...target, draft: evidenceDraft('work-result') });
+            assert.equal(workSource.content.evidence[0].artifactId, 'work-result');
+            assert.equal(workSource.content.evidence[0].truncated, true);
+            assert.equal(update.mock.callCount(), 2);
+            await assert.rejects(saveWorkDraft(db, { ...target, draft: evidenceDraft('other-work') }), /current Work/);
+            await assert.rejects(saveWorkDraft(db, { ...target, draft: evidenceDraft('cross-scope') }), /outside the selected analysis scope/);
+            await assert.rejects(
+                saveWorkDraft(db, { ...target, draft: { ...evidenceDraft('orders'), markdown: '<Unknown />\n\n' + evidenceDraft('orders').markdown } }),
+                /Fix the report syntax before saving evidence changes/,
+            );
+            await assert.rejects(saveWorkDraft(db, { ...target, source: 'agent', draft: { ...evidenceDraft('orders'), reviewedEvidenceGroupIds: ['revenue'] } }), /Only a person/);
+            assert.equal(update.mock.callCount(), 2);
+        });
         await t.test('saving a conversation chart resolves its original evidence and enforces its scope', async t => {
             t.mock.method(db.resultSets, 'readRows', async () => ({
                 columns: [{ name: 'month' }, { name: 'revenue' }],

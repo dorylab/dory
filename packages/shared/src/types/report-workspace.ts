@@ -8,6 +8,20 @@ export type ReportEvidenceReference = {
     publicationId?: string;
     snapshotId?: string;
 };
+export type ReportEvidenceInspection = {
+    evidence: WorkEvidence;
+    artifactAvailable: boolean;
+    fullResultAvailable: boolean;
+    canOpenWorkspace: boolean;
+};
+export type ReportEvidenceRows = {
+    columns: string[];
+    rows: Record<string, unknown>[];
+    rowCount: number | null;
+    offset: number;
+    limit: number;
+};
+export type ReportArtifactUsage = { id: string; title: string; revision?: number; publicationId?: string };
 export type ReportWorkspaceSource =
     | { kind: 'attachment'; dialect: 'duckdb' }
     | { kind: 'database'; connectionId: string; database: string | null; dialect: ConnectionType }

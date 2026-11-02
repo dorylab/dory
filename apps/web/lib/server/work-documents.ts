@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { canWriteWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
 import { reportNumber } from '@/lib/work-documents/format';
+import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-groups';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
 import { legacyToMdx, parseReport, reportEmbeds, reportTagSource, resolvedReport } from '@/lib/work-documents/report-core';
 import { analysisScopeSchema, applyMarkdownEdits, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
@@ -39,6 +40,36 @@ export async function assertDocumentWrite(owner: Owner) {
     if (!canWriteWorkspace(await resolveOrganizationAccess(owner.organizationId, owner.userId))) throw new DatabaseError('Workspace write access required.', 403);
 }
 
+/** The chooser is deliberately bounded to the report and the Work which produced it. */
+export async function reportEvidenceCandidates(db: DBService, input: Owner & { documentId: string }) {
+    const document = await db.workDocuments.get(input);
+    const candidates = new Map(document.content.evidence.map(item => [item.artifactId, { id: item.artifactId, title: item.title }]));
+    const workId = document.content.sourceWorkId;
+    if (!workId || !(await db.works.getById({ ...input, workId }))) return { artifacts: [...candidates.values()] };
+    const access = await resolveOrganizationAccess(input.organizationId, input.userId);
+    for (const item of await db.artifacts.listByWork({ ...input, workId })) {
+        if (candidates.has(item.id)) continue;
+        try {
+            const artifact = await db.artifacts.get({ ...input, artifactId: item.id });
+            if (!artifact.resultSet) continue;
+            const attachment = artifact.resultSet.attachmentSource;
+            if (!canReadAttachmentSource(attachment, input.userId, document.chatId)) continue;
+            if (
+                !attachment &&
+                (!access?.permissions.connection.read ||
+                    !artifact.connectionId ||
+                    !document.scope.connectionIds.includes(artifact.connectionId) ||
+                    !isAnalysisDatabaseAllowed(document.scope, artifact.connectionId, artifact.resultSet.sourceDatabaseName))
+            )
+                continue;
+            candidates.set(item.id, { id: item.id, title: item.title });
+        } catch (error) {
+            if (!(error instanceof DatabaseError && [403, 404].includes(error.code))) throw error;
+        }
+    }
+    return { artifacts: [...candidates.values()] };
+}
+
 export async function saveWorkDraft(
     db: DBService,
     input: Owner & {
@@ -57,6 +88,7 @@ export async function saveWorkDraft(
     const existing = await db.workDocuments.get(input);
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const draft = workDraftSchema.parse(input.draft);
+    if (input.source !== 'user' && draft.reviewedEvidenceGroupIds?.length) throw new DatabaseError('Only a person can mark evidence as reviewed.', 403);
     const sourceBody = draft.format === 'restricted-mdx' ? (draft.body ?? draft.markdown) : draft.markdown;
     if (input.source === 'agent' && existing.chatId && sourceBody.includes('dory://chart/')) {
         const history = await db.chat.listMessages({ ...input, sessionId: existing.chatId });
@@ -67,7 +99,7 @@ export async function saveWorkDraft(
     }
     if (!draft.format) {
         try {
-            referencedEvidence(draft.markdown, draft.visuals);
+            referencedEvidence(draft.markdown, draft.visuals, draft.evidenceGroups ?? existing.content.evidenceGroups);
         } catch (error) {
             throw new DatabaseError(error instanceof Error ? error.message : 'Invalid reference.', 400);
         }
@@ -89,8 +121,23 @@ export async function saveWorkDraft(
             `WORK_REFERENCE_INVALID: ${parsed.diagnostics.map(item => `Line ${item.line ?? 1}: ${item.message} Offending text: ${JSON.stringify(body.split('\n')[(item.line ?? 1) - 1]?.slice(0, 240))}`).join('; ')}. No changes were saved. Correct or remove the invalid syntax. Component source must be a visual ID, not an artifact ID. Available visuals: ${JSON.stringify(draft.visuals.map(({ id, type, evidenceId }) => ({ id, type, evidenceId })))}. Read the latest report, then use patch.embedVisualIds with these visual IDs to embed components without writing tags manually.`,
             400,
         );
+    if (
+        parsed.diagnostics.length &&
+        (draft.reviewedEvidenceGroupIds?.length ||
+            (draft.evidenceGroups &&
+                JSON.stringify(draft.evidenceGroups) !== JSON.stringify((existing.content.evidenceGroups ?? []).map(({ id, references }) => ({ id, references })))))
+    )
+        throw new DatabaseError('Fix the report syntax before saving evidence changes. Your edits remain in the editor.', 400);
     draft.markdown = parsed.diagnostics.length ? existing.content.markdown : draft.format ? parsed.presentation : draft.markdown;
     if (parsed.diagnostics.length) draft.status = 'draft';
+    let evidenceGroups = existing.content.evidenceGroups ?? [];
+    if (!parsed.diagnostics.length) {
+        try {
+            evidenceGroups = reconcileReportEvidenceGroups(existing.content, body, draft.evidenceGroups, draft.reviewedEvidenceGroupIds);
+        } catch (error) {
+            throw new DatabaseError(error instanceof Error ? error.message : 'Invalid evidence groups.', 400);
+        }
+    }
     const previousWrite = existing.content.agentWrite;
     const changedVisualIds = draft.visuals
         .filter(
@@ -137,11 +184,20 @@ export async function saveWorkDraft(
     try {
         references = parsed.diagnostics.length
             ? { ids: existing.content.evidence.map(item => item.artifactId), visuals: draft.visuals }
-            : referencedEvidence(draft.markdown, draft.visuals);
+            : referencedEvidence(draft.markdown, draft.visuals, evidenceGroups);
     } catch (error) {
         throw new DatabaseError(error instanceof Error ? error.message : 'Invalid references.', 400);
     }
     const { ids, visuals } = references;
+    const newGroupReferences = evidenceGroups
+        .flatMap(group => group.references)
+        .filter(reference => !existing.content.evidence.some(item => item.artifactId === reference.artifactId));
+    if (newGroupReferences.length) {
+        const workIds = [...new Set([existing.content.sourceWorkId, input.runId].filter((id): id is string => Boolean(id)))];
+        const candidates = (await Promise.all(workIds.map(workId => db.artifacts.listByWork({ organizationId: input.organizationId, userId: input.userId, workId })))).flat();
+        if (newGroupReferences.some(reference => !candidates.some(candidate => candidate.id === reference.artifactId)))
+            throw new DatabaseError('Choose evidence from this report or its current Work.', 403);
+    }
     if (
         input.source === 'agent' &&
         input.runId &&
@@ -163,6 +219,8 @@ export async function saveWorkDraft(
             if (!canReadAttachmentSource(attachment, input.userId, existing.chatId)) throw new DatabaseError('Attachment evidence belongs to another conversation.', 403);
             if (!attachment && (!artifact.connectionId || !scope.connectionIds.includes(artifact.connectionId)))
                 throw new DatabaseError('Evidence is outside the selected analysis scope.', 403);
+            if (!attachment && !(await resolveOrganizationAccess(input.organizationId, input.userId))?.permissions.connection.read)
+                throw new DatabaseError('Data source read access required.', 403);
             if (artifact.workId) {
                 if (!(await db.works.getById({ ...input, workId: artifact.workId }))) throw new DatabaseError('Evidence is unavailable.', 403);
             }
@@ -266,6 +324,7 @@ export async function saveWorkDraft(
         markdown: draft.markdown,
         visuals,
         evidence,
+        evidenceGroups,
         knowledge,
         ...(input.source === 'agent' && input.requestId
             ? {
@@ -405,6 +464,7 @@ export async function patchWorkDocument(
             body: patch.format ? markdown : undefined,
             markdown,
             visuals: [...visuals.values()],
+            evidenceGroups: patch.evidenceGroups,
             status: patch.status,
         },
     });
@@ -415,6 +475,9 @@ export async function publishWorkReport(db: DBService, input: Owner & { document
     await assertDocumentWrite(input);
     const existing = await db.workDocuments.get(input);
     // Retries are resolved in the repository against the original immutable publication.
-    if (existing.revision === input.expectedRevision) resolvedReport(existing.content);
+    if (existing.revision === input.expectedRevision) {
+        resolvedReport(existing.content);
+        if (existing.content.evidenceGroups?.some(group => group.needsReview)) throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
+    }
     return db.workDocuments.publish(input);
 }

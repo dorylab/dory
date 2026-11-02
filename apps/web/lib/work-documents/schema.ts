@@ -76,6 +76,35 @@ export const workVisualSchema = z
             ctx.addIssue({ code: 'custom', message: 'A pie chart requires exactly one numeric series.' });
         if (value.type === 'metric' && !value.metric) ctx.addIssue({ code: 'custom', message: 'Metric must reference an evidence cell.' });
     });
+export const reportEvidenceGroupSchema = z
+    .object({
+        id: z
+            .string()
+            .regex(/^[a-zA-Z0-9_-]+$/)
+            .max(100),
+        references: z
+            .array(
+                z
+                    .object({
+                        artifactId: z.string().min(1),
+                        explanation: z.string().trim().max(1000).optional(),
+                    })
+                    .strict(),
+            )
+            .min(1)
+            .max(20),
+    })
+    .strict();
+export const reportEvidenceGroupsSchema = z.array(reportEvidenceGroupSchema).max(100);
+export const reviewedEvidenceGroupIdsSchema = z
+    .array(
+        z
+            .string()
+            .regex(/^[a-zA-Z0-9_-]+$/)
+            .max(100),
+    )
+    .max(100);
+
 export const workDraftSchema = z
     .object({
         title: z.string().trim().min(1).max(160),
@@ -83,6 +112,8 @@ export const workDraftSchema = z
         format: z.literal('restricted-mdx').optional(),
         body: z.string().max(200000).optional(),
         visuals: z.array(workVisualSchema).max(100),
+        evidenceGroups: reportEvidenceGroupsSchema.optional(),
+        reviewedEvidenceGroupIds: reviewedEvidenceGroupIdsSchema.optional(),
         status: z.enum(['draft', 'ready']),
     })
     .strict()
@@ -90,6 +121,11 @@ export const workDraftSchema = z
 export const workPatchSchema = z
     .object({
         title: z.string().trim().min(1).max(160).optional(),
+        evidenceGroups: reportEvidenceGroupsSchema
+            .optional()
+            .describe(
+                'Complete evidence group list for paragraph links [Evidence](dory://evidence-group/GROUP_ID). Each group contains id and references:[{artifactId,explanation?}]. Omit to preserve groups; removing the paragraph link removes its group.',
+            ),
         format: z.literal('restricted-mdx').optional(),
         edits: z.array(z.object({ oldText: z.string().max(200000), newText: z.string().max(200000) })).max(100),
         visuals: z

@@ -2,6 +2,7 @@ import { createSerializer, parseAsInteger, parseAsString } from 'nuqs';
 import type { ReportEvidenceReference } from '@dory/shared/types/report-workspace';
 
 export const reportWorkspaceParsers = { revision: parseAsInteger, publication: parseAsString, snapshot: parseAsString };
+export const reportArtifactParsers = { report: parseAsString, ...reportWorkspaceParsers };
 const serialize = createSerializer(reportWorkspaceParsers);
 export function buildReportWorkspacePath(organization: string, reference: ReportEvidenceReference) {
     return serialize(`/${encodeURIComponent(organization)}/reports/${encodeURIComponent(reference.documentId)}/workspace/${encodeURIComponent(reference.artifactId)}`, {

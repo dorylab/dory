@@ -75,6 +75,8 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
                         title: snapshot.title,
                         body: snapshot.content.body ?? '',
                         visuals: snapshot.content.visuals,
+                        evidenceGroups: snapshot.content.evidenceGroups?.map(({ id, references }) => ({ id, references })),
+                        reviewedEvidenceGroupIds: snapshot.content.reviewedEvidenceGroupIds,
                         tabs: snapshot.tabs,
                         activeTabId: snapshot.activeTabId,
                         proseReviewed: !snapshot.proseNeedsReview,

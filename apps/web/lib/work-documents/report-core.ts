@@ -8,6 +8,7 @@ import { unified } from 'unified';
 
 import { referencedEvidence } from './markdown';
 import { workVisualSchema } from './schema';
+import { validateReportEvidenceGroups } from './evidence-groups';
 
 const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMdx);
 const markdown = unified().use(remarkParse).use(remarkGfm);
@@ -94,7 +95,7 @@ export function parseReport(body: string, visuals: WorkVisual[]) {
                 error(node, `Unsupported report syntax: ${node.type}`);
                 return;
             }
-            if ('url' in node && !/^(https?:\/\/|mailto:|#|dory:\/\/evidence\/[a-zA-Z0-9_-]+$)/i.test(node.url)) error(node, 'Unsupported link URL.');
+            if ('url' in node && !/^(https?:\/\/|mailto:|#|dory:\/\/(?:evidence|evidence-group)\/[a-zA-Z0-9_-]+$)/i.test(node.url)) error(node, 'Unsupported link URL.');
             if ('children' in node) for (const child of node.children) visit(child, node);
         };
         visit(tree);
@@ -191,7 +192,8 @@ export function resolvedReport(content: WorkDocumentContent): WorkDocumentConten
     const visuals = Object.entries(content.embeds ?? {}).map(([id, embed]) => workVisualSchema.parse({ id, type: embed.type, evidenceId: embed.artifactId, ...embed.config }));
     const parsed = parseReport(content.body ?? '', visuals);
     if (parsed.diagnostics.length) throw new Error(parsed.diagnostics.map(item => `${item.line ?? 1}:${item.column ?? 1} ${item.message}`).join('\n'));
-    for (const id of referencedEvidence(parsed.presentation, visuals).ids) {
+    validateReportEvidenceGroups(content.body ?? '', content.evidenceGroups);
+    for (const id of referencedEvidence(parsed.presentation, visuals, content.evidenceGroups).ids) {
         if (!content.evidence.some(item => item.artifactId === id)) throw new Error('Missing report evidence.');
     }
     for (const component of parsed.components) {

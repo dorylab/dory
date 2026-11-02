@@ -77,7 +77,7 @@ export function materializeWorkingContent(state: ReportWorkingState, results: Re
 
 export function versionContent(draft: ReportWorkingDraft) {
     const content = materializeWorkingContent(draft.state, draft.results, true);
-    const referenced = referencedEvidence(content.markdown, content.visuals);
+    const referenced = referencedEvidence(content.markdown, content.visuals, content.evidenceGroups);
     const evidence = content.evidence.filter(item => referenced.ids.includes(item.artifactId));
     return { ...content, visuals: referenced.visuals, evidence, embeds: reportEmbeds(referenced.visuals, evidence), agentWrite: undefined };
 }

@@ -71,6 +71,8 @@ type ResultSetContext = {
         id: string;
         columns: unknown[];
         dataAvailability: string;
+        status?: string;
+        limited?: boolean;
         sql: string | null;
         previewRowCount: number;
     } | null;

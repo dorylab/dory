@@ -18,10 +18,10 @@ export function ArtifactProvenance({ artifact, organization }: { artifact: Artif
                     <span>{artifact.createdByName ?? artifact.createdByActorType}</span>
                 )}
             </div>
-            <div className="grid gap-2">
-                <span className="text-xs font-medium text-muted-foreground">{t('EvidenceFor')}</span>
-                {artifact.usedBy.length ? (
-                    artifact.usedBy.map(finding => (
+            {artifact.usedBy.length ? (
+                <div className="grid gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">{t('EvidenceFor')}</span>
+                    {artifact.usedBy.map(finding => (
                         <Link
                             key={finding.findingId}
                             href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(finding.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`}
@@ -29,11 +29,9 @@ export function ArtifactProvenance({ artifact, organization }: { artifact: Artif
                         >
                             {finding.title}
                         </Link>
-                    ))
-                ) : (
-                    <span className="text-muted-foreground">{t('NoEvidence')}</span>
-                )}
-            </div>
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
 }

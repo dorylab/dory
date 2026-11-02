@@ -1,6 +1,7 @@
 import { listTablesOperation } from '@/lib/ai/tools/dory-tool-operations';
 import { actionOperationContext } from '../../operation-context';
 import { reportWorkingDraftActions } from './working-draft';
+import { reportEvidenceActions } from './evidence-viewer';
 import { randomUUID } from 'node:crypto';
 import type { ActionContext } from '@dory/actions';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -182,4 +183,4 @@ const executeAction = defineWebAction({
         });
     },
 });
-export const reportWorkspaceActions = [contextAction, sourceAction, detailsAction, executeAction, ...reportWorkingDraftActions];
+export const reportWorkspaceActions = [contextAction, sourceAction, detailsAction, executeAction, ...reportWorkingDraftActions, ...reportEvidenceActions];

@@ -1,10 +1,9 @@
 'use client';
 
-import React, { Activity, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
-import { cn } from '@dory/web-utils';
+import { SqlResults, SqlResultView, SqlResultTablePane, SqlResultChartPane } from '@/components/sql-workspace/sql-result-view';
 
-import VTable from './vtable';
 import { InspectorPanel } from './vtable/InspectorPanel';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
 import { runningTabsAtom, sessionIdByTabAtom } from '../../sql-console.store';
@@ -18,17 +17,14 @@ import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { OverviewTable } from './OverviewTable';
 import { currentSessionMetaAtom } from './stores/result-table.atoms';
 import { chartStatesByKeyAtom, viewModesByTabAtom } from './components/charts/stores/chart-state.atoms';
-import { ResultStatusBar } from './ResultStatusBar';
 import { makeSetUserPickedAtom, makeActiveSetAtom, makeAutoSetActiveSetAtom, makeSetActiveSetAtom, makeUserPickedAtom } from './stores/active-set.atoms';
 import { useAutoJumpToLastResult } from './hooks/useAutoJumpToLastResult';
 import { SQLErrorAlert } from './components/SQLErrorAlert';
 import { VTableSearchBar } from './components/TableSearchBar';
-import { Charts } from './components/charts';
 import { useTranslations } from 'next-intl';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useVTableFilters, VTableFilters } from './vtable/VTableFilters';
-import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import type { ColumnFilter, VTableRemoteSource } from './vtable/type';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
 import type { ResultSetMeta, ResultSetViewState } from '@/lib/client/type';
@@ -995,104 +991,80 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         if (shouldShowWholeResultEmpty) {
             return <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>;
         }
-        const showSharedFilterBar = currentViewMode === 'table' || currentViewMode === 'charts';
-
         return (
-            <div className="flex h-full min-h-0 flex-col bg-card mb-2" data-testid="result-table-content">
-                <div className="border-b bg-muted/30">
-                    <div className="flex min-h-12 items-center justify-between gap-3 w-full px-2 py-1">
-                        <Tabs
-                            value={currentViewMode}
-                            onValueChange={value => {
-                                if (value === 'table' || value === 'charts') {
-                                    setCurrentViewMode(value);
-                                    setViewModesByKey(prev => {
-                                        if (prev[viewModeKey] === value) return prev;
-                                        return {
-                                            ...prev,
-                                            [viewModeKey]: value,
-                                        };
-                                    });
-                                }
-                            }}
-                        >
-                            <div className="flex items-center gap-2">
-                                <TabsList className="h-7 p-[2px]" aria-label="Result view">
-                                    <TabsTrigger value="table" className="h-6 px-3 text-xs cursor-pointer">
-                                        {t('Results.Table')}
-                                    </TabsTrigger>
-                                    <TabsTrigger value="charts" className="h-6 px-3 text-xs cursor-pointer">
-                                        {t('Results.Charts')}
-                                    </TabsTrigger>
-                                </TabsList>
-                            </div>
-                        </Tabs>
-                        {showSharedFilterBar ? (
-                            <div className="flex min-w-0 flex-1 flex-row">
-                                <VTableSearchBar
-                                    query={query}
-                                    className="w-80 max-w-full"
-                                    onQueryChange={setQuery}
-                                    onClearQuery={() => setQuery('')}
-                                    filteredCount={stats.filteredCount}
-                                    totalCount={stats.totalCount}
-                                />
-                                <VTableFilters
-                                    activeFilters={activeFilters}
-                                    columnsRaw={sessionMetas.columns ?? []}
-                                    onUpsertFilter={setColumnFilter}
-                                    onRemoveFilter={removeFilter}
-                                    onClearAllFilters={clearAllFilters}
-                                    className="border-0 bg-transparent px-0 py-0"
-                                />
-                            </div>
-                        ) : (
-                            <div className="h-10 flex-1" />
+            <SqlResultView
+                view={currentViewMode}
+                onViewChange={value => {
+                    setCurrentViewMode(value);
+                    setViewModesByKey(prev => {
+                        if (prev[viewModeKey] === value) return prev;
+                        return {
+                            ...prev,
+                            [viewModeKey]: value,
+                        };
+                    });
+                }}
+                filters={
+                    <>
+                        <VTableSearchBar
+                            query={query}
+                            className="w-80 max-w-full"
+                            onQueryChange={setQuery}
+                            onClearQuery={() => setQuery('')}
+                            filteredCount={stats.filteredCount}
+                            totalCount={stats.totalCount}
+                        />
+                        <VTableFilters
+                            activeFilters={activeFilters}
+                            columnsRaw={sessionMetas.columns ?? []}
+                            onUpsertFilter={setColumnFilter}
+                            onRemoveFilter={removeFilter}
+                            onClearAllFilters={clearAllFilters}
+                            className="border-0 bg-transparent px-0 py-0"
+                        />
+                    </>
+                }
+                actions={
+                    <>
+                        {isResult && currentViewMode === 'table' && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 mr-1 cursor-pointer"
+                                        title={t('Results.DownloadCsvTitle')}
+                                        aria-label={t('Results.DownloadCsvTitle')}
+                                    >
+                                        <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onSelect={() => void handleDownloadCsv()} disabled={rowCount <= 0} className="cursor-pointer">
+                                        <Download />
+                                        CSV
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         )}
-                        <div className="flex items-center gap-1.5 mr-2">
-                            {isResult && currentViewMode === 'table' && (
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 mr-1 cursor-pointer"
-                                            title={t('Results.DownloadCsvTitle')}
-                                            aria-label={t('Results.DownloadCsvTitle')}
-                                        >
-                                            <MoreHorizontal className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onSelect={() => void handleDownloadCsv()} disabled={rowCount <= 0} className="cursor-pointer">
-                                            <Download />
-                                            CSV
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <div className="relative flex min-h-0 flex-1">
-                    {Object.values(tablePaneSnapshotsBySet).map(snapshot => {
-                        const visible =
-                            currentViewMode === 'table' &&
-                            snapshot.setIndex === activeSet &&
-                            sessionMetas.sessionId === snapshot.sessionId &&
-                            sessionMetas.setIndex === snapshot.setIndex &&
-                            hydratedViewStateKey === `${snapshot.sessionId}:${snapshot.setIndex}`;
-                        const paneActiveFilters = visible ? activeFilters : snapshot.activeFilters;
+                    </>
+                }
+                tables={
+                    <>
+                        {Object.values(tablePaneSnapshotsBySet).map(snapshot => {
+                            const visible =
+                                currentViewMode === 'table' &&
+                                snapshot.setIndex === activeSet &&
+                                sessionMetas.sessionId === snapshot.sessionId &&
+                                sessionMetas.setIndex === snapshot.setIndex &&
+                                hydratedViewStateKey === `${snapshot.sessionId}:${snapshot.setIndex}`;
+                            const paneActiveFilters = visible ? activeFilters : snapshot.activeFilters;
 
-                        return (
-                            <div
-                                key={`${snapshot.sessionId}:${snapshot.setIndex}`}
-                                data-testid={`result-set-table-${snapshot.setIndex}`}
-                                aria-hidden={!visible}
-                                inert={!visible}
-                                className={cn('absolute inset-0 min-h-0', visible ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none')}
-                            >
-                                <VTable
+                            return (
+                                <SqlResultTablePane
+                                    key={`${snapshot.sessionId}:${snapshot.setIndex}`}
+                                    visible={visible}
+                                    testId={`result-set-table-${snapshot.setIndex}`}
                                     results={visible ? (isRemoteFullResult ? EMPTY_RESULTS : columnFilteredResults) : snapshot.results}
                                     columnMetas={visible ? (sessionMetas.columns ?? []) : snapshot.columnMetas}
                                     remoteSource={visible ? remoteSource : snapshot.remoteSource}
@@ -1113,13 +1085,12 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                                     onSortChange={visible ? setSortState : undefined}
                                     onSelectedRowIndexesChange={visible ? handleSelectedRowIndexesChange : undefined}
                                 />
-                            </div>
-                        );
-                    })}
-                    {currentViewMode === 'table' && shouldShowFilteredEmpty && (
-                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-card text-sm text-muted-foreground">{t('Results.NoResults')}</div>
-                    )}
-                    <div className={cn('absolute inset-0 min-h-0', currentViewMode === 'charts' ? 'z-10 flex opacity-100' : 'z-0 opacity-0 pointer-events-none')}>
+                            );
+                        })}
+                    </>
+                }
+                charts={
+                    <>
                         {chartSetIndices.map(setIndex => {
                             const setChartStateKey = tabId ? `tab:${tabId}:set:${setIndex}` : 'unknown';
                             const snapshot =
@@ -1134,132 +1105,126 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                             const visible = setIndex === activeSet;
 
                             return (
-                                <Activity key={setChartStateKey} mode={visible ? 'visible' : 'hidden'}>
-                                    <div className={`flex min-h-0 flex-1 flex-col ${visible ? '' : 'hidden'}`}>
-                                        <Charts
-                                            key={`${setChartStateKey}:${setVersion}`}
-                                            rows={snapshot.rows}
-                                            columnsRaw={snapshot.columnsRaw}
-                                            resultStats={setIndex === activeSet ? sessionMetas.stats : undefined}
-                                            remoteSource={
-                                                visible && isRemoteFullResult && remoteResultSetId
-                                                    ? {
-                                                          cacheKey: `${remoteResultSetId}:${remoteOperationKey}:chart`,
-                                                          readChart: state =>
-                                                              readResultSetChart({
-                                                                  resultSetId: remoteResultSetId,
-                                                                  xKey: state.xKey,
-                                                                  yKey: state.yKey,
-                                                                  groupKey: state.groupKey,
-                                                                  chartType: state.chartType,
-                                                                  filters: remoteOperations.filters,
-                                                                  search: remoteOperations.search,
-                                                              }),
-                                                      }
-                                                    : null
+                                <SqlResultChartPane
+                                    visible={visible}
+                                    key={`${setChartStateKey}:${setVersion}`}
+                                    rows={snapshot.rows}
+                                    columnsRaw={snapshot.columnsRaw}
+                                    resultStats={setIndex === activeSet ? sessionMetas.stats : undefined}
+                                    remoteSource={
+                                        visible && isRemoteFullResult && remoteResultSetId
+                                            ? {
+                                                  cacheKey: `${remoteResultSetId}:${remoteOperationKey}:chart`,
+                                                  readChart: state =>
+                                                      readResultSetChart({
+                                                          resultSetId: remoteResultSetId,
+                                                          xKey: state.xKey,
+                                                          yKey: state.yKey,
+                                                          groupKey: state.groupKey,
+                                                          chartType: state.chartType,
+                                                          filters: remoteOperations.filters,
+                                                          search: remoteOperations.search,
+                                                      }),
+                                              }
+                                            : null
+                                    }
+                                    stateKey={setChartStateKey}
+                                    initialState={setInitialState}
+                                    stateSyncEnabled={visible}
+                                    onResetState={() => {
+                                        setChartStatesByKey(prev => {
+                                            if (!prev[setChartStateKey]) {
+                                                return prev;
                                             }
-                                            stateKey={setChartStateKey}
-                                            initialState={setInitialState}
-                                            stateSyncEnabled={visible}
-                                            onResetState={() => {
-                                                setChartStatesByKey(prev => {
-                                                    if (!prev[setChartStateKey]) {
-                                                        return prev;
-                                                    }
 
-                                                    const next = { ...prev };
-                                                    delete next[setChartStateKey];
-                                                    return next;
-                                                });
-                                                setChartStateVersionByTab(prev => ({
-                                                    ...prev,
-                                                    [setChartStateKey]: (prev[setChartStateKey] ?? 0) + 1,
-                                                }));
-                                            }}
-                                            onStateChange={nextState => {
-                                                setChartStatesByKey(prev => {
-                                                    const current = prev[setChartStateKey];
-                                                    if (
-                                                        current?.chartType === nextState.chartType &&
-                                                        current?.xKey === nextState.xKey &&
-                                                        current?.yKey === nextState.yKey &&
-                                                        current?.groupKey === nextState.groupKey &&
-                                                        current?.chartColorPreset === nextState.chartColorPreset
-                                                    ) {
-                                                        return prev;
-                                                    }
-
-                                                    return {
-                                                        ...prev,
-                                                        [setChartStateKey]: nextState,
-                                                    };
-                                                });
-                                            }}
-                                            onSaveArtifact={
-                                                visible && remoteResultSetId
-                                                    ? nextState => {
-                                                          void executeActionClient<{ id: string }>(
-                                                              'artifact.chart.create',
-                                                              { sourceArtifactId: `artifact_${remoteResultSetId}`, chartState: nextState },
-                                                              { organizationId },
-                                                          )
-                                                              .then(() => toast.success('Chart saved to Artifacts.'))
-                                                              .catch(error => toast.error(error instanceof Error ? error.message : 'Failed to save chart.'));
-                                                      }
-                                                    : undefined
+                                            const next = { ...prev };
+                                            delete next[setChartStateKey];
+                                            return next;
+                                        });
+                                        setChartStateVersionByTab(prev => ({
+                                            ...prev,
+                                            [setChartStateKey]: (prev[setChartStateKey] ?? 0) + 1,
+                                        }));
+                                    }}
+                                    onStateChange={nextState => {
+                                        setChartStatesByKey(prev => {
+                                            const current = prev[setChartStateKey];
+                                            if (
+                                                current?.chartType === nextState.chartType &&
+                                                current?.xKey === nextState.xKey &&
+                                                current?.yKey === nextState.yKey &&
+                                                current?.groupKey === nextState.groupKey &&
+                                                current?.chartColorPreset === nextState.chartColorPreset
+                                            ) {
+                                                return prev;
                                             }
-                                            onApplyFilters={(filters, options) => {
-                                                if (!visible) {
-                                                    return;
-                                                }
-                                                if (!options?.append) {
-                                                    clearAllFilters();
-                                                }
 
-                                                filters.forEach(filter => {
-                                                    setColumnFilter(filter);
-                                                });
-                                            }}
-                                        />
-                                    </div>
-                                </Activity>
+                                            return {
+                                                ...prev,
+                                                [setChartStateKey]: nextState,
+                                            };
+                                        });
+                                    }}
+                                    onSaveArtifact={
+                                        visible && remoteResultSetId
+                                            ? nextState => {
+                                                  void executeActionClient<{ id: string }>(
+                                                      'artifact.chart.create',
+                                                      { sourceArtifactId: `artifact_${remoteResultSetId}`, chartState: nextState },
+                                                      { organizationId },
+                                                  )
+                                                      .then(() => toast.success('Chart saved to Artifacts.'))
+                                                      .catch(error => toast.error(error instanceof Error ? error.message : 'Failed to save chart.'));
+                                              }
+                                            : undefined
+                                    }
+                                    onApplyFilters={(filters, options) => {
+                                        if (!visible) {
+                                            return;
+                                        }
+                                        if (!options?.append) {
+                                            clearAllFilters();
+                                        }
+
+                                        filters.forEach(filter => {
+                                            setColumnFilter(filter);
+                                        });
+                                    }}
+                                />
                             );
                         })}
-                    </div>
-                    {currentViewMode === 'table' && (
-                        <InspectorPanel
-                            open={inspectorOpen}
-                            setOpen={setInspectorOpen}
-                            mode={inspectorMode}
-                            payload={inspectorPayload}
-                            rowViewMode={rowViewMode}
-                            setRowViewMode={setRowViewMode}
-                            inspectorWidth={inspectorWidth}
-                            setInspectorWidth={setInspectorWidth}
-                        />
-                    )}
-                </div>
-            </div>
+                    </>
+                }
+                inspector={
+                    <InspectorPanel
+                        open={inspectorOpen}
+                        setOpen={setInspectorOpen}
+                        mode={inspectorMode}
+                        payload={inspectorPayload}
+                        rowViewMode={rowViewMode}
+                        setRowViewMode={setRowViewMode}
+                        inspectorWidth={inspectorWidth}
+                        setInspectorWidth={setInspectorWidth}
+                    />
+                }
+                empty={
+                    shouldShowFilteredEmpty ? (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-card text-sm text-muted-foreground">{t('Results.NoResults')}</div>
+                    ) : undefined
+                }
+            />
         );
     }
 
     return (
-        <div className="flex h-full flex-col" data-testid="result-table">
-            {/* Top toolbar */}
-            <Toolbar
-                indices={indices}
-                titles={Object.fromEntries(setsMeta.map(set => [set.setIndex, set.title]))}
-                activeSet={activeSet} // -1 = Overview，>=0 = Result i
-                onSetActiveSet={n => {
-                    setActiveSet(n);
-                }}
-            />
-
-            {/* Table area */}
-            {storageLimitApplied ? <div className="border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{t('Results.StorageLimitPreviewOnly')}</div> : null}
-            <div className="flex-1 min-h-0">{renderResult()}</div>
-
-            {isResult && <ResultStatusBar meta={execMetaBySet?.[activeSet]} shouldShowLimitNotice={shouldShowLimitNotice} />}
-        </div>
+        <SqlResults
+            tabs={<Toolbar indices={indices} titles={Object.fromEntries(setsMeta.map(set => [set.setIndex, set.title]))} activeSet={activeSet} onSetActiveSet={setActiveSet} />}
+            notice={storageLimitApplied ? <div className="border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{t('Results.StorageLimitPreviewOnly')}</div> : undefined}
+            meta={execMetaBySet?.[activeSet]}
+            showStatus={isResult}
+            limited={shouldShowLimitNotice}
+        >
+            {renderResult()}
+        </SqlResults>
     );
 }

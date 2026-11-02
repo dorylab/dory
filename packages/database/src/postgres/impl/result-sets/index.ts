@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import { and, asc, eq, lte, ne, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lte, ne, not, notInArray, sql } from 'drizzle-orm';
 
 import { getDoryArtifactStore, joinObjectPath, safeObjectPathPart, type DoryArtifactStore } from '@dory/artifacts';
 import { collectSerializableDataPage, createDataSchema, prefetchSerializableDataStream, rowDataStream, schemaToIpc, serializableColumns, type DataStream } from '@dory/data-plane';
@@ -43,6 +43,14 @@ import {
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import type { PostgresDBClient } from '@dory/shared';
+import {
+    discardUnreferencedResultData,
+    isReportExportReferenced,
+    isReportResultSetReferenced,
+    lockResultSet,
+    reportExportReference,
+    reportResultSetReference,
+} from '../work-documents/evidence-retention';
 
 const DEFAULT_PREVIEW_ROWS = 200;
 const DEFAULT_ROW_LIMIT = 1000;
@@ -809,23 +817,28 @@ export class PostgresResultSetsRepository {
         private readonly fullDataWriter: ResultSetDataWriter = createDefaultResultSetDataWriter(),
     ) {}
 
-    async init() {
-        const client = await getClient();
+    async init(injectedClient?: PostgresDBClient) {
+        const client = injectedClient ?? (await getClient());
         if (!client) throw new DatabaseError('Database connection failed', 500);
         this.db = client as PostgresDBClient;
     }
 
     async deleteResultSet(input: { organizationId: string; resultSetId: string }): Promise<void> {
         this.assertInited();
-        const record = await this.getRecord(input.organizationId, input.resultSetId);
-        const exports = await this.db
-            .select()
-            .from(resultSetExports)
-            .where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, input.resultSetId)));
-        await Promise.all(exports.map(item => this.artifacts.objectStore.delete(item.objectPath).catch(() => undefined)));
-        await this.db.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, input.resultSetId)));
-        await this.artifacts.resultSets.deleteResultSet(record.artifactRefJson).catch(() => undefined);
-        await this.deleteResultSetRecord(input.organizationId, input.resultSetId, new Date());
+        await this.db.transaction(async tx => {
+            const record = await lockResultSet(tx, input.organizationId, input.resultSetId);
+            if (!record) throw new DatabaseError('Result set not found', 404);
+            if (await isReportResultSetReferenced(tx, input.organizationId, input.resultSetId))
+                throw new DatabaseError('This result is retained by a report or report version and cannot be deleted.', 409);
+            const exports = await tx
+                .select()
+                .from(resultSetExports)
+                .where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, input.resultSetId)));
+            await Promise.all(exports.map(item => this.artifacts.objectStore.delete(item.objectPath)));
+            await tx.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, input.resultSetId)));
+            await this.artifacts.resultSets.deleteResultSet(record.artifactRefJson);
+            await this.deleteResultSetRecord(input.organizationId, input.resultSetId, new Date(), tx);
+        });
     }
 
     async persistDerivedResultSet(input: PersistDerivedResultSetInput): Promise<PersistDerivedResultSetOutput> {
@@ -947,7 +960,7 @@ export class PostgresResultSetsRepository {
                 });
             }
         } catch (error) {
-            await this.artifacts.resultSets.deleteResultSet(ref).catch(() => undefined);
+            await discardUnreferencedResultData(this.db, this.artifacts, input.organizationId, artifactId, ref).catch(() => undefined);
             throw error;
         }
 
@@ -1180,7 +1193,7 @@ export class PostgresResultSetsRepository {
                 });
             }
         } catch (error) {
-            await this.artifacts.resultSets.deleteResultSet(ref).catch(() => undefined);
+            await discardUnreferencedResultData(this.db, this.artifacts, input.organizationId, artifactId, ref).catch(() => undefined);
             throw error;
         }
 
@@ -1389,7 +1402,7 @@ export class PostgresResultSetsRepository {
             }
         } catch (error) {
             await prefetched.stream.close().catch(() => undefined);
-            await this.artifacts.resultSets.deleteResultSet(previewRef).catch(() => undefined);
+            await discardUnreferencedResultData(this.db, this.artifacts, input.organizationId, artifactId, previewRef).catch(() => undefined);
             throw error;
         }
 
@@ -1682,7 +1695,11 @@ export class PostgresResultSetsRepository {
 
         const deleteExportRows = async (expiredOnly: boolean) => {
             while (true) {
-                const conditions = [eq(resultSetExports.organizationId, params.organizationId)];
+                const conditions = [
+                    eq(resultSetExports.organizationId, params.organizationId),
+                    isNotNull(resultSetExports.expiresAt),
+                    not(reportExportReference(params.organizationId, resultSetExports.id)),
+                ];
                 if (expiredOnly) conditions.push(lte(resultSetExports.expiresAt, now));
                 if (params.protectedExportId) conditions.push(ne(resultSetExports.id, params.protectedExportId));
                 if (failedExportIds.size) conditions.push(notInArray(resultSetExports.id, [...failedExportIds]));
@@ -1696,10 +1713,17 @@ export class PostgresResultSetsRepository {
                 scanned += rows.length;
                 for (const row of rows) {
                     try {
-                        await this.artifacts.objectStore.delete(row.objectPath);
-                        await Promise.all([
-                            this.db.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, row.id))),
-                            this.db
+                        const deleted = await this.db.transaction(async tx => {
+                            if (row.resultSetId) {
+                                const result = await lockResultSet(tx, params.organizationId, row.resultSetId);
+                                if (result?.pinnedAt) return false;
+                            }
+                            if (await isReportExportReferenced(tx, params.organizationId, row.id)) return false;
+                            const [current] = await tx.select().from(resultSetExports).where(eq(resultSetExports.id, row.id)).for('update');
+                            if (!current || !current.expiresAt || (expiredOnly && current.expiresAt > now)) return false;
+                            await this.artifacts.objectStore.delete(current.objectPath);
+                            await tx.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, row.id)));
+                            await tx
                                 .delete(artifactCatalogTable)
                                 .where(
                                     and(
@@ -1707,10 +1731,13 @@ export class PostgresResultSetsRepository {
                                         eq(artifactCatalogTable.type, 'file'),
                                         eq(artifactCatalogTable.resourceId, row.id),
                                     ),
-                                ),
-                        ]);
-                        deletedExports += 1;
-                        bytesFreed += row.byteSize;
+                                );
+                            return true;
+                        });
+                        if (deleted) {
+                            deletedExports += 1;
+                            bytesFreed += row.byteSize;
+                        } else failedExportIds.add(row.id);
                     } catch (error) {
                         failures += 1;
                         failedExportIds.add(row.id);
@@ -1723,7 +1750,12 @@ export class PostgresResultSetsRepository {
 
         const deleteResultRows = async (expiredOnly: boolean) => {
             while (true) {
-                const conditions = [eq(resultSetsTable.organizationId, params.organizationId)];
+                const conditions = [
+                    eq(resultSetsTable.organizationId, params.organizationId),
+                    isNull(resultSetsTable.pinnedAt),
+                    isNotNull(resultSetsTable.expiresAt),
+                    not(reportResultSetReference(params.organizationId, resultSetsTable.id)),
+                ];
                 if (expiredOnly) conditions.push(lte(resultSetsTable.expiresAt, now));
                 if (params.protectedResultSetId) conditions.push(ne(resultSetsTable.id, params.protectedResultSetId));
                 if (failedResultSetIds.size) conditions.push(notInArray(resultSetsTable.id, [...failedResultSetIds]));
@@ -1737,10 +1769,18 @@ export class PostgresResultSetsRepository {
                 scanned += rows.length;
                 for (const row of rows) {
                     try {
-                        await this.artifacts.resultSets.deleteResultSet(row.artifactRefJson);
-                        await this.deleteResultSetRecord(params.organizationId, row.id, now);
-                        deletedResultSets += 1;
-                        bytesFreed += row.byteSize ?? 0;
+                        const deleted = await this.db.transaction(async tx => {
+                            const current = await lockResultSet(tx, params.organizationId, row.id);
+                            if (!current || current.pinnedAt || !current.expiresAt || (expiredOnly && current.expiresAt > now)) return false;
+                            if (await isReportResultSetReferenced(tx, params.organizationId, row.id)) return false;
+                            await this.artifacts.resultSets.deleteResultSet(current.artifactRefJson);
+                            await this.deleteResultSetRecord(params.organizationId, row.id, now, tx);
+                            return true;
+                        });
+                        if (deleted) {
+                            deletedResultSets += 1;
+                            bytesFreed += row.byteSize ?? 0;
+                        } else failedResultSetIds.add(row.id);
                     } catch (error) {
                         failures += 1;
                         failedResultSetIds.add(row.id);
@@ -2157,13 +2197,9 @@ export class PostgresResultSetsRepository {
             }
         } catch (error) {
             try {
-                await this.artifacts.objectStore.delete(objectPath);
                 if (exportRegistered) {
-                    await Promise.all([
-                        this.db.delete(resultSetExports).where(eq(resultSetExports.id, exportId)),
-                        this.db.delete(artifactCatalogTable).where(eq(artifactCatalogTable.resourceId, exportId)),
-                    ]);
-                }
+                    await this.deleteExport({ organizationId: params.organizationId, exportId });
+                } else await this.artifacts.objectStore.delete(objectPath);
             } catch (cleanupError) {
                 console.warn('[resultSets] failed to discard rejected export; retaining its database record for retry', {
                     exportId,
@@ -2195,27 +2231,8 @@ export class PostgresResultSetsRepository {
             const source = await this.getRecord(params.organizationId, record.resultSetId);
             if (!canReadAttachmentSource(source.attachmentSource, params.userId, params.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
         }
-        if (record?.expiresAt && record.expiresAt.getTime() <= Date.now()) {
-            try {
-                await this.artifacts.objectStore.delete(record.objectPath);
-                await Promise.all([
-                    this.db.delete(resultSetExports).where(eq(resultSetExports.id, record.id)),
-                    this.db
-                        .delete(artifactCatalogTable)
-                        .where(
-                            and(
-                                eq(artifactCatalogTable.organizationId, params.organizationId),
-                                eq(artifactCatalogTable.type, 'file'),
-                                eq(artifactCatalogTable.resourceId, record.id),
-                            ),
-                        ),
-                ]);
-            } catch (error) {
-                console.warn('[resultSets] expired export cleanup failed during download; retaining record for retry', {
-                    exportId: record.id,
-                    error: getErrorMessage(error),
-                });
-            }
+        if (record?.expiresAt && record.expiresAt.getTime() <= Date.now() && !(await isReportExportReferenced(this.db, params.organizationId, record.id))) {
+            // Deletion belongs to cleanup, which locks against concurrent report saves.
             throw new DatabaseError('Result set export has expired', 404);
         }
 
@@ -2250,29 +2267,31 @@ export class PostgresResultSetsRepository {
     async deleteExport(params: { organizationId: string; exportId: string }): Promise<void> {
         this.assertInited();
 
-        const [record] = await this.db
-            .select({ objectPath: resultSetExports.objectPath })
-            .from(resultSetExports)
-            .where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)))
-            .limit(1);
-        if (record) {
+        const deleted = await this.db.transaction(async tx => {
+            const [source] = await tx
+                .select()
+                .from(resultSetExports)
+                .where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)));
+            if (!source) return false;
+            if (source.resultSetId) await lockResultSet(tx, params.organizationId, source.resultSetId);
+            if (await isReportExportReferenced(tx, params.organizationId, source.id))
+                throw new DatabaseError('This result is retained by a report or report version and cannot be deleted.', 409);
+            const [record] = await tx.select().from(resultSetExports).where(eq(resultSetExports.id, source.id)).for('update');
+            if (!record) return true;
             await this.artifacts.objectStore.delete(record.objectPath);
-            await Promise.all([
-                this.db.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId))),
-                this.db
-                    .delete(artifactCatalogTable)
-                    .where(
-                        and(
-                            eq(artifactCatalogTable.organizationId, params.organizationId),
-                            eq(artifactCatalogTable.type, 'file'),
-                            eq(artifactCatalogTable.resourceId, params.exportId),
-                        ),
+            await tx.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)));
+            await tx
+                .delete(artifactCatalogTable)
+                .where(
+                    and(
+                        eq(artifactCatalogTable.organizationId, params.organizationId),
+                        eq(artifactCatalogTable.type, 'file'),
+                        eq(artifactCatalogTable.resourceId, params.exportId),
                     ),
-            ]);
-            return;
-        }
-
-        await this.artifacts.objectStore.deletePrefix(this.exportPrefix(params.organizationId, params.exportId));
+                );
+            return true;
+        });
+        if (!deleted) await this.artifacts.objectStore.deletePrefix(this.exportPrefix(params.organizationId, params.exportId));
     }
 
     async readChart(params: ResultSetChartReadInput) {
@@ -2511,17 +2530,17 @@ export class PostgresResultSetsRepository {
         });
     }
 
-    private async deleteResultSetRecord(organizationId: string, resultSetId: string, now: Date) {
+    private async deleteResultSetRecord(organizationId: string, resultSetId: string, now: Date, db: Pick<PostgresDBClient, 'delete' | 'update'> = this.db) {
         await Promise.all([
-            this.db.delete(artifactCatalogTable).where(and(eq(artifactCatalogTable.organizationId, organizationId), eq(artifactCatalogTable.sourceResultSetId, resultSetId))),
-            this.db.delete(agentRunResultSets).where(eq(agentRunResultSets.resultSetId, resultSetId)),
-            this.db
+            db.delete(artifactCatalogTable).where(and(eq(artifactCatalogTable.organizationId, organizationId), eq(artifactCatalogTable.sourceResultSetId, resultSetId))),
+            db.delete(agentRunResultSets).where(eq(agentRunResultSets.resultSetId, resultSetId)),
+            db
                 .update(queryRuns)
                 .set({ resultSetId: null, updatedAt: now })
                 .where(and(eq(queryRuns.organizationId, organizationId), eq(queryRuns.resultSetId, resultSetId))),
-            this.db.update(workQueryResultSets).set({ resultSetId: null, artifactRefJson: null }).where(eq(workQueryResultSets.resultSetId, resultSetId)),
+            db.update(workQueryResultSets).set({ resultSetId: null, artifactRefJson: null }).where(eq(workQueryResultSets.resultSetId, resultSetId)),
         ]);
-        await this.db.delete(resultSetsTable).where(and(eq(resultSetsTable.organizationId, organizationId), eq(resultSetsTable.id, resultSetId)));
+        await db.delete(resultSetsTable).where(and(eq(resultSetsTable.organizationId, organizationId), eq(resultSetsTable.id, resultSetId)));
     }
 
     private async registerResultSetArtifact(input: {

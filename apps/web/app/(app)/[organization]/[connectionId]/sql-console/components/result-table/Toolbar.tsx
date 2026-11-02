@@ -1,7 +1,6 @@
 'use client';
 import React from 'react';
-import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
-import { cn } from '@/registry/new-york-v4/lib/utils';
+import { SqlResultTabs } from '@/components/sql-workspace/sql-result-view';
 import { useTranslations } from 'next-intl';
 
 export type ExecMeta = {
@@ -33,27 +32,19 @@ export function Toolbar(props: {
     const t = useTranslations('SqlConsole');
 
     return (
-        <div className={cn('flex flex-col', className)}>
-            <div className="flex items-center justify-between w-full border bg-muted">
-                <Tabs value={String(activeSet)} onValueChange={v => onSetActiveSet(Number(v))} className="min-w-0 overflow-x-auto">
-                    <TabsList className="w-max justify-start">
-                        <TabsTrigger value="-1" className="px-2">
-                            {t('Results.Overview')}
-                        </TabsTrigger>
-                        {indices.map(i => (
-                            <TabsTrigger
-                                key={i}
-                                value={String(i)}
-                                className="max-w-48 px-2"
-                                title={titles?.[i] || undefined}
-                                aria-label={`${t('Results.ResultTab', { index: i + 1 })}${titles?.[i] ? `: ${titles[i]}` : ''}`}
-                            >
-                                <span className="truncate">{titles?.[i] || t('Results.ResultTab', { index: i + 1 })}</span>
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-                </Tabs>
-            </div>
+        <div className={className}>
+            <SqlResultTabs
+                value={String(activeSet)}
+                onChange={value => onSetActiveSet(Number(value))}
+                items={[
+                    { id: '-1', label: t('Results.Overview') },
+                    ...indices.map(index => ({
+                        id: String(index),
+                        label: titles?.[index] || t('Results.ResultTab', { index: index + 1 }),
+                        ariaLabel: `${t('Results.ResultTab', { index: index + 1 })}${titles?.[index] ? `: ${titles[index]}` : ''}`,
+                    })),
+                ]}
+            />
         </div>
     );
 }

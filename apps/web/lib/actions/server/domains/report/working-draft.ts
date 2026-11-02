@@ -7,7 +7,9 @@ import { readWorkspace, writeWorkspace } from '../../policies';
 import type { WebActionServices } from '../../types';
 import { loadReportEvidence, reportWorkspaceContext } from '@/lib/server/report-workspace-context';
 import { initialWorkingState, materializeWorkingContent, versionContent } from '@/lib/work-documents/working-draft';
-import { workVisualSchema } from '@/lib/work-documents/schema';
+import { reportEvidenceGroupsSchema, reviewedEvidenceGroupIdsSchema, workVisualSchema } from '@/lib/work-documents/schema';
+import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-groups';
+import { parseReport } from '@/lib/work-documents/report-core';
 
 const referenceSchema = z.object({
     documentId: z.string().min(1),
@@ -73,6 +75,8 @@ const save = defineWebAction({
         title: z.string().trim().min(1).max(300),
         body: z.string().max(200000),
         visuals: z.array(workVisualSchema).max(200),
+        evidenceGroups: reportEvidenceGroupsSchema.optional(),
+        reviewedEvidenceGroupIds: reviewedEvidenceGroupIdsSchema.optional(),
         tabs: z.array(tabSchema).max(100),
         activeTabId: z.string().nullable(),
         proseReviewed: z.boolean().optional(),
@@ -97,13 +101,30 @@ const save = defineWebAction({
             if (!previous && tab.copiedFromId && !copied) throw new DatabaseError('The original query is unavailable.', 400);
             return { ...tab, appliedId: previous?.appliedId ?? copied?.appliedId };
         });
+        let evidenceGroups = draft.state.content.evidenceGroups;
+        const hasSyntaxErrors = parseReport(input.body, input.visuals).diagnostics.length > 0;
+        if (
+            hasSyntaxErrors &&
+            (input.reviewedEvidenceGroupIds?.length ||
+                (input.evidenceGroups && JSON.stringify(input.evidenceGroups) !== JSON.stringify((evidenceGroups ?? []).map(({ id, references }) => ({ id, references })))))
+        )
+            throw new DatabaseError('Fix the report syntax before saving evidence changes. Your edits remain in the editor.', 400);
+        if (!hasSyntaxErrors) {
+            try {
+                evidenceGroups = reconcileReportEvidenceGroups(draft.state.content, input.body, input.evidenceGroups, input.reviewedEvidenceGroupIds);
+            } catch (error) {
+                throw new DatabaseError(error instanceof Error ? error.message : 'Invalid evidence groups.', 400);
+            }
+        }
+        if (evidenceGroups?.some(group => group.references.some(reference => !draft.state.content.evidence.some(item => item.artifactId === reference.artifactId))))
+            throw new DatabaseError('Choose evidence already in this working report.', 403);
         const state: ReportWorkingState = {
             ...draft.state,
             title: input.title,
             tabs,
             activeTabId: input.activeTabId,
             proseNeedsReview: draft.state.proseNeedsReview && !input.proseReviewed,
-            content: { ...draft.state.content, body: input.body, visuals: input.visuals },
+            content: { ...draft.state.content, body: input.body, visuals: input.visuals, evidenceGroups, reviewedEvidenceGroupIds: undefined },
         };
         state.content = materializeWorkingContent(state, draft.results);
         if (state.content.visuals.some(visual => draft.state.content.visuals.find(previous => previous.id === visual.id)?.evidenceId !== visual.evidenceId))

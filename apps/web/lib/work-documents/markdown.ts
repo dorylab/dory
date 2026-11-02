@@ -1,23 +1,24 @@
-import type { WorkVisual } from '@dory/shared/types/work-document';
+import type { ReportEvidenceGroup, WorkVisual } from '@dory/shared/types/work-document';
 import { Marked, type Token } from 'marked';
 
 export const markdownParser = new Marked({ gfm: true, breaks: false });
 export function workReferences(markdown: string) {
     const visuals = new Set<string>();
     const evidence = new Set<string>();
+    const evidenceGroups = new Set<string>();
     const invalid: string[] = [];
     markdownParser.walkTokens(markdownParser.lexer(markdown), token => {
         if (token.type === 'text' && !token.tokens && token.text.includes('dory://')) invalid.push(token.text);
         if (token.type !== 'image' && token.type !== 'link') return;
         const href = token.href;
         if (!href.startsWith('dory:')) return;
-        const match = /^dory:\/\/(visual|evidence)\/([a-zA-Z0-9_-]+)$/.exec(href);
-        if (!match || (match[1] === 'visual' && token.type !== 'image') || (match[1] === 'evidence' && token.type !== 'link')) invalid.push(href);
-        else (match[1] === 'visual' ? visuals : evidence).add(match[2]);
+        const match = /^dory:\/\/(visual|evidence|evidence-group)\/([a-zA-Z0-9_-]+)$/.exec(href);
+        if (!match || (match[1] === 'visual' && token.type !== 'image') || (match[1] !== 'visual' && token.type !== 'link')) invalid.push(href);
+        else (match[1] === 'visual' ? visuals : match[1] === 'evidence-group' ? evidenceGroups : evidence).add(match[2]);
     });
-    return { visuals: [...visuals], evidence: [...evidence], invalid };
+    return { visuals: [...visuals], evidence: [...evidence], evidenceGroups: [...evidenceGroups], invalid };
 }
-export function referencedEvidence(markdown: string, visuals: WorkVisual[]) {
+export function referencedEvidence(markdown: string, visuals: WorkVisual[], groups: ReportEvidenceGroup[] = []) {
     const refs = workReferences(markdown);
     if (refs.invalid.length)
         throw new Error(
@@ -27,6 +28,11 @@ export function referencedEvidence(markdown: string, visuals: WorkVisual[]) {
         );
     if (new Set(visuals.map(v => v.id)).size !== visuals.length) throw new Error('Visual IDs must be unique.');
     const ids = new Set(refs.evidence);
+    for (const id of refs.evidenceGroups) {
+        const group = groups.find(item => item.id === id);
+        if (!group?.references.length) throw new Error('Missing evidence group: ' + id);
+        for (const reference of group.references) ids.add(reference.artifactId);
+    }
     for (const id of refs.visuals) {
         const visual = visuals.find(v => v.id === id);
         if (!visual) throw new Error('Unknown visual: ' + id);

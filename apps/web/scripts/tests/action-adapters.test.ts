@@ -7,6 +7,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ActionActorType, ActionContext } from '@dory/actions';
 import { z } from 'zod';
+import { DrizzleQueryError } from 'drizzle-orm';
 import type { WebActionServices } from '@/lib/actions/server/types';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 
@@ -125,6 +126,35 @@ function auditSignature(auditEvents: unknown[]) {
         resourceType: event.resource?.type,
     };
 }
+
+test('persistence failures do not expose SQL or bound report content through action adapters', async () => {
+    const failure = new DrizzleQueryError('insert into report_working_drafts values ($1)', ['private report content'], new Error('relation does not exist'));
+    const services = {
+        db: {
+            tabState: {
+                saveTabState: async () => {
+                    throw failure;
+                },
+            },
+        },
+    } as unknown as WebActionServices;
+
+    await assert.rejects(executeUiAction(createContext('user', ['tabs:write'], services), 'tab.create', tabCreateInput), error => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.message, 'Unable to access application storage. Please try again.');
+        assert.equal((error.cause as Error).cause, failure);
+        return true;
+    });
+    const agentTool = actionToAgentTool(tabCreateAction, () => createContext('agent', ['tabs:write'], services));
+    const agentOutput = await (agentTool.execute as any)(tabCreateInput);
+    const mcpTool = actionToMcpTool(tabCreateAction, () => createContext('mcp', ['tabs:write'], services));
+    const mcpOutput = await mcpTool.execute(tabCreateInput);
+    for (const output of [agentOutput, mcpOutput]) {
+        const serialized = JSON.stringify(output);
+        assert.match(serialized, /Unable to access application storage/);
+        assert.doesNotMatch(serialized, /report_working_drafts|private report content/);
+    }
+});
 
 test('tab.create can be executed through UI, Agent, and MCP adapters with the same side effect and audit semantics', async () => {
     const ui = createServices();

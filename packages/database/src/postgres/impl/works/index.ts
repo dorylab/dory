@@ -43,7 +43,8 @@ import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { applyCheckpointCommand, initialChatCheckpoints, type ChatCheckpoints, type CheckpointCommand } from '@dory/shared/types/chat-checkpoints';
 import { mergeChatProgress, type ChatProgressEntry } from '@dory/shared/types/chat-progress';
 import { newEntityId } from '@dory/shared/id';
-import { and, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { discardUnreferencedResultData, isReportResultSetReferenced } from '../work-documents/evidence-retention';
 
 const DEFAULT_WORK_TITLE = 'Agent Run';
 
@@ -745,28 +746,53 @@ export class PostgresWorksRepository {
     }
 
     private async purgeWorkspaceArtifacts(params: { organizationId: string; userId: string; workId: string }): Promise<void> {
-        const resultSetRows = await this.db
-            .select({
-                id: resultSetsTable.id,
-                artifactRefJson: resultSetsTable.artifactRefJson,
-            })
-            .from(resultSetsTable)
-            .where(or(eq(resultSetsTable.workId, params.workId), eq(resultSetsTable.agentRunId, params.workId)));
-        const resultSetIds = resultSetRows.map(row => row.id);
-
-        await Promise.all(resultSetRows.map(row => this.artifacts.resultSets.deleteResultSet(row.artifactRefJson)));
-        await this.artifacts.agentRuns.deleteAgentRun(this.artifacts.agentRuns.ref(params.organizationId, params.workId));
-
-        await Promise.all([
-            resultSetIds.length ? this.db.delete(agentRunResultSets).where(inArray(agentRunResultSets.resultSetId, resultSetIds)) : Promise.resolve(),
-            this.db.delete(agentRunResultSets).where(eq(agentRunResultSets.agentRunId, params.workId)),
-            this.db.delete(resultSetsTable).where(or(eq(resultSetsTable.workId, params.workId), eq(resultSetsTable.agentRunId, params.workId))),
-            this.db.delete(queryRuns).where(or(eq(queryRuns.workId, params.workId), eq(queryRuns.agentRunId, params.workId))),
-            this.db.delete(workQueryResultSets).where(eq(workQueryResultSets.workId, params.workId)),
-            this.db.delete(workQuerySessions).where(eq(workQuerySessions.workId, params.workId)),
-            this.db.delete(workChartStates).where(eq(workChartStates.workId, params.workId)),
-            this.db.delete(tabs).where(and(eq(tabs.userId, params.userId), eq(tabs.workId, params.workId))),
-        ]);
+        await this.db.transaction(async tx => {
+            // Report saves take these same locks before writing a reference.
+            const resultSetRows = await tx
+                .select()
+                .from(resultSetsTable)
+                .where(and(eq(resultSetsTable.organizationId, params.organizationId), or(eq(resultSetsTable.workId, params.workId), eq(resultSetsTable.agentRunId, params.workId))))
+                .orderBy(asc(resultSetsTable.id))
+                .for('update');
+            const removableIds: string[] = [];
+            for (const row of resultSetRows) {
+                if (row.pinnedAt || !row.expiresAt || (await isReportResultSetReferenced(tx, params.organizationId, row.id))) continue;
+                await this.artifacts.resultSets.deleteResultSet(row.artifactRefJson);
+                removableIds.push(row.id);
+            }
+            const retained = resultSetRows.length > removableIds.length;
+            if (!retained) await this.artifacts.agentRuns.deleteAgentRun(this.artifacts.agentRuns.ref(params.organizationId, params.workId));
+            if (removableIds.length) {
+                await tx.delete(agentRunResultSets).where(inArray(agentRunResultSets.resultSetId, removableIds));
+                await tx.delete(artifacts).where(and(eq(artifacts.organizationId, params.organizationId), inArray(artifacts.sourceResultSetId, removableIds)));
+                await tx.delete(resultSetsTable).where(and(eq(resultSetsTable.organizationId, params.organizationId), inArray(resultSetsTable.id, removableIds)));
+            }
+            // Keep original execution/session records for retained report evidence.
+            await tx.delete(queryRuns).where(
+                and(
+                    eq(queryRuns.organizationId, params.organizationId),
+                    or(eq(queryRuns.workId, params.workId), eq(queryRuns.agentRunId, params.workId)),
+                    sql`not exists (select 1 from result_sets retained_result where retained_result.organization_id = ${params.organizationId}
+                    and (retained_result.id = ${queryRuns.resultSetId} or retained_result.source_query_run_id = ${queryRuns.id}))`,
+                ),
+            );
+            await tx.delete(workQueryResultSets).where(
+                and(
+                    eq(workQueryResultSets.workId, params.workId),
+                    sql`not exists (select 1 from result_sets retained_result where retained_result.organization_id = ${params.organizationId}
+                    and retained_result.id = ${workQueryResultSets.resultSetId})`,
+                ),
+            );
+            await tx.delete(workQuerySessions).where(
+                and(
+                    eq(workQuerySessions.workId, params.workId),
+                    sql`not exists (select 1 from result_sets retained_result where retained_result.organization_id = ${params.organizationId}
+                    and retained_result.session_id = ${workQuerySessions.sessionId})`,
+                ),
+            );
+            await tx.delete(workChartStates).where(eq(workChartStates.workId, params.workId));
+            await tx.delete(tabs).where(and(eq(tabs.userId, params.userId), eq(tabs.workId, params.workId)));
+        });
     }
 
     async listEvents(params: { organizationId: string; userId: string; workId: string }): Promise<WorkEventRecord[]> {
@@ -1591,7 +1617,7 @@ export class PostgresWorksRepository {
                     rowCount,
                 });
             } catch (error) {
-                await this.artifacts.resultSets.deleteResultSet(ref).catch(() => undefined);
+                await discardUnreferencedResultData(this.db, this.artifacts, work.organizationId, artifactId, ref).catch(() => undefined);
                 throw error;
             }
 

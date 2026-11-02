@@ -9,6 +9,7 @@ import { useTranslations } from 'next-intl';
 import { editableReport, parseReport, reportEmbeds, reportTagSource } from '@/lib/work-documents/report-core';
 
 import { ReportBody } from './report-body';
+import { ReportEvidenceEditor } from './report-evidence-editor';
 import type { ComponentDialogHandle } from './report-component-dialog';
 
 const SourceEditor = dynamic(() => import('./source-editor'), { ssr: false });
@@ -17,17 +18,21 @@ export type ReportEditorHandle = { requestLeave: () => Promise<boolean>; insert:
 export default function ReportEditor({
     ref,
     content,
+    documentId,
     restrictSources,
     title,
     onChange,
     onEvidence,
+    onEvidenceGroup,
 }: {
     ref?: Ref<ReportEditorHandle>;
     content: WorkDocumentContent;
+    documentId?: string;
     restrictSources?: boolean;
     title: string;
     onChange: (content: WorkDocumentContent) => void;
     onEvidence: (id: string) => void;
+    onEvidenceGroup?: (id: string) => void;
 }) {
     const t = useTranslations('WorkDocuments.Report');
     const current = editableReport(content);
@@ -67,13 +72,20 @@ export default function ReportEditor({
                 true,
             ),
     }));
-    const update = (visuals: WorkVisual[], body = current.body!) => onChange({ ...current, body, visuals, embeds: reportEmbeds(visuals, current.evidence) });
+    const update = (visuals: WorkVisual[], body = current.body!) =>
+        onChange({ ...current, body, visuals, reviewedEvidenceGroupIds: [], embeds: reportEmbeds(visuals, current.evidence) });
     const pending = current.visuals.filter(visual => !current.evidence.some(evidence => evidence.artifactId === visual.evidenceId));
+    const pendingEvidence = current.evidenceGroups?.some(group =>
+        group.references.some(reference => !current.evidence.some(evidence => evidence.artifactId === reference.artifactId)),
+    );
     const diagnostics = parseReport(current.body!, current.visuals).diagnostics;
     return (
         <>
             <div ref={host} className="report-editor-columns grid min-w-0 gap-6">
-                <SourceEditor value={current.body!} onChange={body => update(current.visuals, body)} />
+                <div className="min-w-0 space-y-4">
+                    <SourceEditor value={current.body!} onChange={body => update(current.visuals, body)} />
+                    <ReportEvidenceEditor content={current} documentId={documentId} onChange={onChange} />
+                </div>
                 <div className="min-w-0 overflow-auto">
                     {diagnostics.length ? (
                         <ul role="alert" className="text-sm text-destructive">
@@ -83,7 +95,7 @@ export default function ReportEditor({
                                 </li>
                             ))}
                         </ul>
-                    ) : pending.length ? (
+                    ) : pending.length || pendingEvidence ? (
                         <div className="space-y-3 text-sm">
                             <p role="status" className="text-muted-foreground">
                                 {t('PendingBinding')}
@@ -99,6 +111,7 @@ export default function ReportEditor({
                             content={current}
                             title={title}
                             onEvidence={onEvidence}
+                            onEvidenceGroup={onEvidenceGroup}
                             onEditComponent={id => {
                                 const visual = current.visuals.find(item => item.id === id);
                                 if (visual) open(visual, false);

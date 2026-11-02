@@ -43,6 +43,17 @@ export function markdownExportFiles(document: WorkDocumentView): Record<string, 
             if (index < 0) throw new Error('Missing exported evidence.');
             return `${token.text} [${index + 1}]`;
         }
+        if (token.type === 'link' && token.href.startsWith('dory://evidence-group/')) {
+            const group = document.content.evidenceGroups?.find(item => `dory://evidence-group/${item.id}` === token.href);
+            if (!group) throw new Error('Missing exported evidence group.');
+            return group.references
+                .map(reference => {
+                    const index = document.content.evidence.findIndex(item => item.artifactId === reference.artifactId);
+                    if (index < 0) throw new Error('Missing exported evidence.');
+                    return `[${index + 1}]${reference.explanation ? ` (${cell(reference.explanation)})` : ''}`;
+                })
+                .join(' ');
+        }
         if (token.type === 'html') return escapeHtml(token.raw);
         if (token.type === 'image') return token.text;
         if (token.type === 'link') {

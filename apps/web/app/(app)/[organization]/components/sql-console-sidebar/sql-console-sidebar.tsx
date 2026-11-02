@@ -1,21 +1,15 @@
 'use client';
 
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { useAtom, useAtomValue } from 'jotai';
-import { useTranslations } from 'next-intl';
-import { Button } from '@/registry/new-york-v4/ui/button';
-import { Input } from '@/registry/new-york-v4/ui/input';
+import { SqlSourceSidebar } from '@/components/sql-workspace/sql-source-sidebar';
 import { useDatabases } from '@/hooks/use-databases';
 import { useTables } from '@/hooks/use-tables';
 import { useColumns } from '@/hooks/use-columns';
 import { useSchemas } from '@/hooks/use-schemas';
 import { driverSupportsDataImport } from '@/lib/client/import-capabilities';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
-import { DatabaseSelect } from './database-select';
 import { getSidebarConfig } from './sidebar-config';
-import { SchemaSelect } from './schema-select';
-import { TableList } from './table-list';
 import type { RenameTablePayload, SQLConsoleSidebarProps, SidebarOption, SidebarTableItem, TableActionPayload, TableColumn } from './types';
 import { buildScopedTableKey, getInitialDatabase, isHiddenDatabase, matchesFilter, normalizeOption, toSidebarTableItem } from './utils';
 
@@ -56,7 +50,6 @@ export function SQLConsoleSidebar({
     const deferredFilter = useDeferredValue(localFilter);
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const t = useTranslations('SQLConsoleSidebar');
     const sidebarConfig = useMemo(() => getSidebarConfig(currentConnection?.connection?.type), [currentConnection?.connection?.type]);
     const isLocalFilesDataset = useMemo(
         () => isLocalFilesDatasetConnection(parseConnectionOptions(currentConnection?.connection?.options)),
@@ -239,52 +232,36 @@ export function SQLConsoleSidebar({
     };
 
     return (
-        <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 p-3">
-            {!isLocalFilesDataset && (
-                <DatabaseSelect value={activeDatabase} databases={databaseOptions} onChange={handleDatabaseChange} loading={databasesLoading} error={databasesError} />
-            )}
-
-            {sidebarConfig.supportsSchemas && <SchemaSelect value={activeSchema} schemas={schemaOptions} onChange={setActiveSchema} />}
-
-            <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                    <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input value={localFilter} onChange={e => setFilter(e.target.value)} placeholder={t('Filter tables')} className="h-8 pl-8" aria-label={t('Filter tables')} />
-                </div>
-
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    className="h-8 w-8 shrink-0"
-                    onClick={() => void handleRefresh()}
-                    disabled={!activeDatabase || isRefreshing}
-                    aria-label={t('Refresh tables')}
-                    title={t('Refresh tables')}
-                >
-                    {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
-            </div>
-
-            <TableList
-                tables={filteredTables}
-                loading={tablesLoading}
-                activeDatabase={activeDatabase}
-                selectedTable={selectedTable}
-                selectedDatabase={selectedDatabase}
-                expandedTableKeys={expandedTableKeys}
-                loadingTableKeys={loadingTableKeys}
-                columnsByTableKey={columnsByTableKey}
-                onToggleTable={toggleTableExpansion}
-                onSelectTable={onSelectTable}
-                onOpenTableTab={onOpenTableTab}
-                onOpenQueryConsole={onOpenQueryConsole}
-                onQueryTable={onQueryTable}
-                onRenameTable={handleRenameTable}
-                onImportTable={driverSupportsDataImport(currentConnection?.connection?.type) ? onImportTable : undefined}
-                getTableActionPayload={toTableActionPayload}
-                t={t}
-            />
-        </div>
+        <SqlSourceSidebar
+            database={
+                isLocalFilesDataset
+                    ? undefined
+                    : { value: activeDatabase, databases: databaseOptions, onChange: handleDatabaseChange, loading: databasesLoading, error: databasesError }
+            }
+            schema={sidebarConfig.supportsSchemas ? { value: activeSchema, schemas: schemaOptions, onChange: setActiveSchema } : undefined}
+            filter={localFilter}
+            onFilterChange={setFilter}
+            refreshing={isRefreshing}
+            refreshDisabled={!activeDatabase}
+            onRefresh={() => void handleRefresh()}
+            tableList={{
+                tables: filteredTables,
+                loading: tablesLoading,
+                activeDatabase,
+                selectedTable,
+                selectedDatabase,
+                expandedTableKeys,
+                loadingTableKeys,
+                columnsByTableKey,
+                onToggleTable: toggleTableExpansion,
+                onSelectTable,
+                onOpenTableTab,
+                onOpenQueryConsole,
+                onQueryTable,
+                onRenameTable: onRenameTable ? handleRenameTable : undefined,
+                onImportTable: driverSupportsDataImport(currentConnection?.connection?.type) ? onImportTable : undefined,
+                getTableActionPayload: toTableActionPayload,
+            }}
+        />
     );
 }

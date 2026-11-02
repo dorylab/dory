@@ -8,11 +8,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, BarChart3, Bot, Check, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useQueryStates } from 'nuqs';
+import type { ReportArtifactUsage } from '@dory/shared/types/report-workspace';
 
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { executeActionClient } from '@/lib/actions/client';
 import { buildArtifactHandoffPrompt } from '@/lib/artifacts/handoff-prompt';
 import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
+import { reportArtifactParsers, reportWorkspaceReturnPath } from '@/lib/work-documents/workspace-url';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DataSourceCell } from '@/components/data-source/data-source-cell';
 import type { ArtifactChartState, ArtifactDetail } from '@/lib/artifacts/types';
@@ -70,6 +73,8 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
     const t = useTranslations('Artifacts.Viewer');
     const agentRunsT = useTranslations('AgentRuns');
     const knowledgeT = useTranslations('Knowledge');
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
+    const [reportContext] = useQueryStates(reportArtifactParsers);
     const router = useRouter();
     const organizationId = useOrganizationId();
     const queryClient = useQueryClient();
@@ -85,6 +90,11 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
         queryFn: () => executeActionClient<ArtifactDetail>('artifact.get', { artifactId }, { organizationId }),
     });
     const artifact = artifactQuery.data;
+    const reportReferences = useQuery({
+        queryKey: ['artifact-report-references', organizationId, artifactId],
+        enabled: Boolean(artifact),
+        queryFn: ({ signal }) => executeActionClient<ReportArtifactUsage[]>('report.evidence.references', { artifactId }, { organizationId, signal }),
+    });
     useEffect(() => {
         if (!artifact) return;
         if (!editing) setTitle(artifact.title);
@@ -193,8 +203,18 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
     }
 
     const TypeIcon = artifact.type === 'result_set' ? Database : artifact.type === 'chart' ? BarChart3 : FileText;
-    const backHref = fromAgentRun ? `/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(fromAgentRun)}` : `/${encodeURIComponent(organization)}/artifacts`;
-    const backLabel = fromAgentRun ? `${agentRunsT('List.Title')} - ${artifact.runTitle ?? fromAgentRun}` : t('Back');
+    const fromReport = Boolean(reportContext.report && reportContext.revision && reportContext.revision > 0);
+    const backHref = fromReport
+        ? reportWorkspaceReturnPath(organization, {
+              documentId: reportContext.report!,
+              revision: reportContext.revision!,
+              artifactId,
+              publicationId: reportContext.publication ?? undefined,
+          })
+        : fromAgentRun
+          ? `/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(fromAgentRun)}`
+          : `/${encodeURIComponent(organization)}/artifacts`;
+    const backLabel = fromReport ? evidenceT('BackToReport') : fromAgentRun ? `${agentRunsT('List.Title')} - ${artifact.runTitle ?? fromAgentRun}` : t('Back');
     return (
         <div className="h-dvh overflow-hidden bg-n8">
             <main className="container mx-auto flex h-full min-h-0 flex-col gap-3 px-12 pb-6 pt-4 lg:px-12 xl:px-8 2xl:px-4">
@@ -313,6 +333,32 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                             ) : null}
                         </CardContent>
                     </Card>
+                    {reportReferences.data?.length ? (
+                        <div className="space-y-1 text-sm">
+                            <p className="font-medium">{evidenceT('UsedInReports')}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                {reportReferences.data.map(report => (
+                                    <Link
+                                        key={report.id}
+                                        href={
+                                            report.revision
+                                                ? reportWorkspaceReturnPath(organization, {
+                                                      documentId: report.id,
+                                                      revision: report.revision,
+                                                      publicationId: report.publicationId,
+                                                      artifactId,
+                                                  })
+                                                : `/${encodeURIComponent(organization)}/reports/${encodeURIComponent(report.id)}`
+                                        }
+                                        className="text-primary hover:underline"
+                                    >
+                                        {report.title}
+                                    </Link>
+                                ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{evidenceT('RelatedVersions')}</p>
+                        </div>
+                    ) : null}
                 </header>
 
                 <div className="min-h-0 flex-1">
@@ -398,13 +444,23 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                     <AlertDialogHeader>
                         <AlertDialogTitle>{t('DeleteDialog.Title')}</AlertDialogTitle>
                         <AlertDialogDescription>{t('DeleteDialog.Description', { title: artifact.title })}</AlertDialogDescription>
+                        {reportReferences.data?.length ? (
+                            <div className="text-sm">
+                                <p>{evidenceT('UsedInReports')}</p>
+                                <ul>
+                                    {reportReferences.data.map(report => (
+                                        <li key={report.id}>{report.title}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={deleteMutation.isPending}>{t('DeleteDialog.Cancel')}</AlertDialogCancel>
                         <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             onClick={() => deleteMutation.mutate()}
-                            disabled={deleteMutation.isPending}
+                            disabled={deleteMutation.isPending || Boolean(reportReferences.data?.length)}
                         >
                             {deleteMutation.isPending ? <Loader2 className="animate-spin" /> : null}
                             {t('DeleteDialog.Confirm')}

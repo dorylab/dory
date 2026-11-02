@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
-import type { PostgresDBClient } from '@dory/shared';
-import { PostgresWorkDocumentsRepository } from '@dory/database/postgres/impl/work-documents';
+import { reportRetentionFixture } from '../../../../packages/database/scripts/tests/report-retention-fixture';
 import type { WorkDocumentContent, WorkEvidence } from '@dory/shared/types/work-document';
 import { resolvedReport } from '@/lib/work-documents/report-core';
 import { initialWorkingState, materializeWorkingContent, validateWorkingVisual, versionContent } from '@/lib/work-documents/working-draft';
@@ -90,15 +86,12 @@ test('changed fields, missing metric rows, truncation and invalid numeric charts
 });
 
 test('real PGlite drafts enforce ownership, atomic immutable versions, replay and conflicts', async () => {
-    const db = new PGlite();
-    const repo = new PostgresWorkDocumentsRepository();
+    const fixture = await reportRetentionFixture();
+    const repo = fixture.reports;
+    const db = fixture.client;
     try {
-        for (const name of ['0038_work_documents', '0041_report_publications', '0042_report_working_drafts']) {
-            const sql = await readFile(`../../packages/database/src/postgres/migrations/${name}.sql`, 'utf8');
-            assert.equal(sql, await readFile(`../../packages/database/src/pglite/migrations/${name}.sql`, 'utf8'));
-            await db.exec(sql);
-        }
-        await repo.init(drizzle(db) as unknown as PostgresDBClient);
+        await fixture.seedEvidence('artifact_1', [{ count: 3 }]);
+        await fixture.seedEvidence('artifact_new', [{ count: 2 }]);
         const owner = { organizationId: 'org', userId: 'alice' };
         const report = await repo.create({ ...owner, creationKey: 'fixture', title: 'Report', content, scope: { connectionIds: ['connection'] } });
         const target = { ...owner, documentId: report.id, baseRevision: 1 };
@@ -144,6 +137,6 @@ test('real PGlite drafts enforce ownership, atomic immutable versions, replay an
         assert.equal(branch.publication.number, 2);
         assert.equal(branch.revision, first.revision + 2);
     } finally {
-        await db.close();
+        await fixture.close();
     }
 });

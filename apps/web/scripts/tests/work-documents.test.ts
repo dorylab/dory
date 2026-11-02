@@ -3,11 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { PostgresWorkDocumentsRepository } from '@dory/database/postgres/impl/work-documents';
+import { artifacts, resultSets } from '@dory/database/postgres/schemas';
 import type { PostgresDBClient } from '@dory/shared';
 import type { WorkDocumentContent, WorkDocumentView } from '@dory/shared/types/work-document';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
+import { migrate as migratePostgres } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/pglite';
+import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
 import { Pool } from 'pg';
 
 import { markdownExportFiles } from '@/lib/work-documents/export';
@@ -47,15 +50,45 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
     const migration = await readFile('../../packages/database/src/postgres/migrations/0038_work_documents.sql', 'utf8');
     const localMigration = await readFile('../../packages/database/src/pglite/migrations/0038_work_documents.sql', 'utf8');
     assert.equal(localMigration, migration);
-    if (postgres) await postgres.query(migration);
-    else await db!.exec(migration);
-    const publicationMigration = await readFile('../../packages/database/src/postgres/migrations/0041_report_publications.sql', 'utf8');
-    if (postgres) await postgres.query(publicationMigration);
-    else await db!.exec(publicationMigration);
+    const postgresClient = postgres ? drizzlePg(postgres) : null;
+    const pgliteClient = db ? drizzle(db) : null;
+    if (postgresClient) await migratePostgres(postgresClient, { migrationsFolder: '../../packages/database/src/postgres/migrations' });
+    else await migratePglite(pgliteClient!, { migrationsFolder: '../../packages/database/src/pglite/migrations' });
+    const client = (postgresClient ?? pgliteClient!) as unknown as PostgresDBClient;
     const repository = new PostgresWorkDocumentsRepository();
-    await repository.init((postgres ? drizzlePg(postgres) : drizzle(db!)) as unknown as PostgresDBClient);
+    await repository.init(client);
     const owner = { organizationId: 'org', userId: 'alice' };
     try {
+        for (const [organizationId, artifactId] of [
+            ['org', 'art-1'],
+            ['list-org', 'list-art-1'],
+        ]) {
+            const resultId = `result_${artifactId}`;
+            await client.insert(resultSets).values({
+                id: resultId,
+                organizationId,
+                sourceType: 'query-run',
+                kind: 'sql-result-set',
+                status: 'success',
+                rowCount: 1,
+                artifactRefJson: { store: 'filesystem', artifactId: resultId, basePath: resultId, manifestPath: 'manifest.json', dataAvailability: 'preview-only' },
+                dataAvailability: 'preview-only',
+                createdByActorType: 'user',
+                createdByActorId: 'alice',
+            });
+            await client
+                .insert(artifacts)
+                .values({
+                    id: artifactId,
+                    organizationId,
+                    type: 'result_set',
+                    title: 'Revenue',
+                    resourceId: resultId,
+                    sourceResultSetId: resultId,
+                    createdByActorType: 'user',
+                    createdByActorId: 'alice',
+                });
+        }
         const input = {
             ...owner,
             creationKey: 'chat:request-1',
@@ -105,16 +138,22 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         assert.deepEqual(renamed.content.evidence, content.evidence);
         // Put archived reports behind more than a page of newer active reports.
         const listOwner = { organizationId: 'list-org', userId: 'alice' };
+        const listContent = {
+            ...content,
+            markdown: content.markdown.replaceAll('art-1', 'list-art-1'),
+            evidence: content.evidence.map(item => ({ ...item, artifactId: 'list-art-1' })),
+        };
+        const listInput = { ...input, ...listOwner, content: listContent };
         const attachmentEvidence = {
-            ...content.evidence[0],
+            ...listContent.evidence[0],
             connectionName: null,
             connectionId: null,
             attachmentSource: { chatId: 'chat', userId: 'alice', files: [{ attachmentId: 'file-1', filename: 'sales.csv', sheet: 'Orders', sha256: 'fixture', table: 'orders' }] },
         };
-        const archiveOnly = await repository.create({ ...input, ...listOwner, creationKey: 'archived', title: 'Archived revenue' });
+        const archiveOnly = await repository.create({ ...listInput, creationKey: 'archived', title: 'Archived revenue' });
         await repository.archive({ ...listOwner, documentId: archiveOnly.id, archived: true });
         for (let i = 0; i < 105; i++) {
-            await repository.create({ ...input, ...listOwner, creationKey: `active-${i}`, title: `Active ${i}` });
+            await repository.create({ ...listInput, creationKey: `active-${i}`, title: `Active ${i}` });
         }
         assert.equal((await repository.list(listOwner)).length, 100);
         const archived = await repository.list({ ...listOwner, archiveState: 'archived' });
@@ -135,11 +174,10 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
             [archiveOnly.id],
         );
         const withSources = await repository.create({
-            ...input,
-            ...listOwner,
+            ...listInput,
             creationKey: 'sources',
             title: 'Sources fixture',
-            content: { ...content, evidence: [...content.evidence, ...content.evidence, attachmentEvidence] },
+            content: { ...listContent, evidence: [...listContent.evidence, ...listContent.evidence, attachmentEvidence] },
         });
         const summary = (await repository.list({ ...listOwner, query: 'Sources fixture' }))[0];
         assert.equal(summary.id, withSources.id);

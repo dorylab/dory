@@ -11,13 +11,14 @@ import { ArrowUpRight, Pencil } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { reportMetrics } from '@/lib/work-documents/format';
-import { formatWorkValue, renderWorkMarkdown } from '@/lib/work-documents/render';
+import { escapeHtml, formatWorkValue, renderWorkMarkdown } from '@/lib/work-documents/render';
 import { editableReport, parseReport, resolvedReport } from '@/lib/work-documents/report-core';
 
 const ReportChart = dynamic(() => import('./report-chart'));
 
-function SnapshotTable({ evidence }: { evidence: WorkEvidence }) {
+export function SnapshotTable({ evidence }: { evidence: WorkEvidence }) {
     const t = useTranslations('WorkDocuments.Report');
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
     const [sorting, setSorting] = useState<SortingState>([]);
     const [filter, setFilter] = useState('');
     const [visibility, setVisibility] = useState<Record<string, boolean>>({});
@@ -92,6 +93,7 @@ function SnapshotTable({ evidence }: { evidence: WorkEvidence }) {
                     </tbody>
                 </table>
             </div>
+            {evidence.rowCount === 0 ? <p className="py-2 text-sm text-muted-foreground">{evidenceT('NoRows')}</p> : null}
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <Button size="sm" variant="outline" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>
                     {t('Previous')}
@@ -118,6 +120,7 @@ function ReportVisual({
     previewOnly?: boolean;
 }) {
     const t = useTranslations('WorkDocuments.Report');
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
     return (
         <figure className="report-wide group relative min-w-0 space-y-3" data-visual={visual.id}>
             {onEditComponent && (
@@ -158,11 +161,22 @@ function ReportVisual({
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span>
-                    {evidence.connectionName ?? evidence.title} · {t(evidence.truncated ? 'Subset' : 'Complete')} · {t('Rows', { count: evidence.rows.length })}
+                    {evidence.attachmentSource?.files
+                        .map(file => file.filename)
+                        .filter((name, index, all) => all.indexOf(name) === index)
+                        .join(', ') ||
+                        evidence.connectionName ||
+                        evidence.title}
+                    {' · '}
+                    {new Date(evidence.capturedAt).toLocaleString()}
+                    {' · '}
+                    {evidence.rowCount == null
+                        ? evidenceT('UnknownRange', { shown: evidence.rows.length })
+                        : evidenceT('DisplayRange', { shown: evidence.rows.length, total: evidence.rowCount })}
                 </span>
                 {!previewOnly && (
                     <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId)}>
-                        {t('OpenResult')}
+                        {evidenceT('ViewSource')}
                         <ArrowUpRight className="size-3.5" />
                     </Button>
                 )}
@@ -174,16 +188,36 @@ export function ReportBody({
     content,
     title,
     onEvidence,
+    onEvidenceGroup,
     onEditComponent,
     previewOnly,
 }: {
     content: WorkDocumentContent;
     title: string;
     onEvidence: (id: string) => void;
+    onEvidenceGroup?: (id: string) => void;
     onEditComponent?: (id: string) => void;
     previewOnly?: boolean;
 }) {
-    if (!content.format) return <div data-testid="work-markdown" className="report-prose" dangerouslySetInnerHTML={{ __html: renderWorkMarkdown(content, true, title) }} />;
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
+    const labels = (html: string) =>
+        html.replace(/(<a\b[^>]*data-evidence-group="([^"]+)"[^>]*>)[\s\S]*?<\/a>/g, (_match, opening: string, id: string) => {
+            const count = content.evidenceGroups?.find(group => group.id === id)?.references.length ?? 0;
+            return `${opening}${escapeHtml(evidenceT('ViewEvidence', { count }))}</a>`;
+        });
+    const groupClick = (event: React.MouseEvent) => {
+        const link = event.target instanceof Element ? event.target.closest('[data-evidence-group]') : null;
+        const id = link?.getAttribute('data-evidence-group');
+        if (id && onEvidenceGroup) {
+            event.preventDefault();
+            event.stopPropagation();
+            onEvidenceGroup(id);
+        }
+    };
+    if (!content.format)
+        return (
+            <div data-testid="work-markdown" className="report-prose" onClick={groupClick} dangerouslySetInnerHTML={{ __html: labels(renderWorkMarkdown(content, true, title)) }} />
+        );
     let prepared: WorkDocumentContent;
     try {
         prepared = resolvedReport(content);
@@ -205,7 +239,7 @@ export function ReportBody({
     let offset = 0;
     const sections: React.ReactNode[] = [];
     const prose = (body: string, key: number) => (
-        <div key={`prose-${key}`} className="report-prose" dangerouslySetInnerHTML={{ __html: renderWorkMarkdown({ ...prepared, format: undefined, markdown: body }) }} />
+        <div key={`prose-${key}`} className="report-prose" dangerouslySetInnerHTML={{ __html: labels(renderWorkMarkdown({ ...prepared, format: undefined, markdown: body })) }} />
     );
     // Suppress only a matching leading H1; the stored content stays untouched.
     const first = parsed.tree?.children[0];
@@ -227,5 +261,9 @@ export function ReportBody({
         offset = component.end;
     }
     sections.push(prose(editable.body!.slice(offset), offset));
-    return <div data-testid="work-markdown">{sections}</div>;
+    return (
+        <div data-testid="work-markdown" onClick={groupClick}>
+            {sections}
+        </div>
+    );
 }

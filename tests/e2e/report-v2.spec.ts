@@ -209,7 +209,7 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
         expect(visual.border).toBe('0px');
     }
     await expect(page.getByRole('button', { name: 'View source', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'View query and results', exact: true })).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'View source and data', exact: true })).toHaveCount(3);
 
     const surface = page.getByTestId('work-report');
     expect(
@@ -241,15 +241,13 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     await editMetric.click();
     await component.getByRole('textbox', { name: 'Component title', exact: true }).fill('Reviewed revenue');
     await component.getByRole('button', { name: 'Apply', exact: true }).click();
-    await expect.poll(() => drafts.get(1)?.state.content.visuals[0].title).toBe('Reviewed revenue');
+    await expect.poll(() => document.content.visuals[0].title).toBe('Reviewed revenue');
     await page.getByRole('button', { name: 'Edit Reviewed revenue', exact: true }).click();
     await expect(component.getByRole('textbox', { name: 'Component title', exact: true })).toHaveValue('Reviewed revenue');
     await component.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Report preview', exact: true }).last().click();
-    await expect(page.getByText('Original source unavailable.', { exact: false })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Report snapshot', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Save new version', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Save new version', exact: true }).click();
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Publish version', exact: true }).click();
     await expect.poll(() => publications.length).toBe(1);
     await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Published v1');
     await page.getByRole('button', { name: 'More actions', exact: true }).click();
@@ -259,9 +257,10 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     const source = page.getByTestId('markdown-source').locator('textarea').first();
     await source.press('ControlOrMeta+Home');
     await page.keyboard.insertText('Updated summary.\n\n');
-    await expect.poll(() => drafts.get(document.revision)?.state.content.body).toContain('Updated summary.');
-    await page.getByRole('button', { name: 'Save new version', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Save new version', exact: true }).click();
+    await expect.poll(() => document.content.body).toContain('Updated summary.');
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Publish version', exact: true }).click();
     await expect.poll(() => publications.length).toBe(2);
     await page.getByRole('button', { name: 'Report versions', exact: true }).click();
     await page.getByRole('menuitemradio', { name: 'Published v1', exact: true }).click();

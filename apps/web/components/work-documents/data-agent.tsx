@@ -50,6 +50,7 @@ export function DataAgent() {
     const { organization } = useParams<{ organization: string }>();
     const t = useTranslations('WorkDocuments');
     const [state, setState] = useQueryStates({
+        handoff: parseAsString,
         chat: parseAsString,
         document: parseAsString,
         revision: parseAsInteger,
@@ -64,6 +65,19 @@ export function DataAgent() {
         knowledgeMode: parseAsStringLiteral(['auto', 'manual', 'none'] as const),
         databases: parseAsJson(databaseSelectionsSchema.parse),
     });
+    const [handoffDraft, setHandoffDraft] = useState<ChatSubmission | null>(null);
+    useEffect(() => {
+        if (!state.handoff) return;
+        const key = `report-handoff:${organization}:${state.handoff}`;
+        try {
+            const value = JSON.parse(sessionStorage.getItem(key) ?? 'null');
+            if (typeof value?.text === 'string') setHandoffDraft(value);
+            sessionStorage.removeItem(key);
+        } catch {
+            /* An unavailable local draft does not prevent opening Work. */
+        }
+        void setState({ handoff: null });
+    }, [state.handoff, organization, setState]);
     const [newId, setNewId] = useState(() => crypto.randomUUID());
     const [busy, setBusy] = useState(false);
     const chats = useRef(new Map<string, Chat<UIMessage>>());
@@ -136,6 +150,7 @@ export function DataAgent() {
         if (editingReport) return;
         setBusy(false);
         setPrompt(null);
+        setHandoffDraft(null);
         setLiveMessages([]);
         setNewId(crypto.randomUUID());
         void setState({
@@ -195,6 +210,7 @@ export function DataAgent() {
                     if (editingReport) return;
                     setBusy(false);
                     setPrompt(null);
+                    setHandoffDraft(null);
                     setLiveMessages([]);
                     void setState({
                         chat: id,
@@ -269,6 +285,7 @@ export function DataAgent() {
                                     documentId={state.document}
                                     reportRevision={state.revision}
                                     prompt={prompt}
+                                    handoffDraft={handoffDraft}
                                     blocked={editingReport}
                                     ready={databases.ready && !options.isError}
                                     onBusy={value => {
@@ -351,6 +368,7 @@ function AgentConversation({
     documentId,
     reportRevision,
     prompt,
+    handoffDraft,
     blocked,
     ready,
     scopePicker,
@@ -368,6 +386,7 @@ function AgentConversation({
     documentId: string | null;
     reportRevision: number | null;
     prompt: ChatSubmission | null;
+    handoffDraft: ChatSubmission | null;
     blocked: boolean;
     ready: boolean;
     scopePicker: ReactNode;
@@ -517,6 +536,7 @@ function AgentConversation({
                     </p>
                 ) : null}
                 <AgentComposer
+                    restoreDraft={handoffDraft}
                     text={text}
                     onTextChange={setText}
                     onSubmit={submit}

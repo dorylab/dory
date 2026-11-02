@@ -11,7 +11,6 @@ import { useTranslations } from 'next-intl';
 import { createSerializer, parseAsInteger, parseAsString, useQueryState, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
-import { buildReportWorkspacePath } from '@/lib/work-documents/workspace-url';
 import { workRequest } from '@/lib/work-documents/client';
 import { reportListParsers, serializeReportList } from '@/lib/work-documents/list-state';
 import { renderWorkHtml } from '@/lib/work-documents/render';
@@ -21,8 +20,10 @@ import { AddDefinitionDialog } from './add-definition-dialog';
 import { ReportBody } from './report-body';
 import type { ReportEditorHandle } from './report-editor';
 import { ReportToolbar } from './report-toolbar';
+import type { ReportEvidenceSelection } from './report-evidence-panel';
 
 const ReportEditor = dynamic(() => import('./report-editor'), { ssr: false });
+const ReportEvidencePanel = dynamic(() => import('./report-evidence-panel').then(module => module.ReportEvidencePanel), { ssr: false });
 const continueUrl = createSerializer({ document: parseAsString, revision: parseAsInteger, chat: parseAsString });
 
 type Detail = {
@@ -49,6 +50,7 @@ export function WorkReport({
     const { organization } = useParams<{ organization: string }>();
     const t = useTranslations('WorkDocuments');
     const reportT = useTranslations('WorkDocuments.Report');
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
     const analysisT = useTranslations('WorkDocuments.Analysis');
     const router = useRouter();
     const [listState] = useQueryStates(reportListParsers);
@@ -102,6 +104,7 @@ export function WorkReport({
     };
     const [saveError, setSaveError] = useState(false);
     const [definition, setDefinition] = useState<{ title: string; text: string } | null>(null);
+    const [evidenceSelection, setEvidenceSelection] = useState<ReportEvidenceSelection | null>(null);
     useEffect(() => {
         onEditingChange?.(Boolean(editing));
         return () => onEditingChange?.(false);
@@ -169,32 +172,15 @@ export function WorkReport({
         setSaveError(false);
         navigate();
     };
-    const openEvidence = (artifactId: string) => {
-        void leaveReport(() => {
-            const selected = (historical ? historyQuery.data : client.getQueryData<Detail>(key))?.document;
-            const evidence = selected?.content.evidence.find(item => item.artifactId === artifactId);
-            if (!selected || !evidence) {
-                toast.error(reportT('OriginalUnavailable'));
-                return;
-            }
-            router.push(
-                buildReportWorkspacePath(organization, {
-                    documentId,
-                    artifactId,
-                    revision: selected.revision,
-                    publicationId: selectedPublication ?? undefined,
-                    snapshotId: evidence.snapshotId,
-                }),
-                { scroll: false },
-            );
-        });
-    };
+    const openEvidence = (artifactId: string) => setEvidenceSelection({ artifactId });
+    const openEvidenceGroup = (groupId: string) => setEvidenceSelection({ groupId });
     const switchVersion = async (revision: number | null) => {
         if (!(await requestLeave())) return;
         setEditing(null);
         setDirty(false);
         setSaveError(false);
         setDefinition(null);
+        setEvidenceSelection(null);
         await setSelectedPublication(null);
         await setSelectedRevision(revision);
     };
@@ -205,6 +191,7 @@ export function WorkReport({
         setDirty(false);
         setSaveError(false);
         setRestoreOpen(false);
+        setEvidenceSelection(null);
         void setSelectedRevision(null);
         void setSelectedPublication(null);
     }, [documentId, setSelectedRevision, setSelectedPublication]);
@@ -223,6 +210,8 @@ export function WorkReport({
                 body: current.content.body,
                 markdown: current.content.body ?? current.content.markdown,
                 visuals: current.content.visuals,
+                evidenceGroups: current.content.evidenceGroups?.map(({ id, references }) => ({ id, references })),
+                reviewedEvidenceGroupIds: current.content.reviewedEvidenceGroupIds,
                 status: 'draft',
             },
         });
@@ -237,7 +226,9 @@ export function WorkReport({
             if (dirty) event.preventDefault();
         };
         const guard = (event: MouseEvent) => {
-            if (event.target instanceof Element && event.target.closest('[data-evidence], a[href^="dory://evidence/"]')) return;
+            if (event.target instanceof Element && event.target.closest('[data-report-evidence-navigation]')) return;
+            if (event.target instanceof Element && event.target.closest('[data-evidence], [data-evidence-group], a[href^="dory://evidence/"], a[href^="dory://evidence-group/"]'))
+                return;
             if (dirty && event.target instanceof Element && event.target.closest('a[href]')) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -324,6 +315,21 @@ export function WorkReport({
     };
     return (
         <article className="report-surface h-full min-w-0 overflow-auto bg-background text-foreground" data-testid="work-report">
+            {evidenceSelection ? (
+                <ReportEvidencePanel
+                    key={`${document.id}:${document.revision}:${'groupId' in evidenceSelection ? evidenceSelection.groupId : evidenceSelection.artifactId}`}
+                    document={document}
+                    selection={evidenceSelection}
+                    organization={organization}
+                    onClose={() => setEvidenceSelection(null)}
+                    onBeforeNavigate={href => {
+                        void leaveReport(() => {
+                            setEvidenceSelection(null);
+                            router.push(href, { scroll: false });
+                        });
+                    }}
+                />
+            ) : null}
             <div className="min-w-0">
                 <AlertDialog
                     open={Boolean(leaveDecision)}
@@ -383,6 +389,7 @@ export function WorkReport({
                         !isEditing &&
                         !publish.isPending &&
                         !document.archivedAt &&
+                        !document.content.evidenceGroups?.some(group => group.needsReview) &&
                         Boolean(document.content.format && document.content.body?.trim()) &&
                         !document.content.diagnostics?.length
                     }
@@ -396,20 +403,6 @@ export function WorkReport({
                     }
                     onTitle={title => change({ ...document, title })}
                     onEdit={() => {
-                        if (document.content.evidence.length && !isEditing) {
-                            const evidence = document.content.evidence[0];
-                            router.push(
-                                buildReportWorkspacePath(organization, {
-                                    documentId,
-                                    artifactId: evidence.artifactId,
-                                    revision: document.revision,
-                                    publicationId: selectedPublication ?? undefined,
-                                    snapshotId: evidence.snapshotId,
-                                }) + '&view=report',
-                                { scroll: false },
-                            );
-                            return;
-                        }
                         if (historical) {
                             setRestoreOpen(true);
                             return;
@@ -506,9 +499,20 @@ export function WorkReport({
                             {document.content.workspaceOrigin && (
                                 <p className="mb-3 text-xs text-muted-foreground">{analysisT('BasedOn', { version: document.content.workspaceOrigin.baseRevision })}</p>
                             )}
+                            {document.content.evidenceGroups?.some(group => group.needsReview) ? (
+                                <p role="status" className="mb-3 text-sm text-muted-foreground">
+                                    {evidenceT('ReviewRequired')}
+                                </p>
+                            ) : null}
                             <div
                                 className="work-prose"
                                 onClick={event => {
+                                    const group = event.target instanceof Element ? event.target.closest('[data-evidence-group]')?.getAttribute('data-evidence-group') : null;
+                                    if (group) {
+                                        event.preventDefault();
+                                        openEvidenceGroup(group);
+                                        return;
+                                    }
                                     const target = event.target instanceof Element ? event.target.closest('[data-evidence], a[href^="dory://evidence/"]') : null;
                                     if (target) {
                                         event.preventDefault();
@@ -520,13 +524,21 @@ export function WorkReport({
                                 {isEditing ? (
                                     <ReportEditor
                                         ref={editorRef}
+                                        documentId={documentId}
                                         content={document.content}
                                         title={document.title}
                                         onChange={content => change({ ...document, content })}
                                         onEvidence={openEvidence}
+                                        onEvidenceGroup={openEvidenceGroup}
                                     />
                                 ) : (
-                                    <ReportBody key={document.revision} content={document.content} title={document.title} onEvidence={openEvidence} />
+                                    <ReportBody
+                                        key={document.revision}
+                                        content={document.content}
+                                        title={document.title}
+                                        onEvidence={openEvidence}
+                                        onEvidenceGroup={openEvidenceGroup}
+                                    />
                                 )}
                             </div>
                             {!isEditing ? (

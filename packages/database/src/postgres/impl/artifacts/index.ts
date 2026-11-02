@@ -23,6 +23,7 @@ import { getResultSetRetentionDaysFromOrganizationMetadata } from '@dory/databas
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import type { PostgresDBClient } from '@dory/shared';
+import { isReportArtifactReferenced, isReportResultSetReferenced, lockResultSet, reportArtifactReference } from '../work-documents/evidence-retention';
 
 export type ArtifactSummary = NamingMetadata & {
     id: string;
@@ -84,6 +85,8 @@ export type ArtifactDetail = ArtifactSummary & {
         id: string;
         columns: unknown[];
         dataAvailability: string;
+        status: string;
+        limited: boolean;
         sql: string | null;
         previewRowCount: number;
     } | null;
@@ -159,8 +162,8 @@ function displayTitle(input: { artifact: typeof artifacts.$inferSelect; resultSe
 export class PostgresArtifactsRepository {
     private db!: PostgresDBClient;
 
-    async init() {
-        const client = await getClient();
+    async init(injectedClient?: PostgresDBClient) {
+        const client = injectedClient ?? (await getClient());
         if (!client) throw new DatabaseError('Database connection failed', 500);
         this.db = client as PostgresDBClient;
     }
@@ -188,7 +191,10 @@ export class PostgresArtifactsRepository {
     async list(input: { organizationId: string; userId?: string; query?: string | null; types?: ArtifactType[]; pinnedOnly?: boolean; offset?: number; limit?: number }) {
         this.assertInited();
         const query = input.query?.trim();
-        const conditions = [eq(artifacts.organizationId, input.organizationId), or(isNull(artifacts.expiresAt), gt(artifacts.expiresAt, new Date()))!];
+        const conditions = [
+            eq(artifacts.organizationId, input.organizationId),
+            or(isNull(artifacts.expiresAt), gt(artifacts.expiresAt, new Date()), reportArtifactReference(input.organizationId, artifacts.id))!,
+        ];
         conditions.push(or(isNull(resultSets.attachmentSource), input.userId ? eq(artifacts.createdByActorId, input.userId) : isNull(artifacts.id))!);
         if (input.userId) conditions.push(or(isNull(artifacts.workId), eq(works.userId, input.userId))!);
         if (input.types?.length) conditions.push(inArray(artifacts.type, input.types));
@@ -297,7 +303,13 @@ export class PostgresArtifactsRepository {
             .limit(1);
         if (!row) throw new DatabaseError('Artifact not found', 404);
         if (!canReadAttachmentSource(row.resultSet?.attachmentSource, input.userId, input.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
-        if (row.artifact.expiresAt && row.artifact.expiresAt.getTime() <= Date.now()) throw new DatabaseError('Artifact is no longer available', 404);
+        if (
+            row.artifact.expiresAt &&
+            row.artifact.expiresAt.getTime() <= Date.now() &&
+            !row.resultSet?.pinnedAt &&
+            !(await isReportArtifactReferenced(this.db, input.organizationId, input.artifactId))
+        )
+            throw new DatabaseError('Artifact is no longer available', 404);
         const workspaceTarget = resolveArtifactWorkspaceTarget({
             type: row.artifact.type,
             comparisonId: row.artifact.comparisonId,
@@ -327,6 +339,8 @@ export class PostgresArtifactsRepository {
                       id: row.resultSet.id,
                       columns: row.resultSet.schemaJson,
                       dataAvailability: row.resultSet.dataAvailability,
+                      status: row.resultSet.status,
+                      limited: row.resultSet.limited,
                       sql: row.resultSet.sql,
                       previewRowCount: row.resultSet.previewRowCount,
                   }
@@ -353,13 +367,18 @@ export class PostgresArtifactsRepository {
 
     async delete(input: { userId?: string; organizationId: string; artifactId: string }) {
         this.assertInited();
-        await this.get(input);
-        const [row] = await this.db
-            .delete(artifacts)
-            .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
-            .returning({ id: artifacts.id, title: artifacts.title });
-        if (!row) throw new DatabaseError('Artifact not found', 404);
-        return row;
+        const artifact = await this.get(input);
+        return this.db.transaction(async tx => {
+            if (artifact.sourceResultSetId) await lockResultSet(tx, input.organizationId, artifact.sourceResultSetId);
+            if (await isReportArtifactReferenced(tx, input.organizationId, input.artifactId))
+                throw new DatabaseError('This result is retained by a report or report version and cannot be deleted.', 409);
+            const [row] = await tx
+                .delete(artifacts)
+                .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
+                .returning({ id: artifacts.id, title: artifacts.title });
+            if (!row) throw new DatabaseError('Artifact not found', 404);
+            return row;
+        });
     }
 
     async pin(input: { userId?: string; organizationId: string; artifactId: string; pinnedByActorId: string | null }) {
@@ -368,6 +387,7 @@ export class PostgresArtifactsRepository {
 
         const now = new Date();
         await this.db.transaction(async tx => {
+            if (!(await lockResultSet(tx, input.organizationId, artifact.sourceResultSetId!))) throw new DatabaseError('Result set not found', 404);
             await tx
                 .update(resultSets)
                 .set({ expiresAt: null, pinnedAt: now, pinnedByActorId: input.pinnedByActorId, updatedAt: now })
@@ -393,6 +413,9 @@ export class PostgresArtifactsRepository {
         const now = new Date();
         const expiresAt = new Date(now.getTime() + getResultSetRetentionDaysFromOrganizationMetadata(organization?.metadata) * 24 * 60 * 60 * 1000);
         await this.db.transaction(async tx => {
+            if (!(await lockResultSet(tx, input.organizationId, artifact.sourceResultSetId!))) throw new DatabaseError('Result set not found', 404);
+            if (await isReportResultSetReferenced(tx, input.organizationId, artifact.sourceResultSetId!))
+                throw new DatabaseError('This result is retained by a report or report version and cannot be unpinned.', 409);
             await tx
                 .update(resultSets)
                 .set({ expiresAt, pinnedAt: null, pinnedByActorId: null, updatedAt: now })
@@ -456,12 +479,21 @@ export class PostgresArtifactsRepository {
 
     async deleteForResultSet(organizationId: string, resultSetId: string) {
         this.assertInited();
-        await this.db.delete(artifacts).where(and(eq(artifacts.organizationId, organizationId), eq(artifacts.sourceResultSetId, resultSetId)));
+        await this.db.transaction(async tx => {
+            await lockResultSet(tx, organizationId, resultSetId);
+            if (await isReportResultSetReferenced(tx, organizationId, resultSetId))
+                throw new DatabaseError('This result is retained by a report or report version and cannot be deleted.', 409);
+            await tx.delete(artifacts).where(and(eq(artifacts.organizationId, organizationId), eq(artifacts.sourceResultSetId, resultSetId)));
+        });
     }
 
     async deleteByResource(organizationId: string, type: ArtifactType, resourceId: string) {
         this.assertInited();
-        await this.db.delete(artifacts).where(and(eq(artifacts.organizationId, organizationId), eq(artifacts.type, type), eq(artifacts.resourceId, resourceId)));
+        const rows = await this.db
+            .select({ id: artifacts.id })
+            .from(artifacts)
+            .where(and(eq(artifacts.organizationId, organizationId), eq(artifacts.type, type), eq(artifacts.resourceId, resourceId)));
+        for (const row of rows) await this.delete({ organizationId, artifactId: row.id });
     }
 
     private toSummary(row: {

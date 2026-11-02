@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { WorkspacePanels } from '@/components/agent-runs/workspace-panels';
-import { Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
+import { SqlWorkspacePanelToggle } from '@/components/sql-workspace/sql-workspace-panel';
+import { SqlWorkspace } from '@/components/sql-workspace/sql-workspace';
+import type { Layout } from 'react-resizable-panels';
 import { Bot, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -31,13 +32,11 @@ import { SQLConsoleSidebar } from '../../components/sql-console-sidebar/sql-cons
 import type { RenameTablePayload, TableActionPayload } from '../../components/sql-console-sidebar/types';
 import { SavedQueriesSidebar, type SavedQueryItem } from './components/saved-queries/saved-queries-sidebar';
 import SQLTabEmpty from './components/tabs/tab-empty';
-import { SQLTabs } from './components/tabs';
 import { SqlConsoleOverlayHost } from './components/sql-console-overlay';
 import { SqlMode } from './components/copilot-modes/sql-mode';
 import { TableMode } from './components/copilot-modes/table-mode';
 import { useSqlConsoleClient } from './hooks/useSqlConsoleClient';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
@@ -49,13 +48,6 @@ const INITIAL_LAYOUT = {
     horizontal: {
         total: 100,
         default: [20, 80] as [number, number],
-        leftPanel: {
-            min: 15,
-            max: 40,
-        },
-        middlePanel: {
-            min: 40,
-        },
     },
     copilot: {
         defaultWidth: 30,
@@ -66,9 +58,6 @@ const INITIAL_LAYOUT = {
         defaultHeaderHeight: 36,
     },
 } as const;
-
-const WORKSPACE_RAIL_WIDTH = 40;
-const AGENT_RUN_PANEL_WIDTH = 300;
 
 type SerializedWorkspaceTab = {
     tabId: string;
@@ -588,13 +577,6 @@ export default function AgentWorkspaceClient({
         closeWorkspace(closeTargetHref);
     }, [closeTargetHref, closeWorkspace]);
 
-    const reservedRightWidth = WORKSPACE_RAIL_WIDTH + (agentRunPanelOpen ? AGENT_RUN_PANEL_WIDTH : 0);
-    const workspaceStyle = {
-        '--agent-run-panel-width': `${AGENT_RUN_PANEL_WIDTH}px`,
-        '--workspace-rail-width': `${WORKSPACE_RAIL_WIDTH}px`,
-        '--workspace-reserved-right-width': `${reservedRightWidth}px`,
-    } as CSSProperties;
-
     useEffect(() => {
         const handler = (event: KeyboardEvent) => {
             const isOpenShortcut = event.key.toLowerCase() === 'i' && (event.metaKey || event.ctrlKey);
@@ -720,176 +702,123 @@ export default function AgentWorkspaceClient({
     );
 
     return (
-        <main className="relative h-full w-full min-w-0 max-w-full overflow-hidden" style={workspaceStyle}>
-            <div className="absolute inset-y-0 left-0 right-[var(--workspace-rail-width)] transition-[right] duration-200 ease-out xl:right-[var(--workspace-reserved-right-width)]">
-                <WorkspacePanels
-                    mode="agent"
-                    orientation="horizontal"
-                    id="agent-workspace-horizontal"
-                    defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
-                    onLayoutChanged={handleLayoutChange}
-                >
-                    <Panel
-                        id="left-panel"
-                        minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`}
-                        maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
-                        className="min-w-0 overflow-hidden"
-                    >
-                        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card" data-testid="sql-console-sidebar-surface">
-                            <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
-                                <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
-                                    <TabsTrigger value="tables" className="min-w-0 flex-1">
-                                        {t('Sidebar.Tables')}
-                                    </TabsTrigger>
-                                    <TabsTrigger value="saved" className="min-w-0 flex-1">
-                                        {t('Sidebar.Queries')}
-                                    </TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="tables" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
-                                    <SQLConsoleSidebar
-                                        onOpenTableTab={handleOpenTableTab}
-                                        onOpenQueryConsole={handleOpenQueryConsole}
-                                        onQueryTable={handleQueryTable}
-                                        onRenameTable={handleRenameTable}
-                                        selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
-                                        selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
-                                    />
-                                </TabsContent>
-                                <TabsContent value="saved" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
-                                    <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />
-                                </TabsContent>
-                            </Tabs>
-                        </div>
-                    </Panel>
-
-                    <PanelSeparator className="w-1.5 bg-border transition-colors" />
-
-                    <Panel id="middle-panel" minSize={`${INITIAL_LAYOUT.horizontal.middlePanel.min}%`}>
-                        <div className="flex h-full flex-col">
-                            {!areTabsHydrated || tabs.length === 0 ? (
-                                <SQLTabEmpty addTab={addTab} disabled={isLoading} />
-                            ) : (
-                                <>
-                                    <SQLTabs
-                                        tabs={tabs}
-                                        activeTabId={activeTabId}
-                                        setActiveTabId={setActiveTabId}
-                                        addTab={addTab}
-                                        closeTab={handleCloseTab}
-                                        closeOtherTabs={handleCloseOthers}
-                                        updateTab={updateTab}
-                                        reorderTabs={reorderTabs}
-                                        onRequestAITitle={manualRenameTab}
-                                        onHeightChange={setTabHeaderHeight}
-                                    />
-                                    <div className="relative flex-1 min-h-0">
-                                        {retainedSqlTab ? (
-                                            <div
-                                                aria-hidden={activeTab?.tabType !== 'sql'}
-                                                inert={activeTab?.tabType !== 'sql'}
-                                                className={cn(
-                                                    'absolute inset-0 flex h-full min-h-0 flex-col',
-                                                    activeTab?.tabType === 'sql' ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none',
-                                                )}
-                                            >
-                                                <SqlMode
-                                                    tabs={tabs}
-                                                    activeTab={retainedSqlTab}
-                                                    activeTabId={retainedSqlTab.tabId}
-                                                    setActiveTabId={setActiveTabId}
-                                                    addTab={addTab}
-                                                    updateTab={updateTab}
-                                                    editorRef={editorRef}
-                                                    runQuery={runQueryWithRef}
-                                                    cancelQuery={cancelQuery}
-                                                    runningTabs={runningTabs}
-                                                    showChatbot={shouldShowChatbot}
-                                                    chatWidth={normalizedChatWidth}
-                                                    setChatWidth={setClampedChatWidth}
-                                                    onCloseChatbot={closeChatbotPanel}
-                                                    reserveRightRail={false}
-                                                    workspaceActive={activeTab?.tabType === 'sql'}
-                                                />
-                                            </div>
-                                        ) : null}
-                                        {activeTab?.tabType === 'table' ? (
-                                            <div className="absolute inset-0 z-20 flex h-full min-h-0 flex-col">
-                                                <TableMode
-                                                    tabs={tabs}
-                                                    activeTab={activeTab}
-                                                    activeTabId={activeTab.tabId}
-                                                    setActiveTabId={setActiveTabId}
-                                                    addTab={addTab}
-                                                    updateTab={updateTab}
-                                                    showChatbot={false}
-                                                    chatWidth={normalizedChatWidth}
-                                                    setChatWidth={setClampedChatWidth}
-                                                    runQuery={runQueryWithRef}
-                                                    onCloseChatbot={closeChatbotPanel}
-                                                    reserveRightRail={false}
-                                                />
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </Panel>
-                </WorkspacePanels>
-            </div>
-
-            <SqlConsoleOverlayHost topOffset={isLoading || tabs.length === 0 ? 0 : tabHeaderHeight} />
-
-            <div className="absolute bottom-0 right-0 top-0 z-20 flex">
-                <div className="flex h-full w-10 flex-col items-center gap-2 border-l border-border/70 bg-card py-3" data-testid="sql-console-action-rail">
-                    {activeTab?.tabType === 'sql' && (
-                        <Button
-                            size="icon"
-                            variant={shouldShowChatbot ? 'default' : 'ghost'}
-                            className="group h-8 w-8"
-                            onClick={toggleChatbotPanel}
-                            title={shouldShowChatbot ? t('Copilot.ToggleClose') : t('Copilot.ToggleOpen')}
-                            aria-label={t('Copilot.ToggleAria')}
+        <main className="relative h-full w-full min-w-0 max-w-full overflow-hidden">
+            <SqlWorkspace
+                mode="agent"
+                defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
+                onLayoutChanged={handleLayoutChange}
+                sidebar={{
+                    tables: (
+                        <SQLConsoleSidebar
+                            onOpenTableTab={handleOpenTableTab}
+                            onOpenQueryConsole={handleOpenQueryConsole}
+                            onQueryTable={handleQueryTable}
+                            onRenameTable={handleRenameTable}
+                            selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
+                            selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
+                        />
+                    ),
+                    queries: <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />,
+                }}
+                tabs={{
+                    tabs: tabs,
+                    activeTabId: activeTabId,
+                    setActiveTabId: setActiveTabId,
+                    addTab: addTab,
+                    closeTab: handleCloseTab,
+                    closeOtherTabs: handleCloseOthers,
+                    updateTab: updateTab,
+                    reorderTabs: reorderTabs,
+                    onRequestAITitle: manualRenameTab,
+                    onHeightChange: setTabHeaderHeight,
+                }}
+                empty={!areTabsHydrated || tabs.length === 0 ? <SQLTabEmpty addTab={addTab} disabled={isLoading} /> : undefined}
+                rail={
+                    <>
+                        {activeTab?.tabType === 'sql' && (
+                            <SqlWorkspacePanelToggle active={shouldShowChatbot} label={t('Copilot.ToggleAria')} onClick={toggleChatbotPanel}>
+                                <Sparkles className={cn('h-5 w-5 transition-colors', shouldShowChatbot ? 'text-background' : 'text-muted-foreground group-hover:text-[#9460FF]')} />
+                            </SqlWorkspacePanelToggle>
+                        )}
+                        <SqlWorkspacePanelToggle
+                            active={agentRunPanelOpen}
+                            label={agentRunPanelOpen ? tAgentRuns('WorkspacePanel.Rail.Close') : tAgentRuns('WorkspacePanel.Rail.Open')}
+                            onClick={toggleAgentRunPanel}
                         >
-                            <Sparkles className={cn('h-5 w-5 transition-colors', shouldShowChatbot ? 'text-background' : 'text-muted-foreground group-hover:text-[#9460FF]')} />
-                            <span className="sr-only">{t('Copilot.ToggleLabel')}</span>
-                        </Button>
-                    )}
-                    <Button
-                        size="icon"
-                        variant={agentRunPanelOpen ? 'default' : 'ghost'}
-                        className="group h-8 w-8"
-                        onClick={toggleAgentRunPanel}
-                        title={agentRunPanelOpen ? tAgentRuns('WorkspacePanel.Rail.Close') : tAgentRuns('WorkspacePanel.Rail.Open')}
-                        aria-label={agentRunPanelOpen ? tAgentRuns('WorkspacePanel.Rail.Close') : tAgentRuns('WorkspacePanel.Rail.Open')}
-                    >
-                        <Bot className={cn('h-5 w-5 transition-colors', agentRunPanelOpen ? 'text-background' : 'text-muted-foreground group-hover:text-primary')} />
-                        <span className="sr-only">{tAgentRuns('Common.AgentRun')}</span>
-                    </Button>
+                            <Bot className={cn('h-5 w-5 transition-colors', agentRunPanelOpen ? 'text-background' : 'text-muted-foreground group-hover:text-primary')} />
+                        </SqlWorkspacePanelToggle>
+                    </>
+                }
+                rightPanel={
+                    agentRunPanelOpen ? (
+                        <AgentRunWorkspacePanel
+                            workId={workId}
+                            connectionId={connectionId}
+                            connectionName={currentConnection?.connection?.name ?? connectionId}
+                            workspaceUrl={typeof window !== 'undefined' ? window.location.href : null}
+                            tabCount={tabs.length}
+                            onSaveWorkspace={async () => {
+                                await saveAgentWorkspace();
+                            }}
+                            hasUnsavedChanges={hasUnsavedChanges}
+                            onRequestCloseWorkspace={requestCloseWorkspace}
+                            onOpenAgentRuns={closeWorkspaceToAgentRuns}
+                            onSelectGeneratedTab={setActiveTabId}
+                            activeTabId={activeTabId}
+                            onSaveAndCloseWorkspace={saveAndCloseWorkspace}
+                            onCloseWorkspaceWithoutSaving={closeWorkspaceWithoutSaving}
+                        />
+                    ) : undefined
+                }
+                overlay={<SqlConsoleOverlayHost topOffset={isLoading || tabs.length === 0 ? 0 : tabHeaderHeight} />}
+            >
+                <div className="relative flex-1 min-h-0">
+                    {retainedSqlTab ? (
+                        <div
+                            aria-hidden={activeTab?.tabType !== 'sql'}
+                            inert={activeTab?.tabType !== 'sql'}
+                            className={cn('absolute inset-0 flex h-full min-h-0 flex-col', activeTab?.tabType === 'sql' ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none')}
+                        >
+                            <SqlMode
+                                tabs={tabs}
+                                activeTab={retainedSqlTab}
+                                activeTabId={retainedSqlTab.tabId}
+                                setActiveTabId={setActiveTabId}
+                                addTab={addTab}
+                                updateTab={updateTab}
+                                editorRef={editorRef}
+                                runQuery={runQueryWithRef}
+                                cancelQuery={cancelQuery}
+                                runningTabs={runningTabs}
+                                showChatbot={shouldShowChatbot}
+                                chatWidth={normalizedChatWidth}
+                                setChatWidth={setClampedChatWidth}
+                                onCloseChatbot={closeChatbotPanel}
+                                reserveRightRail={false}
+                                workspaceActive={activeTab?.tabType === 'sql'}
+                            />
+                        </div>
+                    ) : null}
+                    {activeTab?.tabType === 'table' ? (
+                        <div className="absolute inset-0 z-20 flex h-full min-h-0 flex-col">
+                            <TableMode
+                                tabs={tabs}
+                                activeTab={activeTab}
+                                activeTabId={activeTab.tabId}
+                                setActiveTabId={setActiveTabId}
+                                addTab={addTab}
+                                updateTab={updateTab}
+                                showChatbot={false}
+                                chatWidth={normalizedChatWidth}
+                                setChatWidth={setClampedChatWidth}
+                                runQuery={runQueryWithRef}
+                                onCloseChatbot={closeChatbotPanel}
+                                reserveRightRail={false}
+                            />
+                        </div>
+                    ) : null}
                 </div>
-            </div>
-
-            {agentRunPanelOpen ? (
-                <div className="absolute bottom-0 right-[var(--workspace-rail-width)] top-0 z-10 w-[var(--agent-run-panel-width)] max-w-[calc(100%_-_var(--workspace-rail-width))]">
-                    <AgentRunWorkspacePanel
-                        workId={workId}
-                        connectionId={connectionId}
-                        connectionName={currentConnection?.connection?.name ?? connectionId}
-                        workspaceUrl={typeof window !== 'undefined' ? window.location.href : null}
-                        tabCount={tabs.length}
-                        onSaveWorkspace={async () => {
-                            await saveAgentWorkspace();
-                        }}
-                        hasUnsavedChanges={hasUnsavedChanges}
-                        onRequestCloseWorkspace={requestCloseWorkspace}
-                        onOpenAgentRuns={closeWorkspaceToAgentRuns}
-                        onSelectGeneratedTab={setActiveTabId}
-                        activeTabId={activeTabId}
-                        onSaveAndCloseWorkspace={saveAndCloseWorkspace}
-                        onCloseWorkspaceWithoutSaving={closeWorkspaceWithoutSaving}
-                    />
-                </div>
-            ) : null}
+            </SqlWorkspace>
 
             <AlertDialog open={confirmOpen} onOpenChange={open => setConfirmOpen(open)}>
                 <AlertDialogContent>

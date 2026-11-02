@@ -1,4 +1,5 @@
 import { reportWorkspaceActions } from './workspace';
+import { reportEvidenceCandidatesAction } from './evidence';
 import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -6,7 +7,7 @@ import type { AnalysisScope } from '@dory/shared/types/work-document';
 import { z } from 'zod';
 
 import { emptyWorkContent, publishWorkReport, saveWorkDraft, validateAnalysisScope } from '@/lib/server/work-documents';
-import { analysisScopeSchema, workVisualSchema } from '@/lib/work-documents/schema';
+import { analysisScopeSchema, reportEvidenceGroupsSchema, reviewedEvidenceGroupIdsSchema, workVisualSchema } from '@/lib/work-documents/schema';
 
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
@@ -15,6 +16,8 @@ import type { WebActionServices } from '../../types';
 const contentInput = z.object({
     title: z.string().trim().min(1).max(160),
     body: z.string().max(200000),
+    evidenceGroups: reportEvidenceGroupsSchema.optional(),
+    reviewedEvidenceGroupIds: reviewedEvidenceGroupIdsSchema.optional(),
     visuals: z
         .array(workVisualSchema)
         .max(100)
@@ -86,7 +89,16 @@ const reportCreate = defineWebAction({
                     documentId: document.id,
                     expectedRevision: document.revision,
                     source: 'agent',
-                    draft: { title: input.title, markdown: input.body, body: input.body, format: 'restricted-mdx', visuals: input.visuals, status: 'draft' },
+                    draft: {
+                        title: input.title,
+                        markdown: input.body,
+                        body: input.body,
+                        format: 'restricted-mdx',
+                        visuals: input.visuals,
+                        evidenceGroups: input.evidenceGroups,
+                        reviewedEvidenceGroupIds: input.reviewedEvidenceGroupIds,
+                        status: 'draft',
+                    },
                 }),
             ),
         };
@@ -137,6 +149,7 @@ const reportUpdate = defineWebAction({
     audit: { allowInputFields: ['documentId', 'expectedRevision'] },
     handler: async (ctx, input) => {
         await writableReport(ctx, input.documentId);
+        if (ctx.actor.type !== 'user' && input.reviewedEvidenceGroupIds?.length) throw new DatabaseError('Only a person can mark evidence as reviewed.', 403);
         return {
             document: bounded(
                 await saveWorkDraft(ctx.services.db, {
@@ -144,7 +157,16 @@ const reportUpdate = defineWebAction({
                     documentId: input.documentId,
                     expectedRevision: input.expectedRevision,
                     source: 'user',
-                    draft: { title: input.title, markdown: input.body, body: input.body, format: 'restricted-mdx', visuals: input.visuals, status: 'draft' },
+                    draft: {
+                        title: input.title,
+                        markdown: input.body,
+                        body: input.body,
+                        format: 'restricted-mdx',
+                        visuals: input.visuals,
+                        evidenceGroups: input.evidenceGroups,
+                        reviewedEvidenceGroupIds: input.reviewedEvidenceGroupIds,
+                        status: 'draft',
+                    },
                 }),
             ),
         };
@@ -179,4 +201,4 @@ const reportPublish = defineWebAction({
         return { document: bounded(await publishWorkReport(ctx.services.db, { ...owner(ctx), ...input })) };
     },
 });
-export const reportActions = [reportCreate, reportGet, reportUpdate, reportPublish, ...reportWorkspaceActions];
+export const reportActions = [reportCreate, reportGet, reportUpdate, reportPublish, reportEvidenceCandidatesAction, ...reportWorkspaceActions];

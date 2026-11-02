@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -326,6 +326,10 @@ async function initSchema() {
 }
 
 await initSchema();
+for (const migration of ['0038_work_documents', '0041_report_publications', '0042_report_working_drafts']) {
+    const migrationSql = await readFile(new URL(`../../../../packages/database/src/pglite/migrations/${migration}.sql`, import.meta.url), 'utf8');
+    for (const statement of migrationSql.split('--> statement-breakpoint').filter(part => part.trim())) await db.execute(sql.raw(statement));
+}
 
 async function createRepositories() {
     const organizationsRepo = new PostgresOrganizationsRepository();

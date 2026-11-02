@@ -49,6 +49,12 @@ export type ReportEmbed =
     | { type: 'chart'; artifactId: string; snapshotId: string; config: { title: string; chart: NonNullable<WorkVisual['chart']>; allowSubset?: boolean } }
     | { type: 'table'; artifactId: string; snapshotId: string; config: { title: string; allowSubset?: boolean } };
 export type ReportDiagnostic = { message: string; line?: number; column?: number };
+export type ReportEvidenceGroup = {
+    id: string;
+    references: Array<{ artifactId: string; explanation?: string }>;
+    /** Human review state, computed by the server when prose or references change. */
+    needsReview?: boolean;
+};
 export type WorkDocumentContent = {
     workspaceOrigin?: { baseRevision: number; draftRevision: number };
     sourceWorkId?: string;
@@ -61,6 +67,9 @@ export type WorkDocumentContent = {
     markdown: string;
     visuals: WorkVisual[];
     evidence: WorkEvidence[];
+    evidenceGroups?: ReportEvidenceGroup[];
+    /** Editor-only acknowledgement; stripped before content is persisted. */
+    reviewedEvidenceGroupIds?: string[];
     knowledge: Array<{ ref: string; title: string; revision: string; content: string }>;
 };
 export type WorkDocumentView = {

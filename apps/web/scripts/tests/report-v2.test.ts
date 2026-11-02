@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { PostgresWorkDocumentsRepository } from '@dory/database/postgres/impl/work-documents';
-import type { PostgresDBClient } from '@dory/shared';
+import { reportRetentionFixture } from '../../../../packages/database/scripts/tests/report-retention-fixture';
 import type { WorkDocumentContent, WorkDocumentView, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
-import { PGlite } from '@electric-sql/pglite';
-import { drizzle } from 'drizzle-orm/pglite';
 import { strFromU8, unzipSync } from 'fflate';
 
 import { exportDoryMdxZip, markdownExportFiles } from '@/lib/work-documents/export';
@@ -88,15 +84,11 @@ test('legacy conversion preserves literal Markdown, code examples and visual ref
 });
 
 test('publication freezes the selected revision, is idempotent, retains snapshots and enforces ownership', async () => {
-    const db = new PGlite();
-    const repo = new PostgresWorkDocumentsRepository();
+    const fixture = await reportRetentionFixture();
+    const repo = fixture.reports;
+    const db = fixture.client;
     try {
-        for (const migration of ['0038_work_documents', '0041_report_publications']) {
-            const sql = await readFile(`../../packages/database/src/postgres/migrations/${migration}.sql`, 'utf8');
-            assert.equal(await readFile(`../../packages/database/src/pglite/migrations/${migration}.sql`, 'utf8'), sql);
-            await db.exec(sql);
-        }
-        await repo.init(drizzle(db) as unknown as PostgresDBClient);
+        await fixture.seedEvidence('artifact', [{ value: 123.45, base: 0 }]);
         const owner = { organizationId: 'org', userId: 'alice' };
         const first = await repo.create({
             ...owner,
@@ -139,7 +131,7 @@ test('publication freezes the selected revision, is idempotent, retains snapshot
         assert.equal((await repo.publications(target)).length, 2);
         await repo.archive({ ...target, archived: true });
         const historical = await repo.getPublication({ ...target, publicationId: published.publication.id });
-        // No Artifact or ResultSet tables exist here: reading/exporting only needs retained report data.
+        // Historical rendering/exporting still uses the original embedded report data.
         const view: WorkDocumentView = {
             ...historical,
             createdAt: historical.createdAt.toISOString(),
@@ -165,7 +157,7 @@ test('publication freezes the selected revision, is idempotent, retains snapshot
         assert.doesNotMatch(strFromU8(archive['manifest.json']), /confidential|private_table|"sql"|connectionId/);
         assert.match(strFromU8(archive['report.mdx']), /Metric/);
     } finally {
-        await db.close();
+        await fixture.close();
     }
 });
 

@@ -22,6 +22,7 @@ const directory = await mkdtemp(join(tmpdir(), 'dory-agent-works-'));
 const postgres = process.env.AGENT_WORKS_TEST_POSTGRES === '1';
 process.env.DB_TYPE = postgres ? 'postgres' : 'pglite';
 process.env.PGLITE_DB_PATH = join(directory, 'db');
+process.env.DORY_ARTIFACTS_FILESYSTEM_DIR = join(directory, 'artifacts');
 const { getClient } = await import('@dory/database/postgres/client');
 const { resetPgliteClient } = await import('@dory/database/postgres/client/pglite');
 const { getDBService } = await import('@dory/database');
@@ -174,6 +175,17 @@ test('work metadata aggregation, title races and owner isolation use the shared 
                 ] as unknown as typeof schema.chatMessages.$inferInsert.parts,
             })
             .where((await import('drizzle-orm')).eq(schema.chatMessages.id, 'assistant'));
+        const reportResult = await db.resultSets.persistQueryResultSet({
+            ...owner,
+            sessionId: 'report-source',
+            sessionSqlText: report.content.evidence[0].sql!,
+            resultSet: { sessionId: 'report-source', setIndex: 0, sqlText: report.content.evidence[0].sql!, status: 'success' },
+            rows: report.content.evidence[0].rows,
+        });
+        await database
+            .update(schema.artifacts)
+            .set({ id: 'private-artifact' })
+            .where((await import('drizzle-orm')).eq(schema.artifacts.sourceResultSetId, reportResult.resultSetId));
         const savedReport = await db.workDocuments.create({ ...owner, creationKey: 'report', chatId: 'chat', title: report.title, scope: report.scope, content: report.content });
         await db.workDocuments.update({
             ...owner,
