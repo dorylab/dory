@@ -146,7 +146,7 @@
         "ai": "^7.0.93",
         "ai-gateway-provider": "^4.0.0",
         "ansi-to-react": "^6.2.6",
-        "better-auth": "^1.6.23",
+        "better-auth": "^1.7.7",
         "better-sqlite3": "^12.8.0",
         "boring-avatars": "^2.0.4",
         "class-variance-authority": "^0.7.1",
