@@ -361,6 +361,110 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 await db.workDocuments.archive({ ...owner, documentId: document.id, archived: true });
             }
         });
+        await t.test('automatic conversation charts save original evidence axes and reject derived aggregates', async t => {
+            const { buildChartFromQuery } = await import('@/lib/agent-runs/chart-result');
+            const rows = [
+                { continent: 'Asia', order_count: 42 },
+                { continent: 'Europe', order_count: 18 },
+            ];
+            t.mock.method(db.resultSets, 'readRows', async () => ({
+                columns: [{ name: 'continent' }, { name: 'order_count' }],
+                rows,
+                rowCount: rows.length,
+                dataAvailability: 'full',
+            }));
+            const output = buildChartFromQuery(
+                { chartType: 'bar' },
+                {
+                    source: { artifactId: 'orders', toolCallId: 'auto-query' },
+                    result: { type: 'sql-result', ok: true, sql: '', database: 'main', previewRows: rows, columns: [] },
+                },
+            );
+            t.mock.method(
+                db.chat,
+                'listMessages',
+                async () =>
+                    [
+                        {
+                            role: 'assistant',
+                            parts: [
+                                {
+                                    type: 'tool-chartBuilder',
+                                    toolCallId: 'auto-chart',
+                                    state: 'output-available',
+                                    output,
+                                },
+                            ],
+                        },
+                    ] as never,
+            );
+            const tools = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:auto-chart',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            const saved = await tools.tools.createWorkReport.execute!(
+                {
+                    title: 'Orders by continent',
+                    markdown: '![Chart](dory://chart/auto-chart)',
+                    visuals: [],
+                    status: 'ready',
+                },
+                call,
+            );
+            assert.ok('content' in saved);
+            assert.equal(saved.status, 'ready');
+            assert.deepEqual(saved.content.visuals[0].chart, {
+                type: 'bar',
+                xKey: 'continent',
+                yKeys: [{ key: 'order_count', label: 'Sum(order_count)' }],
+            });
+            assert.deepEqual(saved.content.evidence[0].rows, rows);
+            const persisted = await db.workDocuments.get({ ...owner, documentId: saved.id });
+            assert.deepEqual(persisted.content.visuals[0].chart, saved.content.visuals[0].chart);
+            const updated = await tools.tools.updateWorkReport.execute!(
+                {
+                    documentId: saved.id,
+                    expectedRevision: saved.revision,
+                    patch: { edits: [{ oldText: saved.content.body ?? saved.content.markdown, newText: '## Updated\n\n![Chart](dory://chart/auto-chart)' }], status: 'ready' },
+                },
+                call,
+            );
+            assert.ok('content' in updated);
+            assert.equal(updated.status, 'ready');
+            assert.deepEqual(updated.content.visuals[0].chart, saved.content.visuals[0].chart);
+            output.data[0].__value__ = 999;
+            const invalid = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:forged-auto-chart',
+                scope: { connectionIds: ['orders'] },
+                runId: async () => run.workId,
+            });
+            await assert.rejects(
+                invalid.tools.createWorkReport.execute!(
+                    {
+                        title: 'Invalid chart',
+                        markdown: '![Chart](dory://chart/auto-chart)',
+                        visuals: [],
+                        status: 'ready',
+                    },
+                    call,
+                ) as Promise<unknown>,
+                /computed in SQL/,
+            );
+            for (const creationKey of ['reports:auto-chart', 'reports:forged-auto-chart']) {
+                const document = await db.workDocuments.findByCreationKey({ ...owner, creationKey });
+                assert.ok(document);
+                await db.workDocuments.archive({ ...owner, documentId: document.id, archived: true });
+            }
+        });
         await t.test('report creation saves all chart series and rejects an invalid secondary evidence column', async t => {
             const assertTurn = db.works.assertChatTurn.bind(db.works);
             t.mock.method(db.works, 'assertChatTurn', async (input: Parameters<typeof assertTurn>[0]) => {

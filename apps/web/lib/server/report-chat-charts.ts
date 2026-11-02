@@ -1,13 +1,57 @@
 import { createHash } from 'node:crypto';
-import type { WorkVisual } from '@dory/shared/types/work-document';
+import { buildResultAutoChartProfile, RESULT_AUTO_CHART_NONE_VALUE, toChartResultPart } from '@dory/analysis/core/result-chart-profile';
+import type { WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
 
 import { getChartResultFromPart } from '@/lib/agent-runs/chart-result';
 import { record } from '@/lib/agent-runs/sql-result';
 import { workVisualSchema } from '@/lib/work-documents/schema';
 
+type ChatChart = { chart: NonNullable<ReturnType<typeof getChartResultFromPart>>; input: Record<string, unknown> };
+
+/** Recover original axes only when the automatic chart is a lossless view of the verified snapshot. */
+export function reportChatChartAxes(source: ChatChart, evidence: WorkEvidence): WorkVisual['chart'] | undefined {
+    const { chart, input } = source;
+    if (chart.source?.artifactId !== evidence.artifactId || chart.xKey !== 'xLabel' || chart.yKeys?.length !== 1 || chart.yKeys[0].key !== '__value__' || evidence.truncated)
+        return;
+    const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+    const profile = buildResultAutoChartProfile({
+        rows: evidence.rows,
+        overrides: {
+            chartType: chart.chartType,
+            xKey: text(input.xKey),
+            categoryKey: text(input.categoryKey),
+            valueKey: text(input.valueKey),
+            yKeys: Array.isArray(input.yKeys)
+                ? input.yKeys
+                      .map(record)
+                      .filter(series => typeof series.key === 'string')
+                      .map(series => ({ key: String(series.key) }))
+                : undefined,
+        },
+    });
+    const metric = profile.metricOptions.find(option => option.key === profile.chartState.yKey);
+    const xKey = profile.chartState.xKey;
+    if (
+        profile.chartState.groupKey !== RESULT_AUTO_CHART_NONE_VALUE ||
+        !metric?.column ||
+        !['sum', 'avg', 'min', 'max'].includes(metric.kind) ||
+        profile.aggregated.data.length !== evidence.rows.length ||
+        profile.aggregated.data.some(row => {
+            const filter = record(row.__xFilter);
+            return filter.kind !== 'exact' || filter.col !== xKey;
+        })
+    )
+        return;
+    const rebuilt = toChartResultPart(profile);
+    const values = (rows: Record<string, unknown>[]) => JSON.stringify(rows.map(row => [row.xLabel, row.__value__]));
+    if (!rebuilt || rebuilt.yKeys?.[0].label !== chart.yKeys[0].label || values(rebuilt.data) !== values(chart.data)) return;
+    return { type: chart.chartType, xKey, yKeys: [{ key: metric.column, label: chart.yKeys[0].label }] };
+}
+
 /** Convert only complete chart tool results from this conversation, never copied preview rows. */
-export function resolveReportChatCharts(body: string, visuals: WorkVisual[], messages: readonly unknown[], mdx: boolean) {
+export function resolveReportChatCharts(body: string, visuals: WorkVisual[], messages: readonly unknown[], mdx: boolean, evidence: WorkEvidence[] = []) {
     const matches = new Map<string, WorkVisual[]>();
+    const charts = new Map<string, ChatChart>();
     for (const value of messages) {
         const message = record(value);
         if (message.role !== 'assistant' && message.role !== 'tool') continue;
@@ -29,6 +73,10 @@ export function resolveReportChatCharts(body: string, visuals: WorkVisual[], mes
                 chart: { type: chart.chartType, xKey, yKeys },
             });
             if (!visual.success) continue;
+            const source = { chart, input: record(part.input ?? part.args) };
+            charts.set(id, source);
+            const snapshot = evidence.find(item => item.artifactId === visual.data.evidenceId);
+            if (snapshot && !snapshot.columns.includes(xKey)) visual.data.chart = reportChatChartAxes(source, snapshot) ?? visual.data.chart;
             const prior = matches.get(part.toolCallId) ?? [];
             if (!prior.some(item => JSON.stringify(item) === JSON.stringify(visual.data))) prior.push(visual.data);
             matches.set(part.toolCallId, prior);
@@ -62,5 +110,5 @@ export function resolveReportChatCharts(body: string, visuals: WorkVisual[], mes
             return mdx ? `<Chart source="${visual.id}" />` : `![Chart](dory://visual/${visual.id})`;
         })
         .join('\n');
-    return { body: result, visuals: [...resolved.values()] };
+    return { body: result, visuals: [...resolved.values()], charts };
 }

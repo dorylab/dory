@@ -89,7 +89,7 @@ export function AgentMessageReports({
         <div className="my-4 space-y-3" data-testid="message-reports">
             {documents.map(document => {
                 const preview = reportPreview(document);
-                const generating = document.status !== 'ready' && busy;
+                const generating = document.status !== 'ready' && busy && messages.at(-1)?.id === message.id;
                 return (
                     <button
                         key={document.id}
