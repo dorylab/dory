@@ -1,12 +1,13 @@
-import { assertReportAttachmentDataset } from '@/lib/work-documents/workspace-evidence';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { WorkEvidence } from '@dory/shared/types/work-document';
-import { loadReportEvidence, reportWorkspaceContext } from '@/lib/server/report-workspace-context';
+
 import type { WebActionServices } from '@/lib/actions/server/types';
+import { loadReportEvidence, reportWorkspaceContext } from '@/lib/server/report-workspace-context';
+import { assertReportAttachmentDataset } from '@/lib/work-documents/workspace-evidence';
 import { buildReportWorkspacePath, reportWorkspaceReturnPath } from '@/lib/work-documents/workspace-url';
 
 const reference = { documentId: 'report', revision: 2, artifactId: 'artifact', snapshotId: 'snap' };
@@ -96,4 +97,11 @@ test('attachment reruns reject changed files, missing sheets and unrelated attac
     assert.throws(() => assertReportAttachmentDataset(source, { ...data, sha256: 'changed' }), /changed/);
     assert.throws(() => assertReportAttachmentDataset(source, { ...data, tables: [] }), /changed/);
     assert.throws(() => assertReportAttachmentDataset(source, { ...data, attachmentId: 'unrelated' }), /changed/);
+});
+
+test('report sources restore their captured schema independently of the current connection', async () => {
+    const { ctx } = fixture({ sourceSchemaName: 'analytics' });
+    const result = await reportWorkspaceContext(ctx, reference);
+    assert.equal(result.source.kind, 'database');
+    if (result.source.kind === 'database') assert.equal(result.source.schema, 'analytics');
 });

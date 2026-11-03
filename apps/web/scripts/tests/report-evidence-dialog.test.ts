@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ReportWorkingDraft } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentContent, WorkEvidence } from '@dory/shared/types/work-document';
+
 import { hasCompleteReportSnapshot, hasQueryLimit } from '@/lib/work-documents/evidence-preview';
 import { applyWorkingResult, initialWorkingState, versionContent } from '@/lib/work-documents/working-draft';
 import { selectReportEvidence } from '@/lib/work-documents/workspace-evidence';
@@ -38,7 +39,7 @@ function fixture(): ReportWorkingDraft {
         revision: 1,
         baseRevision: 1,
         expectedReportRevision: 1,
-        state: initialWorkingState('Report', content),
+        state: { ...initialWorkingState('Report', content), bindingVersion: undefined },
         results: {
             next: { sourceArtifactId: 'source', evidence: { ...evidence, artifactId: 'next', snapshotId: 'next-snapshot', rows: [{ n: 2 }] } },
         },
@@ -73,7 +74,7 @@ test('query LIMIT ignores quoted text, identifiers, comments and nested queries'
         assert.equal(hasQueryLimit(sql), false, sql);
 });
 
-test('applying one component splits a shared query without changing other components or conclusions', () => {
+test('legacy applying one component splits a shared query without changing other components or conclusions', () => {
     const draft = fixture();
     const before = structuredClone(draft);
     const state = applyWorkingResult(draft, 'query_1', 'next', { artifactId: 'source', componentId: 'a' }, 'split');

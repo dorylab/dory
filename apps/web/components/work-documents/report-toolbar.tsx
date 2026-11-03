@@ -36,6 +36,7 @@ type Props = {
     publications: Array<{ id: string; number: number; revision: number; publishedAt: string }>;
     versions: Array<{ revision: number; source: string; createdAt: string }>;
     latestRevision?: number;
+    onOpenWorkspace?: () => void;
     onBack: () => void;
     onContinue: () => void;
     onEdit: () => void;
@@ -81,6 +82,11 @@ export function ReportToolbar(p: Props) {
     );
     return (
         <header ref={host} className="report-toolbar sticky top-0 z-20 mb-4 flex h-11 items-center gap-1.5 border-b bg-background px-3" data-testid="report-toolbar">
+            {p.onOpenWorkspace && (
+                <Button size="sm" variant="ghost" disabled={p.disabled || p.unavailable} onClick={p.onOpenWorkspace}>
+                    {t('ConnectedWorkspace.OpenWorkspace')}
+                </Button>
+            )}
             {p.standalone && (
                 <IconHint label={t('BackToReports')}>
                     <Button size="icon" variant="ghost" className="size-7 shrink-0" aria-label={t('BackToReports')} onClick={p.onBack}>

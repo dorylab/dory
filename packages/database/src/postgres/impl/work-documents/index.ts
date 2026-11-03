@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
 import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
-import type { ReportWorkingState, ReportWorkingDraft } from '@dory/shared/types/report-workspace';
+import type { ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { getClient } from '../../client';
-import { reportWorkingDrafts, reportPublications, reportSnapshots, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
+import { reportPublications, reportSnapshots, reportWorkingDrafts, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
 import { reportArtifactReference, retainReportEvidence, validateReportPublicationEvidence } from './evidence-retention';
 
 type Owner = { organizationId: string; userId: string };
@@ -236,6 +236,23 @@ export class PostgresWorkDocumentsRepository {
         return this.db.transaction(async tx => {
             const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
             if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            const [existing] = await tx
+                .select()
+                .from(reportWorkingDrafts)
+                .where(
+                    and(
+                        eq(reportWorkingDrafts.documentId, input.documentId),
+                        eq(reportWorkingDrafts.organizationId, input.organizationId),
+                        eq(reportWorkingDrafts.userId, input.userId),
+                        or(
+                            eq(reportWorkingDrafts.baseRevision, input.baseRevision),
+                            current.revision === input.baseRevision ? eq(reportWorkingDrafts.expectedReportRevision, input.baseRevision) : undefined,
+                        ),
+                    ),
+                )
+                .orderBy(desc(reportWorkingDrafts.updatedAt))
+                .limit(1);
+            if (existing) return existing;
             const [base] = await tx
                 .select()
                 .from(workDocumentVersions)
@@ -276,7 +293,7 @@ export class PostgresWorkDocumentsRepository {
         await this.db.transaction(async tx => {
             const [document] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
             if (!document || document.archivedAt) throw new DatabaseError('Report unavailable.', 404);
-            await retainReportEvidence(tx, input.organizationId, [input.result.evidence], input.documentId);
+            // Execution records are recoverable until ordinary result expiry; only adopted results are retained.
             const [row] = await tx
                 .update(reportWorkingDrafts)
                 .set({ results: sql`${reportWorkingDrafts.results} || ${JSON.stringify({ [input.resultId]: input.result })}::jsonb` })
@@ -329,7 +346,25 @@ export class PostgresWorkDocumentsRepository {
             );
             const [row] = await tx
                 .update(workDocuments)
-                .set({ content, scope: base.scope, title: draft.state.title, revision: current.revision + 1, status: 'ready', updatedAt: new Date() })
+                .set({
+                    content,
+                    scope: {
+                        ...base.scope,
+                        connectionIds: [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))],
+                        databasesByConnection: Object.fromEntries(
+                            [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))].flatMap(connectionId => {
+                                const databases = [
+                                    ...new Set(content.evidence.flatMap(e => (e.connectionId === connectionId && e.sourceDatabaseName ? [e.sourceDatabaseName] : []))),
+                                ];
+                                return databases.length ? [[connectionId, databases]] : [];
+                            }),
+                        ),
+                    },
+                    title: draft.state.title,
+                    revision: current.revision + 1,
+                    status: 'ready',
+                    updatedAt: new Date(),
+                })
                 .where(this.owned(input))
                 .returning();
             await tx.insert(workDocumentVersions).values(this.version(row, 'user'));
@@ -355,7 +390,11 @@ export class PostgresWorkDocumentsRepository {
             await tx.update(workDocuments).set({ publishedVersionId: publication.id }).where(this.owned(input));
             await tx
                 .update(reportWorkingDrafts)
-                .set({ expectedReportRevision: row.revision, revision: draft.revision + 1 })
+                .set({
+                    expectedReportRevision: row.revision,
+                    revision: draft.revision + 1,
+                    state: { ...draft.state, content, proseNeedsReview: false, baseline: { revision: row.revision, title: draft.state.title, content } },
+                })
                 .where(this.draftOwned(input));
             return publication.id;
         });

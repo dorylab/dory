@@ -1,16 +1,17 @@
-import type { NamingMetadata, NamingSource } from '@dory/shared/utils/sql-name';
-import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
-
-import { and, asc, eq, isNotNull, isNull, lte, ne, not, notInArray, sql } from 'drizzle-orm';
-
 import { getDoryArtifactStore, joinObjectPath, safeObjectPathPart, type DoryArtifactStore } from '@dory/artifacts';
 import { collectSerializableDataPage, createDataSchema, prefetchSerializableDataStream, rowDataStream, schemaToIpc, serializableColumns, type DataStream } from '@dory/data-plane';
 import { getClient } from '@dory/database/postgres/client';
+import {
+    DEFAULT_RESULT_SET_MAX_STORAGE_BYTES,
+    DEFAULT_RESULT_SET_RETENTION_DAYS,
+    getResultSetMaxStorageBytesFromOrganizationMetadata,
+    getResultSetRetentionDaysFromOrganizationMetadata,
+} from '@dory/database/postgres/impl/organization';
 import {
     agentRunResultSets,
     artifacts as artifactCatalogTable,
@@ -21,12 +22,6 @@ import {
     resultSets as resultSetsTable,
     workQueryResultSets,
 } from '@dory/database/postgres/schemas';
-import {
-    DEFAULT_RESULT_SET_MAX_STORAGE_BYTES,
-    DEFAULT_RESULT_SET_RETENTION_DAYS,
-    getResultSetMaxStorageBytesFromOrganizationMetadata,
-    getResultSetRetentionDaysFromOrganizationMetadata,
-} from '@dory/database/postgres/impl/organization';
 import {
     buildResultSetPreview,
     configureResultSetDuckDb,
@@ -40,9 +35,13 @@ import {
     type ResultSetDataWriterResult,
     type ResultSetManifest,
 } from '@dory/resultset';
+import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
-import type { PostgresDBClient } from '@dory/shared';
+import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
+import type { NamingMetadata, NamingSource } from '@dory/shared/utils/sql-name';
+import { and, asc, eq, isNotNull, isNull, lte, ne, not, notInArray, sql } from 'drizzle-orm';
+
 import {
     discardUnreferencedResultData,
     isReportExportReferenced,
@@ -1167,6 +1166,7 @@ export class PostgresResultSetsRepository {
             });
             await this.registerResultSetArtifact({
                 organizationId: input.organizationId,
+                temporary: input.source === 'report-workspace',
                 resultSetId: artifactId,
                 title: getString(resultSet.title) ?? `${getString(resultSet.sqlOp) ?? 'Result Set'} ${artifactId.slice(3, 11)}`,
                 namingSource: resultSet.namingSource === 'rule' ? 'rule' : 'manual',
@@ -1375,6 +1375,7 @@ export class PostgresResultSetsRepository {
             });
             await this.registerResultSetArtifact({
                 organizationId: input.organizationId,
+                temporary: input.source === 'report-workspace',
                 resultSetId: artifactId,
                 title: getString(resultSet.title) ?? `${getString(resultSet.sqlOp) ?? 'Result Set'} ${artifactId.slice(3, 11)}`,
                 namingSource: resultSet.namingSource === 'rule' ? 'rule' : 'manual',
@@ -2544,6 +2545,7 @@ export class PostgresResultSetsRepository {
     }
 
     private async registerResultSetArtifact(input: {
+        temporary?: boolean;
         organizationId: string;
         resultSetId: string;
         title: string;
@@ -2569,6 +2571,7 @@ export class PostgresResultSetsRepository {
                 title: input.title.slice(0, 160),
                 namingSource: input.namingSource ?? 'manual',
                 status: 'ready',
+                visibility: input.temporary ? 'workspace' : 'catalog',
                 resourceId: input.resultSetId,
                 sourceResultSetId: input.resultSetId,
                 connectionId: input.connectionId,

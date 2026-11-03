@@ -15,12 +15,13 @@ import { workRequest } from '@/lib/work-documents/client';
 import { reportListParsers, serializeReportList } from '@/lib/work-documents/list-state';
 import { renderWorkHtml } from '@/lib/work-documents/render';
 import { editableReport, reportEmbeds } from '@/lib/work-documents/report-core';
+import { buildReportWorkspacePath } from '@/lib/work-documents/workspace-url';
 
 import { AddDefinitionDialog } from './add-definition-dialog';
 import { ReportBody } from './report-body';
 import type { ReportEditorHandle } from './report-editor';
-import { ReportToolbar } from './report-toolbar';
 import type { ReportEvidenceSelection } from './report-evidence-panel';
+import { ReportToolbar } from './report-toolbar';
 
 const ReportEditor = dynamic(() => import('./report-editor'), { ssr: false });
 const ReportEvidencePanel = dynamic(() => import('./report-evidence-panel').then(module => module.ReportEvidencePanel), { ssr: false });
@@ -378,6 +379,18 @@ export function WorkReport({
                     </AlertDialogContent>
                 </AlertDialog>
                 <ReportToolbar
+                    onOpenWorkspace={() =>
+                        void leaveReport(() =>
+                            router.push(
+                                buildReportWorkspacePath(organization, {
+                                    documentId: document.id,
+                                    artifactId: '',
+                                    revision: document.revision,
+                                    publicationId: document.publication?.id,
+                                }),
+                            ),
+                        )
+                    }
                     document={document}
                     standalone={presentation === 'standalone'}
                     historical={historical}

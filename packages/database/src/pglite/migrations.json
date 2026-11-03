@@ -688,5 +688,17 @@
     "bps": true,
     "folderMillis": 1793318400000,
     "hash": "e794a85a25f69f8893fe4da85c220673be6a22587802bcb7509048e66f8e25a6"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"report_working_drafts\" ADD COLUMN \"id\" text;\n",
+      "\nUPDATE \"report_working_drafts\" SET \"id\" = 'draft_' || md5(\"document_id\" || ':' || \"user_id\" || ':' || \"base_revision\"::text);\n",
+      "\nALTER TABLE \"report_working_drafts\" ALTER COLUMN \"id\" SET NOT NULL;\n",
+      "\nCREATE UNIQUE INDEX \"report_working_drafts_id\" ON \"report_working_drafts\" (\"id\");\n",
+      "\nALTER TABLE \"artifacts\" ADD COLUMN \"visibility\" text NOT NULL DEFAULT 'catalog';\n"
+    ],
+    "bps": true,
+    "folderMillis": 1793577600000,
+    "hash": "3fdb5689ccadcc8dc499b2eea2b971552b4414418c068de80f55d8dc62d0d030"
   }
 ]

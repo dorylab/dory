@@ -1,9 +1,11 @@
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { ReportApplyTarget, ReportQueryTab, ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
-import type { WorkDocumentContent, WorkVisual, WorkEvidence } from '@dory/shared/types/work-document';
-import { editableReport, parseReport, reportEmbeds } from './report-core';
-import { referencedEvidence } from './markdown';
+import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
+
 import { reportNumber } from './format';
+import { remapChartFields, resultUsedBy } from './workspace-presentation';
+import { referencedEvidence } from './markdown';
+import { editableReport, parseReport, reportEmbeds, reportOutline, reportTagSource } from './report-core';
 
 export function initialWorkingState(title: string, raw: WorkDocumentContent): ReportWorkingState {
     const content = editableReport(raw);
@@ -25,11 +27,44 @@ export function initialWorkingState(title: string, raw: WorkDocumentContent): Re
             });
     }
     const tabs = [...groups.values()];
-    return { title, content, tabs, activeTabId: tabs[0]?.id ?? null, proseNeedsReview: false };
+    return {
+        title,
+        content,
+        tabs,
+        activeTabId: tabs[0]?.id ?? null,
+        proseNeedsReview: false,
+        bindingVersion: 2,
+        charts: [],
+        baseline: { revision: 1, title, content: structuredClone(content) },
+    };
 }
 
 export function validateWorkingVisual(visual: WorkVisual, evidence: WorkEvidence) {
     if (evidence.truncated && !visual.allowSubset) throw new DatabaseError(`“${visual.title}”: explicitly allow partial results or rerun an aggregate query.`, 400);
+    if (visual.chartSpec) {
+        const spec = visual.chartSpec;
+        const keys = [
+            spec.xKey,
+            ...(spec.groupKey && spec.groupKey !== '__none__' ? [spec.groupKey] : []),
+            ...(spec.filters ?? []).map(filter => filter.col),
+            ...(spec.search?.columns ?? []),
+        ];
+        // Metric keys encode aggregate operations, e.g. sum:duration; count has no column.
+        if (spec.yKey !== 'count' && !/^(sum|avg|min|max|count_distinct|count_true):.+$/.test(spec.yKey))
+            throw new DatabaseError('Unsupported chart aggregation. Update its configuration.', 400);
+        const metricColumn = spec.yKey.includes(':') ? spec.yKey.slice(spec.yKey.indexOf(':') + 1) : spec.yKey;
+        if (spec.yKey !== 'count') keys.push(metricColumn);
+        if (keys.some(key => !evidence.columns.includes(key))) throw new DatabaseError(`“${visual.title}”: chart fields changed. Update its configuration.`, 400);
+        const numericColumns = [...(/^(sum|avg|min|max):/.test(spec.yKey) ? [metricColumn] : []), ...(['scatter', 'histogram'].includes(spec.chartType) ? [spec.xKey] : [])];
+        for (const key of numericColumns) {
+            const type = evidence.columnTypes?.find(column => column.name === key)?.type ?? '';
+            if (
+                /(^|[^a-z])(string|varchar|char|text|json|uuid|boolean|bool|date|timestamp|datetime)([^a-z]|$)/i.test(type) ||
+                evidence.rows.some(row => row[key] != null && row[key] !== '' && reportNumber(row[key]) === null)
+            )
+                throw new DatabaseError(`“${visual.title}”: chart field “${key}” is no longer numeric. Update its configuration.`, 400);
+        }
+    }
     if (visual.metric) {
         for (const cell of [visual.metric, ...(visual.metric.items ?? []), ...(visual.metric.comparison ? [visual.metric.comparison] : [])]) {
             if (!evidence.columns.includes(cell.column) || !evidence.rows[cell.rowIndex])
@@ -55,6 +90,26 @@ export function validateWorkingVisual(visual: WorkVisual, evidence: WorkEvidence
 
 /** Materialize only server-owned evidence. Client bindings/configuration contain no rows or provenance. */
 export function materializeWorkingContent(state: ReportWorkingState, results: ReportWorkingDraft['results'], validate = false): WorkDocumentContent {
+    if (state.bindingVersion === 2) {
+        const trusted = new Map([...Object.values(results).map(result => result.evidence), ...state.content.evidence].map(evidence => [evidence.artifactId, evidence]));
+        const ids = new Set<string>();
+        for (const visual of state.content.visuals) {
+            if (ids.has(visual.id)) throw new DatabaseError('Duplicate component ID.', 400);
+            ids.add(visual.id);
+            const evidence = trusted.get(visual.evidenceId);
+            if (!evidence) throw new DatabaseError('The selected result is unavailable.', 409);
+            if (validate) validateWorkingVisual(visual, evidence);
+        }
+        const parsed = parseReport(state.content.body ?? '', state.content.visuals);
+        if (validate && parsed.diagnostics.length) throw new DatabaseError(parsed.diagnostics[0].message, 400);
+        const referenced = referencedEvidence(parsed.presentation, state.content.visuals, state.content.evidenceGroups);
+        const evidence = referenced.ids.map(id => {
+            const value = trusted.get(id);
+            if (!value) throw new DatabaseError('Report evidence is unavailable.', 409);
+            return value;
+        });
+        return { ...state.content, evidence, embeds: reportEmbeds(state.content.visuals, evidence), markdown: parsed.presentation, diagnostics: parsed.diagnostics };
+    }
     const seen = new Set<string>();
     const visuals = state.content.visuals.map(visual => {
         const owners = state.tabs.filter(tab => tab.componentIds.includes(visual.id));
@@ -120,4 +175,109 @@ export function applyWorkingResult(draft: ReportWorkingDraft, tabId: string, res
     state.content = materializeWorkingContent(state, draft.results, true);
     state.proseNeedsReview = true;
     return state;
+}
+
+/** Upgrade once, preserving already applied legacy bindings and their result records. */
+export function upgradeWorkingState(draft: ReportWorkingDraft, baseline: WorkDocumentContent): ReportWorkingState {
+    if (draft.state.bindingVersion === 2) return draft.state;
+    const content = materializeWorkingContent(draft.state, draft.results);
+    return {
+        ...draft.state,
+        content,
+        bindingVersion: 2,
+        charts: [],
+        baseline: { revision: draft.expectedReportRevision, title: draft.state.title, content: editableReport(baseline) },
+    };
+}
+
+export type ReportDraftOperation =
+    | { type: 'replace'; resultId: string; blockIds: string[]; chartSpec?: WorkVisual['chartSpec']; fieldMappings?: Record<string, Record<string, string>> }
+    | { type: 'insert'; resultId: string; visual: Pick<WorkVisual, 'id' | 'type' | 'title' | 'chartSpec'>; anchorId: string; position: 'before' | 'after' | 'end' }
+    | { type: 'remove' | 'revert'; blockId: string };
+
+export function changeReportDraft(draft: ReportWorkingDraft, operation: ReportDraftOperation): ReportWorkingState {
+    const state = structuredClone(draft.state);
+    if (state.bindingVersion !== 2) throw new DatabaseError('Reopen the workspace to upgrade this draft.', 409);
+    const content = state.content;
+    const body = content.body ?? '';
+    const outline = reportOutline(body, content.visuals);
+    if (operation.type === 'replace' || operation.type === 'insert') {
+        const snapshot = operation.resultId.startsWith('snapshot:')
+            ? [...state.content.evidence, ...(state.baseline?.content.evidence ?? [])].find(item => item.artifactId === operation.resultId.slice(9))
+            : undefined;
+        const result = draft.results[operation.resultId] ?? (snapshot ? { evidence: snapshot } : undefined);
+        if (!result) throw new DatabaseError('Result unavailable. Run the query again.', 409);
+        if (!content.evidence.some(item => item.artifactId === result.evidence.artifactId)) content.evidence.push(result.evidence);
+        if (operation.type === 'replace') {
+            if (!operation.blockIds.length || new Set(operation.blockIds).size !== operation.blockIds.length) throw new DatabaseError('Select report blocks.', 400);
+            for (const id of operation.blockIds) {
+                const visual = content.visuals.find(item => item.id === id);
+                if (!visual || !outline.some(item => item.visualId === id)) throw new DatabaseError('The target changed. Select it again.', 409);
+                if (operation.chartSpec && visual.type !== 'chart') throw new DatabaseError('Select a chart target.', 400);
+                if (!Object.keys(operation.fieldMappings?.[id] ?? {}).length && resultUsedBy([visual], result.evidence, operation.chartSpec).length) continue;
+                visual.evidenceId = result.evidence.artifactId;
+                if (operation.chartSpec) {
+                    visual.chartSpec = structuredClone(operation.chartSpec);
+                    delete visual.chart;
+                }
+                if (operation.fieldMappings?.[id]) Object.assign(visual, remapChartFields(visual, operation.fieldMappings[id]));
+                delete visual.chartData;
+                validateWorkingVisual(visual, result.evidence);
+            }
+        } else {
+            if (!['chart', 'table'].includes(operation.visual.type) || content.visuals.some(item => item.id === operation.visual.id))
+                throw new DatabaseError('Invalid report block.', 400);
+            const visual: WorkVisual = { ...operation.visual, evidenceId: result.evidence.artifactId };
+            if (visual.type === 'chart' && !visual.chartSpec) throw new DatabaseError('Choose a chart configuration.', 400);
+            validateWorkingVisual(visual, result.evidence);
+            const anchor = outline.find(item => item.id === operation.anchorId);
+            if (!anchor) throw new DatabaseError('The insertion position changed. Select it again.', 409);
+            const offset = operation.position === 'before' ? anchor.start : operation.position === 'after' ? anchor.end : anchor.sectionEnd;
+            content.body = body.slice(0, offset) + '\n\n' + reportTagSource(visual) + '\n\n' + body.slice(offset);
+            content.visuals.push(visual);
+        }
+    } else {
+        const node = outline.find(item => item.visualId === operation.blockId);
+        const baseline = state.baseline?.content;
+        const original = baseline?.visuals.find(item => item.id === operation.blockId);
+        if (operation.type === 'revert' && original && baseline) {
+            const current = content.visuals.find(item => item.id === original.id);
+            if (current) Object.assign(current, { chart: undefined, chartSpec: undefined, chartData: undefined, metric: undefined }, structuredClone(original));
+            else {
+                const baseOutline = reportOutline(baseline.body ?? '', baseline.visuals);
+                const index = baseOutline.findIndex(item => item.visualId === original.id);
+                const baselineBody = baseline.body ?? '';
+                const matches = (item: (typeof baseOutline)[number]) =>
+                    outline.filter(current =>
+                        item.visualId
+                            ? current.visualId === item.visualId
+                            : current.kind === item.kind && body.slice(current.start, current.end) === baselineBody.slice(item.start, item.end),
+                    );
+                const next = baseOutline.slice(index + 1).find(item => matches(item).length === 1);
+                const offset = next ? matches(next)[0].start : body.length;
+                content.body = body.slice(0, offset) + '\n\n' + reportTagSource(original) + '\n\n' + body.slice(offset);
+                content.visuals.push(structuredClone(original));
+            }
+            const evidence = baseline.evidence.find(item => item.artifactId === original.evidenceId);
+            if (evidence && !content.evidence.some(item => item.artifactId === evidence.artifactId)) content.evidence.push(evidence);
+        } else {
+            if (!node) throw new DatabaseError('The block is no longer present.', 409);
+            content.body = body.slice(0, node.start) + body.slice(node.end);
+            content.visuals = content.visuals.filter(item => item.id !== operation.blockId);
+        }
+    }
+    state.content = materializeWorkingContent(state, draft.results, true);
+    state.proseNeedsReview = true;
+    return state;
+}
+
+export function reportDraftChanges(state: ReportWorkingState) {
+    const before = state.baseline?.content.visuals ?? [];
+    const after = state.content.visuals;
+    return [...new Set([...before, ...after].map(item => item.id))].flatMap(id => {
+        const original = before.find(item => item.id === id);
+        const current = after.find(item => item.id === id);
+        if (JSON.stringify(original) === JSON.stringify(current)) return [];
+        return [{ id, title: (current ?? original)!.title, type: !original ? ('insert' as const) : !current ? ('remove' as const) : ('replace' as const) }];
+    });
 }

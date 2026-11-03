@@ -1,285 +1,323 @@
-import { initialWorkingState } from '../../apps/web/lib/work-documents/working-draft';
-import type { ReportWorkspaceContext } from '@dory/shared/types/report-workspace';
+import type { ReportAnalysisContext, ReportWorkingDraft, ReportWorkspaceContext } from '@dory/shared/types/report-workspace';
 import { expect } from '@playwright/test';
-import { test, expectAppHealthy } from './fixtures';
+
+import { changeReportDraft, initialWorkingState, reportDraftChanges } from '../../apps/web/lib/work-documents/working-draft';
+import { expectAppHealthy, test } from './fixtures';
 import { createWorkbenchConnection, mockWorkbenchApis } from './helpers/workbench';
 
-for (const kind of ['attachment', 'database'] as const) {
-    test(`Report Workspace preserves versioned snapshots and manually runs ${kind} SQL`, async ({ page, appErrors }, testInfo) => {
+for (const kind of ['database', 'attachment'] as const) {
+    test(`Report-connected workspace: ${kind} snapshot, cross-source tabs, results, draft operations and save`, async ({ page, appErrors }, testInfo) => {
         test.setTimeout(180_000);
-        page.setDefaultTimeout(15_000);
         const connection = createWorkbenchConnection();
-        await mockWorkbenchApis(page, { initialConnections: [connection] });
-        let releaseInitialLoad!: () => void;
-        const initialLoad = new Promise<void>(resolve => {
-            releaseInitialLoad = resolve;
-        });
-        let executions = 0;
-        let sourceReads = 0;
-        let writes = 0;
-        let fail = false;
-        let available = true;
-        let hold = false;
-        let release: (() => void) | undefined;
-        const reference = { documentId: 'report-snapshot', artifactId: 'result-original', revision: 3, snapshotId: 'snap-original', publicationId: 'published-1' };
-        const context: ReportWorkspaceContext = {
+        const second = { ...connection, connection: { ...connection.connection, id: 'other-connection', name: 'Other database', type: 'postgres' as const } };
+        await mockWorkbenchApis(page, { initialConnections: [connection, second] });
+        const reference = { documentId: `connected-${kind}`, artifactId: 'artifact_original', revision: 3, componentId: 'logs' };
+        const source: ReportWorkspaceContext = {
             reference,
-            title: 'Customer activity',
-            source: kind === 'attachment' ? { kind, dialect: 'duckdb' } : { kind, dialect: 'postgres', database: 'orders', connectionId: connection.connection.id },
+            title: 'Logs report',
+            source: kind === 'attachment' ? { kind, dialect: 'duckdb' } : { kind, dialect: 'postgres', connectionId: connection.connection.id, database: 'main' },
             evidence: {
-                snapshotId: reference.snapshotId,
                 artifactId: reference.artifactId,
-                title: 'Customer count',
-                connectionId: null,
-                connectionName: null,
-                sql: 'SELECT COUNT(*) AS total_customers FROM customers',
-                capturedAt: '2026-10-28T00:00:00Z',
-                columns: ['total_customers'],
-                columnTypes: [{ name: 'total_customers', type: 'BIGINT' }],
-                rows: [{ total_customers: 2000 }],
-                rowCount: 2000,
-                truncated: true,
+                snapshotId: 'original-snapshot',
+                title: 'Logs summary',
+                connectionId: kind === 'database' ? connection.connection.id : null,
+                connectionName: connection.connection.name,
+                sql: 'SELECT level, count FROM logs',
+                capturedAt: '2026-11-03T00:00:00Z',
+                columns: ['level', 'count'],
+                columnTypes: [
+                    { name: 'level', type: 'VARCHAR' },
+                    { name: 'count', type: 'BIGINT' },
+                ],
+                rows: [{ level: 'error', count: 100 }],
+                rowCount: 1,
+                truncated: false,
                 runId: null,
             },
         };
-        const otherContext: ReportWorkspaceContext = {
-            ...context,
-            reference: { ...reference, artifactId: 'other-source', snapshotId: 'other-snapshot' },
-            source:
-                kind === 'database'
-                    ? { kind: 'attachment', dialect: 'duckdb' }
-                    : { kind: 'database', dialect: 'postgres', database: 'warehouse', connectionId: connection.connection.id },
-            evidence: { ...context.evidence, artifactId: 'other-source', snapshotId: 'other-snapshot', title: 'Other source', sql: 'SELECT * FROM events' },
-        };
-        let draft = {
+        let draft: ReportWorkingDraft = {
+            id: `draft-${kind}`,
             userId: 'fixture',
             documentId: reference.documentId,
-            baseRevision: reference.revision,
-            expectedReportRevision: reference.revision,
+            baseRevision: 3,
+            expectedReportRevision: 3,
             revision: 1,
-            results: {} as Record<string, any>,
-            state: initialWorkingState(context.title, { markdown: '# Customers', visuals: [], evidence: [context.evidence, otherContext.evidence], knowledge: [] }),
+            results: {},
+            state: initialWorkingState('Logs report', {
+                markdown:
+                    '# Summary\n\nThis report summarizes log traffic.\n\nErrors require investigation. [Evidence](dory://evidence-group/finding)\n\n![Logs](dory://visual/logs)\n\n## Details\n\n![Copy](dory://visual/copy)',
+                evidenceGroups: [{ id: 'finding', references: [{ artifactId: reference.artifactId }] }],
+                visuals: [
+                    { id: 'logs', title: 'Logs Level Distribution', type: 'table', evidenceId: reference.artifactId },
+                    { id: 'copy', title: 'Shared source copy', type: 'table', evidenceId: reference.artifactId },
+                ],
+                evidence: [source.evidence],
+                knowledge: [],
+            }),
         };
+        draft.state.tabs[0].source = source.source;
+        draft.state.baseline!.revision = 3;
+        let executions = 0;
+        let saves = 0;
+        const executedConnections: string[] = [];
         await page.route('**/api/actions/execute', async route => {
             const { actionId, input } = route.request().postDataJSON();
-            if (actionId.startsWith('report.workspace.')) {
-                if (actionId !== 'report.workspace.saveDraft') expect(input).toMatchObject(input.artifactId === 'other-source' ? otherContext.reference : reference);
-                if (actionId === 'report.workspace.analysis') {
-                    await initialLoad;
-                    return route.fulfill({ json: { ok: true, data: { draft, sources: [context, otherContext] } } });
-                }
-                if (actionId === 'report.workspace.saveDraft') {
+            const ok = (data: unknown) => route.fulfill({ json: { ok: true, data } });
+            switch (actionId) {
+                case 'connection.list':
+                    return ok({ connections: [connection, second] });
+                case 'schema.listSchemas':
+                    return ok([
+                        { value: 'public', label: 'public' },
+                        { value: 'analytics', label: 'analytics' },
+                    ]);
+                case 'schema.listDatabases':
+                    return ok({ databases: [{ label: 'main', value: 'main' }] });
+                case 'report.workspace.analysis':
+                    return ok({ draft, sources: [source] } satisfies ReportAnalysisContext);
+                case 'report.workspace.source':
+                    return ok({ available: true, tables: [{ name: 'logs', filename: 'main', columns: [] }] });
+                case 'schema.describeTable':
+                    return ok({ columns: [{ columnName: 'count', columnType: 'BIGINT' }] });
+                case 'artifact.get':
+                    return ok({ id: input.artifactId, sourceResultSetId: input.artifactId === reference.artifactId ? 'original' : input.artifactId.replace('artifact_', '') });
+                case 'resultSet.rows.read':
+                    return ok({
+                        rows: input.resultSetId === 'original' ? source.evidence.rows : (draft.results[input.resultSetId]?.evidence.rows ?? []),
+                        rowCount: 1,
+                        dataAvailability: 'full',
+                    });
+                case 'resultSet.chart.read':
+                    return ok({ data: [{ xLabel: 'error', __value__: 200 }], series: [{ key: '__value__', label: 'Count' }] });
+                case 'report.workspace.saveDraft': {
+                    expect(input.expectedDraftRevision).toBe(draft.revision);
                     draft = {
                         ...draft,
                         revision: draft.revision + 1,
                         state: {
                             ...draft.state,
-                            title: input.title,
                             tabs: input.tabs,
+                            charts: input.charts,
                             activeTabId: input.activeTabId,
-                            content: { ...draft.state.content, body: input.body, visuals: input.visuals },
+                            proseNeedsReview: input.proseReviewed ? false : draft.state.proseNeedsReview,
                         },
                     };
-                    return route.fulfill({ json: { ok: true, data: draft } });
+                    return ok(draft);
                 }
-                if (actionId === 'report.workspace.context') return route.fulfill({ json: { ok: true, data: context } });
-                if (actionId === 'report.workspace.source') {
-                    sourceReads++;
-                    const current = input.artifactId === 'other-source' ? otherContext : context;
-                    return route.fulfill({
-                        json: {
-                            ok: true,
-                            data: {
-                                available,
-                                tables: [
-                                    {
-                                        name: input.artifactId === 'other-source' ? 'events' : 'customers',
-                                        filename: 'data.csv',
-                                        columns: current.source.kind === 'attachment' ? [{ name: 'active', type: 'BOOLEAN' }] : [],
-                                    },
-                                ],
-                            },
-                        },
-                    });
-                }
-                if (actionId === 'report.workspace.details')
-                    return route.fulfill({ json: { ok: true, data: { artifact: null, reports: [{ id: reference.documentId, title: context.title }] } } });
-                if (actionId === 'report.workspace.execute') {
+                case 'report.workspace.execute': {
                     executions++;
-                    if (hold) {
-                        await new Promise<void>(resolve => {
-                            release = resolve;
-                        });
-                        await route.abort().catch(() => undefined);
-                        return;
-                    }
-                    expect(input.sql).toContain('WHERE active');
-                    if (fail) return route.fulfill({ status: 400, json: { ok: false, message: 'Query rejected' } });
-                    draft.results['new-result'] = {
-                        sourceArtifactId: reference.artifactId,
-                        evidence: { ...context.evidence, artifactId: 'artifact_new-result', sql: input.sql, rows: [{ total_customers: 200 }], rowCount: 1, truncated: false },
-                    };
-                    return route.fulfill({
-                        json: {
-                            ok: true,
-                            data: {
-                                sessionId: input.requestId,
-                                sets: [
-                                    {
-                                        resultSetId: 'new-result',
-                                        sql: input.sql,
-                                        rows: [{ total_customers: 200 }],
-                                        columns: [{ name: 'total_customers', type: 'BIGINT' }],
-                                        rowCount: 1,
-                                        limited: false,
-                                    },
-                                    {
-                                        resultSetId: 'second-result',
-                                        sql: 'SELECT 42 AS other_total',
-                                        columns: [{ name: 'other_total', type: 'BIGINT' }],
-                                        rows: [{ other_total: 42 }],
-                                        rowCount: 1,
-                                        limited: false,
-                                    },
-                                ],
-                            },
-                        },
+                    executedConnections.push(input.connectionId ?? 'attachment');
+                    const sets = [0, 1].map(index => {
+                        const resultSetId = `run-${executions}-${index}`;
+                        const evidence = {
+                            ...source.evidence,
+                            artifactId: `artifact_${resultSetId}`,
+                            snapshotId: `working_${resultSetId}`,
+                            rows: [{ level: 'error', count: 200 + index }],
+                            connectionId: input.connectionId ?? null,
+                            sql: input.sql,
+                        };
+                        draft.results[resultSetId] = { tabId: input.tabId, sessionId: `session-${executions}`, sourceArtifactId: input.artifactId, evidence };
+                        return { resultSetId, sql: input.sql, columns: source.evidence.columnTypes, rows: evidence.rows, rowCount: 1, limited: false };
                     });
+                    return ok({ sessionId: `session-${executions}`, sets });
                 }
+                case 'report.workspace.apply': {
+                    expect(input.expectedDraftRevision).toBe(draft.revision);
+                    draft = { ...draft, revision: draft.revision + 1, state: changeReportDraft(draft, input.operation) };
+                    return ok(draft);
+                }
+                case 'report.workspace.saveVersion': {
+                    saves++;
+                    draft = {
+                        ...draft,
+                        revision: draft.revision + 1,
+                        expectedReportRevision: 3 + saves,
+                        state: {
+                            ...draft.state,
+                            proseNeedsReview: false,
+                            baseline: { revision: 3 + saves, title: draft.state.title, content: structuredClone(draft.state.content) },
+                        },
+                    };
+                    return ok({ id: draft.documentId, title: draft.state.title, revision: 3 + saves, content: draft.state.content, draft });
+                }
+                default:
+                    return route.fallback();
             }
-            if (actionId === 'schema.describeTable') {
-                expect(input).toMatchObject({ connectionId: connection.connection.id, database: kind === 'database' ? 'orders' : 'warehouse' });
-                return route.fulfill({ json: { ok: true, data: { columns: [{ columnName: 'active', columnType: 'BOOLEAN' }] } } });
-            }
-            if (['query.execute', 'query.readOnlyExecute', 'report.update', 'report.publish', 'tab.save', 'tab.create', 'tab.delete'].includes(actionId)) writes++;
-            await route.fallback();
         });
         await page.goto('/');
         const organization = new URL(page.url()).pathname.split('/')[1];
-        await page.goto(`/${organization}/reports/${reference.documentId}/workspace/${reference.artifactId}?revision=3&publication=published-1&snapshot=snap-original`);
-        const drawer = page.locator('[data-slot=drawer-content]');
-        await expect(drawer.getByRole('status')).toBeVisible();
-        const loadingDrawer = await drawer.elementHandle();
-        releaseInitialLoad();
-        const result = page.getByTestId('report-workspace-result');
-        await expect(page.getByRole('tab', { name: 'Report snapshot', exact: true })).toHaveAttribute('data-state', 'active');
-        await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
-        expect(await drawer.evaluate((element, original) => element === original, loadingDrawer)).toBe(true);
-        await loadingDrawer?.dispose();
-        await expect(result.getByText('Partial result', { exact: true })).toBeVisible();
-        await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(context.evidence.sql);
-        expect((await page.getByTestId('sql-editor').boundingBox())!.height).toBeGreaterThan(100);
+        await page.goto(`/${organization}/reports/${reference.documentId}/workspace/${reference.artifactId}?revision=3&componentId=logs`);
+        await expect(page.getByRole('tab', { name: 'Report snapshot', exact: true })).toBeVisible();
+        await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(source.evidence.sql);
         expect(executions).toBe(0);
-        const sidebar = page.getByTestId('sql-source-sidebar');
-        await expect(sidebar.getByRole('combobox')).toHaveText(kind === 'database' ? 'orders' : 'main');
-        await sidebar.getByRole('button', { name: 'Expand customers columns', exact: true }).click();
-        await expect(sidebar.getByText('active', { exact: true })).toBeVisible();
-        await expect(sidebar.getByText('BOOLEAN', { exact: true })).toBeVisible();
-        await sidebar.getByRole('textbox', { name: 'Filter tables' }).fill('missing');
-        await expect(sidebar.getByText('No matching tables found')).toBeVisible();
-        await sidebar.getByRole('textbox', { name: 'Filter tables' }).fill('');
-        const readsBeforeRefresh = sourceReads;
-        await sidebar.getByRole('button', { name: 'Refresh tables' }).click();
-        await expect.poll(() => sourceReads).toBeGreaterThan(readsBeforeRefresh);
-        await page.getByRole('tab', { name: /^Other source/ }).click();
-        await expect(sidebar.getByRole('combobox')).toHaveText(kind === 'database' ? 'main' : 'warehouse');
-        await expect(sidebar.getByRole('button', { name: 'Expand customers columns', exact: true })).toHaveCount(0);
-        await sidebar.getByRole('button', { name: 'Expand events columns', exact: true }).click();
-        await expect(sidebar.getByText('active', { exact: true })).toBeVisible();
-        await page.getByRole('tab', { name: /^Customer count/ }).click();
-        await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(context.evidence.sql);
-        const panel = page.getByTestId('sql-workspace-panel');
-        const rail = page.getByTestId('sql-console-action-rail');
-        await expect(panel).toContainText('Customer activity');
-        await expect(panel.getByRole('button', { name: 'Edit report text', exact: true })).toHaveCount(0);
-        await expect(panel.getByRole('button', { name: 'Continue in Work', exact: true })).toBeVisible();
-        await expect(panel.getByTestId('report-workspace-context')).toContainText('Based on revision 3');
-        await page.evaluate(() => {
-            Object.defineProperty(navigator, 'clipboard', {
-                configurable: true,
-                value: {
-                    writeText: async (text: string) => {
-                        (window as any).__handoff = text;
-                    },
-                },
-            });
-        });
-        await panel.getByRole('button', { name: 'Continue with external Agent', exact: true }).click();
-        await expect(panel.getByRole('button', { name: 'Task copied', exact: true })).toBeVisible();
-        expect(await page.evaluate(() => (window as any).__handoff)).toContain(context.evidence.sql);
-        expect(executions).toBe(0);
+        await expect(page.getByTestId('report-context-panel').getByRole('button', { name: 'This report summarizes log traffic.', exact: true })).toBeHidden();
+        await expect(page.getByTestId('report-context-panel').getByRole('button', { name: 'Errors require investigation.', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Run', exact: true }).click();
+        await expect(page.getByRole('tab', { name: 'Result 2', exact: true })).toBeVisible();
+        expect(reportDraftChanges(draft.state)).toEqual([]);
+        await page.getByRole('tab', { name: 'Result 2', exact: true }).click();
+        await page.getByRole('button', { name: 'Update Logs Level Distribution', exact: true }).click();
+        await expect(page.getByRole('combobox', { name: 'Update location', exact: true })).toContainText('Logs Level Distribution');
+        await page.getByRole('button', { name: 'Also update other content…', exact: true }).click();
+        await expect(page.getByRole('checkbox', { name: /Shared source copy/ })).not.toBeChecked();
+        // The pending operation remains bound to Result 2 even after changing the selected result.
+        await page.getByRole('tab', { name: 'Result 1', exact: true }).click();
+        await expect(page.getByTestId('report-add-form')).toContainText('Result 2');
+        await page.screenshot({ path: testInfo.outputPath(`report-update-${kind}.png`), fullPage: true });
+        await page.getByRole('button', { name: 'Update this table', exact: true }).click();
+        await expect.poll(() => draft.state.content.visuals[0].evidenceId).toBe('artifact_run-1-1');
+        expect(draft.state.content.visuals[1].evidenceId).toBe(reference.artifactId);
+        await page.getByRole('tab', { name: /Pending changes/ }).click();
+        await page.getByRole('button', { name: 'Undo', exact: true }).last().click();
+        await expect.poll(() => draft.state.content.visuals[0].evidenceId).toBe(reference.artifactId);
+        await expect(page.getByRole('button', { name: '0 changes', exact: true })).toBeVisible();
+        await page.getByRole('tab', { name: 'Result 2', exact: true }).click();
+        await page.getByRole('button', { name: 'Update Logs Level Distribution', exact: true }).click();
+        await page.getByRole('button', { name: 'Update this table', exact: true }).click();
+        await expect.poll(() => draft.state.content.visuals[0].evidenceId).toBe('artifact_run-1-1');
 
-        await rail.getByRole('button', { name: 'Query & result actions', exact: true }).click();
-        await expect(panel).toBeHidden();
-        await rail.getByRole('button', { name: 'Query & result actions', exact: true }).click();
-        await expect(panel).toBeVisible();
-        await result.getByRole('tab', { name: 'Charts', exact: true }).click();
-        await expect(result.getByRole('tab', { name: 'Charts', exact: true })).toHaveAttribute('data-state', 'active');
-        await expect(result.getByRole('combobox').first()).toBeVisible();
-        await result.getByRole('tab', { name: 'Table', exact: true }).click();
-        await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
-        await panel.getByRole('button', { name: 'Workspace actions', exact: true }).click();
-        await page.getByRole('menuitem', { name: 'Source and details', exact: true }).click();
-        await expect(page.getByText('Original Artifact unavailable.', { exact: false })).toBeVisible();
-        await expect(page.getByRole('link', { name: 'Customer activity', exact: true })).toBeVisible();
-        await page.keyboard.press('Escape');
-        await page.evaluate(() => window.__DORY_E2E_MONACO__!.setValue('SELECT COUNT(*) AS total_customers FROM customers WHERE active'));
+        await page.getByRole('button', { name: 'Duplicate query', exact: true }).click();
+        await page.getByRole('combobox', { name: 'Data source', exact: true }).click();
+        await page.getByRole('option', { name: 'Other database', exact: true }).click();
         await page.getByRole('button', { name: 'Run', exact: true }).click();
-        await expect(result.getByRole('button', { name: '200', exact: true })).toBeVisible();
-        await expect(page.getByRole('tab', { name: 'Current run 1', exact: true })).toHaveAttribute('data-state', 'active');
-        expect(executions).toBe(1);
-        await page.getByRole('tab', { name: 'Current run 2', exact: true }).click();
-        await expect(result.getByRole('button', { name: '42', exact: true })).toBeVisible();
-        await page.getByRole('tab', { name: 'Current run 1', exact: true }).click();
-        await expect(result.getByRole('button', { name: '200', exact: true })).toBeVisible();
-        await page.getByRole('tab', { name: 'Report snapshot', exact: true }).click();
-        await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
-        fail = true;
-        await page.getByRole('button', { name: 'Run', exact: true }).click();
-        await expect(page.getByRole('alert').filter({ hasText: 'Query rejected' })).toBeVisible();
-        await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
+        await expect.poll(() => executions).toBe(2);
+        await expect(page.getByRole('tab', { name: 'Result 2', exact: true })).toBeVisible();
+        expect(executedConnections[1]).toBe('other-connection');
+        await page.getByRole('tab', { name: 'Charts', exact: true }).click();
+        await expect(page.getByRole('button', { name: 'Save chart', exact: true })).toBeEnabled();
+        await page.getByRole('textbox', { name: 'Chart title', exact: true }).fill('Error Trend');
+        await page.getByRole('button', { name: 'Save chart', exact: true }).click();
+        await expect.poll(() => draft.state.charts?.length).toBe(1);
+        await expect(page.getByRole('button', { name: 'Update Logs Level Distribution', exact: true })).toHaveCount(0);
+        await page.getByRole('button', { name: 'Add chart to report', exact: true }).click();
+        await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Error Trend');
+        await page.getByRole('button', { name: 'Add chart', exact: true }).click();
+        await expect.poll(() => draft.state.content.visuals.length).toBe(3);
+        const insertedId = draft.state.content.visuals.at(-1)!.id;
+        await page.getByRole('button', { name: 'Content actions', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Remove from draft', exact: true }).click();
+        await expect.poll(() => draft.state.content.visuals.length).toBe(2);
+        // Removing an unsaved insertion creates no net change, but its immediate undo restores it.
+        expect(reportDraftChanges(draft.state).some(item => item.id === insertedId)).toBe(false);
+        await page.getByRole('button', { name: 'Undo', exact: true }).first().click();
+        await expect.poll(() => draft.state.content.visuals.some(item => item.id === insertedId)).toBe(true);
+        await page.getByRole('button', { name: 'Preview report', exact: true }).click();
+        await expect(page.getByRole('dialog').last()).toContainText('Error Trend');
+        await page.getByRole('dialog').last().getByRole('button', { name: 'Close', exact: true }).click();
+        await page.getByRole('button', { name: 'Review & Save New Version', exact: true }).click();
+        await page.getByRole('checkbox', { name: /I have checked/ }).check();
+        await page.getByRole('button', { name: 'Save new version', exact: true }).click();
+        await expect.poll(() => saves).toBe(1);
+        await expect(page).toHaveURL(/\/workspace\//);
+        await expect(page.getByRole('button', { name: '0 changes', exact: true })).toBeVisible();
         await page.reload();
-        await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
-        await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe('SELECT COUNT(*) AS total_customers FROM customers WHERE active');
+        await expect(page.getByRole('button', { name: '0 changes', exact: true })).toBeVisible();
+        expect(draft.state.tabs.length).toBe(2);
+        expect(draft.state.charts?.length).toBe(1);
         expect(executions).toBe(2);
-        hold = true;
-        await page.getByRole('button', { name: 'Run', exact: true }).click();
-        await expect.poll(() => Boolean(release)).toBe(true);
-        await page.getByTestId('sql-query-toolbar').getByRole('button', { name: 'Cancel', exact: true }).click();
-        release?.();
-        await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
-        await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
-        available = false;
-        await page.reload();
-        await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeDisabled();
-        expect(executions).toBe(3);
-        expect(writes).toBe(0);
-        await page.screenshot({ path: testInfo.outputPath(`report-workspace-${kind}.png`), fullPage: true });
-        await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [] } }));
-        await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [] } }));
-        await page.route(`**/api/work-documents/${reference.documentId}`, route =>
-            route.fulfill({
-                json: {
-                    document: {
-                        id: reference.documentId,
-                        title: context.title,
-                        revision: 3,
-                        chatId: null,
-                        scope: { connectionIds: [], connectionMode: 'auto', knowledgeMode: 'none' },
-                        content: draft.state.content,
-                    },
-                },
-            }),
-        );
-        let chatsSent = 0;
-        page.on('request', request => {
-            if (request.url().endsWith('/api/chat') && request.method() === 'POST') chatsSent++;
-        });
-        await page.getByRole('button', { name: 'Continue in Work', exact: true }).click();
-        await expect(page).toHaveURL(/\/work\?/);
-        await expect(page.getByTestId('data-agent').locator('[contenteditable="true"]').first()).toContainText('WHERE active');
-        expect(chatsSent).toBe(0);
+        await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(source.evidence.sql);
+        await expect(page.getByTestId('report-workspace-result').getByRole('button', { name: '200', exact: true })).toBeVisible();
+        await page.screenshot({ path: testInfo.outputPath(`report-panel-${kind}.png`), fullPage: true });
+        if (kind === 'database') {
+            await page.evaluate(() => localStorage.setItem('theme', 'dark'));
+            await page.reload();
+            await expect(page.locator('html')).toHaveClass(/dark/);
+            await expect(page.getByTestId('report-context-panel')).toBeVisible();
+            await expect.poll(() => page.evaluate(() => Boolean(window.__DORY_E2E_MONACO__))).toBe(true);
+            await page.screenshot({ path: testInfo.outputPath('report-panel-dark.png'), fullPage: true });
+            await page.setViewportSize({ width: 900, height: 800 });
+            await expect(page.getByRole('dialog').last().getByRole('heading', { name: 'Report', exact: true }).last()).toBeVisible();
+            await expect.poll(async () => (await page.getByTestId('report-context-panel').boundingBox())?.x ?? 999).toBeLessThan(565);
+            await page.screenshot({ path: testInfo.outputPath('report-panel-narrow.png'), fullPage: true, animations: 'disabled' });
+            await page.getByRole('button', { name: 'Collapse report panel', exact: true }).click();
+            await expect(page.getByTestId('report-context-panel')).toBeHidden();
+            await page.setViewportSize({ width: 1280, height: 720 });
+            await page.getByTestId('sql-console-action-rail').getByRole('button', { name: 'Report', exact: true }).click();
+        }
+        await page.getByTestId('sql-console-action-rail').getByRole('button', { name: 'Report', exact: true }).click();
+        await expect(page.getByRole('region', { name: 'Report', exact: true })).toBeHidden();
+        await page.screenshot({ path: testInfo.outputPath(`report-connected-${kind}.png`), fullPage: true });
         await expectAppHealthy(appErrors);
     });
 }
+
+test('an empty report opens a workspace without an Artifact and can insert its first table', async ({ page, appErrors }) => {
+    const connection = createWorkbenchConnection();
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    let draft: ReportWorkingDraft = {
+        id: 'empty-draft',
+        userId: 'fixture',
+        documentId: 'empty-report',
+        baseRevision: 1,
+        expectedReportRevision: 1,
+        revision: 1,
+        results: {},
+        state: initialWorkingState('Empty report', { markdown: '', visuals: [], evidence: [], knowledge: [] }),
+    };
+    const evidence = {
+        artifactId: 'artifact_first',
+        title: 'First result',
+        columns: ['value'],
+        columnTypes: [{ name: 'value', type: 'BIGINT' }],
+        rows: [{ value: 42 }],
+        rowCount: 1,
+        truncated: false,
+        sql: 'SELECT 42 AS value',
+        capturedAt: '2026-11-03T00:00:00Z',
+        connectionId: connection.connection.id,
+        connectionName: 'Database',
+        runId: null,
+    };
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId, input } = route.request().postDataJSON();
+        const ok = (data: unknown) => route.fulfill({ json: { ok: true, data } });
+        switch (actionId) {
+            case 'connection.list':
+                return ok({ connections: [connection] });
+            case 'schema.listDatabases':
+                return ok({ databases: [] });
+            case 'report.workspace.analysis':
+                expect(input.artifactId).toBe('');
+                return ok({ draft, sources: [] });
+            case 'report.workspace.source':
+                return ok({ available: true, tables: [] });
+            case 'report.workspace.saveDraft':
+                draft = { ...draft, revision: draft.revision + 1, state: { ...draft.state, tabs: input.tabs, charts: input.charts, activeTabId: input.activeTabId } };
+                return ok(draft);
+            case 'report.workspace.execute':
+                expect(input.connectionId).toBe(connection.connection.id);
+                draft.results.first = { sourceArtifactId: '', tabId: input.tabId, sessionId: 'empty-session', evidence };
+                return ok({
+                    sessionId: 'empty-session',
+                    sets: [{ resultSetId: 'first', sql: input.sql, rows: evidence.rows, columns: evidence.columnTypes, rowCount: 1, limited: false }],
+                });
+            case 'resultSet.rows.read':
+                return ok({ rows: evidence.rows, rowCount: 1, dataAvailability: 'full' });
+            case 'report.workspace.apply':
+                expect(input.operation.anchorId).toBe('root');
+                draft = { ...draft, revision: draft.revision + 1, state: changeReportDraft(draft, input.operation) };
+                return ok(draft);
+            default:
+                return route.fallback();
+        }
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    await page.goto(`/${organization}/reports/empty-report/workspace?revision=1`);
+    await page.getByRole('button', { name: 'New query', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => Boolean(window.__DORY_E2E_MONACO__))).toBe(true);
+    await page.evaluate(() => window.__DORY_E2E_MONACO__!.setValue('SELECT 42 AS value'));
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+    await expect(page.getByRole('tab', { name: 'Result 1', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Add table to report', exact: true }).click();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(draft.state.content.visuals.length).toBe(0);
+    await page.getByRole('button', { name: 'Add table to report', exact: true }).click();
+    await page.getByRole('button', { name: 'Add table', exact: true }).click();
+    await expect.poll(() => draft.state.content.visuals.length).toBe(1);
+    expect(draft.state.content.visuals[0].evidenceId).toBe(evidence.artifactId);
+    await page.reload();
+    await expect(page.getByRole('button', { name: '1 changes', exact: true })).toBeVisible();
+    await expectAppHealthy(appErrors);
+});

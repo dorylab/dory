@@ -1,5 +1,6 @@
 import type { ConnectionType } from './connections';
 import type { WorkEvidence } from './work-document';
+import type { WorkspaceChart } from './workspace-chart';
 
 export type ReportEvidenceReference = {
     documentId: string;
@@ -26,7 +27,7 @@ export type ReportEvidenceRows = {
 export type ReportArtifactUsage = { id: string; title: string; revision?: number; publicationId?: string };
 export type ReportWorkspaceSource =
     | { kind: 'attachment'; dialect: 'duckdb' }
-    | { kind: 'database'; connectionId: string; database: string | null; dialect: ConnectionType }
+    | { kind: 'database'; connectionId: string; database: string | null; schema?: string | null; dialect: ConnectionType }
     | { kind: 'unavailable'; reason: string };
 export type ReportWorkspaceContext = {
     reference: ReportEvidenceReference;
@@ -35,6 +36,7 @@ export type ReportWorkspaceContext = {
     source: ReportWorkspaceSource;
 };
 export type ReportWorkspaceSourceInfo = {
+    source?: ReportWorkspaceSource;
     available: boolean;
     reason?: string;
     tables: Array<{ name: string; filename: string; columns: Array<{ name: string; type: string }> }>;
@@ -56,6 +58,9 @@ export type ReportQueryTab = {
     id: string;
     title: string;
     sourceArtifactId: string;
+    source?: ReportWorkspaceSource;
+    resultIds?: string[];
+    selectedResultId?: string;
     copiedFromId?: string;
     snapshotArtifactId?: string;
     sql: string;
@@ -66,6 +71,9 @@ export type ReportQueryTab = {
 };
 export type ReportWorkingState = {
     title: string;
+    bindingVersion?: 2;
+    baseline?: { revision: number; title: string; content: import('./work-document').WorkDocumentContent };
+    charts?: WorkspaceChart[];
     content: import('./work-document').WorkDocumentContent;
     tabs: ReportQueryTab[];
     activeTabId: string | null;
@@ -73,13 +81,14 @@ export type ReportWorkingState = {
     applyTarget?: ReportApplyTarget;
 };
 export type ReportWorkingDraft = {
+    id?: string;
     userId: string;
     documentId: string;
     baseRevision: number;
     expectedReportRevision: number;
     revision: number;
     state: ReportWorkingState;
-    results: Record<string, { sourceArtifactId: string; evidence: WorkEvidence }>;
+    results: Record<string, { sourceArtifactId: string; sessionId?: string; tabId?: string; evidence: WorkEvidence }>;
 };
 export type ReportAnalysisContext = {
     draft: ReportWorkingDraft;
@@ -87,3 +96,12 @@ export type ReportAnalysisContext = {
 };
 
 export type ReportApplyTarget = { artifactId: string; componentId?: string; groupId?: string };
+
+/** Session-wide report association; tab sources and execution are independent. */
+export type ReportContext = {
+    reportId: string;
+    draftId: string;
+    baseRevision: number;
+    originBlockId?: string;
+    originArtifactId?: string;
+};

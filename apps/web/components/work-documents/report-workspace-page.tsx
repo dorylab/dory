@@ -6,7 +6,7 @@ export default async function ReportWorkspacePage({
     intercepted = false,
 }: {
     intercepted?: boolean;
-    params: Promise<{ organization: string; documentId: string; artifactId: string }>;
+    params: Promise<{ organization: string; documentId: string; artifactId?: string }>;
     searchParams: Promise<{ revision?: string; publication?: string; snapshot?: string; componentId?: string; groupId?: string }>;
 }) {
     const [path, query] = await Promise.all([params, searchParams]);
@@ -16,7 +16,7 @@ export default async function ReportWorkspacePage({
             organization={path.organization}
             reference={{
                 documentId: path.documentId,
-                artifactId: path.artifactId,
+                artifactId: path.artifactId ?? '',
                 revision: Number(query.revision),
                 publicationId: query.publication,
                 snapshotId: query.snapshot,

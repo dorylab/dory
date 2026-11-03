@@ -85,6 +85,9 @@ export const reportPublications = pgTable(
 export const reportWorkingDrafts = pgTable(
     'report_working_drafts',
     {
+        id: text('id')
+            .notNull()
+            .$defaultFn(() => `draft_${newEntityId()}`),
         documentId: text('document_id')
             .notNull()
             .references(() => workDocuments.id, { onDelete: 'cascade' }),
@@ -97,5 +100,5 @@ export const reportWorkingDrafts = pgTable(
         results: jsonb('results').$type<import('@dory/shared/types/report-workspace').ReportWorkingDraft['results']>().notNull().default({}),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },
-    table => [primaryKey({ columns: [table.documentId, table.userId, table.baseRevision] })],
+    table => [primaryKey({ columns: [table.documentId, table.userId, table.baseRevision] }), uniqueIndex('report_working_drafts_id').on(table.id)],
 );

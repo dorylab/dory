@@ -1,12 +1,13 @@
 'use client';
 
 import { useDeferredValue, useState } from 'react';
+import type { ReportWorkspaceContext, ReportWorkspaceSourceInfo } from '@dory/shared/types/report-workspace';
 import { useQueries } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
-import type { ReportWorkspaceContext, ReportWorkspaceSourceInfo } from '@dory/shared/types/report-workspace';
-import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
-import { SqlSourceSidebar } from '@/components/sql-workspace/sql-source-sidebar';
+
 import { executeActionClient } from '@/lib/actions/client';
+import { SqlSourceSidebar } from '@/components/sql-workspace/sql-source-sidebar';
+import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
 
 /** Report-scoped data adapter for the SQL workspace source browser. */
 export function ReportSourceSidebar({
@@ -63,7 +64,6 @@ export function ReportSourceSidebar({
     const failure = error ?? info?.reason ?? columns.find(column => column.error)?.error?.message;
     return (
         <SqlSourceSidebar
-            database={{ value: database, databases: [{ value: database, label: database }], onChange: () => undefined }}
             filter={filter}
             onFilterChange={setFilter}
             refreshing={loading}

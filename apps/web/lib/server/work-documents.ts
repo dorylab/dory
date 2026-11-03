@@ -7,11 +7,12 @@ import { isAnalysisDatabaseAllowed } from '@dory/shared/utils/analysis-scope';
 import { z } from 'zod';
 
 import { canWriteWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
-import { reportNumber } from '@/lib/work-documents/format';
 import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-groups';
+import { reportNumber } from '@/lib/work-documents/format';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
 import { legacyToMdx, parseReport, reportEmbeds, reportTagSource, resolvedReport } from '@/lib/work-documents/report-core';
 import { analysisScopeSchema, applyMarkdownEdits, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
+
 import { resolveReportChatCharts } from './report-chat-charts';
 
 type Owner = { organizationId: string; userId: string };
@@ -88,6 +89,18 @@ export async function saveWorkDraft(
     const existing = await db.workDocuments.get(input);
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const draft = workDraftSchema.parse(input.draft);
+    // Workspace chart projections are computed from trusted immutable results, never accepted as client data.
+    for (const visual of draft.visuals) {
+        const previous = existing.content.visuals.find(item => item.id === visual.id);
+        if (visual.chartSpec) {
+            if (!previous?.chartSpec || previous.evidenceId !== visual.evidenceId || JSON.stringify(previous.chartSpec) !== JSON.stringify(visual.chartSpec))
+                throw new DatabaseError('Use the SQL Workspace to add or update this chart.', 400);
+            visual.chartData = previous.chartData;
+        } else {
+            delete visual.chartData;
+        }
+    }
+
     if (input.source !== 'user' && draft.reviewedEvidenceGroupIds?.length) throw new DatabaseError('Only a person can mark evidence as reviewed.', 403);
     const sourceBody = draft.format === 'restricted-mdx' ? (draft.body ?? draft.markdown) : draft.markdown;
     if (input.source === 'agent' && existing.chatId && sourceBody.includes('dory://chart/')) {

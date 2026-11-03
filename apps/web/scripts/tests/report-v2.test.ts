@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reportRetentionFixture } from '../../../../packages/database/scripts/tests/report-retention-fixture';
 import type { WorkDocumentContent, WorkDocumentView, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
 import { strFromU8, unzipSync } from 'fflate';
 
 import { exportDoryMdxZip, markdownExportFiles } from '@/lib/work-documents/export';
 import { formatReportMetric, reportMetrics } from '@/lib/work-documents/format';
 import { renderWorkHtml, workChartSvg } from '@/lib/work-documents/render';
-import { selectReportEvidence } from '@/lib/work-documents/workspace-evidence';
 import { editableReport, legacyToMdx, parseReport, reportEmbeds, resolvedReport } from '@/lib/work-documents/report-core';
+import { selectReportEvidence } from '@/lib/work-documents/workspace-evidence';
+
+import { reportRetentionFixture } from '../../../../packages/database/scripts/tests/report-retention-fixture';
 
 const visual: WorkVisual = {
     id: 'total',
@@ -140,7 +141,7 @@ test('publication freezes the selected revision, is idempotent, retains snapshot
         };
         assert.match(renderWorkHtml(view), /123.45/);
         assert.equal((await db.query<{ count: number }>('select count(*)::int as count from report_snapshots')).rows[0].count, 1);
-        assert.deepEqual(await repo.listReferencingArtifact({ ...owner, artifactId: 'artifact' }), [{ id: first.id, title: historical.title }]);
+        assert.deepEqual(await repo.listReferencingArtifact({ ...owner, artifactId: 'artifact' }), [{ id: first.id, title: historical.title, revision: restored.revision }]);
         assert.deepEqual(await repo.listReferencingArtifact({ ...owner, userId: 'bob', artifactId: 'artifact' }), []);
         await repo.archive({ ...target, archived: false });
         await repo.update({

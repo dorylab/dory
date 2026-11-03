@@ -10,6 +10,7 @@ export type AnalysisScope = {
 export type WorkEvidence = {
     snapshotId?: string;
     sourceDatabaseName?: string | null;
+    sourceSchemaName?: string | null;
     columnTypes?: Array<{ name: string; type: string }>;
     dataRange?: { from?: string; through?: string };
     attachmentSource?: ChatAttachmentSource;
@@ -26,6 +27,8 @@ export type WorkEvidence = {
     runId: string | null;
 };
 export type WorkVisual = {
+    chartSpec?: import('./workspace-chart').WorkspaceChartSpec;
+    chartData?: { data: Record<string, unknown>[]; series: Array<{ key: string; label: string }>; bucketHint?: string | null };
     id: string;
     type: 'metric' | 'chart' | 'table';
     title: string;
@@ -46,7 +49,12 @@ export type WorkVisual = {
 };
 export type ReportEmbed =
     | { type: 'metric'; artifactId: string; snapshotId: string; config: { title: string; metric: NonNullable<WorkVisual['metric']>; allowSubset?: boolean } }
-    | { type: 'chart'; artifactId: string; snapshotId: string; config: { title: string; chart: NonNullable<WorkVisual['chart']>; allowSubset?: boolean } }
+    | {
+          type: 'chart';
+          artifactId: string;
+          snapshotId: string;
+          config: { title: string; chart?: NonNullable<WorkVisual['chart']>; chartSpec?: WorkVisual['chartSpec']; chartData?: WorkVisual['chartData']; allowSubset?: boolean };
+      }
     | { type: 'table'; artifactId: string; snapshotId: string; config: { title: string; allowSubset?: boolean } };
 export type ReportDiagnostic = { message: string; line?: number; column?: number };
 export type ReportEvidenceGroup = {

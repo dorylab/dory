@@ -1,6 +1,7 @@
 import type { ActionContext } from '@dory/actions';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { ReportEvidenceReference, ReportWorkspaceContext } from '@dory/shared/types/report-workspace';
+
 import type { WebActionServices } from '@/lib/actions/server/types';
 import { selectReportEvidence } from '@/lib/work-documents/workspace-evidence';
 
@@ -38,6 +39,7 @@ export async function reportWorkspaceContext(ctx: Context, reference: ReportEvid
                     kind: 'database',
                     connectionId: evidence.connectionId,
                     database: database ?? null,
+                    ...(evidence.sourceSchemaName !== undefined ? { schema: evidence.sourceSchemaName } : {}),
                     dialect: connection.connection.type,
                 };
             else source = { kind: 'unavailable', reason: 'The original database context is no longer available.' };
