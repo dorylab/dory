@@ -1,19 +1,13 @@
+import { newEntityId } from '@dory/shared/id';
+import type { WorkspaceChartSpec } from '@dory/shared/types/workspace-chart';
 import type { NamingSource } from '@dory/shared/utils/sql-name';
 import { bigint, index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
-
-import { newEntityId } from '@dory/shared/id';
 
 export const ARTIFACT_TYPES = ['result_set', 'chart', 'file'] as const;
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
 export type ArtifactStatus = 'ready' | 'unavailable';
 
-export type ArtifactChartState = {
-    chartType: 'bar' | 'line' | 'pie' | 'scatter' | 'histogram' | 'heatmap';
-    xKey: string;
-    yKey: string;
-    groupKey: string;
-    chartColorPreset?: 'blue' | 'emerald' | 'amber' | 'rose' | 'violet' | 'slate';
-};
+export type ArtifactChartState = Omit<WorkspaceChartSpec, 'version' | 'filters' | 'search'>;
 
 export const artifacts = pgTable(
     'artifacts',
@@ -26,6 +20,7 @@ export const artifacts = pgTable(
         title: text('title').notNull(),
         namingSource: text('naming_source').$type<NamingSource>().notNull().default('manual'),
         namingRequestId: text('naming_request_id'),
+        visibility: text('visibility').$type<'catalog' | 'workspace'>().notNull().default('catalog'),
         status: text('status').$type<ArtifactStatus>().notNull().default('ready'),
         resourceId: text('resource_id').notNull(),
         parentArtifactId: text('parent_artifact_id'),

@@ -12,6 +12,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/registr
 export function AgentWorkspaceDrawer({
     children,
     headerActions,
+    hideHeader = false,
     onBeforeClose,
     preferBack = true,
     closeHref,
@@ -22,6 +23,7 @@ export function AgentWorkspaceDrawer({
 }: {
     children: ReactNode;
     headerActions?: ReactNode;
+    hideHeader?: boolean;
     onBeforeClose?: () => boolean | Promise<boolean>;
     preferBack?: boolean;
     closeHref: string;
@@ -49,19 +51,30 @@ export function AgentWorkspaceDrawer({
     return (
         <Drawer direction="bottom" dismissible={false} handleOnly open onOpenChange={open => !open && closeDrawer()}>
             <DrawerContent className="!inset-0 !m-0 !h-dvh !max-h-none !w-screen !max-w-none !overflow-hidden !rounded-none !border-0 !p-0 shadow-2xl sm:!inset-2 sm:!h-auto sm:!w-auto sm:!rounded-xl sm:!border [&>div:first-child]:!hidden">
-                <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-background px-2.5 sm:h-11">
-                    <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2 sm:h-8" onClick={closeDrawer}>
-                        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                        <span>{resolvedBackLabel}</span>
-                    </Button>
+                <header className={hideHeader ? 'sr-only' : 'flex h-12 shrink-0 items-center gap-2 border-b bg-background px-2.5 sm:h-11'}>
+                    {!hideHeader && (
+                        <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2 sm:h-8" onClick={closeDrawer}>
+                            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                            <span>{resolvedBackLabel}</span>
+                        </Button>
+                    )}
                     <div className="min-w-0 flex-1 text-center">
                         <DrawerTitle className="truncate text-sm font-medium">{resolvedTitle}</DrawerTitle>
                         <DrawerDescription className="sr-only">{resolvedDescription}</DrawerDescription>
                     </div>
-                    {headerActions}
-                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 sm:h-8 sm:w-8" onClick={closeDrawer} aria-label={resolvedCloseLabel} title={resolvedCloseLabel}>
-                        <X className="h-4 w-4" aria-hidden="true" />
-                    </Button>
+                    {!hideHeader && headerActions}
+                    {!hideHeader && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 sm:h-8 sm:w-8"
+                            onClick={closeDrawer}
+                            aria-label={resolvedCloseLabel}
+                            title={resolvedCloseLabel}
+                        >
+                            <X className="h-4 w-4" aria-hidden="true" />
+                        </Button>
+                    )}
                 </header>
                 <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
             </DrawerContent>

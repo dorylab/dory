@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
+import type { ReportCanvasBlock } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
 import { flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable, type SortingState } from '@tanstack/react-table';
 import { ArrowUpRight, Pencil } from 'lucide-react';
@@ -16,7 +17,7 @@ import { editableReport, parseReport, resolvedReport } from '@/lib/work-document
 
 const ReportChart = dynamic(() => import('./report-chart'));
 
-export function SnapshotTable({ evidence }: { evidence: WorkEvidence }) {
+export function SnapshotTable({ evidence, compact = false }: { evidence: WorkEvidence; compact?: boolean }) {
     const t = useTranslations('WorkDocuments.Report');
     const evidenceT = useTranslations('WorkDocuments.Evidence');
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -46,6 +47,34 @@ export function SnapshotTable({ evidence }: { evidence: WorkEvidence }) {
         initialState: { pagination: { pageSize: 25 } },
         globalFilterFn: 'includesString',
     });
+    if (compact)
+        return (
+            <div>
+                <div className="work-table-scroll" tabIndex={0}>
+                    <table>
+                        <thead>
+                            <tr>
+                                {evidence.columns.map(column => (
+                                    <th key={column}>{column}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {evidence.rows.slice(0, 5).map((row, index) => (
+                                <tr key={index}>
+                                    {evidence.columns.map(column => (
+                                        <td key={column}>{formatWorkValue(row[column])}</td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    {evidenceT('DisplayRange', { shown: Math.min(5, evidence.rows.length), total: evidence.rowCount ?? evidence.rows.length })}
+                </p>
+            </div>
+        );
     return (
         <div>
             <div className="flex flex-wrap items-center gap-3">
@@ -106,16 +135,18 @@ export function SnapshotTable({ evidence }: { evidence: WorkEvidence }) {
         </div>
     );
 }
-function ReportVisual({
+export function ReportVisual({
     visual,
     evidence,
     onEvidence,
     onEditComponent,
     previewOnly,
+    compact = false,
 }: {
+    compact?: boolean;
     visual: WorkVisual;
     evidence: WorkEvidence;
-    onEvidence: (id: string) => void;
+    onEvidence: (id: string, componentId?: string) => void;
     onEditComponent?: (id: string) => void;
     previewOnly?: boolean;
 }) {
@@ -157,9 +188,9 @@ function ReportVisual({
             ) : visual.type === 'chart' ? (
                 <ReportChart visual={visual} evidence={evidence} />
             ) : (
-                <SnapshotTable evidence={evidence} />
+                <SnapshotTable evidence={evidence} compact={compact} />
             )}
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className={compact ? 'hidden' : 'mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground'}>
                 <span>
                     {evidence.attachmentSource?.files
                         .map(file => file.filename)
@@ -175,7 +206,7 @@ function ReportVisual({
                         : evidenceT('DisplayRange', { shown: evidence.rows.length, total: evidence.rowCount })}
                 </span>
                 {!previewOnly && (
-                    <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId)}>
+                    <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId, visual.id)}>
                         {evidenceT('ViewSource')}
                         <ArrowUpRight className="size-3.5" />
                     </Button>
@@ -194,7 +225,7 @@ export function ReportBody({
 }: {
     content: WorkDocumentContent;
     title: string;
-    onEvidence: (id: string) => void;
+    onEvidence: (id: string, componentId?: string) => void;
     onEvidenceGroup?: (id: string) => void;
     onEditComponent?: (id: string) => void;
     previewOnly?: boolean;
@@ -265,5 +296,43 @@ export function ReportBody({
         <div data-testid="work-markdown" onClick={groupClick}>
             {sections}
         </div>
+    );
+}
+
+/** Uses the same safe Markdown and snapshot renderers as the full report. */
+export function ReportBlockView({
+    block,
+    content,
+    onEvidenceGroup,
+    definitions = '',
+}: {
+    block: ReportCanvasBlock;
+    content: WorkDocumentContent;
+    onEvidenceGroup?: (id: string) => void;
+    definitions?: string;
+}) {
+    const t = useTranslations('WorkDocuments.Evidence');
+    if (block.visualId) {
+        const visual = content.visuals.find(item => item.id === block.visualId);
+        const evidence = content.evidence.find(item => item.artifactId === visual?.evidenceId);
+        return visual && evidence ? <ReportVisual visual={visual} evidence={evidence} onEvidence={() => undefined} previewOnly compact /> : <p role="alert">{t('Unavailable')}</p>;
+    }
+    const html = renderWorkMarkdown({ ...content, format: undefined, markdown: `${block.source}\n\n${definitions}` }).replace(
+        /(<a\b[^>]*data-evidence-group="([^"]+)"[^>]*>)[\s\S]*?<\/a>/g,
+        (_match, opening: string, id: string) =>
+            `${opening}${escapeHtml(t('ViewEvidence', { count: content.evidenceGroups?.find(group => group.id === id)?.references.length ?? 0 }))}</a>`,
+    );
+    return (
+        <div
+            className="report-prose"
+            onClick={event => {
+                const id = event.target instanceof Element ? event.target.closest('[data-evidence-group]')?.getAttribute('data-evidence-group') : null;
+                if (id) {
+                    event.preventDefault();
+                    onEvidenceGroup?.(id);
+                }
+            }}
+            dangerouslySetInnerHTML={{ __html: html }}
+        />
     );
 }

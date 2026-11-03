@@ -1,6 +1,6 @@
-import type { PostgresDBClient } from '@dory/shared';
 import { joinObjectPath, type DoryArtifactStore } from '@dory/artifacts';
 import type { ResultSetArtifactRef } from '@dory/resultset';
+import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { WorkEvidence } from '@dory/shared/types/work-document';
 import { and, asc, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm';
@@ -11,7 +11,7 @@ import { getResultSetMaxStorageBytesFromOrganizationMetadata } from '../organiza
 
 type ReadDb = Pick<PostgresDBClient, 'select' | 'execute'>;
 
-/** All retained report states count, including archived reports and unapplied query results. */
+/** Only adopted evidence and the undo baseline retain modern workspace results. Legacy drafts remain recoverable. */
 export function reportArtifactReference(organizationId: string, artifactId: SQLWrapper | string, documentId?: SQLWrapper | string) {
     const reference = sql`jsonb_build_array(jsonb_build_object('artifactId', ${artifactId}::text))`;
     return sql<boolean>`exists (
@@ -27,8 +27,10 @@ export function reportArtifactReference(organizationId: string, artifactId: SQLW
             or exists (select 1 from report_working_drafts retention_draft
                 where retention_draft.document_id = retention_document.id and (
                     retention_draft.state->'content'->'evidence' @> ${reference}
-                    or exists (select 1 from jsonb_each(retention_draft.results) retention_result
-                        where retention_result.value->'evidence'->>'artifactId' = ${artifactId}::text)
+                    or retention_draft.state->'baseline'->'content'->'evidence' @> ${reference}
+                    or retention_draft.state->'canvas'->'undo'->'content'->'evidence' @> ${reference}
+                    or (retention_draft.state->>'bindingVersion' is distinct from '2' and exists (select 1 from jsonb_each(retention_draft.results) retention_result
+                        where retention_result.value->'evidence'->>'artifactId' = ${artifactId}::text))
                 ))
         )
     )`;

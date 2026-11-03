@@ -1,9 +1,14 @@
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
-import type { ReportQueryTab, ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
-import type { WorkDocumentContent, WorkVisual, WorkEvidence } from '@dory/shared/types/work-document';
-import { editableReport, parseReport, reportEmbeds } from './report-core';
-import { referencedEvidence } from './markdown';
+import type { ReportApplyTarget, ReportQueryTab, ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
+import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
+
+import { withReportCanvas, movedCanvasBlocks } from './report-canvas';
+import { reportEvidenceParagraphs } from './evidence-groups';
+import { canonicalValue } from './workspace-presentation';
 import { reportNumber } from './format';
+import { remapChartFields, resultUsedBy } from './workspace-presentation';
+import { referencedEvidence } from './markdown';
+import { editableReport, parseReport, reportEmbeds, reportOutline, reportTagSource } from './report-core';
 
 export function initialWorkingState(title: string, raw: WorkDocumentContent): ReportWorkingState {
     const content = editableReport(raw);
@@ -25,11 +30,44 @@ export function initialWorkingState(title: string, raw: WorkDocumentContent): Re
             });
     }
     const tabs = [...groups.values()];
-    return { title, content, tabs, activeTabId: tabs[0]?.id ?? null, proseNeedsReview: false };
+    return {
+        title,
+        content,
+        tabs,
+        activeTabId: tabs[0]?.id ?? null,
+        proseNeedsReview: false,
+        bindingVersion: 2,
+        charts: [],
+        baseline: { revision: 1, title, content: structuredClone(content) },
+    };
 }
 
 export function validateWorkingVisual(visual: WorkVisual, evidence: WorkEvidence) {
     if (evidence.truncated && !visual.allowSubset) throw new DatabaseError(`“${visual.title}”: explicitly allow partial results or rerun an aggregate query.`, 400);
+    if (visual.chartSpec) {
+        const spec = visual.chartSpec;
+        const keys = [
+            spec.xKey,
+            ...(spec.groupKey && spec.groupKey !== '__none__' ? [spec.groupKey] : []),
+            ...(spec.filters ?? []).map(filter => filter.col),
+            ...(spec.search?.columns ?? []),
+        ];
+        // Metric keys encode aggregate operations, e.g. sum:duration; count has no column.
+        if (spec.yKey !== 'count' && !/^(sum|avg|min|max|count_distinct|count_true):.+$/.test(spec.yKey))
+            throw new DatabaseError('Unsupported chart aggregation. Update its configuration.', 400);
+        const metricColumn = spec.yKey.includes(':') ? spec.yKey.slice(spec.yKey.indexOf(':') + 1) : spec.yKey;
+        if (spec.yKey !== 'count') keys.push(metricColumn);
+        if (keys.some(key => !evidence.columns.includes(key))) throw new DatabaseError(`“${visual.title}”: chart fields changed. Update its configuration.`, 400);
+        const numericColumns = [...(/^(sum|avg|min|max):/.test(spec.yKey) ? [metricColumn] : []), ...(['scatter', 'histogram'].includes(spec.chartType) ? [spec.xKey] : [])];
+        for (const key of numericColumns) {
+            const type = evidence.columnTypes?.find(column => column.name === key)?.type ?? '';
+            if (
+                /(^|[^a-z])(string|varchar|char|text|json|uuid|boolean|bool|date|timestamp|datetime)([^a-z]|$)/i.test(type) ||
+                evidence.rows.some(row => row[key] != null && row[key] !== '' && reportNumber(row[key]) === null)
+            )
+                throw new DatabaseError(`“${visual.title}”: chart field “${key}” is no longer numeric. Update its configuration.`, 400);
+        }
+    }
     if (visual.metric) {
         for (const cell of [visual.metric, ...(visual.metric.items ?? []), ...(visual.metric.comparison ? [visual.metric.comparison] : [])]) {
             if (!evidence.columns.includes(cell.column) || !evidence.rows[cell.rowIndex])
@@ -55,6 +93,26 @@ export function validateWorkingVisual(visual: WorkVisual, evidence: WorkEvidence
 
 /** Materialize only server-owned evidence. Client bindings/configuration contain no rows or provenance. */
 export function materializeWorkingContent(state: ReportWorkingState, results: ReportWorkingDraft['results'], validate = false): WorkDocumentContent {
+    if (state.bindingVersion === 2) {
+        const trusted = new Map([...Object.values(results).map(result => result.evidence), ...state.content.evidence].map(evidence => [evidence.artifactId, evidence]));
+        const ids = new Set<string>();
+        for (const visual of state.content.visuals) {
+            if (ids.has(visual.id)) throw new DatabaseError('Duplicate component ID.', 400);
+            ids.add(visual.id);
+            const evidence = trusted.get(visual.evidenceId);
+            if (!evidence) throw new DatabaseError('The selected result is unavailable.', 409);
+            if (validate) validateWorkingVisual(visual, evidence);
+        }
+        const parsed = parseReport(state.content.body ?? '', state.content.visuals);
+        if (validate && parsed.diagnostics.length) throw new DatabaseError(parsed.diagnostics[0].message, 400);
+        const referenced = referencedEvidence(parsed.presentation, state.content.visuals, state.content.evidenceGroups);
+        const evidence = referenced.ids.map(id => {
+            const value = trusted.get(id);
+            if (!value) throw new DatabaseError('Report evidence is unavailable.', 409);
+            return value;
+        });
+        return { ...state.content, evidence, embeds: reportEmbeds(state.content.visuals, evidence), markdown: parsed.presentation, diagnostics: parsed.diagnostics };
+    }
     const seen = new Set<string>();
     const visuals = state.content.visuals.map(visual => {
         const owners = state.tabs.filter(tab => tab.componentIds.includes(visual.id));
@@ -80,4 +138,210 @@ export function versionContent(draft: ReportWorkingDraft) {
     const referenced = referencedEvidence(content.markdown, content.visuals, content.evidenceGroups);
     const evidence = content.evidence.filter(item => referenced.ids.includes(item.artifactId));
     return { ...content, visuals: referenced.visuals, evidence, embeds: reportEmbeds(referenced.visuals, evidence), agentWrite: undefined };
+}
+
+/** An execution is a candidate until a single, still-current report reference is selected. */
+export function applyWorkingResult(draft: ReportWorkingDraft, tabId: string, resultId: string, target: ReportApplyTarget, newTabId: string): ReportWorkingState {
+    const tab = draft.state.tabs.find(item => item.id === tabId);
+    const result = draft.results[resultId];
+    if (!tab || !result || result.sourceArtifactId !== tab.sourceArtifactId) throw new DatabaseError('Query result unavailable.', 403);
+    if (Boolean(target.componentId) === Boolean(target.groupId)) throw new DatabaseError('Select one report component or evidence reference.', 400);
+    const state = structuredClone(draft.state);
+    if (target.componentId) {
+        const visual = state.content.visuals.find(item => item.id === target.componentId);
+        const owner = state.tabs.find(item => item.componentIds.includes(target.componentId!));
+        if (!visual || visual.evidenceId !== target.artifactId || !owner || owner.sourceArtifactId !== tab.sourceArtifactId)
+            throw new DatabaseError('The report target changed. Select the target again.', 409);
+        validateWorkingVisual(visual, result.evidence);
+        if (owner.id === tabId && owner.componentIds.length === 1) owner.appliedId = resultId;
+        else {
+            if (state.tabs.length >= 100 || state.tabs.some(item => item.id === newTabId))
+                throw new DatabaseError('Too many query tabs. Close unused queries before applying.', 400);
+            owner.componentIds = owner.componentIds.filter(id => id !== visual.id);
+            state.tabs.push({ ...tab, id: newTabId, copiedFromId: tab.id, title: visual.title, componentIds: [visual.id], appliedId: resultId, hidden: false });
+            state.activeTabId = newTabId;
+        }
+    } else {
+        const group = state.content.evidenceGroups?.find(item => item.id === target.groupId);
+        const source = state.content.evidence.find(item => item.artifactId === target.artifactId);
+        const belongs =
+            target.artifactId === tab.sourceArtifactId ||
+            Object.values(draft.results).some(item => item.sourceArtifactId === tab.sourceArtifactId && item.evidence.artifactId === target.artifactId);
+        if (!group || !source || !belongs || !group.references.some(item => item.artifactId === target.artifactId))
+            throw new DatabaseError('The conclusion reference changed. Select the target again.', 409);
+        if (group.references.some(item => item.artifactId !== target.artifactId && item.artifactId === result.evidence.artifactId))
+            throw new DatabaseError('This result is already linked to the conclusion.', 400);
+        group.references = group.references.map(item => (item.artifactId === target.artifactId ? { ...item, artifactId: result.evidence.artifactId } : item));
+        group.needsReview = true;
+        if (!state.content.evidence.some(item => item.artifactId === result.evidence.artifactId)) state.content.evidence.push(result.evidence);
+    }
+    state.content = materializeWorkingContent(state, draft.results, true);
+    state.proseNeedsReview = true;
+    return state;
+}
+
+/** Upgrade once, preserving already applied legacy bindings and their result records. */
+export function upgradeWorkingState(draft: ReportWorkingDraft, baseline: WorkDocumentContent): ReportWorkingState {
+    if (draft.state.bindingVersion === 2) return draft.state;
+    const content = materializeWorkingContent(draft.state, draft.results);
+    return {
+        ...draft.state,
+        content,
+        bindingVersion: 2,
+        charts: [],
+        baseline: { revision: draft.expectedReportRevision, title: draft.state.title, content: editableReport(baseline) },
+    };
+}
+
+export type ReportDraftOperation =
+    | { type: 'replace'; resultId: string; blockIds: string[]; chartSpec?: WorkVisual['chartSpec']; fieldMappings?: Record<string, Record<string, string>> }
+    | { type: 'insert'; resultId: string; visual: Pick<WorkVisual, 'id' | 'type' | 'title' | 'chartSpec'>; anchorId: string; position: 'before' | 'after' | 'end' }
+    | { type: 'move'; blockId: string; anchorId: string; position: 'before' | 'after' }
+    | { type: 'rename'; blockId: string; title: string }
+    | { type: 'undo' }
+    | { type: 'remove' | 'revert'; blockId: string };
+
+export function changeReportDraft(draft: ReportWorkingDraft, operation: ReportDraftOperation): ReportWorkingState {
+    const state = withReportCanvas(structuredClone(draft.state));
+    const before = { content: structuredClone(state.content), blocks: structuredClone(state.canvas.blocks), proseNeedsReview: state.proseNeedsReview };
+    if (operation.type === 'undo') {
+        if (!state.canvas.undo) return state;
+        const undo = state.canvas.undo;
+        state.content = undo.content;
+        state.proseNeedsReview = undo.proseNeedsReview;
+        state.canvas = { ...state.canvas, blocks: undo.blocks, undo: undefined };
+        return withReportCanvas(state);
+    }
+    if (state.bindingVersion !== 2) throw new DatabaseError('Reopen the workspace to upgrade this draft.', 409);
+    const content = state.content;
+    const body = content.body ?? '';
+    const outline = reportOutline(body, content.visuals);
+    if (operation.type === 'replace' || operation.type === 'insert') {
+        const snapshot = operation.resultId.startsWith('snapshot:')
+            ? [...state.content.evidence, ...(state.baseline?.content.evidence ?? [])].find(item => item.artifactId === operation.resultId.slice(9))
+            : undefined;
+        const result = draft.results[operation.resultId] ?? (snapshot ? { evidence: snapshot } : undefined);
+        if (!result) throw new DatabaseError('Result unavailable. Run the query again.', 409);
+        if (!content.evidence.some(item => item.artifactId === result.evidence.artifactId)) content.evidence.push(result.evidence);
+        if (operation.type === 'replace') {
+            if (!operation.blockIds.length || new Set(operation.blockIds).size !== operation.blockIds.length) throw new DatabaseError('Select report blocks.', 400);
+            for (const id of operation.blockIds) {
+                const visual = content.visuals.find(item => item.id === id);
+                if (!visual || !outline.some(item => item.visualId === id)) throw new DatabaseError('The target changed. Select it again.', 409);
+                if (operation.chartSpec && visual.type !== 'chart') throw new DatabaseError('Select a chart target.', 400);
+                if (!Object.keys(operation.fieldMappings?.[id] ?? {}).length && resultUsedBy([visual], result.evidence, operation.chartSpec).length) continue;
+                visual.evidenceId = result.evidence.artifactId;
+                if (operation.chartSpec) {
+                    visual.chartSpec = structuredClone(operation.chartSpec);
+                    delete visual.chart;
+                }
+                if (operation.fieldMappings?.[id]) Object.assign(visual, remapChartFields(visual, operation.fieldMappings[id]));
+                delete visual.chartData;
+                validateWorkingVisual(visual, result.evidence);
+            }
+        } else {
+            if (!['chart', 'table'].includes(operation.visual.type) || content.visuals.some(item => item.id === operation.visual.id))
+                throw new DatabaseError('Invalid report block.', 400);
+            const visual: WorkVisual = { ...operation.visual, evidenceId: result.evidence.artifactId };
+            if (visual.type === 'chart' && !visual.chartSpec) throw new DatabaseError('Choose a chart configuration.', 400);
+            validateWorkingVisual(visual, result.evidence);
+            const blockIndex = state.canvas.blocks.findIndex(item => item.id === operation.anchorId);
+            const anchor = blockIndex >= 0 ? outline[blockIndex + 1] : outline.find(item => item.id === operation.anchorId);
+            if (!anchor) throw new DatabaseError('The insertion position changed. Select it again.', 409);
+            const offset = operation.position === 'before' ? anchor.start : operation.position === 'after' ? anchor.end : anchor.sectionEnd;
+            content.body = body.slice(0, offset) + '\n\n' + reportTagSource(visual) + '\n\n' + body.slice(offset);
+            content.visuals.push(visual);
+        }
+    } else {
+        const blocks = state.canvas.blocks;
+        const index = blocks.findIndex(item => item.id === operation.blockId);
+        const block = blocks[index];
+        if (operation.type === 'rename') {
+            const visual = content.visuals.find(item => item.id === block?.visualId);
+            if (!visual || !operation.title.trim()) throw new DatabaseError('Choose a data block and a title.', 400);
+            visual.title = operation.title.trim();
+        } else if (operation.type === 'move') {
+            const target = blocks.find(item => item.id === operation.anchorId);
+            if (!block || !target) throw new DatabaseError('The target changed. Select it again.', 409);
+            if (block.id === target.id) return state;
+            blocks.splice(index, 1);
+            blocks.splice(blocks.indexOf(target) + (operation.position === 'after' ? 1 : 0), 0, block);
+            content.body = blocks.map(item => item.source).join('\n\n');
+        } else if (operation.type === 'remove') {
+            if (!block) throw new DatabaseError('The block is no longer present.', 409);
+            blocks.splice(index, 1);
+            content.body = blocks.map(item => item.source).join('\n\n');
+            content.visuals = content.visuals.filter(item => item.id !== block.visualId);
+        } else {
+            const baseline = state.baseline?.content;
+            const originalIndex = state.canvas.baselineBlocks.findIndex(item => item.id === operation.blockId);
+            const original = state.canvas.baselineBlocks[originalIndex];
+            if (index >= 0) blocks.splice(index, 1);
+            if (original && baseline) {
+                const after = state.canvas.baselineBlocks.slice(originalIndex + 1).find(item => blocks.some(current => current.id === item.id));
+                blocks.splice(after ? blocks.findIndex(item => item.id === after.id) : blocks.length, 0, structuredClone(original));
+                if (original.visualId) {
+                    const restored = structuredClone(baseline.visuals.find(item => item.id === original.visualId)!);
+                    const existing = content.visuals.findIndex(item => item.id === original.visualId);
+                    if (existing >= 0) content.visuals[existing] = restored;
+                    else
+                        content.visuals.splice(
+                            Math.min(
+                                baseline.visuals.findIndex(item => item.id === original.visualId),
+                                content.visuals.length,
+                            ),
+                            0,
+                            restored,
+                        );
+                }
+                for (const evidence of baseline.evidence)
+                    if (!content.evidence.some(item => item.artifactId === evidence.artifactId)) content.evidence.push(structuredClone(evidence));
+                for (const group of baseline.evidenceGroups ?? [])
+                    if (!content.evidenceGroups?.some(item => item.id === group.id)) (content.evidenceGroups ??= []).push(structuredClone(group));
+            } else if (block?.visualId) content.visuals = content.visuals.filter(item => item.id !== block.visualId);
+            content.body = blocks.map(item => item.source).join('\n\n');
+        }
+        const liveGroups = new Set(reportEvidenceParagraphs(content.body ?? '').flatMap(item => (item.groupId ? [item.groupId] : [])));
+        content.evidenceGroups = content.evidenceGroups?.filter(item => liveGroups.has(item.id));
+    }
+    state.content = materializeWorkingContent(state, draft.results, true);
+    state.proseNeedsReview = true;
+    const next = withReportCanvas(state);
+    // Compare parsed blocks, not whitespace introduced by MDX splicing.
+    if (
+        canonicalValue(before.blocks.map(item => [item.id, item.source])) !== canonicalValue(next.canvas.blocks.map(item => [item.id, item.source])) ||
+        canonicalValue(before.content.visuals) !== canonicalValue(next.content.visuals)
+    )
+        next.canvas.undo = before;
+    return next;
+}
+
+export function reportDraftChanges(raw: ReportWorkingState) {
+    const state = withReportCanvas(raw);
+    const before = state.canvas.baselineBlocks;
+    const after = state.canvas.blocks;
+    const moved = movedCanvasBlocks(
+        before.map(item => item.id),
+        after.map(item => item.id),
+    );
+    return [...new Set([...before, ...after].map(item => item.id))].flatMap(id => {
+        const oldBlock = before.find(item => item.id === id);
+        const block = after.find(item => item.id === id);
+        const original = state.baseline?.content.visuals.find(item => item.id === oldBlock?.visualId);
+        const current = state.content.visuals.find(item => item.id === block?.visualId);
+        const changedVisual = canonicalValue(original) !== canonicalValue(current);
+        const renamedOnly = original && current && original.title !== current.title && canonicalValue({ ...original, title: current.title }) === canonicalValue(current);
+        const type = !oldBlock
+            ? ('insert' as const)
+            : !block
+              ? ('remove' as const)
+              : changedVisual
+                ? renamedOnly
+                    ? ('rename' as const)
+                    : ('replace' as const)
+                : moved.has(id)
+                  ? ('move' as const)
+                  : undefined;
+        return type ? [{ id, title: (current ?? original)?.title ?? (block ?? oldBlock)!.title, type }] : [];
+    });
 }

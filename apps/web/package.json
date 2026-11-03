@@ -6,10 +6,10 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "node ../../scripts/prepare-duckdb-extensions.mjs && tsx ./scripts/dev-bootstrap.ts && next dev --turbopack",
+        "dev": "node ../../scripts/prepare-duckdb-extensions.mjs && yarn run pglite:migrate:bundle && tsx ./scripts/dev-bootstrap.ts && next dev --turbopack",
         "build": "yarn run build:bootstrap && next build --turbopack",
         "build:cf": "next build && opennextjs-cloudflare build",
-        "build:bootstrap": "node ../../scripts/prepare-duckdb-extensions.mjs && bun build scripts/bootstrap.ts --target=node --format=esm --outfile=./dist-scripts/bootstrap.mjs && node scripts/copy-pglite-assets.mjs",
+        "build:bootstrap": "yarn run pglite:migrate:bundle && node ../../scripts/prepare-duckdb-extensions.mjs && bun build scripts/bootstrap.ts --target=node --format=esm --outfile=./dist-scripts/bootstrap.mjs && node scripts/copy-pglite-assets.mjs",
         "start": "next start",
         "studio": "drizzle-kit studio",
         "pglite:studio": "drizzle-kit studio --config ./drizzle.pglite.config.ts",
@@ -45,7 +45,8 @@
         "docker:build": "docker build --build-arg VERSION=$(git rev-parse HEAD) -t dorylab/dory .",
         "docker:quickstart": "docker run -d --name dory -p 3000:3000 -e TRUSTED_ORIGINS=\"http://localhost:3000\" -e DS_SECRET_KEY=\"$(openssl rand -base64 32 | tr -d '\\n')\" -e BETTER_AUTH_SECRET=\"$(openssl rand -hex 32)\" dorylab/dory:latest",
         "docker:run": "docker run -d --name dory -p 3000:3000 --env-file=.env dorylab/dory:latest",
-        "registry:build": "tsx --tsconfig ./tsconfig.scripts.json ./scripts/build-registry.mts && prettier --log-level silent --write \"registry/**/*.{ts,tsx,json,mdx}\" --cache"
+        "registry:build": "tsx --tsconfig ./tsconfig.scripts.json ./scripts/build-registry.mts && prettier --log-level silent --write \"registry/**/*.{ts,tsx,json,mdx}\" --cache",
+        "pglite:migrate:bundle": "tsx ./scripts/compile-pglite-migrations.ts"
     },
     "dependencies": {
         "@ai-sdk/anthropic": "^4.0.49",

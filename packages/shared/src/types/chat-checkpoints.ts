@@ -114,7 +114,7 @@ export function applyCheckpointCommand(state: ChatCheckpoints, requestId: string
             state.stopped = true;
             return stop('Execution budget exhausted. Preserve completed work.');
         }
-        const failed = state.actions.findLast(item => item.toolName === command.toolName && item.state !== 'running');
+        const failed = [...state.actions].reverse().find(item => item.toolName === command.toolName && item.state !== 'running');
         if (failed?.state === 'failed' && failed.failure) {
             if (!failed.failure.retryable) return stop(failed.failure.recovery);
             if (failed.fingerprint && failed.fingerprint === command.fingerprint && failed.epoch === (state.evidenceEpoch ?? 0))

@@ -1,4 +1,5 @@
 import type { WorkDocumentView, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
+import { CHART_COLOR_PRESETS } from '@dory/shared/types/workspace-chart';
 import { Marked, Renderer } from 'marked';
 
 import { reportMetrics, reportNumber } from './format';
@@ -13,6 +14,7 @@ export function formatWorkValue(value: unknown) {
 
 /** Same snapshot and SVG are used on screen, in HTML and when printing to PDF. */
 export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string {
+    if (visual.chartSpec) return workspaceChartSvg(visual);
     if (!visual.chart) return '';
     if (visual.chart.yKeys) {
         // Separate scales keep differently sized metrics (e.g. revenue and order
@@ -183,4 +185,90 @@ export function renderWorkHtml(document: WorkDocumentView): string {
         .join('');
     const body = renderWorkMarkdown(document.content, true, document.title).replace(/href="dory:\/\/evidence\/([^"<>]+)"/g, 'href="#evidence-$1"');
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>${workPrintStyles}</style></head><body><header><h1>${escapeHtml(document.title)}</h1><p>${document.publication ? `v${document.publication.number}` : `r${document.revision}`} · ${escapeHtml(document.updatedAt)}${document.publication ? ' · Published / 已发布' : ' · Draft / 草稿'}</p></header>${body}<footer><h2>Sources / 来源</h2><ul>${groups}${sources}</ul></footer></body></html>`;
+}
+
+/** Portable chart projection computed from the full immutable ResultSet at Apply time. */
+function workspaceChartSvg(visual: WorkVisual): string {
+    const spec = visual.chartSpec!;
+    const projection = visual.chartData;
+    if (!projection) throw new Error('The saved chart projection is unavailable. Reapply the chart before exporting.');
+    const palette = (CHART_COLOR_PRESETS.find(preset => preset.value === spec.chartColorPreset) ?? CHART_COLOR_PRESETS[0]).colors.light;
+    const color = (index: number) => palette[index % palette.length];
+    const data = projection.data;
+    const series = projection.series;
+    const values = data.flatMap(row => series.map(item => Number(row[item.key])).filter(Number.isFinite));
+    const low = Math.min(0, ...values),
+        high = Math.max(0, ...values);
+    const y = (value: number) => 260 - ((value - low) / (high - low || 1)) * 220;
+    const step = 560 / Math.max(1, data.length);
+    const x = (index: number) => 65 + (index + 0.5) * step;
+    let shapes = '';
+    if (spec.chartType === 'pie') {
+        const points = data
+            .map(row => ({ label: String(row.xLabel ?? ''), value: series.reduce((sum, item) => sum + (Number(row[item.key]) || 0), 0) }))
+            .filter(item => item.value > 0);
+        const total = points.reduce((sum, point) => sum + point.value, 0);
+        let angle = -Math.PI / 2;
+        shapes = points
+            .map((point, index) => {
+                const next = angle + (point.value / total) * Math.PI * 2;
+                const start = [200 + 100 * Math.cos(angle), 150 + 100 * Math.sin(angle)];
+                const end = [200 + 100 * Math.cos(next), 150 + 100 * Math.sin(next)];
+                angle = next;
+                const hint = `<title>${escapeHtml(point.label)}: ${point.value}</title>`;
+                return (
+                    (point.value === total
+                        ? `<circle cx="200" cy="150" r="100" fill="${color(index)}">${hint}</circle>`
+                        : `<path d="M200,150 L${start.join(',')} A100,100 0 ${point.value / total > 0.5 ? 1 : 0},1 ${end.join(',')} Z" fill="${color(index)}">${hint}</path>`) +
+                    `<text x="330" y="${35 + index * 18}" fill="${color(index)}" font-size="11">${escapeHtml(point.label)}: ${point.value}</text>`
+                );
+            })
+            .join('');
+    } else if (spec.chartType === 'heatmap') {
+        shapes = data
+            .flatMap((row, i) =>
+                series.map((item, j) => {
+                    const value = Number(row[item.key]);
+                    if (row[item.key] == null || !Number.isFinite(value)) return '';
+                    const height = 220 / Math.max(1, series.length);
+                    return `<rect x="${65 + i * step}" y="${35 + j * height}" width="${Math.max(1, step - 1)}" height="${Math.max(1, height - 1)}" fill="${color(0)}" opacity="${0.15 + 0.85 * (Number.isFinite(value) ? (value - low) / (high - low || 1) : 0)}"><title>${escapeHtml(row.xLabel)} / ${escapeHtml(item.label)}: ${value}</title></rect>`;
+                }),
+            )
+            .join('');
+    } else {
+        shapes = series
+            .map((item, j) => {
+                const points = data.map((row, index) => ({ index, value: row[item.key] == null ? NaN : Number(row[item.key]), label: String(row.xLabel ?? index) }));
+                if (spec.chartType === 'line') {
+                    const path = points
+                        .map((point, index) =>
+                            Number.isFinite(point.value) ? `${index === 0 || !Number.isFinite(points[index - 1].value) ? 'M' : 'L'}${x(point.index)},${y(point.value)}` : '',
+                        )
+                        .join(' ');
+                    return `<path d="${path}" fill="none" stroke="${color(j)}" stroke-width="2"><title>${escapeHtml(item.label)}</title></path>`;
+                }
+                return points
+                    .filter(point => Number.isFinite(point.value))
+                    .map(point => {
+                        const hint = `<title>${escapeHtml(point.label)} / ${escapeHtml(item.label)}: ${point.value}</title>`;
+                        if (spec.chartType === 'scatter') return `<circle cx="${x(point.index)}" cy="${y(point.value)}" r="3" fill="${color(j)}">${hint}</circle>`;
+                        const width = (step * 0.8) / Math.max(1, series.length);
+                        return `<rect x="${x(point.index) - step * 0.4 + j * width}" y="${Math.min(y(0), y(point.value))}" width="${width}" height="${Math.max(1, Math.abs(y(point.value) - y(0)))}" fill="${color(j)}">${hint}</rect>`;
+                    })
+                    .join('');
+            })
+            .join('');
+    }
+    const labels =
+        spec.chartType === 'pie'
+            ? ''
+            : data
+                  .map((row, index) =>
+                      index % Math.max(1, Math.ceil(data.length / 8)) === 0
+                          ? `<text x="${x(index)}" y="280" text-anchor="middle" font-size="10" fill="currentColor">${escapeHtml(String(row.xLabel ?? '').slice(0, 24))}</text>`
+                          : '',
+                  )
+                  .join('');
+    const legend = series.map((item, index) => `<text x="${65 + index * 140}" y="310" font-size="11" fill="${color(index)}">${escapeHtml(item.label)}</text>`).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 ${Math.max(330, spec.chartType === 'pie' ? 60 + data.length * 18 : 330)}" role="img" aria-label="${escapeHtml(visual.title)}" data-chart-type="${spec.chartType}">${shapes}${labels}${legend}</svg>`;
 }

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reportRetentionFixture } from '../../../../packages/database/scripts/tests/report-retention-fixture';
 import type { WorkDocumentContent, WorkEvidence } from '@dory/shared/types/work-document';
+
 import { resolvedReport } from '@/lib/work-documents/report-core';
-import { initialWorkingState, materializeWorkingContent, validateWorkingVisual, versionContent } from '@/lib/work-documents/working-draft';
+import { changeReportDraft, initialWorkingState, materializeWorkingContent, validateWorkingVisual, versionContent } from '@/lib/work-documents/working-draft';
+
+import { reportRetentionFixture } from '../../../../packages/database/scripts/tests/report-retention-fixture';
 
 const evidence: WorkEvidence = {
     artifactId: 'artifact_1',
@@ -29,8 +31,8 @@ const content: WorkDocumentContent = {
     ],
 };
 
-test('shared queries, independent bindings, candidate/apply separation and version filtering', () => {
-    const state = initialWorkingState('Report', content);
+test('legacy shared queries, independent bindings, candidate/apply separation and version filtering', () => {
+    const state = { ...initialWorkingState('Report', content), bindingVersion: undefined };
     assert.equal(state.tabs.length, 1);
     assert.deepEqual(state.tabs[0].componentIds, ['metric', 'table']);
     const result = {
@@ -45,7 +47,7 @@ test('shared queries, independent bindings, candidate/apply separation and versi
     assert.doesNotThrow(() => resolvedReport(applied));
     assert.ok(applied.visuals.every(v => v.evidenceId === 'artifact_new'));
     assert.equal(content.evidence[0].rows[0].count, 3);
-    const original = initialWorkingState('Report', content);
+    const original = { ...initialWorkingState('Report', content), bindingVersion: undefined };
     original.tabs.push({ ...original.tabs[0], id: 'copy', componentIds: ['table'], appliedId: 'result' });
     original.tabs[0].componentIds = ['metric'];
     const split = materializeWorkingContent(original, results, true);
@@ -88,7 +90,6 @@ test('changed fields, missing metric rows, truncation and invalid numeric charts
 test('real PGlite drafts enforce ownership, atomic immutable versions, replay and conflicts', async () => {
     const fixture = await reportRetentionFixture();
     const repo = fixture.reports;
-    const db = fixture.client;
     try {
         await fixture.seedEvidence('artifact_1', [{ count: 3 }]);
         await fixture.seedEvidence('artifact_new', [{ count: 2 }]);
@@ -109,7 +110,7 @@ test('real PGlite drafts enforce ownership, atomic immutable versions, replay an
         assert.equal(saved.results.result.evidence.rows[0].count, 2);
         assert.equal((await repo.get(target)).title, 'Report');
         await assert.rejects(repo.saveWorkingDraft({ ...target, expectedDraftRevision: draft.revision, state: draft.state }), /another window/);
-        const appliedState = { ...saved.state, proseNeedsReview: true, tabs: saved.state.tabs.map(t => ({ ...t, appliedId: 'result' })) };
+        const appliedState = changeReportDraft(saved, { type: 'replace', resultId: 'result', blockIds: ['metric', 'table'] });
         appliedState.content = materializeWorkingContent(appliedState, saved.results, true);
         const applied = await repo.saveWorkingDraft({ ...target, expectedDraftRevision: saved.revision, state: appliedState });
         await assert.rejects(repo.saveWorkingVersion({ ...target, expectedDraftRevision: applied.revision, requestId: 'review', content: versionContent(applied) }), /Review/);

@@ -1,10 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { buildSqlFallbackName } from '@dory/shared/utils/sql-name';
-import { createSqlNamer } from '@/lib/server/sql-naming';
-
-import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
-import { splitSqlStatements } from '@/lib/server/sql-splitter';
-import { runWithSqlAudit } from '@/lib/server/sql-audit';
 import type { ActionContext } from '@dory/actions';
 import { serializableColumns, type DataStream } from '@dory/data-plane';
 import type { BaseConnection } from '@dory/drivers/core';
@@ -12,6 +6,13 @@ import type { DriverType } from '@dory/drivers/types';
 import { newEntityId } from '@dory/shared/id';
 import type { QuerySource } from '@dory/shared/types/audit';
 import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
+import { buildSqlFallbackName } from '@dory/shared/utils/sql-name';
+
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
+import { runWithSqlAudit } from '@/lib/server/sql-audit';
+import { createSqlNamer } from '@/lib/server/sql-naming';
+import { splitSqlStatements } from '@/lib/server/sql-splitter';
+
 import type { WebActionServices } from '../../types';
 
 export const MAX_ACTION_STATEMENTS = 100;
@@ -29,6 +30,7 @@ export type QueryExecuteInput = {
     connectionId?: string | null;
     identityId?: string | null;
     database?: string | null;
+    schema?: string | null;
     sql: string;
     stopOnError?: boolean | null;
     sessionId?: string | null;
@@ -263,7 +265,7 @@ function isQuerySource(value?: string | null): value is QuerySource {
 async function executeOne(
     connection: BaseConnection,
     statement: string,
-    context: { database?: string | null; locale?: string | null },
+    context: { database?: string | null; schema?: string | null; locale?: string | null },
     options?: { queryId?: string; statementIndex?: number },
 ) {
     const startedAt = preciseDateNow();
@@ -272,6 +274,7 @@ async function executeOne(
     try {
         const result = await connection.queryWithContext(statement, {
             database: context.database ?? undefined,
+            schema: context.schema ?? undefined,
             queryId: options?.queryId,
             statementIndex: options?.statementIndex,
         });
@@ -343,7 +346,7 @@ async function executeOne(
 async function executeOneStream(
     connection: BaseConnection,
     statement: string,
-    context: { database?: string | null; locale?: string | null },
+    context: { database?: string | null; schema?: string | null; locale?: string | null },
     options?: { queryId?: string; statementIndex?: number; signal?: AbortSignal },
 ) {
     const startedAt = preciseDateNow();
@@ -355,6 +358,7 @@ async function executeOneStream(
                 sql: statement,
                 context: {
                     database: context.database ?? undefined,
+                    schema: context.schema ?? undefined,
                     queryId: options?.queryId,
                     statementIndex: options?.statementIndex,
                 },
@@ -574,10 +578,15 @@ async function runSqlExecution(
                     ? await executeOneStream(
                           entry.instance,
                           statement,
-                          { database: input.database, locale: ctx.locale },
+                          { database: input.database, schema: input.schema, locale: ctx.locale },
                           { queryId: sessionId, statementIndex: i, signal: options?.signal },
                       )
-                    : await executeOne(entry.instance, statement, { database: input.database, locale: ctx.locale }, { queryId: sessionId, statementIndex: i });
+                    : await executeOne(
+                          entry.instance,
+                          statement,
+                          { database: input.database, schema: input.schema, locale: ctx.locale },
+                          { queryId: sessionId, statementIndex: i },
+                      );
                 let qrs: Record<string, unknown> = {
                     sessionId,
                     setIndex: i,

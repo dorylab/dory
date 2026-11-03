@@ -69,7 +69,7 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
             });
             const artifactId = `artifact_${first.queryResultSets[0].resultSetId}`;
             const groupArtifactId = `artifact_${second.queryResultSets[0].resultSetId}`;
-            const report = await action('report.create', {
+            const created = await action('report.create', {
                 requestId: crypto.randomUUID(),
                 title: 'Live customer analysis',
                 body: '# Customers\n\nThere are three customers.\n\n<Metric source="metric" />\n\n<DataTable source="table" />\n\n<Chart source="chart" />',
@@ -79,6 +79,18 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
                     { id: 'table', title: 'Customer total', type: 'table', evidenceId: artifactId },
                     { id: 'chart', title: 'Activity', type: 'chart', evidenceId: groupArtifactId, chart: { type: 'bar', xKey: 'active', yKey: 'count' } },
                 ],
+            });
+            const report = await action('report.update', {
+                documentId: created.document.id,
+                expectedRevision: created.document.revision,
+                title: created.document.title,
+                body: created.document.content.body.replace(
+                    'There are three customers.',
+                    'There are three customers. [Evidence](dory://evidence-group/one)\n\nThe original total is three. [Evidence](dory://evidence-group/two)',
+                ),
+                visuals: created.document.content.visuals,
+                evidenceGroups: ['one', 'two'].map(id => ({ id, references: [{ artifactId, explanation: 'Customer count for the same source.' }] })),
+                reviewedEvidenceGroupIds: ['one', 'two'],
             });
             return {
                 reference: {
@@ -100,7 +112,14 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
         if (request.url().includes('/api/actions/execute') && request.postDataJSON()?.actionId === 'report.workspace.execute') executed++;
     });
     const ref = fixture.reference;
-    await page.goto(`/${organization}/reports/${ref.documentId}/workspace/${ref.artifactId}?revision=${ref.revision}&snapshot=${ref.snapshotId}`);
+    await page.goto(`/${organization}/reports/${ref.documentId}`);
+    await page.getByRole('button', { name: 'View source and data', exact: true }).first().click();
+    const evidenceDialog = page.getByTestId('report-evidence-panel');
+    await expect(evidenceDialog.getByText('1 row · Complete result', { exact: true })).toBeVisible();
+    await expect(evidenceDialog.getByRole('button', { name: /Full result/ })).toHaveCount(0);
+    await expect(evidenceDialog.getByRole('link', { name: 'Edit SQL', exact: true })).toHaveAttribute('href', /componentId=metric/);
+    await evidenceDialog.getByRole('link', { name: 'Edit SQL', exact: true }).click();
+    await expect(page).toHaveURL(/componentId=metric/);
     const workspace = page.getByTestId('report-workspace');
     await expect(workspace).toBeVisible();
     await expect(page.getByRole('tab', { name: 'Report snapshot', exact: true })).toBeVisible();
@@ -123,13 +142,13 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
     await expect(page.getByTestId('report-workspace-result').getByText('2', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Apply to report', exact: true }).click();
     await expect(page.getByRole('dialog').getByText('Customer count', { exact: true })).toBeVisible();
-    await expect(page.getByRole('dialog').getByText('Customer total', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Apply to report', exact: true }).getByRole('combobox', { name: 'Select a report target' })).toContainText('Customer count');
     await page.getByRole('dialog').getByRole('button', { name: 'Apply to report', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Applied to draft', exact: true })).toBeVisible();
     await expect(page.getByText('Missing report snapshot.', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Save new version', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Duplicate query', exact: true }).click();
-    const copy = page.getByRole('tab', { name: `${fixture.countTitle} (copy)` });
+    const copy = page.getByRole('tab', { name: 'Customer count (copy)' });
     await expect(copy).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('combobox', { name: 'Move component to this query', exact: true }).click();
     await page.getByRole('option', { name: 'Customer total', exact: true }).click();
@@ -139,23 +158,33 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
     await page.getByRole('button', { name: 'Run', exact: true }).click();
     await expect(page.getByTestId('report-workspace-result').getByText('4', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Apply to report', exact: true }).click();
-    await expect(page.getByRole('dialog').getByText('Customer count', { exact: true })).toHaveCount(0);
-    await expect(page.getByRole('dialog').getByText('Customer total', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Apply to report', exact: true })).toBeDisabled();
+    await page.getByRole('dialog', { name: 'Apply to report', exact: true }).getByRole('combobox', { name: 'Select a report target' }).click();
+    await page.getByRole('option', { name: 'Customer total', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Apply to report', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Apply to report', exact: true })).toHaveCount(0);
+    await page.evaluate(() => window.__DORY_E2E_MONACO__!.setValue('SELECT 5 AS count'));
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+    await expect(page.getByTestId('report-workspace-result').getByText('5', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Apply to report', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Apply to report', exact: true }).getByRole('combobox', { name: 'Select a report target' }).click();
+    await page.getByRole('option', { name: 'There are three customers.', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Apply to report', exact: true }).click();
     await copy.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Close', exact: true }).click();
     await expect(copy).toHaveCount(0);
     await page.getByRole('tab', { name: 'Queries', exact: true }).click();
-    await page.getByRole('button', { name: `${fixture.countTitle} (copy) · hidden`, exact: true }).click();
+    await page.getByRole('button', { name: 'Customer count (copy) · hidden', exact: true }).click();
     await expect(copy).toHaveAttribute('aria-selected', 'true');
     await page.getByRole('button', { name: 'I have reviewed the text', exact: true }).click();
     await expect(page.getByText('Draft saved', { exact: true })).toBeVisible();
     await page.reload();
     await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toContain('WHERE active');
     await expect(page.getByRole('tab', { name: 'Applied to draft', exact: true })).toBeVisible();
-    expect(executed).toBe(2);
+    expect(executed).toBe(3);
     await page.screenshot({ path: testInfo.outputPath('report-analysis-workspace.png'), fullPage: true });
     await page.getByRole('button', { name: 'Save new version', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Save new version', exact: true }).getByText(/result not applied/)).toHaveCount(0);
     await page.getByRole('dialog').getByRole('button', { name: 'Save new version', exact: true }).click();
     await expect(page).toHaveURL(/publication=/);
     await expect(page.getByTestId('work-report')).toBeVisible();
@@ -176,7 +205,22 @@ test('real report analysis edits, runs, applies, refreshes and saves an immutabl
     expect(versions.old.content.evidence.find((e: { artifactId: string }) => e.artifactId === ref.artifactId).rows[0].count).toBe('3');
     expect(versions.latest.content.evidence.some((e: { rows: { count: number }[] }) => e.rows.length === 1 && Number(e.rows[0].count) === 2)).toBe(true);
     expect(versions.latest.content.body).toContain('There are three customers.');
+    const conclusionResult = versions.latest.content.evidenceGroups[0].references[0].artifactId;
+    expect(conclusionResult).not.toBe(ref.artifactId);
+    expect(Number(versions.latest.content.evidence.find((e: { artifactId: string }) => e.artifactId === conclusionResult).rows[0].count)).toBe(5);
+    expect(versions.latest.content.evidenceGroups[1].references[0].artifactId).toBe(ref.artifactId);
+    expect(versions.old.content.evidenceGroups[0].references[0].artifactId).toBe(ref.artifactId);
+    expect(versions.latest.content.visuals.find((v: { id: string }) => v.id === 'metric').evidenceId).not.toBe(
+        versions.latest.content.visuals.find((v: { id: string }) => v.id === 'table').evidenceId,
+    );
     expect(versions.latest.content.workspaceOrigin.baseRevision).toBe(ref.revision);
     await page.screenshot({ path: testInfo.outputPath('saved-analysis-report.png'), fullPage: true });
+    await page.goto(`/${organization}/reports/${ref.documentId}/workspace/${ref.artifactId}?revision=${ref.revision}&snapshot=${ref.snapshotId}`);
+    await page.getByRole('tab', { name: 'Current run', exact: true }).click();
+    await page.getByRole('button', { name: 'Apply to report', exact: true }).click();
+    const legacyApply = page.getByRole('dialog', { name: 'Apply to report', exact: true });
+    await expect(legacyApply.getByRole('button', { name: 'Apply to report', exact: true })).toBeDisabled();
+    await legacyApply.getByRole('combobox', { name: 'Select a report target' }).click();
+    await expect(page.getByRole('option', { name: 'Customer count', exact: true })).toBeVisible();
     await expectAppHealthy(appErrors);
 });

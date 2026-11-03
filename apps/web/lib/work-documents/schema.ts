@@ -17,6 +17,29 @@ export const analysisScopeSchema = z
         message: 'Database selections must belong to the selected data sources.',
         path: ['databasesByConnection'],
     });
+export const workspaceChartSpecSchema = z.object({
+    version: z.literal(1),
+    chartType: z.enum(['bar', 'line', 'pie', 'scatter', 'histogram', 'heatmap']),
+    xKey: z.string().min(1),
+    yKey: z.string().min(1),
+    groupKey: z.string(),
+    chartColorPreset: z.enum(['blue', 'emerald', 'amber', 'rose', 'violet', 'slate']).optional(),
+    filters: z
+        .array(
+            z.object({
+                col: z.string(),
+                kind: z.enum(['string', 'number', 'range']),
+                op: z.enum(['contains', 'equals', 'startsWith', 'endsWith', 'empty', 'notEmpty', 'regex', 'eq', 'ne', 'gt', 'ge', 'lt', 'le', 'range']),
+                value: z.string().optional(),
+                valueTo: z.string().optional(),
+                rangeValueType: z.enum(['number', 'date']).optional(),
+                caseSensitive: z.boolean().optional(),
+            }),
+        )
+        .max(100)
+        .optional(),
+    search: z.object({ text: z.string().max(1000), columns: z.array(z.string()).optional() }).optional(),
+});
 const chartAxes = { type: z.enum(['bar', 'line', 'area', 'pie']), xKey: z.string().min(1) };
 const workChartSchema = z.union([
     z.object({ ...chartAxes, yKey: z.string().min(1) }).strict(),
@@ -40,6 +63,14 @@ export const workVisualSchema = z
         type: z.enum(['metric', 'chart', 'table']),
         title: z.string().max(300),
         evidenceId: z.string().min(1),
+        chartSpec: workspaceChartSpecSchema.optional(),
+        chartData: z
+            .object({
+                data: z.array(z.record(z.string(), z.unknown())).max(100000),
+                series: z.array(z.object({ key: z.string(), label: z.string() })),
+                bucketHint: z.string().nullable().optional(),
+            })
+            .optional(),
         chart: workChartSchema
             .optional()
             .describe(
@@ -69,9 +100,11 @@ export const workVisualSchema = z
     })
     .strict()
     .superRefine((value, ctx) => {
-        if (value.type !== 'chart' && value.chart) ctx.addIssue({ code: 'custom', message: 'Chart configuration is only allowed for charts.' });
+        if (value.chart && value.chartSpec) ctx.addIssue({ code: 'custom', message: 'Choose one chart configuration format.' });
+        if (value.chartData && !value.chartSpec) ctx.addIssue({ code: 'custom', message: 'Chart projections require a workspace chart configuration.' });
+        if (value.type !== 'chart' && (value.chart || value.chartSpec)) ctx.addIssue({ code: 'custom', message: 'Chart configuration is only allowed for charts.' });
         if (value.type !== 'metric' && value.metric) ctx.addIssue({ code: 'custom', message: 'Metric configuration is only allowed for metrics.' });
-        if (value.type === 'chart' && !value.chart) ctx.addIssue({ code: 'custom', message: 'Chart configuration is required.' });
+        if (value.type === 'chart' && !value.chart && !value.chartSpec) ctx.addIssue({ code: 'custom', message: 'Chart configuration is required.' });
         if (value.chart?.type === 'pie' && 'yKeys' in value.chart && value.chart.yKeys && value.chart.yKeys.length !== 1)
             ctx.addIssue({ code: 'custom', message: 'A pie chart requires exactly one numeric series.' });
         if (value.type === 'metric' && !value.metric) ctx.addIssue({ code: 'custom', message: 'Metric must reference an evidence cell.' });

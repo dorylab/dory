@@ -8,14 +8,16 @@ import { pipeline } from 'node:stream/promises';
 import { getDoryArtifactStore, type ChatAttachmentOwner } from '@dory/artifacts';
 import type { DBService } from '@dory/database';
 import { boundedAttachmentRows, materializeAttachment, queryAttachmentTables, type AttachmentTable } from '@dory/drivers/database/duckdb/attachments';
-import type { FileUIPart } from 'ai';
-import { z } from 'zod';
 import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
 import { buildSqlFallbackName } from '@dory/shared/utils/sql-name';
-import type { createSqlNamer } from './sql-naming';
+import type { FileUIPart } from 'ai';
+import { z } from 'zod';
+
 import { decodeAttachment, isStructuredAttachment, storedAttachmentId } from '@/lib/chat-context/attachments';
-import { resolveChatAttachment } from './chat-attachments';
 import { assertReportAttachmentDataset } from '@/lib/work-documents/workspace-evidence';
+
+import { resolveChatAttachment } from './chat-attachments';
+import type { createSqlNamer } from './sql-naming';
 
 const READER_VERSION = 'duckdb-1.5.2-v1';
 type Dataset = { attachmentId: string; filename: string; sha256: string; directory: string; tables: AttachmentTable[] };
@@ -185,14 +187,22 @@ export async function prepareReportAttachments(db: DBService, owner: ChatAttachm
     );
 }
 
-export async function runReportAttachments(db: DBService, owner: ChatAttachmentOwner, source: ChatAttachmentSource, sql: string, sessionId: string, signal?: AbortSignal) {
+export async function runReportAttachments(
+    db: DBService,
+    owner: ChatAttachmentOwner,
+    source: ChatAttachmentSource,
+    sql: string,
+    sessionId: string,
+    signal?: AbortSignal,
+    resultSource = 'sql-console',
+) {
     const tables = await prepareReportAttachments(db, owner, source, signal);
     const result = await queryAttachmentTables(tables, sql, signal);
     signal?.throwIfAborted();
     const persisted = await db.resultSets.persistQueryResultSet({
         ...owner,
         sessionId,
-        source: 'sql-console',
+        source: resultSource,
         sourceConnectionType: 'duckdb',
         attachmentSource: source,
         sessionSqlText: sql,

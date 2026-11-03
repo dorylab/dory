@@ -8,6 +8,14 @@ export function selectReportEvidence(document: { revision: number; chatId: strin
     const evidence = document.content.evidence.find(item => item.artifactId === reference.artifactId && (!reference.snapshotId || item.snapshotId === reference.snapshotId));
     if (!evidence) throw new DatabaseError('Report snapshot not found in this version.', 404);
     if (!canReadAttachmentSource(evidence.attachmentSource, userId, document.chatId)) throw new DatabaseError('Private attachment result unavailable.', 403);
+    if (reference.componentId && reference.groupId) throw new DatabaseError('Choose one report target.', 400);
+    if (reference.componentId && !document.content.visuals.some(visual => visual.id === reference.componentId && visual.evidenceId === reference.artifactId))
+        throw new DatabaseError('The report component no longer references this result. Select the target again.', 409);
+    if (
+        reference.groupId &&
+        !document.content.evidenceGroups?.some(group => group.id === reference.groupId && group.references.some(item => item.artifactId === reference.artifactId))
+    )
+        throw new DatabaseError('The conclusion no longer references this result. Select the target again.', 409);
     return evidence;
 }
 

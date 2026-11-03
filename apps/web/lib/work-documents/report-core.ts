@@ -6,9 +6,9 @@ import remarkParse from 'remark-parse';
 import remarkStringify from 'remark-stringify';
 import { unified } from 'unified';
 
+import { validateReportEvidenceGroups } from './evidence-groups';
 import { referencedEvidence } from './markdown';
 import { workVisualSchema } from './schema';
-import { validateReportEvidenceGroups } from './evidence-groups';
 
 const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMdx);
 const markdown = unified().use(remarkParse).use(remarkGfm);
@@ -174,7 +174,11 @@ export function reportEmbeds(visuals: WorkVisual[], evidence: WorkDocumentConten
                 visual.type === 'metric'
                     ? { ...base, type: 'metric', config: { title: visual.title, metric: visual.metric!, allowSubset: visual.allowSubset } }
                     : visual.type === 'chart'
-                      ? { ...base, type: 'chart', config: { title: visual.title, chart: visual.chart!, allowSubset: visual.allowSubset } }
+                      ? {
+                            ...base,
+                            type: 'chart',
+                            config: { title: visual.title, chart: visual.chart, chartSpec: visual.chartSpec, chartData: visual.chartData, allowSubset: visual.allowSubset },
+                        }
                       : { ...base, type: 'table', config: { title: visual.title, allowSubset: visual.allowSubset } };
             return [visual.id, embed];
         }),
@@ -201,4 +205,48 @@ export function resolvedReport(content: WorkDocumentContent): WorkDocumentConten
         if (!content.evidence.some(item => item.artifactId === embed.artifactId && item.snapshotId === embed.snapshotId)) throw new Error('Missing report snapshot.');
     }
     return { ...content, markdown: parsed.presentation, visuals };
+}
+
+export type ReportOutlineItem = { id: string; title: string; kind: string; start: number; end: number; sectionEnd: number; depth?: number; visualId?: string };
+/** Offsets are scoped to an expected draft revision, never reused after a text edit. */
+export function reportOutline(body: string, visuals: WorkVisual[]): ReportOutlineItem[] {
+    const root: ReportOutlineItem = { id: 'root', title: 'Report', kind: 'section', start: 0, end: 0, sectionEnd: body.length, depth: 0 };
+    let tree: Root;
+    try {
+        tree = parser.parse(body) as Root;
+    } catch {
+        return [root];
+    }
+    const plain = (node: Nodes): string =>
+        'value' in node
+            ? String(node.value)
+            : 'children' in node
+              ? node.children.map(child => plain(child as Nodes)).join(node.type === 'list' || node.type === 'listItem' ? ' ' : '')
+              : '';
+    const items: ReportOutlineItem[] = tree.children.map(node => {
+        const start = node.position?.start.offset ?? 0;
+        const end = node.position?.end.offset ?? start;
+        const source =
+            node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement'
+                ? node.attributes.find(attr => attr.type === 'mdxJsxAttribute' && attr.name === 'source')
+                : undefined;
+        const visualId = source?.type === 'mdxJsxAttribute' && typeof source.value === 'string' ? source.value : undefined;
+        const visual = visuals.find(item => item.id === visualId);
+        return {
+            id: visual ? `visual:${visual.id}` : `node:${start}`,
+            title: visual?.title ?? plain(node).slice(0, 160),
+            kind: visual?.type ?? (node.type === 'heading' ? 'section' : 'text'),
+            start,
+            end,
+            sectionEnd: body.length,
+            ...(visual ? { visualId: visual.id } : {}),
+            ...(node.type === 'heading' ? { depth: node.depth } : {}),
+        };
+    });
+    for (let index = 0; index < items.length; index++) {
+        const item = items[index];
+        item.sectionEnd =
+            item.kind === 'section' ? (items.slice(index + 1).find(next => next.kind === 'section' && (next.depth ?? 0) <= (item.depth ?? 0))?.start ?? body.length) : item.end;
+    }
+    return [root, ...items];
 }

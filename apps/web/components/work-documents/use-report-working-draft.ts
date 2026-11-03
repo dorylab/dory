@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { useMutation } from '@tanstack/react-query';
 import type { ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
+import { useMutation } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
+
 import { executeActionClient } from '@/lib/actions/client';
 
-export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationId: string) {
+export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationId: string, suspendAutosave = false) {
     const t = useTranslations('WorkDocuments.Analysis');
     const [state, setState] = useState(initial.state);
     const [draft, setDraft] = useState(initial);
@@ -16,7 +17,8 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
     const saved = useRef(JSON.stringify(initial.state));
     const recovered = useRef(false);
     const queue = useRef<Promise<unknown>>(Promise.resolve());
-    const key = `report-working-draft:${organizationId}:${initial.userId}:${initial.documentId}:${initial.baseRevision}`;
+    const key = `report-working-draft:${organizationId}:${initial.userId}:${initial.id ?? `${initial.documentId}:${initial.baseRevision}`}`;
+    const legacyKey = `report-working-draft:${organizationId}:${initial.userId}:${initial.documentId}:${initial.baseRevision}`;
     const change = useCallback((update: ReportWorkingState | ((previous: ReportWorkingState) => ReportWorkingState)) => {
         const next = typeof update === 'function' ? update(stateRef.current) : update;
         stateRef.current = next;
@@ -24,24 +26,28 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
     }, []);
     const accept = useCallback(
         (next: ReportWorkingDraft) => {
-            draftRef.current = next;
-            setDraft(next);
+            const current = stateRef.current;
+            const merged = { ...next, results: { ...draftRef.current.results, ...next.results } };
+            draftRef.current = merged;
+            setDraft(merged);
             saved.current = JSON.stringify(next.state);
-            change(next.state);
+            // Report mutations must not replace edits made in the SQL workspace while the request was in flight.
+            change({ ...next.state, tabs: current.tabs, charts: current.charts, activeTabId: current.activeTabId });
             setError(null);
             try {
                 localStorage.removeItem(key);
+                localStorage.removeItem(legacyKey);
             } catch {
                 /* Server remains authoritative. */
             }
         },
-        [change, key],
+        [change, key, legacyKey],
     );
     useEffect(() => {
         if (recovered.current) return;
         recovered.current = true;
         try {
-            const value = JSON.parse(localStorage.getItem(key) ?? 'null');
+            const value = JSON.parse(localStorage.getItem(key) ?? localStorage.getItem(legacyKey) ?? 'null');
             if (value?.state && value.revision === initial.revision) change(value.state);
             else if (value?.state) {
                 // Keep the stale revision: autosave must conflict, never overwrite newer edits.
@@ -53,7 +59,7 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
         } catch {
             /* Storage may be disabled. */
         }
-    }, [change, initial, key, t]);
+    }, [change, initial, key, legacyKey, t]);
     const mutation = useMutation({
         retry: false,
         mutationFn: (input: unknown) => executeActionClient<ReportWorkingDraft>('report.workspace.saveDraft', input, { organizationId }),
@@ -78,7 +84,9 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
                         evidenceGroups: snapshot.content.evidenceGroups?.map(({ id, references }) => ({ id, references })),
                         reviewedEvidenceGroupIds: snapshot.content.reviewedEvidenceGroupIds,
                         tabs: snapshot.tabs,
+                        charts: snapshot.charts,
                         activeTabId: snapshot.activeTabId,
+                        applyTarget: snapshot.applyTarget,
                         proseReviewed: !snapshot.proseNeedsReview,
                     });
                     draftRef.current = next;
@@ -90,6 +98,7 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
                         change(next.state);
                         try {
                             localStorage.removeItem(key);
+                            localStorage.removeItem(legacyKey);
                         } catch {
                             /* Best effort local recovery. */
                         }
@@ -102,7 +111,26 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
             });
         queue.current = operation;
         return operation;
-    }, [change, key, mutateAsync, t]);
+    }, [change, key, legacyKey, mutateAsync, t]);
+    // Serialize an explicit report operation with autosave, including a timer already in flight.
+    const transact = useCallback(
+        (action: (current: ReportWorkingDraft) => Promise<ReportWorkingDraft>) => {
+            const flushed = flush();
+            const operation = queue.current.then(async () => {
+                await flushed;
+                const next = await action(draftRef.current);
+                accept(next);
+                return next;
+            });
+            queue.current = operation;
+            return operation;
+        },
+        [flush, accept],
+    );
+    const rememberResults = useCallback((results: ReportWorkingDraft['results']) => {
+        draftRef.current = { ...draftRef.current, results: { ...draftRef.current.results, ...results } };
+        setDraft(draftRef.current);
+    }, []);
     const dirty = JSON.stringify(state) !== saved.current;
     useEffect(() => {
         if (!dirty) return;
@@ -111,11 +139,12 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
         } catch {
             /* Leave protection remains active. */
         }
+        if (suspendAutosave) return;
         const timer = setTimeout(() => {
             void flush().catch(() => undefined);
         }, 800);
         return () => clearTimeout(timer);
-    }, [dirty, state, key, flush]);
+    }, [dirty, state, key, flush, suspendAutosave]);
     useEffect(() => {
         const warn = (event: BeforeUnloadEvent) => {
             if (JSON.stringify(stateRef.current) !== saved.current) event.preventDefault();
@@ -123,5 +152,5 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
         window.addEventListener('beforeunload', warn);
         return () => window.removeEventListener('beforeunload', warn);
     }, []);
-    return { state, draft, change, accept, flush, dirty, saving: mutation.isPending, error };
+    return { transact, state, draft, change, accept, rememberResults, flush, dirty, saving: mutation.isPending, error };
 }

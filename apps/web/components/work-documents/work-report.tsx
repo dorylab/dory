@@ -15,12 +15,13 @@ import { workRequest } from '@/lib/work-documents/client';
 import { reportListParsers, serializeReportList } from '@/lib/work-documents/list-state';
 import { renderWorkHtml } from '@/lib/work-documents/render';
 import { editableReport, reportEmbeds } from '@/lib/work-documents/report-core';
+import { buildReportWorkspacePath } from '@/lib/work-documents/workspace-url';
 
 import { AddDefinitionDialog } from './add-definition-dialog';
 import { ReportBody } from './report-body';
 import type { ReportEditorHandle } from './report-editor';
-import { ReportToolbar } from './report-toolbar';
 import type { ReportEvidenceSelection } from './report-evidence-panel';
+import { ReportToolbar } from './report-toolbar';
 
 const ReportEditor = dynamic(() => import('./report-editor'), { ssr: false });
 const ReportEvidencePanel = dynamic(() => import('./report-evidence-panel').then(module => module.ReportEvidencePanel), { ssr: false });
@@ -172,8 +173,15 @@ export function WorkReport({
         setSaveError(false);
         navigate();
     };
-    const openEvidence = (artifactId: string) => setEvidenceSelection({ artifactId });
-    const openEvidenceGroup = (groupId: string) => setEvidenceSelection({ groupId });
+    const evidenceOpener = useRef<HTMLElement | null>(null);
+    const openEvidence = (artifactId: string, componentId?: string) => {
+        evidenceOpener.current = window.document.activeElement as HTMLElement;
+        setEvidenceSelection({ artifactId, componentId });
+    };
+    const openEvidenceGroup = (groupId: string) => {
+        evidenceOpener.current = window.document.activeElement as HTMLElement;
+        setEvidenceSelection({ groupId });
+    };
     const switchVersion = async (revision: number | null) => {
         if (!(await requestLeave())) return;
         setEditing(null);
@@ -320,6 +328,7 @@ export function WorkReport({
                     key={`${document.id}:${document.revision}:${'groupId' in evidenceSelection ? evidenceSelection.groupId : evidenceSelection.artifactId}`}
                     document={document}
                     selection={evidenceSelection}
+                    returnFocusRef={evidenceOpener}
                     organization={organization}
                     onClose={() => setEvidenceSelection(null)}
                     onBeforeNavigate={href => {
@@ -370,6 +379,18 @@ export function WorkReport({
                     </AlertDialogContent>
                 </AlertDialog>
                 <ReportToolbar
+                    onOpenWorkspace={() =>
+                        void leaveReport(() =>
+                            router.push(
+                                buildReportWorkspacePath(organization, {
+                                    documentId: document.id,
+                                    artifactId: '',
+                                    revision: document.revision,
+                                    publicationId: document.publication?.id,
+                                }),
+                            ),
+                        )
+                    }
                     document={document}
                     standalone={presentation === 'standalone'}
                     historical={historical}

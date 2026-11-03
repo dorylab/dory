@@ -10,6 +10,8 @@ const referenceSchema = z.object({
     revision: z.number().int().positive(),
     publicationId: z.string().min(1).optional(),
     snapshotId: z.string().min(1).optional(),
+    componentId: z.string().min(1).optional(),
+    groupId: z.string().min(1).optional(),
 });
 
 export const reportEvidenceActions = [

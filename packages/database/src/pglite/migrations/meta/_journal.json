@@ -295,6 +295,13 @@
             "when": 1793318400000,
             "tag": "0042_report_working_drafts",
             "breakpoints": true
+        },
+        {
+            "idx": 42,
+            "version": "7",
+            "when": 1793577600000,
+            "tag": "0043_report_connected_workspace",
+            "breakpoints": true
         }
     ]
 }

@@ -1,8 +1,5 @@
-import type { NamingMetadata } from '@dory/shared/utils/sql-name';
-import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
-import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, or } from 'drizzle-orm';
-
 import { getClient } from '@dory/database/postgres/client';
+import { getResultSetRetentionDaysFromOrganizationMetadata } from '@dory/database/postgres/impl/organization';
 import {
     artifacts,
     comparisons,
@@ -13,16 +10,19 @@ import {
     resultSetExports,
     resultSets,
     user,
-    works,
     workQuerySessions,
+    works,
     type ArtifactChartState,
     type ArtifactType,
     type NewArtifact,
 } from '@dory/database/postgres/schemas';
-import { getResultSetRetentionDaysFromOrganizationMetadata } from '@dory/database/postgres/impl/organization';
+import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
-import type { PostgresDBClient } from '@dory/shared';
+import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
+import type { NamingMetadata } from '@dory/shared/utils/sql-name';
+import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, or } from 'drizzle-orm';
+
 import { isReportArtifactReferenced, isReportResultSetReferenced, lockResultSet, reportArtifactReference } from '../work-documents/evidence-retention';
 
 export type ArtifactSummary = NamingMetadata & {
@@ -193,6 +193,7 @@ export class PostgresArtifactsRepository {
         const query = input.query?.trim();
         const conditions = [
             eq(artifacts.organizationId, input.organizationId),
+            or(eq(artifacts.visibility, 'catalog'), isNotNull(resultSets.pinnedAt), reportArtifactReference(input.organizationId, artifacts.id))!,
             or(isNull(artifacts.expiresAt), gt(artifacts.expiresAt, new Date()), reportArtifactReference(input.organizationId, artifacts.id))!,
         ];
         conditions.push(or(isNull(resultSets.attachmentSource), input.userId ? eq(artifacts.createdByActorId, input.userId) : isNull(artifacts.id))!);

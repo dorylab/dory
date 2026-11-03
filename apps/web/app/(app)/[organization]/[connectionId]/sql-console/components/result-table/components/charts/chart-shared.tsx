@@ -1,16 +1,16 @@
 'use client';
 
 import React from 'react';
-import { BarChart3, Check, ChevronsUpDown } from 'lucide-react';
-
+import { cn } from '@/registry/new-york-v4/lib/utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/registry/new-york-v4/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { cn } from '@/registry/new-york-v4/lib/utils';
+import type { WorkspaceChartSpec } from '@dory/shared/types/workspace-chart';
+import { BarChart3, Check, ChevronsUpDown } from 'lucide-react';
 
-export type ChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'histogram' | 'heatmap';
-export type ChartColorPreset = 'blue' | 'emerald' | 'amber' | 'rose' | 'violet' | 'slate';
+export type ChartType = WorkspaceChartSpec['chartType'];
+export type ChartColorPreset = NonNullable<WorkspaceChartSpec['chartColorPreset']>;
 export type MetricKind = 'count' | 'count_true' | 'sum' | 'avg' | 'max' | 'min' | 'count_distinct';
 export type ChartRow = { rowData: Record<string, unknown> };
 
@@ -32,73 +32,11 @@ export type AggregatedChartData = {
     bucketHint?: string | null;
 };
 
-export type ChartState = {
-    chartType: ChartType;
-    xKey: string;
-    yKey: string;
-    groupKey: string;
-    chartColorPreset?: ChartColorPreset;
-};
+export type ChartState = Omit<WorkspaceChartSpec, 'version' | 'filters' | 'search'>;
 
 export const NONE_VALUE = '__none__';
 export const ALL_SERIES_KEY = '__value__';
-export const CHART_COLOR_PRESETS: Array<{
-    value: ChartColorPreset;
-    label: string;
-    colors: {
-        light: string[];
-        dark: string[];
-    };
-}> = [
-    {
-        value: 'blue',
-        label: 'Blue',
-        colors: {
-            light: ['#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'],
-            dark: ['#60a5fa', '#3b82f6', '#93c5fd', '#1d4ed8', '#2563eb', '#dbeafe'],
-        },
-    },
-    {
-        value: 'emerald',
-        label: 'Emerald',
-        colors: {
-            light: ['#059669', '#047857', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
-            dark: ['#34d399', '#10b981', '#6ee7b7', '#047857', '#059669', '#d1fae5'],
-        },
-    },
-    {
-        value: 'amber',
-        label: 'Amber',
-        colors: {
-            light: ['#d97706', '#b45309', '#f59e0b', '#fbbf24', '#fcd34d', '#fde68a'],
-            dark: ['#fbbf24', '#f59e0b', '#fcd34d', '#b45309', '#d97706', '#fef3c7'],
-        },
-    },
-    {
-        value: 'rose',
-        label: 'Rose',
-        colors: {
-            light: ['#e11d48', '#be123c', '#f43f5e', '#fb7185', '#fda4af', '#fecdd3'],
-            dark: ['#fb7185', '#f43f5e', '#fda4af', '#be123c', '#e11d48', '#ffe4e6'],
-        },
-    },
-    {
-        value: 'violet',
-        label: 'Violet',
-        colors: {
-            light: ['#7c3aed', '#6d28d9', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe'],
-            dark: ['#a78bfa', '#8b5cf6', '#c4b5fd', '#6d28d9', '#7c3aed', '#ede9fe'],
-        },
-    },
-    {
-        value: 'slate',
-        label: 'Slate',
-        colors: {
-            light: ['#334155', '#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'],
-            dark: ['#94a3b8', '#64748b', '#cbd5e1', '#475569', '#334155', '#e2e8f0'],
-        },
-    },
-];
+export { CHART_COLOR_PRESETS } from '@dory/shared/types/workspace-chart';
 
 export function ChartSelect(props: { label: string; value: string; onValueChange: (value: string) => void; options: Array<{ value: string; label: string }>; disabled?: boolean }) {
     const { label, value, onValueChange, options, disabled = false } = props;

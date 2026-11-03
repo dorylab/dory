@@ -1,27 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { NamingMetadata } from '@dory/shared/utils/sql-name';
-import { FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
-import {
-    DndContext,
-    DragOverlay,
-    closestCenter,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    type CollisionDetection,
-    type DragEndEvent,
-    type DragOverEvent,
-    type DragStartEvent,
-} from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import type { Modifier } from '@dnd-kit/core';
-
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -31,29 +12,49 @@ import {
     DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/registry/new-york-v4/ui/hover-card';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
-import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
+import { currentConnectionAtom } from '@/shared/stores/app.store';
+import {
+    closestCenter,
+    DndContext,
+    DragOverlay,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type CollisionDetection,
+    type DragEndEvent,
+    type DragOverEvent,
+    type DragStartEvent,
+} from '@dnd-kit/core';
+import type { Modifier } from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { AuditItem } from '@dory/shared/types/audit';
+import type { NamingMetadata } from '@dory/shared/utils/sql-name';
+import { cn } from '@dory/web-utils';
+import { useQuery } from '@tanstack/react-query';
+import { useAtom, useAtomValue } from 'jotai';
+import { FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
+import posthog from 'posthog-js';
+
 import { executeActionClient } from '@/lib/actions/client';
 import { authClient } from '@/lib/auth-client';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
-import { cn } from '@dory/web-utils';
-import { useAtom, useAtomValue } from 'jotai';
-import { useLocale, useTranslations } from 'next-intl';
-import { currentConnectionAtom } from '@/shared/stores/app.store';
-import posthog from 'posthog-js';
+import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { AccountRequiredSheet } from '@/components/auth/account-required-sheet';
-import type { AuditItem } from '@dory/shared/types/audit';
-import { QUERY_HISTORY_UPDATED_EVENT, savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
-import { isQueryHistoryResultRestorable } from '../../query-history-result-restore';
+
 import { useRouteConnectionId } from '../../hooks/useRouteConnectionId';
-import { FolderItem, type FolderData } from './folder-item';
+import { isQueryHistoryResultRestorable } from '../../query-history-result-restore';
+import { QUERY_HISTORY_UPDATED_EVENT, savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
+import { FolderItem, type FolderData } from './folder-item';
 import { MoveToFolderDialog } from './move-to-folder-dialog';
 
 export type SavedQueryItem = NamingMetadata & {
@@ -89,6 +90,7 @@ function formatTime(value: string | Date | null | undefined, locale: string) {
 }
 
 type SavedQueriesSidebarProps = {
+    connectionId?: string | null;
     onSelect?: (item: SavedQueryItem) => void;
 };
 
@@ -201,13 +203,13 @@ function saveExpandedFolders(set: Set<string>) {
     }
 }
 
-export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
+export function SavedQueriesSidebar({ onSelect, connectionId: requestedConnectionId }: SavedQueriesSidebarProps) {
     const t = useTranslations('SqlConsole');
     const locale = useLocale();
     const { data: session } = authClient.useSession();
     const currentConnection = useAtomValue(currentConnectionAtom);
     const routeConnectionId = useRouteConnectionId();
-    const connectionId = routeConnectionId ?? currentConnection?.connection?.id ?? null;
+    const connectionId = requestedConnectionId !== undefined ? requestedConnectionId : (routeConnectionId ?? currentConnection?.connection?.id ?? null);
     const sessionUserId = session?.user?.id ?? null;
     const isAnonymous = isAnonymousUser(session?.user);
     const scrollRootRef = useRef<HTMLDivElement | null>(null);
