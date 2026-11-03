@@ -172,8 +172,15 @@ export function WorkReport({
         setSaveError(false);
         navigate();
     };
-    const openEvidence = (artifactId: string) => setEvidenceSelection({ artifactId });
-    const openEvidenceGroup = (groupId: string) => setEvidenceSelection({ groupId });
+    const evidenceOpener = useRef<HTMLElement | null>(null);
+    const openEvidence = (artifactId: string, componentId?: string) => {
+        evidenceOpener.current = window.document.activeElement as HTMLElement;
+        setEvidenceSelection({ artifactId, componentId });
+    };
+    const openEvidenceGroup = (groupId: string) => {
+        evidenceOpener.current = window.document.activeElement as HTMLElement;
+        setEvidenceSelection({ groupId });
+    };
     const switchVersion = async (revision: number | null) => {
         if (!(await requestLeave())) return;
         setEditing(null);
@@ -320,6 +327,7 @@ export function WorkReport({
                     key={`${document.id}:${document.revision}:${'groupId' in evidenceSelection ? evidenceSelection.groupId : evidenceSelection.artifactId}`}
                     document={document}
                     selection={evidenceSelection}
+                    returnFocusRef={evidenceOpener}
                     organization={organization}
                     onClose={() => setEvidenceSelection(null)}
                     onBeforeNavigate={href => {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { ActionContext } from '@dory/actions';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { ReportAnalysisContext, ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
@@ -6,7 +7,7 @@ import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
 import type { WebActionServices } from '../../types';
 import { loadReportEvidence, reportWorkspaceContext } from '@/lib/server/report-workspace-context';
-import { initialWorkingState, materializeWorkingContent, versionContent } from '@/lib/work-documents/working-draft';
+import { applyWorkingResult, initialWorkingState, materializeWorkingContent, versionContent } from '@/lib/work-documents/working-draft';
 import { reportEvidenceGroupsSchema, reviewedEvidenceGroupIdsSchema, workVisualSchema } from '@/lib/work-documents/schema';
 import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-groups';
 import { parseReport } from '@/lib/work-documents/report-core';
@@ -17,7 +18,12 @@ const referenceSchema = z.object({
     artifactId: z.string().min(1),
     publicationId: z.string().optional(),
     snapshotId: z.string().optional(),
+    componentId: z.string().min(1).optional(),
+    groupId: z.string().min(1).optional(),
 });
+const applyTargetSchema = z
+    .object({ artifactId: z.string().min(1), componentId: z.string().min(1).optional(), groupId: z.string().min(1).optional() })
+    .refine(value => Boolean(value.componentId) !== Boolean(value.groupId), 'Select one report target.');
 const targetSchema = z.object({ documentId: z.string().min(1), baseRevision: z.number().int().positive() });
 const editSchema = targetSchema.extend({ expectedDraftRevision: z.number().int().positive() });
 const tabSchema = z.object({
@@ -51,7 +57,9 @@ const context = defineWebAction({
     handler: async (ctx, reference) => {
         const { document } = await loadReportEvidence(ctx, reference);
         const sources = await Promise.all(
-            document.content.evidence.map(evidence => reportWorkspaceContext(ctx, { ...reference, artifactId: evidence.artifactId, snapshotId: evidence.snapshotId })),
+            document.content.evidence.map(evidence =>
+                reportWorkspaceContext(ctx, { ...reference, componentId: undefined, groupId: undefined, artifactId: evidence.artifactId, snapshotId: evidence.snapshotId }),
+            ),
         );
         const draft = await ctx.services.db.workDocuments.initializeWorkingDraft({
             ...owner(ctx),
@@ -80,6 +88,7 @@ const save = defineWebAction({
         tabs: z.array(tabSchema).max(100),
         activeTabId: z.string().nullable(),
         proseReviewed: z.boolean().optional(),
+        applyTarget: applyTargetSchema.optional(),
     }),
     outputSchema: z.custom<ReportWorkingDraft>(),
     handler: async (ctx, input) => {
@@ -123,6 +132,7 @@ const save = defineWebAction({
             title: input.title,
             tabs,
             activeTabId: input.activeTabId,
+            applyTarget: input.applyTarget,
             proseNeedsReview: draft.state.proseNeedsReview && !input.proseReviewed,
             content: { ...draft.state.content, body: input.body, visuals: input.visuals, evidenceGroups, reviewedEvidenceGroupIds: undefined },
         };
@@ -142,17 +152,11 @@ const apply = defineWebAction({
     permissions: writeWorkspace,
     scopes: ['query:write'],
     actors: ['user'],
-    inputSchema: editSchema.extend({ tabId: z.string(), resultId: z.string() }),
+    inputSchema: editSchema.extend({ tabId: z.string(), resultId: z.string(), target: applyTargetSchema }),
     outputSchema: z.custom<ReportWorkingDraft>(),
     handler: async (ctx, input) => {
         const draft = await readDraft(ctx, input);
-        const tab = draft.state.tabs.find(t => t.id === input.tabId);
-        const result = draft.results[input.resultId];
-        if (!tab || !result || result.sourceArtifactId !== tab.sourceArtifactId) throw new DatabaseError('Query result unavailable.', 403);
-        const state = structuredClone(draft.state);
-        state.tabs.find(t => t.id === tab.id)!.appliedId = input.resultId;
-        state.content = materializeWorkingContent(state, draft.results, true);
-        state.proseNeedsReview = true;
+        const state = applyWorkingResult(draft, input.tabId, input.resultId, input.target, `query_${randomUUID()}`);
         return ctx.services.db.workDocuments.saveWorkingDraft({ ...owner(ctx), ...input, state });
     },
 });

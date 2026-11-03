@@ -7,6 +7,8 @@ export type ReportEvidenceReference = {
     revision: number;
     publicationId?: string;
     snapshotId?: string;
+    componentId?: string;
+    groupId?: string;
 };
 export type ReportEvidenceInspection = {
     evidence: WorkEvidence;
@@ -68,6 +70,7 @@ export type ReportWorkingState = {
     tabs: ReportQueryTab[];
     activeTabId: string | null;
     proseNeedsReview: boolean;
+    applyTarget?: ReportApplyTarget;
 };
 export type ReportWorkingDraft = {
     userId: string;
@@ -82,3 +85,5 @@ export type ReportAnalysisContext = {
     draft: ReportWorkingDraft;
     sources: ReportWorkspaceContext[];
 };
+
+export type ReportApplyTarget = { artifactId: string; componentId?: string; groupId?: string };

@@ -115,7 +115,7 @@ function ReportVisual({
 }: {
     visual: WorkVisual;
     evidence: WorkEvidence;
-    onEvidence: (id: string) => void;
+    onEvidence: (id: string, componentId?: string) => void;
     onEditComponent?: (id: string) => void;
     previewOnly?: boolean;
 }) {
@@ -175,7 +175,7 @@ function ReportVisual({
                         : evidenceT('DisplayRange', { shown: evidence.rows.length, total: evidence.rowCount })}
                 </span>
                 {!previewOnly && (
-                    <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId)}>
+                    <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId, visual.id)}>
                         {evidenceT('ViewSource')}
                         <ArrowUpRight className="size-3.5" />
                     </Button>
@@ -194,7 +194,7 @@ export function ReportBody({
 }: {
     content: WorkDocumentContent;
     title: string;
-    onEvidence: (id: string) => void;
+    onEvidence: (id: string, componentId?: string) => void;
     onEvidenceGroup?: (id: string) => void;
     onEditComponent?: (id: string) => void;
     previewOnly?: boolean;

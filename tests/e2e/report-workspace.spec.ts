@@ -10,6 +10,10 @@ for (const kind of ['attachment', 'database'] as const) {
         page.setDefaultTimeout(15_000);
         const connection = createWorkbenchConnection();
         await mockWorkbenchApis(page, { initialConnections: [connection] });
+        let releaseInitialLoad!: () => void;
+        const initialLoad = new Promise<void>(resolve => {
+            releaseInitialLoad = resolve;
+        });
         let executions = 0;
         let sourceReads = 0;
         let writes = 0;
@@ -60,7 +64,10 @@ for (const kind of ['attachment', 'database'] as const) {
             const { actionId, input } = route.request().postDataJSON();
             if (actionId.startsWith('report.workspace.')) {
                 if (actionId !== 'report.workspace.saveDraft') expect(input).toMatchObject(input.artifactId === 'other-source' ? otherContext.reference : reference);
-                if (actionId === 'report.workspace.analysis') return route.fulfill({ json: { ok: true, data: { draft, sources: [context, otherContext] } } });
+                if (actionId === 'report.workspace.analysis') {
+                    await initialLoad;
+                    return route.fulfill({ json: { ok: true, data: { draft, sources: [context, otherContext] } } });
+                }
                 if (actionId === 'report.workspace.saveDraft') {
                     draft = {
                         ...draft,
@@ -150,9 +157,15 @@ for (const kind of ['attachment', 'database'] as const) {
         await page.goto('/');
         const organization = new URL(page.url()).pathname.split('/')[1];
         await page.goto(`/${organization}/reports/${reference.documentId}/workspace/${reference.artifactId}?revision=3&publication=published-1&snapshot=snap-original`);
+        const drawer = page.locator('[data-slot=drawer-content]');
+        await expect(drawer.getByRole('status')).toBeVisible();
+        const loadingDrawer = await drawer.elementHandle();
+        releaseInitialLoad();
         const result = page.getByTestId('report-workspace-result');
         await expect(page.getByRole('tab', { name: 'Report snapshot', exact: true })).toHaveAttribute('data-state', 'active');
         await expect(result.getByRole('button', { name: '2000', exact: true })).toBeVisible();
+        expect(await drawer.evaluate((element, original) => element === original, loadingDrawer)).toBe(true);
+        await loadingDrawer?.dispose();
         await expect(result.getByText('Partial result', { exact: true })).toBeVisible();
         await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(context.evidence.sql);
         expect((await page.getByTestId('sql-editor').boundingBox())!.height).toBeGreaterThan(100);

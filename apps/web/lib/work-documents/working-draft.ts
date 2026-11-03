@@ -1,5 +1,5 @@
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
-import type { ReportQueryTab, ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
+import type { ReportApplyTarget, ReportQueryTab, ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentContent, WorkVisual, WorkEvidence } from '@dory/shared/types/work-document';
 import { editableReport, parseReport, reportEmbeds } from './report-core';
 import { referencedEvidence } from './markdown';
@@ -80,4 +80,44 @@ export function versionContent(draft: ReportWorkingDraft) {
     const referenced = referencedEvidence(content.markdown, content.visuals, content.evidenceGroups);
     const evidence = content.evidence.filter(item => referenced.ids.includes(item.artifactId));
     return { ...content, visuals: referenced.visuals, evidence, embeds: reportEmbeds(referenced.visuals, evidence), agentWrite: undefined };
+}
+
+/** An execution is a candidate until a single, still-current report reference is selected. */
+export function applyWorkingResult(draft: ReportWorkingDraft, tabId: string, resultId: string, target: ReportApplyTarget, newTabId: string): ReportWorkingState {
+    const tab = draft.state.tabs.find(item => item.id === tabId);
+    const result = draft.results[resultId];
+    if (!tab || !result || result.sourceArtifactId !== tab.sourceArtifactId) throw new DatabaseError('Query result unavailable.', 403);
+    if (Boolean(target.componentId) === Boolean(target.groupId)) throw new DatabaseError('Select one report component or evidence reference.', 400);
+    const state = structuredClone(draft.state);
+    if (target.componentId) {
+        const visual = state.content.visuals.find(item => item.id === target.componentId);
+        const owner = state.tabs.find(item => item.componentIds.includes(target.componentId!));
+        if (!visual || visual.evidenceId !== target.artifactId || !owner || owner.sourceArtifactId !== tab.sourceArtifactId)
+            throw new DatabaseError('The report target changed. Select the target again.', 409);
+        validateWorkingVisual(visual, result.evidence);
+        if (owner.id === tabId && owner.componentIds.length === 1) owner.appliedId = resultId;
+        else {
+            if (state.tabs.length >= 100 || state.tabs.some(item => item.id === newTabId))
+                throw new DatabaseError('Too many query tabs. Close unused queries before applying.', 400);
+            owner.componentIds = owner.componentIds.filter(id => id !== visual.id);
+            state.tabs.push({ ...tab, id: newTabId, copiedFromId: tab.id, title: visual.title, componentIds: [visual.id], appliedId: resultId, hidden: false });
+            state.activeTabId = newTabId;
+        }
+    } else {
+        const group = state.content.evidenceGroups?.find(item => item.id === target.groupId);
+        const source = state.content.evidence.find(item => item.artifactId === target.artifactId);
+        const belongs =
+            target.artifactId === tab.sourceArtifactId ||
+            Object.values(draft.results).some(item => item.sourceArtifactId === tab.sourceArtifactId && item.evidence.artifactId === target.artifactId);
+        if (!group || !source || !belongs || !group.references.some(item => item.artifactId === target.artifactId))
+            throw new DatabaseError('The conclusion reference changed. Select the target again.', 409);
+        if (group.references.some(item => item.artifactId !== target.artifactId && item.artifactId === result.evidence.artifactId))
+            throw new DatabaseError('This result is already linked to the conclusion.', 400);
+        group.references = group.references.map(item => (item.artifactId === target.artifactId ? { ...item, artifactId: result.evidence.artifactId } : item));
+        group.needsReview = true;
+        if (!state.content.evidence.some(item => item.artifactId === result.evidence.artifactId)) state.content.evidence.push(result.evidence);
+    }
+    state.content = materializeWorkingContent(state, draft.results, true);
+    state.proseNeedsReview = true;
+    return state;
 }

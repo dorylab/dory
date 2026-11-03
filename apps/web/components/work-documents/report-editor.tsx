@@ -31,7 +31,7 @@ export default function ReportEditor({
     restrictSources?: boolean;
     title: string;
     onChange: (content: WorkDocumentContent) => void;
-    onEvidence: (id: string) => void;
+    onEvidence: (id: string, componentId?: string) => void;
     onEvidenceGroup?: (id: string) => void;
 }) {
     const t = useTranslations('WorkDocuments.Report');

@@ -79,6 +79,7 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
                         reviewedEvidenceGroupIds: snapshot.content.reviewedEvidenceGroupIds,
                         tabs: snapshot.tabs,
                         activeTabId: snapshot.activeTabId,
+                        applyTarget: snapshot.applyTarget,
                         proseReviewed: !snapshot.proseNeedsReview,
                     });
                     draftRef.current = next;

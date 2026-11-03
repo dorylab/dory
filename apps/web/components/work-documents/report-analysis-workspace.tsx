@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { createSerializer, parseAsString, parseAsInteger } from 'nuqs';
@@ -9,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Info, SlidersHorizontal, Save, Bot, MessageSquare, Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type {
+    ReportApplyTarget,
     ReportAnalysisContext,
     ReportEvidenceReference,
     ReportQueryTab,
@@ -29,6 +31,7 @@ import { SqlResults, SqlResultTabs } from '@/components/sql-workspace/sql-result
 import { LocalSqlResult } from '@/components/sql-workspace/local-sql-result';
 import { AgentWorkspaceDrawer } from '@/components/agent-runs/agent-workspace-drawer';
 import { executeActionClient } from '@/lib/actions/client';
+import { reportEvidenceGroupText } from '@/lib/work-documents/evidence-groups';
 import { reportWorkspaceReturnPath } from '@/lib/work-documents/workspace-url';
 import { reportEmbeds, reportTagSource } from '@/lib/work-documents/report-core';
 import { ReportSelect } from './report-select';
@@ -44,6 +47,11 @@ const ComponentDialog = dynamic(() => import('./report-component-dialog'), { ssr
 export function ReportAnalysisWorkspace({ organization, reference, intercepted = false }: { organization: string; reference: ReportEvidenceReference; intercepted?: boolean }) {
     const organizationId = useOrganizationId();
     const t = useTranslations('WorkDocuments.Workspace');
+    const a = useTranslations('WorkDocuments.Analysis');
+    const [headerElement, setHeaderElement] = useState<HTMLDivElement | null>(null);
+    const [backLabel, setBackLabel] = useState<string>();
+    const closeGuard = useRef<(() => boolean | Promise<boolean>) | null>(null);
+    const beforeClose = useCallback(() => closeGuard.current?.() ?? true, []);
     const context = useQuery({
         queryKey: ['report-analysis', organizationId, reference],
         refetchOnMount: 'always',
@@ -52,31 +60,36 @@ export function ReportAnalysisWorkspace({ organization, reference, intercepted =
         retry: false,
         queryFn: ({ signal }) => executeActionClient<ReportAnalysisContext>('report.workspace.analysis', reference, { organizationId, signal }),
     });
-    if (!context.data || context.isFetching || context.error)
-        return (
+    return (
+        <Provider>
             <AgentWorkspaceDrawer
                 preferBack={intercepted}
                 closeHref={reportWorkspaceReturnPath(organization, reference)}
-                title={t('Title')}
-                backLabel={t('Back')}
+                title={a('Title')}
+                backLabel={backLabel ?? t('Back')}
                 closeLabel={t('Close')}
                 description={t('Description')}
+                onBeforeClose={beforeClose}
+                headerActions={<div ref={setHeaderElement} className="contents" />}
             >
-                <p className="p-6" role={context.error ? 'alert' : 'status'}>
-                    {context.error?.message ?? t('Loading')}
-                </p>
+                {context.data && context.isFetchedAfterMount ? (
+                    <Analysis
+                        key={`${reference.documentId}:${reference.revision}:${reference.artifactId}:${reference.componentId ?? reference.groupId ?? ''}`}
+                        initial={context.data}
+                        organization={organization}
+                        organizationId={organizationId}
+                        reference={reference}
+                        intercepted={intercepted}
+                        headerElement={headerElement}
+                        closeGuard={closeGuard}
+                        onTitleChange={setBackLabel}
+                    />
+                ) : (
+                    <p className="p-6" role={context.error ? 'alert' : 'status'}>
+                        {context.error?.message ?? t('Loading')}
+                    </p>
+                )}
             </AgentWorkspaceDrawer>
-        );
-    return (
-        <Provider>
-            <Analysis
-                key={`${reference.documentId}:${reference.revision}`}
-                initial={context.data}
-                organization={organization}
-                organizationId={organizationId}
-                reference={reference}
-                intercepted={intercepted}
-            />
         </Provider>
     );
 }
@@ -87,15 +100,22 @@ function Analysis({
     organizationId,
     reference,
     intercepted,
+    headerElement,
+    closeGuard,
+    onTitleChange,
 }: {
     initial: ReportAnalysisContext;
     organization: string;
     organizationId: string;
     reference: ReportEvidenceReference;
     intercepted: boolean;
+    headerElement: HTMLDivElement | null;
+    closeGuard: RefObject<(() => boolean | Promise<boolean>) | null>;
+    onTitleChange: (title: string) => void;
 }) {
     const t = useTranslations('WorkDocuments.Workspace');
     const a = useTranslations('WorkDocuments.Analysis');
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
     const panelT = useTranslations('AgentRuns.WorkspacePanel.Actions');
     const router = useRouter();
     const client = useQueryClient();
@@ -107,6 +127,7 @@ function Analysis({
     const [resultView, setResultView] = useState<Record<string, string>>({});
     const [runs, setRuns] = useState<Record<string, ReportWorkspaceResult>>({});
     const [error, setError] = useState<string | null>(null);
+    const targetChoice = state.applyTarget ? JSON.stringify(state.applyTarget) : '';
     const [confirmation, setConfirmation] = useState<'apply' | 'save' | null>(null);
     const [component, setComponent] = useState<{ visual: WorkVisual; insert?: boolean; candidate?: boolean } | null>(null);
     const [busy, setBusy] = useState(false);
@@ -132,9 +153,18 @@ function Analysis({
     useEffect(() => {
         if (focusedReference.current === reference.artifactId) return;
         focusedReference.current = reference.artifactId;
-        const selected = initial.draft.state.tabs.find(tab => tab.sourceArtifactId === reference.artifactId);
-        if (selected) change(previous => ({ ...previous, activeTabId: selected.id, tabs: previous.tabs.map(tab => (tab.id === selected.id ? { ...tab, hidden: false } : tab)) }));
-    }, [reference.artifactId, initial.draft.state.tabs, change]);
+        const selected = initial.draft.state.tabs.find(
+            tab => tab.sourceArtifactId === reference.artifactId && (!reference.componentId || tab.componentIds.includes(reference.componentId)),
+        );
+        change(previous => ({
+            ...previous,
+            applyTarget:
+                reference.componentId || reference.groupId
+                    ? { artifactId: reference.artifactId, ...(reference.componentId ? { componentId: reference.componentId } : { groupId: reference.groupId }) }
+                    : undefined,
+            ...(selected ? { activeTabId: selected.id, tabs: previous.tabs.map(tab => (tab.id === selected.id ? { ...tab, hidden: false } : tab)) } : {}),
+        }));
+    }, [reference.artifactId, reference.componentId, reference.groupId, initial.draft.state.tabs, change]);
     useEffect(() => () => abort.current?.abort(), []);
     const uiTabs = useMemo<UITabPayload[]>(
         () =>
@@ -149,6 +179,26 @@ function Analysis({
         [state.tabs, initial.sources, draft.userId],
     );
     const uiActive = uiTabs.find(tab => tab.tabId === active?.id);
+    const sourceArtifacts = new Set([
+        active?.sourceArtifactId,
+        ...Object.values(draft.results)
+            .filter(item => item.sourceArtifactId === active?.sourceArtifactId)
+            .map(item => item.evidence.artifactId),
+    ]);
+    const applyChoices: Array<{ target: ReportApplyTarget; label: string }> = [
+        ...state.content.visuals
+            .filter(visual => sourceArtifacts.has(visual.evidenceId))
+            .map(visual => ({ target: { artifactId: visual.evidenceId, componentId: visual.id }, label: visual.title })),
+        ...(state.content.evidenceGroups ?? []).flatMap(group =>
+            group.references
+                .filter(item => sourceArtifacts.has(item.artifactId))
+                .map(item => ({
+                    target: { artifactId: item.artifactId, groupId: group.id },
+                    label: reportEvidenceGroupText(state.content.body ?? state.content.markdown, group.id),
+                })),
+        ),
+    ];
+    const applyTarget = applyChoices.find(choice => JSON.stringify(choice.target) === targetChoice)?.target;
     const snapshot = initial.sources.find(source => source.reference.artifactId === active?.snapshotArtifactId)?.evidence;
     const view = resultView[active?.id ?? ''] ?? 'snapshot';
     const candidate = active?.candidateId ? draft.results[active.candidateId]?.evidence : undefined;
@@ -242,16 +292,24 @@ function Analysis({
     };
     const apply = () =>
         operation(async () => {
+            if (!applyTarget) throw new Error(evidenceT('SelectTarget'));
             if (!active || !currentResultId) return;
             const saved = await flush();
             const next = await executeActionClient<ReportWorkingDraft>(
                 'report.workspace.apply',
-                { documentId: draft.documentId, baseRevision: draft.baseRevision, expectedDraftRevision: saved.revision, tabId: active.id, resultId: currentResultId },
+                {
+                    documentId: draft.documentId,
+                    baseRevision: draft.baseRevision,
+                    expectedDraftRevision: saved.revision,
+                    tabId: active.id,
+                    target: applyTarget,
+                    resultId: currentResultId,
+                },
                 { organizationId },
             );
             accept(next);
             setConfirmation(null);
-            setResultView(previous => ({ ...previous, [active.id]: 'applied' }));
+            if (applyTarget.componentId) setResultView(previous => ({ ...previous, [next.state.activeTabId ?? active.id]: 'applied' }));
         });
     const saveVersion = () =>
         operation(async () => {
@@ -290,6 +348,15 @@ function Analysis({
             return false;
         }
     };
+    useLayoutEffect(() => {
+        closeGuard.current = beforeClose;
+        return () => {
+            closeGuard.current = null;
+        };
+    });
+    useLayoutEffect(() => {
+        onTitleChange(state.title);
+    }, [onTitleChange, state.title]);
     const returnToReport = async () => {
         if (!(await beforeClose())) return;
         if (intercepted && window.history.length > 1) router.back();
@@ -342,25 +409,21 @@ function Analysis({
             }
         });
     const pending = Object.entries(draft.results)
-        .filter(([id]) => !state.tabs.some(tab => tab.appliedId === id))
+        .filter(
+            ([id, result]) =>
+                !state.tabs.some(tab => tab.appliedId === id) &&
+                !state.content.evidenceGroups?.some(group => group.references.some(item => item.artifactId === result.evidence.artifactId)),
+        )
         .map(([id, result]) => ({ id, title: result.evidence.sql ?? result.evidence.title }));
     return (
-        <AgentWorkspaceDrawer
-            preferBack={intercepted}
-            closeHref={reportWorkspaceReturnPath(organization, reference)}
-            title={a('Title')}
-            description={t('Description')}
-            backLabel={state.title}
-            closeLabel={t('Close')}
-            onBeforeClose={beforeClose}
-            headerActions={
-                <>
+        <>
+            {headerElement &&
+                createPortal(
                     <Button size="sm" disabled={busy || state.proseNeedsReview} onClick={requestSaveVersion}>
                         {a('SaveVersion')}
-                    </Button>
-                </>
-            }
-        >
+                    </Button>,
+                    headerElement,
+                )}
             <div className="relative flex h-full min-h-0 flex-col bg-background" data-testid="report-workspace">
                 {busy && <div className="absolute inset-0 z-50 cursor-wait bg-background/40" aria-label={t('Loading')} />}
                 {(error || working.error) && (
@@ -520,10 +583,36 @@ function Analysis({
                                     {state.proseNeedsReview && (
                                         <div className="grid gap-2">
                                             <span>{a('ReviewNeeded')}</span>
+                                            {state.content.evidenceGroups
+                                                ?.filter(group => group.needsReview)
+                                                .map(group => (
+                                                    <div key={group.id} className="space-y-2 rounded border p-2">
+                                                        <p>{reportEvidenceGroupText(state.content.body ?? state.content.markdown, group.id)}</p>
+                                                        {group.references.map(item => (
+                                                            <p key={item.artifactId}>
+                                                                {state.content.evidence.find(evidence => evidence.artifactId === item.artifactId)?.title} · {item.explanation}
+                                                            </p>
+                                                        ))}
+                                                    </div>
+                                                ))}
                                             <Button variant="outline" size="sm" onClick={() => void returnToReport()}>
                                                 {t('Back')}
                                             </Button>
-                                            <Button variant="link" size="sm" onClick={() => change(previous => ({ ...previous, proseNeedsReview: false }))}>
+                                            <Button
+                                                variant="link"
+                                                size="sm"
+                                                onClick={() =>
+                                                    change(previous => ({
+                                                        ...previous,
+                                                        proseNeedsReview: false,
+                                                        content: {
+                                                            ...previous.content,
+                                                            reviewedEvidenceGroupIds: previous.content.evidenceGroups?.filter(group => group.needsReview).map(group => group.id),
+                                                            evidenceGroups: previous.content.evidenceGroups?.map(group => ({ ...group, needsReview: false })),
+                                                        },
+                                                    }))
+                                                }
+                                            >
                                                 {a('Reviewed')}
                                             </Button>
                                         </div>
@@ -659,31 +748,58 @@ function Analysis({
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>{confirmation === 'apply' ? a('Apply') : a('SaveVersion')}</DialogTitle>
-                        <DialogDescription>{confirmation === 'apply' ? a('ApplyDescription') : a('SaveDescription')}</DialogDescription>
+                        <DialogDescription>{confirmation === 'apply' ? evidenceT('ApplyOne') : a('SaveDescription')}</DialogDescription>
                     </DialogHeader>
-                    <ul className="max-h-64 space-y-1 overflow-auto break-words text-sm">
-                        {confirmation === 'apply'
-                            ? linked.map(visual => (
-                                  <li key={visual.id}>
-                                      <Button variant="link" onClick={() => setComponent({ visual, candidate: true })}>
-                                          {visual.title}
-                                      </Button>
-                                  </li>
-                              ))
-                            : pending.map(tab => <li key={tab.id}>{a('NotApplied', { name: tab.title })}</li>)}
-                    </ul>
-                    {confirmation === 'apply' && !linked.length && <p>{a('ApplyExploration')}</p>}
-                    {confirmation === 'apply' && linked.length > 1 && <p className="text-sm text-muted-foreground">{a('Independent')}</p>}
+                    {confirmation === 'apply' ? (
+                        <div className="space-y-3">
+                            <ReportSelect
+                                aria-label={evidenceT('SelectTarget')}
+                                value={applyTarget ? targetChoice : ''}
+                                onValueChange={value =>
+                                    change(previous => ({ ...previous, applyTarget: applyChoices.find(choice => JSON.stringify(choice.target) === value)?.target }))
+                                }
+                            >
+                                <SelectItem value="__none">{evidenceT('SelectTarget')}</SelectItem>
+                                {applyChoices.map(choice => (
+                                    <SelectItem key={JSON.stringify(choice.target)} value={JSON.stringify(choice.target)}>
+                                        {choice.label}
+                                    </SelectItem>
+                                ))}
+                            </ReportSelect>
+                            {targetChoice && !applyTarget && (
+                                <p role="alert" className="text-sm text-destructive">
+                                    {evidenceT('TargetChanged')}
+                                </p>
+                            )}
+                            {applyTarget?.componentId && (
+                                <Button
+                                    variant="link"
+                                    onClick={() => {
+                                        const visual = state.content.visuals.find(item => item.id === applyTarget.componentId);
+                                        if (visual) setComponent({ visual, candidate: true });
+                                    }}
+                                >
+                                    {evidenceT('ConfigureTarget')}
+                                </Button>
+                            )}
+                        </div>
+                    ) : (
+                        <ul className="max-h-64 space-y-1 overflow-auto break-words text-sm">
+                            {pending.map(tab => (
+                                <li key={tab.id}>{a('NotApplied', { name: tab.title })}</li>
+                            ))}
+                        </ul>
+                    )}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setConfirmation(null)}>
                             {t('Cancel')}
                         </Button>
-                        <Button disabled={busy} onClick={() => void (confirmation === 'apply' ? apply() : saveVersion())}>
+                        <Button disabled={busy || (confirmation === 'apply' && !applyTarget)} onClick={() => void (confirmation === 'apply' ? apply() : saveVersion())}>
                             {confirmation === 'apply' ? a('Apply') : a('SaveVersion')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </AgentWorkspaceDrawer>
+        </>
     );
 }
