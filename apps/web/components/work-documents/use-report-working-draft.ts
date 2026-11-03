@@ -112,6 +112,21 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
         queue.current = operation;
         return operation;
     }, [change, key, legacyKey, mutateAsync, t]);
+    // Serialize an explicit report operation with autosave, including a timer already in flight.
+    const transact = useCallback(
+        (action: (current: ReportWorkingDraft) => Promise<ReportWorkingDraft>) => {
+            const flushed = flush();
+            const operation = queue.current.then(async () => {
+                await flushed;
+                const next = await action(draftRef.current);
+                accept(next);
+                return next;
+            });
+            queue.current = operation;
+            return operation;
+        },
+        [flush, accept],
+    );
     const rememberResults = useCallback((results: ReportWorkingDraft['results']) => {
         draftRef.current = { ...draftRef.current, results: { ...draftRef.current.results, ...results } };
         setDraft(draftRef.current);
@@ -137,5 +152,5 @@ export function useReportWorkingDraft(initial: ReportWorkingDraft, organizationI
         window.addEventListener('beforeunload', warn);
         return () => window.removeEventListener('beforeunload', warn);
     }, []);
-    return { state, draft, change, accept, rememberResults, flush, dirty, saving: mutation.isPending, error };
+    return { transact, state, draft, change, accept, rememberResults, flush, dirty, saving: mutation.isPending, error };
 }

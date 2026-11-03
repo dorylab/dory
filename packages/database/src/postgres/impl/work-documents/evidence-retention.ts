@@ -28,6 +28,7 @@ export function reportArtifactReference(organizationId: string, artifactId: SQLW
                 where retention_draft.document_id = retention_document.id and (
                     retention_draft.state->'content'->'evidence' @> ${reference}
                     or retention_draft.state->'baseline'->'content'->'evidence' @> ${reference}
+                    or retention_draft.state->'canvas'->'undo'->'content'->'evidence' @> ${reference}
                     or (retention_draft.state->>'bindingVersion' is distinct from '2' and exists (select 1 from jsonb_each(retention_draft.results) retention_result
                         where retention_result.value->'evidence'->>'artifactId' = ${artifactId}::text))
                 ))

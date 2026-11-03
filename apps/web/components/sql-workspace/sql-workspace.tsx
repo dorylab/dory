@@ -24,6 +24,8 @@ export function SqlWorkspace({
     rightPanel,
     onRightPanelClose,
     rightPanelLabel,
+    rightPanelFloating = false,
+    rightPanelExpanded = false,
     rail,
     overlay,
     defaultLayout,
@@ -38,6 +40,8 @@ export function SqlWorkspace({
     rightPanel?: ReactNode;
     onRightPanelClose?: () => void;
     rightPanelLabel?: string;
+    rightPanelFloating?: boolean;
+    rightPanelExpanded?: boolean;
     rail?: ReactNode;
     overlay?: ReactNode;
     defaultLayout?: Layout;
@@ -45,7 +49,7 @@ export function SqlWorkspace({
 }) {
     const t = useTranslations('SqlConsole');
     const narrow = useIsMobile(1024);
-    const overlayPanel = Boolean(reportContext && narrow);
+    const overlayPanel = Boolean(reportContext && (narrow || rightPanelExpanded));
     return (
         <ReportContextValue value={reportContext}>
             <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden" data-testid="sql-workspace" data-workspace-mode={mode}>
@@ -90,9 +94,9 @@ export function SqlWorkspace({
                             <Separator className="w-1.5 bg-border transition-colors" />
                             <Panel
                                 id="workspace-details"
-                                defaultSize={reportContext ? '340px' : '25%'}
-                                minSize={reportContext ? '300px' : '20%'}
-                                maxSize="50%"
+                                defaultSize={reportContext ? '460px' : '25%'}
+                                minSize={reportContext ? '360px' : '20%'}
+                                maxSize={reportContext ? '60%' : '50%'}
                                 className="min-h-0 border-l bg-card"
                             >
                                 {rightPanel}
@@ -100,14 +104,14 @@ export function SqlWorkspace({
                         </>
                     )}
                 </Group>
-                {overlayPanel && (
+                {overlayPanel && !rightPanelFloating && (
                     <Sheet
                         open={Boolean(rightPanel)}
                         onOpenChange={open => {
                             if (!open) onRightPanelClose?.();
                         }}
                     >
-                        <SheetContent side="right" className="w-[340px] max-w-[90vw] gap-0 p-0 [&>button]:hidden">
+                        <SheetContent side="right" className="w-[460px] max-w-[90vw] sm:max-w-[90vw] gap-0 p-0 [&>button]:hidden">
                             <SheetHeader className="sr-only">
                                 <SheetTitle>{rightPanelLabel}</SheetTitle>
                                 <SheetDescription>{rightPanelLabel}</SheetDescription>
@@ -115,6 +119,9 @@ export function SqlWorkspace({
                             {rightPanel}
                         </SheetContent>
                     </Sheet>
+                )}
+                {overlayPanel && rightPanelFloating && rightPanel && (
+                    <div className={`absolute inset-y-0 right-10 z-30 max-w-[90%] border-l bg-card shadow-xl ${rightPanelExpanded ? 'w-[850px]' : 'w-[460px]'}`}>{rightPanel}</div>
                 )}
                 {overlay}
                 {rail && (

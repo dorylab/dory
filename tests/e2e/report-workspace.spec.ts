@@ -1,9 +1,22 @@
 import type { ReportAnalysisContext, ReportWorkingDraft, ReportWorkspaceContext } from '@dory/shared/types/report-workspace';
-import { expect } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
+import { sameChartSpec } from '../../apps/web/lib/work-documents/workspace-presentation';
+import { workspaceChartSpecSchema } from '../../apps/web/lib/work-documents/schema';
 
 import { changeReportDraft, initialWorkingState, reportDraftChanges } from '../../apps/web/lib/work-documents/working-draft';
 import { expectAppHealthy, test } from './fixtures';
 import { createWorkbenchConnection, mockWorkbenchApis } from './helpers/workbench';
+
+async function dragTo(page: Page, handle: Locator, target: Locator) {
+    const start = (await handle.boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(start.x + start.width / 2 + 12, start.y + start.height / 2, { steps: 4 });
+    await target.scrollIntoViewIfNeeded();
+    const end = (await target.boundingBox())!;
+    await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 15 });
+    await page.mouse.up();
+}
 
 for (const kind of ['database', 'attachment'] as const) {
     test(`Report-connected workspace: ${kind} snapshot, cross-source tabs, results, draft operations and save`, async ({ page, appErrors }, testInfo) => {
@@ -90,6 +103,10 @@ for (const kind of ['database', 'attachment'] as const) {
                 case 'resultSet.chart.read':
                     return ok({ data: [{ xLabel: 'error', __value__: 200 }], series: [{ key: '__value__', label: 'Count' }] });
                 case 'report.workspace.saveDraft': {
+                    for (const visual of input.visuals) {
+                        const previous = draft.state.content.visuals.find(item => item.id === visual.id);
+                        expect(sameChartSpec(visual.chartSpec ? workspaceChartSpecSchema.parse(visual.chartSpec) : undefined, previous?.chartSpec)).toBe(true);
+                    }
                     expect(input.expectedDraftRevision).toBe(draft.revision);
                     draft = {
                         ...draft,
@@ -148,96 +165,92 @@ for (const kind of ['database', 'attachment'] as const) {
         await page.goto('/');
         const organization = new URL(page.url()).pathname.split('/')[1];
         await page.goto(`/${organization}/reports/${reference.documentId}/workspace/${reference.artifactId}?revision=3&componentId=logs`);
+        const canvas = page.getByTestId('report-canvas');
         await expect(page.getByRole('tab', { name: 'Report snapshot', exact: true })).toBeVisible();
+        await expect(canvas.getByText('This report summarizes log traffic.', { exact: true })).toBeVisible();
+        await expect(page.getByRole('tab', { name: 'Report structure', exact: true })).toHaveCount(0);
         await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(source.evidence.sql);
-        expect(executions).toBe(0);
-        await expect(page.getByTestId('report-context-panel').getByRole('button', { name: 'This report summarizes log traffic.', exact: true })).toBeHidden();
-        await expect(page.getByTestId('report-context-panel').getByRole('button', { name: 'Errors require investigation.', exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'Run', exact: true }).click();
-        await expect(page.getByRole('tab', { name: 'Result 2', exact: true })).toBeVisible();
-        expect(reportDraftChanges(draft.state)).toEqual([]);
         await page.getByRole('tab', { name: 'Result 2', exact: true }).click();
-        await page.getByRole('button', { name: 'Update Logs Level Distribution', exact: true }).click();
-        await expect(page.getByRole('combobox', { name: 'Update location', exact: true })).toContainText('Logs Level Distribution');
-        await page.getByRole('button', { name: 'Also update other content…', exact: true }).click();
-        await expect(page.getByRole('checkbox', { name: /Shared source copy/ })).not.toBeChecked();
-        // The pending operation remains bound to Result 2 even after changing the selected result.
+        expect(reportDraftChanges(draft.state)).toEqual([]);
+        await page.getByRole('button', { name: 'Drag result or chart to report', exact: true }).focus();
+        await page.keyboard.press('Space');
+        await expect(canvas.getByRole('button', { name: 'Cancel placement', exact: true })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(canvas.getByRole('button', { name: 'Cancel placement', exact: true })).toBeHidden();
+        expect(reportDraftChanges(draft.state)).toEqual([]);
+        await page.getByRole('button', { name: 'Place in report', exact: true }).click();
+        // The placement owns Result 2, independent of the newly selected result.
         await page.getByRole('tab', { name: 'Result 1', exact: true }).click();
-        await expect(page.getByTestId('report-add-form')).toContainText('Result 2');
-        await page.screenshot({ path: testInfo.outputPath(`report-update-${kind}.png`), fullPage: true });
-        await page.getByRole('button', { name: 'Update this table', exact: true }).click();
+        await page.locator('[data-canvas-block="logs"]').getByRole('button', { name: 'Update this table', exact: true }).click();
+        const confirmation = page.getByRole('dialog').last();
+        await expect(confirmation).toContainText('Result 2');
+        expect(draft.state.content.visuals[0].evidenceId).toBe(reference.artifactId);
+        await confirmation.getByRole('button', { name: 'Update this table', exact: true }).click();
         await expect.poll(() => draft.state.content.visuals[0].evidenceId).toBe('artifact_run-1-1');
         expect(draft.state.content.visuals[1].evidenceId).toBe(reference.artifactId);
-        await page.getByRole('tab', { name: /Pending changes/ }).click();
-        await page.getByRole('button', { name: 'Undo', exact: true }).last().click();
+        await canvas.getByRole('button', { name: 'Undo', exact: true }).click();
         await expect.poll(() => draft.state.content.visuals[0].evidenceId).toBe(reference.artifactId);
         await expect(page.getByRole('button', { name: '0 changes', exact: true })).toBeVisible();
-        await page.getByRole('tab', { name: 'Result 2', exact: true }).click();
-        await page.getByRole('button', { name: 'Update Logs Level Distribution', exact: true }).click();
-        await page.getByRole('button', { name: 'Update this table', exact: true }).click();
-        await expect.poll(() => draft.state.content.visuals[0].evidenceId).toBe('artifact_run-1-1');
 
         await page.getByRole('button', { name: 'Duplicate query', exact: true }).click();
         await page.getByRole('combobox', { name: 'Data source', exact: true }).click();
         await page.getByRole('option', { name: 'Other database', exact: true }).click();
         await page.getByRole('button', { name: 'Run', exact: true }).click();
         await expect.poll(() => executions).toBe(2);
-        await expect(page.getByRole('tab', { name: 'Result 2', exact: true })).toBeVisible();
-        expect(executedConnections[1]).toBe('other-connection');
         await page.getByRole('tab', { name: 'Charts', exact: true }).click();
         await expect(page.getByRole('button', { name: 'Save chart', exact: true })).toBeEnabled();
         await page.getByRole('textbox', { name: 'Chart title', exact: true }).fill('Error Trend');
-        await page.getByRole('button', { name: 'Save chart', exact: true }).click();
-        await expect.poll(() => draft.state.charts?.length).toBe(1);
-        await expect(page.getByRole('button', { name: 'Update Logs Level Distribution', exact: true })).toHaveCount(0);
-        await page.getByRole('button', { name: 'Add chart to report', exact: true }).click();
-        await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Error Trend');
-        await page.getByRole('button', { name: 'Add chart', exact: true }).click();
+        // No Save chart step is required. Dragging freezes the current valid spec.
+        await dragTo(page, page.getByRole('button', { name: 'Drag result or chart to report', exact: true }), page.locator('[data-drop-gap="before:copy"]'));
         await expect.poll(() => draft.state.content.visuals.length).toBe(3);
-        const insertedId = draft.state.content.visuals.at(-1)!.id;
-        await page.getByRole('button', { name: 'Content actions', exact: true }).click();
+        const added = draft.state.content.visuals.find(item => item.title === 'Error Trend')!;
+        expect(draft.state.content.body!.indexOf(`source="${added.id}"`)).toBeLessThan(draft.state.content.body!.indexOf('source="copy"'));
+        const block = page.locator(`[data-canvas-block="${added.id}"]`);
+        await expect(block.locator('.recharts-wrapper')).toBeVisible();
+        await block.hover();
+        await block.getByRole('button', { name: 'Content actions', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Edit title', exact: true }).click();
+        await block.getByRole('textbox', { name: 'Title', exact: true }).fill('Error Trend revised');
+        await block.getByRole('button', { name: 'Save title', exact: true }).click();
+        await expect.poll(() => draft.state.content.visuals.find(item => item.id === added.id)?.title).toBe('Error Trend revised');
+        await block.hover();
+        await dragTo(page, block.getByRole('button', { name: 'Move Error Trend revised', exact: true }), page.locator('[data-drop-gap="end"]'));
+        await expect.poll(() => draft.state.content.body!.indexOf(`source="${added.id}"`) > draft.state.content.body!.indexOf('source="copy"')).toBe(true);
+        await block.hover();
+        await block.getByRole('button', { name: 'Content actions', exact: true }).click();
         await page.getByRole('menuitem', { name: 'Remove from draft', exact: true }).click();
         await expect.poll(() => draft.state.content.visuals.length).toBe(2);
-        // Removing an unsaved insertion creates no net change, but its immediate undo restores it.
-        expect(reportDraftChanges(draft.state).some(item => item.id === insertedId)).toBe(false);
-        await page.getByRole('button', { name: 'Undo', exact: true }).first().click();
-        await expect.poll(() => draft.state.content.visuals.some(item => item.id === insertedId)).toBe(true);
-        await page.getByRole('button', { name: 'Preview report', exact: true }).click();
-        await expect(page.getByRole('dialog').last()).toContainText('Error Trend');
-        await page.getByRole('dialog').last().getByRole('button', { name: 'Close', exact: true }).click();
+        expect(reportDraftChanges(draft.state)).toEqual([]);
+        await canvas.getByRole('button', { name: 'Undo', exact: true }).click();
+        await expect(block).toBeVisible();
+        await page.getByRole('button', { name: 'Save chart', exact: true }).click();
+        await expect.poll(() => draft.state.charts?.length).toBe(1);
+        expect(draft.state.content.visuals.find(item => item.id === added.id)?.chartSpec).toEqual(added.chartSpec);
         await page.getByRole('button', { name: 'Review & Save New Version', exact: true }).click();
         await page.getByRole('checkbox', { name: /I have checked/ }).check();
         await page.getByRole('button', { name: 'Save new version', exact: true }).click();
         await expect.poll(() => saves).toBe(1);
-        await expect(page).toHaveURL(/\/workspace\//);
-        await expect(page.getByRole('button', { name: '0 changes', exact: true })).toBeVisible();
         await page.reload();
         await expect(page.getByRole('button', { name: '0 changes', exact: true })).toBeVisible();
+        await expect(block).toBeVisible();
         expect(draft.state.tabs.length).toBe(2);
         expect(draft.state.charts?.length).toBe(1);
-        expect(executions).toBe(2);
-        await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(source.evidence.sql);
-        await expect(page.getByTestId('report-workspace-result').getByRole('button', { name: '200', exact: true })).toBeVisible();
-        await page.screenshot({ path: testInfo.outputPath(`report-panel-${kind}.png`), fullPage: true });
+        expect(executedConnections[1]).toBe('other-connection');
+        await expect(canvas.locator('.report-prose > p').first()).toHaveCSS('margin-top', '0px');
+        await page.screenshot({ path: testInfo.outputPath(`report-canvas-${kind}.png`), fullPage: true });
         if (kind === 'database') {
             await page.evaluate(() => localStorage.setItem('theme', 'dark'));
             await page.reload();
             await expect(page.locator('html')).toHaveClass(/dark/);
-            await expect(page.getByTestId('report-context-panel')).toBeVisible();
-            await expect.poll(() => page.evaluate(() => Boolean(window.__DORY_E2E_MONACO__))).toBe(true);
-            await page.screenshot({ path: testInfo.outputPath('report-panel-dark.png'), fullPage: true });
+            await expect(canvas).toBeVisible();
+            await page.screenshot({ path: testInfo.outputPath('report-canvas-dark.png'), fullPage: true });
             await page.setViewportSize({ width: 900, height: 800 });
-            await expect(page.getByRole('dialog').last().getByRole('heading', { name: 'Report', exact: true }).last()).toBeVisible();
-            await expect.poll(async () => (await page.getByTestId('report-context-panel').boundingBox())?.x ?? 999).toBeLessThan(565);
-            await page.screenshot({ path: testInfo.outputPath('report-panel-narrow.png'), fullPage: true, animations: 'disabled' });
+            await expect.poll(async () => (await canvas.boundingBox())?.x ?? 999).toBeLessThan(450);
+            await page.screenshot({ path: testInfo.outputPath('report-canvas-narrow.png'), fullPage: true, animations: 'disabled' });
             await page.getByRole('button', { name: 'Collapse report panel', exact: true }).click();
-            await expect(page.getByTestId('report-context-panel')).toBeHidden();
-            await page.setViewportSize({ width: 1280, height: 720 });
-            await page.getByTestId('sql-console-action-rail').getByRole('button', { name: 'Report', exact: true }).click();
+            await expect(canvas).toBeHidden();
         }
-        await page.getByTestId('sql-console-action-rail').getByRole('button', { name: 'Report', exact: true }).click();
-        await expect(page.getByRole('region', { name: 'Report', exact: true })).toBeHidden();
-        await page.screenshot({ path: testInfo.outputPath(`report-connected-${kind}.png`), fullPage: true });
         await expectAppHealthy(appErrors);
     });
 }
@@ -255,6 +268,7 @@ test('an empty report opens a workspace without an Artifact and can insert its f
         results: {},
         state: initialWorkingState('Empty report', { markdown: '', visuals: [], evidence: [], knowledge: [] }),
     };
+    let failNextApply = true;
     const evidence = {
         artifactId: 'artifact_first',
         title: 'First result',
@@ -296,6 +310,10 @@ test('an empty report opens a workspace without an Artifact and can insert its f
                 return ok({ rows: evidence.rows, rowCount: 1, dataAvailability: 'full' });
             case 'report.workspace.apply':
                 expect(input.operation.anchorId).toBe('root');
+                if (failNextApply) {
+                    failNextApply = false;
+                    return route.fulfill({ status: 409, json: { ok: false, message: 'Temporary storage failure. Retry.' } });
+                }
                 draft = { ...draft, revision: draft.revision + 1, state: changeReportDraft(draft, input.operation) };
                 return ok(draft);
             default:
@@ -310,11 +328,15 @@ test('an empty report opens a workspace without an Artifact and can insert its f
     await page.evaluate(() => window.__DORY_E2E_MONACO__!.setValue('SELECT 42 AS value'));
     await page.getByRole('button', { name: 'Run', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Result 1', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Add table to report', exact: true }).click();
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('button', { name: 'Place in report', exact: true }).click();
+    await page.getByRole('button', { name: 'Cancel placement', exact: true }).click();
     expect(draft.state.content.visuals.length).toBe(0);
-    await page.getByRole('button', { name: 'Add table to report', exact: true }).click();
-    await page.getByRole('button', { name: 'Add table', exact: true }).click();
+    await page.getByRole('button', { name: 'Place in report', exact: true }).click();
+    await page.getByRole('button', { name: 'Insert here', exact: true }).click();
+    await expect(page.getByTestId('report-canvas').getByRole('alert')).toContainText('Temporary storage failure');
+    expect(draft.state.content.visuals.length).toBe(0);
+    await expect(page.getByRole('button', { name: 'Insert here', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Insert here', exact: true }).click();
     await expect.poll(() => draft.state.content.visuals.length).toBe(1);
     expect(draft.state.content.visuals[0].evidenceId).toBe(evidence.artifactId);
     await page.reload();

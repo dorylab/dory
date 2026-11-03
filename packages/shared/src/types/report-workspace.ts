@@ -69,7 +69,15 @@ export type ReportQueryTab = {
     appliedId?: string;
     componentIds: string[];
 };
+export type ReportCanvasBlock = { id: string; source: string; kind: string; title: string; visualId?: string };
+export type ReportCanvasState = {
+    blocks: ReportCanvasBlock[];
+    baselineBlocks: ReportCanvasBlock[];
+    baselineRevision: number;
+    undo?: { content: import('./work-document').WorkDocumentContent; blocks: ReportCanvasBlock[]; proseNeedsReview: boolean };
+};
 export type ReportWorkingState = {
+    canvas?: ReportCanvasState;
     title: string;
     bindingVersion?: 2;
     baseline?: { revision: number; title: string; content: import('./work-document').WorkDocumentContent };

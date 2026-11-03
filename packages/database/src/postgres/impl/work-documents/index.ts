@@ -258,7 +258,7 @@ export class PostgresWorkDocumentsRepository {
                 .from(workDocumentVersions)
                 .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.baseRevision)));
             if (!base) throw new DatabaseError('Version not found.', 404);
-            await retainReportEvidence(tx, input.organizationId, input.state.content.evidence, input.documentId);
+            await retainReportEvidence(tx, input.organizationId, [...input.state.content.evidence, ...(input.state.canvas?.undo?.content.evidence ?? [])], input.documentId);
             await tx
                 .insert(reportWorkingDrafts)
                 .values({
@@ -278,7 +278,7 @@ export class PostgresWorkDocumentsRepository {
         return this.db.transaction(async tx => {
             const [document] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
             if (!document || document.archivedAt) throw new DatabaseError('Report unavailable.', 404);
-            await retainReportEvidence(tx, input.organizationId, input.state.content.evidence, input.documentId);
+            await retainReportEvidence(tx, input.organizationId, [...input.state.content.evidence, ...(input.state.canvas?.undo?.content.evidence ?? [])], input.documentId);
             const [row] = await tx
                 .update(reportWorkingDrafts)
                 .set({ state: input.state, revision: sql`${reportWorkingDrafts.revision} + 1`, updatedAt: new Date() })
@@ -393,7 +393,15 @@ export class PostgresWorkDocumentsRepository {
                 .set({
                     expectedReportRevision: row.revision,
                     revision: draft.revision + 1,
-                    state: { ...draft.state, content, proseNeedsReview: false, baseline: { revision: row.revision, title: draft.state.title, content } },
+                    state: {
+                        ...draft.state,
+                        content,
+                        proseNeedsReview: false,
+                        baseline: { revision: row.revision, title: draft.state.title, content },
+                        canvas: draft.state.canvas
+                            ? { ...draft.state.canvas, baselineBlocks: draft.state.canvas.blocks, baselineRevision: row.revision, undo: undefined }
+                            : undefined,
+                    },
                 })
                 .where(this.draftOwned(input));
             return publication.id;

@@ -16,15 +16,13 @@ import type {
 } from '@dory/shared/types/report-workspace';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 import type { WorkDocumentView, WorkEvidence } from '@dory/shared/types/work-document';
-import type { WorkspaceChartSpec } from '@dory/shared/types/workspace-chart';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Provider } from 'jotai';
 import { ArrowLeft, Copy, Eye, PanelRight, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { executeActionClient } from '@/lib/actions/client';
-import { reportOutline } from '@/lib/work-documents/report-core';
-import { flattenReportStructure, reportStructure, workspaceErrorMessage } from '@/lib/work-documents/workspace-presentation';
+import { workspaceErrorMessage } from '@/lib/work-documents/workspace-presentation';
 import { reportDraftChanges, type ReportDraftOperation } from '@/lib/work-documents/working-draft';
 import { reportWorkspaceReturnPath } from '@/lib/work-documents/workspace-url';
 import { AgentWorkspaceDrawer } from '@/components/agent-runs/agent-workspace-drawer';
@@ -40,7 +38,9 @@ import { useOrganizationId } from '@/app/(app)/[organization]/components/organiz
 import { ReportBody } from './report-body';
 import { ReportSelect } from './report-select';
 import { ReportSourceSidebar } from './report-source-sidebar';
-import { ReportWorkspacePanel, type PendingReportOperation } from './report-workspace-panel';
+import { ReportCanvas, ReportReplacementDialog, type CanvasReplacement } from './report-canvas';
+import { ReportCanvasDnd, type ReportCanvasSource, type ReportDragItem, type ReportDropTarget } from './report-canvas-dnd';
+import { withReportCanvas } from '@/lib/work-documents/report-canvas';
 import { useReportWorkingDraft } from './use-report-working-draft';
 
 type Connection = { connection: { id: string; name: string; type: ConnectionType } };
@@ -111,12 +111,15 @@ function Analysis({
     const controllers = useRef<Record<string, AbortController>>({});
     const [running, setRunning] = useState<string[]>([]);
     const [panel, setPanel] = useState(true);
-    const [panelView, setPanelView] = useState('outline');
+    const [showChanges, setShowChanges] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+    const [canvasSource, setCanvasSource] = useState<ReportCanvasSource>();
+    const [dragItem, setDragItem] = useState<ReportDragItem>();
+    const operationLock = useRef(false);
     const [selectedBlock, setSelectedBlock] = useState(reference.componentId ?? '');
-    const [pending, setPending] = useState<PendingReportOperation>();
+    const [pending, setPending] = useState<CanvasReplacement>();
     const [preview, setPreview] = useState(false);
-    const [explicitTarget, setExplicitTarget] = useState<{ tabId: string; blockId: string }>();
-    const [feedback, setFeedback] = useState<{ blockId: string; message: string; restore?: ReportDraftOperation }>();
+    const [feedback, setFeedback] = useState<string>();
     const [review, setReview] = useState(false);
     const [reviewed, setReviewed] = useState(false);
     const [error, setError] = useState<string>();
@@ -317,12 +320,6 @@ function Analysis({
         setRunning(previous => [...previous, active.id]);
         execution.mutate({ tab: { ...active, source }, sql, controller });
     };
-    const structure = useMemo(() => flattenReportStructure(reportStructure(state.content)), [state.content]);
-    const originTab =
-        state.tabs.find(tab => tab.snapshotArtifactId === reference.artifactId) ??
-        state.tabs.find(tab => tab.id === Object.values(draft.results).find(result => result.evidence.artifactId === reference.artifactId)?.tabId);
-    const recommendedBlock = explicitTarget && explicitTarget.tabId === active?.id ? explicitTarget.blockId : originTab?.id === active?.id ? reference.componentId : undefined;
-    const recommendedVisual = state.content.visuals.find(item => item.id === recommendedBlock && ['table', 'chart'].includes(item.type));
     const safeError = error ?? (working.error ? workspaceErrorMessage(working.error, t('OperationFailed')) : undefined);
     const changes = useMemo(() => reportDraftChanges(state), [state]);
     const perform = async (action: () => Promise<void>) => {
@@ -336,79 +333,81 @@ function Analysis({
             setBusy(false);
         }
     };
-    const applyOperation = (operation: ReportDraftOperation) =>
-        perform(async () => {
-            let restore: ReportDraftOperation | undefined;
-            if (operation.type === 'remove' && !state.baseline?.content.visuals.some(item => item.id === operation.blockId)) {
-                const visual = state.content.visuals.find(item => item.id === operation.blockId);
-                const items = reportOutline(state.content.body ?? '', state.content.visuals);
-                const index = items.findIndex(item => item.visualId === operation.blockId);
-                const previous = items[Math.max(0, index - 1)];
-                const resultId = Object.entries(draft.results).find(([, result]) => result.evidence.artifactId === visual?.evidenceId)?.[0];
-                if (visual)
-                    restore = {
-                        type: 'insert',
-                        resultId: resultId ?? `snapshot:${visual.evidenceId}`,
-                        visual: { id: visual.id, title: visual.title, type: visual.type, chartSpec: visual.chartSpec },
-                        anchorId: previous.id,
-                        position: 'after',
-                    };
-            }
+    const applyOperation = async (operation: ReportDraftOperation) => {
+        if (operationLock.current) return;
+        operationLock.current = true;
+        await perform(async () => {
             editor.current?.flushSave();
-            const saved = await flush();
-            const next = await executeActionClient<ReportWorkingDraft>(
-                'report.workspace.apply',
-                { documentId: draft.documentId, baseRevision: draft.baseRevision, expectedDraftRevision: saved.revision, operation },
-                { organizationId },
+            const next = await working.transact(saved =>
+                executeActionClient<ReportWorkingDraft>(
+                    'report.workspace.apply',
+                    { documentId: draft.documentId, baseRevision: draft.baseRevision, expectedDraftRevision: saved.revision, operation },
+                    { organizationId },
+                ),
             );
-            accept(next);
-            setPending(current => (current === pending ? undefined : current));
+            setPending(undefined);
+            setCanvasSource(undefined);
             setReviewed(false);
-            const id = operation.type === 'insert' ? operation.visual.id : operation.type === 'replace' ? operation.blockIds[0] : operation.blockId;
+            const id = operation.type === 'insert' ? operation.visual.id : operation.type === 'replace' ? operation.blockIds[0] : 'blockId' in operation ? operation.blockId : '';
             setSelectedBlock(id);
-            setPanelView(operation.type === 'remove' || (operation.type === 'replace' && operation.blockIds.length > 1) ? 'changes' : 'outline');
             setFeedback(
-                operation.type === 'revert' || (operation.type === 'replace' && operation.blockIds.length > 1)
-                    ? undefined
-                    : { blockId: id, restore, message: t(operation.type === 'insert' ? 'AddedToDraft' : operation.type === 'replace' ? 'UpdatedDraft' : 'RemovedDraft') },
+                t(
+                    operation.type === 'undo' || operation.type === 'revert'
+                        ? 'Undone'
+                        : operation.type === 'insert'
+                          ? 'AddedToDraft'
+                          : operation.type === 'remove'
+                            ? 'RemovedDraft'
+                            : 'UpdatedDraft',
+                ),
             );
+            if (!withReportCanvas(next.state).canvas.blocks.length) setSelectedBlock('');
         });
-    const startAdd = (type: 'insert' | 'replace', chartSpec?: WorkspaceChartSpec, chartTitle?: string, targetId = recommendedBlock) => {
-        if (!selected || !resultSetId || pending) return;
-        const target = state.content.visuals.find(visual => visual.id === targetId && (chartSpec ? visual.type === 'chart' : ['chart', 'table'].includes(visual.type)));
-        const node = structure.find(item => item.visualId === (target?.id ?? selectedBlock));
-        const sectionId = node?.parentId || 'root';
-        setError(undefined);
-        setPending({
-            type,
-            resultId: selectedResultId === 'snapshot' ? `snapshot:${selected.artifactId}` : resultSetId,
-            evidence: structuredClone(selected),
-            tabTitle: active?.title ?? selected.title,
-            resultLabel: resultChoices.find(item => item.id === selectedResultId)?.label ?? t('Result'),
-            chartSpec: chartSpec ? structuredClone(chartSpec) : undefined,
-            title: chartTitle || selected.title,
-            targets: target ? [target.id] : [],
-            sectionId,
-            anchorId: sectionId,
-            position: 'end',
-            fieldMappings: {},
-        });
-        setPanel(true);
-        setPanelView('outline');
+        operationLock.current = false;
     };
-    const submit = () => {
-        if (!pending) return;
-        void applyOperation(
-            pending.type === 'replace'
-                ? { type: 'replace', resultId: pending.resultId, blockIds: pending.targets, chartSpec: pending.chartSpec, fieldMappings: pending.fieldMappings }
-                : {
-                      type: 'insert',
-                      resultId: pending.resultId,
-                      visual: { id: `block_${crypto.randomUUID()}`, type: pending.chartSpec ? 'chart' : 'table', title: pending.title, chartSpec: pending.chartSpec },
-                      anchorId: pending.anchorId,
-                      position: pending.position,
-                  },
-        );
+    const choosePlacement = (value: ReportCanvasSource) => {
+        if (busy || pending) return;
+        setCanvasSource(structuredClone(value));
+        setPanel(true);
+        setExpanded(false);
+        setError(undefined);
+    };
+    const place = (target: ReportDropTarget, value = canvasSource) => {
+        if (!value || busy || pending) return;
+        if (target.kind === 'gap') {
+            void applyOperation({
+                type: 'insert',
+                resultId: value.resultId,
+                visual: { id: `block_${crypto.randomUUID()}`, title: value.title, type: value.chartSpec ? 'chart' : 'table', chartSpec: value.chartSpec },
+                anchorId: target.anchorId,
+                position: target.position,
+            });
+        } else {
+            const visual = state.content.visuals.find(item => item.id === target.blockId);
+            const evidence =
+                draft.results[value.resultId]?.evidence ??
+                [...state.content.evidence, ...(state.baseline?.content.evidence ?? []), ...initial.sources.map(item => item.evidence)].find(
+                    item => item.artifactId === value.artifactId,
+                );
+            if (!visual || !evidence || (value.chartSpec ? visual.type !== 'chart' : !['chart', 'table'].includes(visual.type))) return;
+            setPending({ source: structuredClone(value), evidence, target: structuredClone(visual), fields: {} });
+        }
+    };
+    const dragStart = (item: ReportDragItem) => {
+        setDragItem(item);
+        setPanel(true);
+        setExpanded(false);
+        if (item.kind === 'result') choosePlacement(item.source);
+    };
+    const dragEnd = (item: ReportDragItem, target?: ReportDropTarget) => {
+        setDragItem(undefined);
+        if (!target) {
+            setCanvasSource(undefined);
+            return;
+        }
+        if (item.kind === 'result') place(target, item.source);
+        else if (target.kind === 'gap' && target.position !== 'end')
+            void applyOperation({ type: 'move', blockId: item.blockId, anchorId: target.anchorId, position: target.position });
     };
     const save = () =>
         perform(async () => {
@@ -479,355 +478,416 @@ function Analysis({
               }
             : undefined;
     return (
-        <div className="flex h-full min-h-0 flex-col bg-background" data-testid="report-workspace">
-            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={w('Back')}
-                    title={w('Back')}
-                    onClick={() =>
-                        void perform(async () => {
-                            editor.current?.flushSave();
-                            await flush();
-                            router.push(
-                                reportWorkspaceReturnPath(organization, { ...reference, revision: state.baseline?.revision ?? reference.revision, publicationId: undefined }),
-                            );
-                        })
-                    }
-                >
-                    <ArrowLeft className="size-4" />
-                </Button>
-                <span className="max-w-[28vw] truncate font-medium" title={state.title}>
-                    {state.title}
-                </span>
-                <span className="text-xs text-muted-foreground">{t('WorkspaceTitle')}</span>
-                <span className="text-xs text-muted-foreground">{t('Baseline', { revision: state.baseline?.revision ?? draft.baseRevision })}</span>
-                <span role="status" className="text-xs text-muted-foreground">
-                    {working.saving || working.dirty ? t('Saving') : t('Saved')}
-                </span>
-                <div className="flex-1" />
-                <Button size="sm" variant="ghost" onClick={() => setPreview(true)}>
-                    <Eye className="size-4" />
-                    {t('Preview')}
-                </Button>
-                {!changes.length && <span className="text-xs text-muted-foreground">{t('ReportUnchanged')}</span>}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                        setPanel(true);
-                        setPanelView('changes');
+        <ReportCanvasDnd
+            onStart={dragStart}
+            onEnd={dragEnd}
+            onCancel={() => {
+                setDragItem(undefined);
+                setCanvasSource(undefined);
+            }}
+        >
+            <div className="flex h-full min-h-0 flex-col bg-background" data-testid="report-workspace">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={w('Back')}
+                        title={w('Back')}
+                        onClick={() =>
+                            void perform(async () => {
+                                editor.current?.flushSave();
+                                await flush();
+                                router.push(
+                                    reportWorkspaceReturnPath(organization, { ...reference, revision: state.baseline?.revision ?? reference.revision, publicationId: undefined }),
+                                );
+                            })
+                        }
+                    >
+                        <ArrowLeft className="size-4" />
+                    </Button>
+                    <span className="max-w-[28vw] truncate font-medium" title={state.title}>
+                        {state.title}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{t('WorkspaceTitle')}</span>
+                    <span className="text-xs text-muted-foreground">{t('Baseline', { revision: state.baseline?.revision ?? draft.baseRevision })}</span>
+                    <span role="status" className="text-xs text-muted-foreground">
+                        {working.saving || working.dirty ? t('Saving') : t('Saved')}
+                    </span>
+                    <div className="flex-1" />
+                    <Button size="sm" variant="ghost" onClick={() => setPreview(true)}>
+                        <Eye className="size-4" />
+                        {t('Preview')}
+                    </Button>
+                    {!changes.length && <span className="text-xs text-muted-foreground">{t('ReportUnchanged')}</span>}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            setPanel(true);
+                            setShowChanges(true);
+                        }}
+                    >
+                        {t('ChangeCount', { count: changes.length })}
+                    </Button>
+                    <Button
+                        size="sm"
+                        disabled={busy || !changes.length || Boolean(pending)}
+                        onClick={() => {
+                            setReview(true);
+                            setReviewed(false);
+                        }}
+                    >
+                        {t('ReviewSave')}
+                    </Button>
+                </div>
+                {safeError && !panel && (
+                    <p role="alert" className="border-b p-2 text-destructive">
+                        {safeError}
+                    </p>
+                )}
+                <SqlWorkspace
+                    mode="report"
+                    reportContext={{
+                        reportId: draft.documentId,
+                        draftId: draft.id ?? `${draft.documentId}:${draft.baseRevision}`,
+                        baseRevision: state.baseline?.revision ?? draft.baseRevision,
+                        originBlockId: reference.componentId,
+                        originArtifactId: reference.artifactId,
                     }}
-                >
-                    {t('ChangeCount', { count: changes.length })}
-                </Button>
-                <Button
-                    size="sm"
-                    disabled={busy || !changes.length || Boolean(pending)}
-                    onClick={() => {
-                        setReview(true);
-                        setReviewed(false);
-                    }}
-                >
-                    {t('ReviewSave')}
-                </Button>
-            </div>
-            {safeError && !panel && (
-                <p role="alert" className="border-b p-2 text-destructive">
-                    {safeError}
-                </p>
-            )}
-            <SqlWorkspace
-                mode="report"
-                reportContext={{
-                    reportId: draft.documentId,
-                    draftId: draft.id ?? `${draft.documentId}:${draft.baseRevision}`,
-                    baseRevision: state.baseline?.revision ?? draft.baseRevision,
-                    originBlockId: reference.componentId,
-                    originArtifactId: reference.artifactId,
-                }}
-                sidebar={{
-                    tables: (
-                        <div className="flex h-full min-h-0 flex-col">
-                            <div className="space-y-2 border-b p-2">
-                                <ReportSelect
-                                    aria-label={t('DataSource')}
-                                    value={
-                                        source?.kind === 'database'
-                                            ? source.connectionId
-                                            : source?.kind === 'attachment'
-                                              ? `attachment:${active?.sourceArtifactId}`
-                                              : '__attachment'
-                                    }
-                                    onValueChange={id => {
-                                        const attachment = initial.sources.find(item => `attachment:${item.reference.artifactId}` === id && item.source.kind === 'attachment');
-                                        if (active && attachment) updateTab(active.id, { source: attachment.source, sourceArtifactId: attachment.reference.artifactId });
-                                        const connection = connections.data?.connections.find(item => item.connection.id === id)?.connection;
-                                        if (active && connection)
-                                            updateTab(active.id, { source: { kind: 'database', connectionId: id, database: null, dialect: connection.type } });
-                                    }}
-                                >
-                                    <SelectItem value="__attachment">{source?.kind === 'attachment' ? t('Attachment') : t('DataSource')}</SelectItem>
-                                    {initial.sources
-                                        .filter(item => item.source.kind === 'attachment')
-                                        .map(item => (
-                                            <SelectItem key={item.reference.artifactId} value={`attachment:${item.reference.artifactId}`}>
-                                                {item.evidence.title}
-                                            </SelectItem>
-                                        ))}
-                                    {connections.data?.connections.map(item => (
-                                        <SelectItem key={item.connection.id} value={item.connection.id}>
-                                            {item.connection.name}
-                                        </SelectItem>
-                                    ))}
-                                </ReportSelect>
-                                {source?.kind === 'database' && (
+                    sidebar={{
+                        tables: (
+                            <div className="flex h-full min-h-0 flex-col">
+                                <div className="space-y-2 border-b p-2">
                                     <ReportSelect
-                                        aria-label={t('Database')}
-                                        value={source.database ?? '__default'}
-                                        onValueChange={database =>
-                                            active && updateTab(active.id, { source: { ...source, database: database === '__default' ? null : database, schema: null } })
+                                        aria-label={t('DataSource')}
+                                        value={
+                                            source?.kind === 'database'
+                                                ? source.connectionId
+                                                : source?.kind === 'attachment'
+                                                  ? `attachment:${active?.sourceArtifactId}`
+                                                  : '__attachment'
                                         }
+                                        onValueChange={id => {
+                                            const attachment = initial.sources.find(item => `attachment:${item.reference.artifactId}` === id && item.source.kind === 'attachment');
+                                            if (active && attachment) updateTab(active.id, { source: attachment.source, sourceArtifactId: attachment.reference.artifactId });
+                                            const connection = connections.data?.connections.find(item => item.connection.id === id)?.connection;
+                                            if (active && connection)
+                                                updateTab(active.id, { source: { kind: 'database', connectionId: id, database: null, dialect: connection.type } });
+                                        }}
                                     >
-                                        <SelectItem value="__default">{t('DefaultDatabase')}</SelectItem>
-                                        {databases.data?.databases.map(item => {
-                                            const name = typeof item === 'string' ? item : (item.value ?? item.name ?? '');
-                                            return (
-                                                <SelectItem key={name} value={name}>
-                                                    {name}
+                                        <SelectItem value="__attachment">{source?.kind === 'attachment' ? t('Attachment') : t('DataSource')}</SelectItem>
+                                        {initial.sources
+                                            .filter(item => item.source.kind === 'attachment')
+                                            .map(item => (
+                                                <SelectItem key={item.reference.artifactId} value={`attachment:${item.reference.artifactId}`}>
+                                                    {item.evidence.title}
                                                 </SelectItem>
-                                            );
-                                        })}
-                                    </ReportSelect>
-                                )}
-                                {source?.kind === 'database' && Boolean(schemas.data?.length) && (
-                                    <ReportSelect
-                                        aria-label={t('Schema')}
-                                        value={source.schema ?? '__default'}
-                                        onValueChange={schema => active && updateTab(active.id, { source: { ...source, schema: schema === '__default' ? null : schema } })}
-                                    >
-                                        <SelectItem value="__default">{t('DefaultSchema')}</SelectItem>
-                                        {schemas.data?.map(schema => (
-                                            <SelectItem key={schema.value} value={schema.value}>
-                                                {schema.label}
+                                            ))}
+                                        {connections.data?.connections.map(item => (
+                                            <SelectItem key={item.connection.id} value={item.connection.id}>
+                                                {item.connection.name}
                                             </SelectItem>
                                         ))}
                                     </ReportSelect>
+                                    {source?.kind === 'database' && (
+                                        <ReportSelect
+                                            aria-label={t('Database')}
+                                            value={source.database ?? '__default'}
+                                            onValueChange={database =>
+                                                active && updateTab(active.id, { source: { ...source, database: database === '__default' ? null : database, schema: null } })
+                                            }
+                                        >
+                                            <SelectItem value="__default">{t('DefaultDatabase')}</SelectItem>
+                                            {databases.data?.databases.map(item => {
+                                                const name = typeof item === 'string' ? item : (item.value ?? item.name ?? '');
+                                                return (
+                                                    <SelectItem key={name} value={name}>
+                                                        {name}
+                                                    </SelectItem>
+                                                );
+                                            })}
+                                        </ReportSelect>
+                                    )}
+                                    {source?.kind === 'database' && Boolean(schemas.data?.length) && (
+                                        <ReportSelect
+                                            aria-label={t('Schema')}
+                                            value={source.schema ?? '__default'}
+                                            onValueChange={schema => active && updateTab(active.id, { source: { ...source, schema: schema === '__default' ? null : schema } })}
+                                        >
+                                            <SelectItem value="__default">{t('DefaultSchema')}</SelectItem>
+                                            {schemas.data?.map(schema => (
+                                                <SelectItem key={schema.value} value={schema.value}>
+                                                    {schema.label}
+                                                </SelectItem>
+                                            ))}
+                                        </ReportSelect>
+                                    )}
+                                </div>
+                                {connections.error && (
+                                    <p role="alert" className="p-2 text-sm text-destructive">
+                                        {connections.error.message}
+                                    </p>
+                                )}
+                                {sourceContext && (
+                                    <ReportSourceSidebar
+                                        context={sourceContext}
+                                        info={sourceInfo.data}
+                                        loading={sourceInfo.isFetching}
+                                        error={sourceInfo.error?.message ?? databases.error?.message ?? schemas.error?.message}
+                                        onRefresh={() => void sourceInfo.refetch()}
+                                        organizationId={organizationId}
+                                    />
                                 )}
                             </div>
-                            {connections.error && (
-                                <p role="alert" className="p-2 text-sm text-destructive">
-                                    {connections.error.message}
-                                </p>
-                            )}
-                            {sourceContext && (
-                                <ReportSourceSidebar
-                                    context={sourceContext}
-                                    info={sourceInfo.data}
-                                    loading={sourceInfo.isFetching}
-                                    error={sourceInfo.error?.message ?? databases.error?.message ?? schemas.error?.message}
-                                    onRefresh={() => void sourceInfo.refetch()}
-                                    organizationId={organizationId}
-                                />
-                            )}
-                        </div>
-                    ),
-                    queries: (
-                        <div className="flex h-full min-h-0 flex-col">
-                            <details className="border-b p-2">
-                                <summary className="cursor-pointer text-sm">{t('SessionQueries')}</summary>
-                                {state.tabs.map(tab => (
-                                    <Button key={tab.id} variant="ghost" className="w-full justify-start" onClick={() => selectTab(tab.id)}>
-                                        {tab.title}
-                                    </Button>
-                                ))}
-                            </details>
-                            {source?.kind === 'database' && (
-                                <SavedQueriesSidebar key={source.connectionId} connectionId={source.connectionId} onSelect={item => void openSavedQuery(item)} />
-                            )}
-                        </div>
-                    ),
-                }}
-                tabs={{
-                    tabs: uiTabs,
-                    activeTabId: active?.id ?? null,
-                    setActiveTabId: selectTab,
-                    addTab: () => addTab(),
-                    closeTab: id => updateTab(id, { hidden: true }),
-                    closeOtherTabs: id => change(previous => ({ ...previous, tabs: previous.tabs.map(tab => ({ ...tab, hidden: tab.id !== id })) })),
-                    updateTab: (id, patch) => updateTab(id, { title: patch.tabName ?? t('NewQuery') }),
-                    reorderTabs: (id, targetId) =>
-                        change(previous => {
-                            const tabs = [...previous.tabs];
-                            const from = tabs.findIndex(tab => tab.id === id);
-                            const to = tabs.findIndex(tab => tab.id === targetId);
-                            if (from >= 0 && to >= 0) tabs.splice(to, 0, tabs.splice(from, 1)[0]);
-                            return { ...previous, tabs };
-                        }),
-                }}
-                rail={
-                    <SqlWorkspacePanelToggle active={panel} label={t('Report')} onClick={() => setPanel(!panel)}>
-                        <PanelRight />
-                    </SqlWorkspacePanelToggle>
-                }
-                onRightPanelClose={() => setPanel(false)}
-                rightPanelLabel={t('Report')}
-                rightPanel={
-                    panel ? (
-                        <ReportWorkspacePanel
-                            state={state}
-                            pending={pending}
-                            onPendingChange={value => {
-                                setPending(value);
-                                setError(undefined);
-                            }}
-                            selectedId={selectedBlock}
-                            originId={reference.componentId}
-                            onSelect={id => {
-                                setSelectedBlock(id);
-                                if (active) setExplicitTarget({ tabId: active.id, blockId: id });
-                            }}
-                            view={panelView}
-                            onViewChange={setPanelView}
-                            onClose={() => setPanel(false)}
-                            onSubmit={submit}
-                            onUpdate={id => startAdd('replace', undefined, undefined, id)}
-                            onRemove={blockId => void applyOperation({ type: 'remove', blockId })}
-                            onRevert={blockId => void applyOperation(feedback?.blockId === blockId && feedback.restore ? feedback.restore : { type: 'revert', blockId })}
-                            hasResult={Boolean(selected && resultSetId)}
-                            busy={busy}
-                            error={safeError}
-                            feedback={feedback}
-                        />
-                    ) : undefined
-                }
-            >
-                {active ? (
-                    <SqlQueryPane
-                        toolbar={
-                            <SqlQueryToolbar
-                                runLabel={w('Run')}
-                                running={running.includes(active.id)}
-                                disabled={busy || !sourceInfo.data?.available}
-                                onRun={run}
-                                onCancel={() => controllers.current[active.id]?.abort()}
-                                cancelLabel={w('Cancel')}
-                                actions={
-                                    <Button size="sm" variant="ghost" onClick={() => addTab(true)}>
-                                        <Copy />
-                                        {t('DuplicateQuery')}
-                                    </Button>
-                                }
-                            />
-                        }
-                        editor={{
-                            ref: editor,
-                            tabs: uiTabs,
-                            activeTab: uiTabs.find(tab => tab.tabId === active.id),
-                            workspaceActive: true,
-                            updateTab: (id, patch) => {
-                                if ('content' in patch) updateTab(id, { sql: patch.content });
-                            },
-                            onRunQuery: run,
-                            onNewTab: () => addTab(),
-                            sourceContext:
-                                source && source.kind !== 'unavailable'
-                                    ? { connectionId: source.kind === 'database' ? source.connectionId : undefined, dialect: source.dialect }
-                                    : undefined,
-                        }}
-                        results={
-                            <SqlResults
-                                testId="report-workspace-result"
-                                tabs={<SqlResultTabs items={resultChoices} value={selectedResultId ?? ''} onChange={id => updateTab(active.id, { selectedResultId: id })} />}
-                                notice={
-                                    runErrors[active.id] ? (
-                                        <p role="alert" className="p-2 text-destructive">
-                                            {workspaceErrorMessage(runErrors[active.id], t('ResultUnavailable'))}
-                                        </p>
-                                    ) : undefined
-                                }
-                                meta={{ runningRemote: running.includes(active.id), runningLocal: false, rowsReturned: selected?.rowCount ?? 0 }}
-                            >
-                                {selected ? (
-                                    <WorkspaceResult
-                                        key={`${active.id}:${selectedResultId}`}
-                                        resultSetId={resultSetId}
-                                        evidence={selected}
-                                        charts={state.charts?.filter(chart => chart.resultSetId === resultSetId) ?? []}
-                                        onSaveChart={chart =>
-                                            change(previous => ({ ...previous, charts: [...(previous.charts ?? []).filter(item => item.id !== chart.id), chart] }))
-                                        }
-                                        recommendedTarget={recommendedVisual}
-                                        adoptedVisuals={state.content.visuals}
-                                        baselineVisuals={state.baseline?.content.visuals ?? []}
-                                        isSnapshot={selectedResultId === 'snapshot'}
-                                        resultLabel={resultChoices.find(item => item.id === selectedResultId)?.label ?? t('Result')}
-                                        onLocate={id => {
-                                            setSelectedBlock(id);
-                                            setPanel(true);
-                                            setPanelView('outline');
-                                        }}
-                                        onAdd={startAdd}
-                                        disabled={busy || Boolean(pending)}
-                                    />
-                                ) : (
-                                    <p className="p-4 text-sm text-muted-foreground">{t('RunToExplore')}</p>
+                        ),
+                        queries: (
+                            <div className="flex h-full min-h-0 flex-col">
+                                <details className="border-b p-2">
+                                    <summary className="cursor-pointer text-sm">{t('SessionQueries')}</summary>
+                                    {state.tabs.map(tab => (
+                                        <Button key={tab.id} variant="ghost" className="w-full justify-start" onClick={() => selectTab(tab.id)}>
+                                            {tab.title}
+                                        </Button>
+                                    ))}
+                                </details>
+                                {source?.kind === 'database' && (
+                                    <SavedQueriesSidebar key={source.connectionId} connectionId={source.connectionId} onSelect={item => void openSavedQuery(item)} />
                                 )}
-                            </SqlResults>
-                        }
-                    />
-                ) : (
-                    <div className="p-4">
-                        <Button onClick={() => addTab()}>
-                            <Plus />
-                            {t('NewQuery')}
-                        </Button>
-                    </div>
-                )}
-            </SqlWorkspace>
-            <Dialog open={preview} onOpenChange={setPreview}>
-                <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-4xl">
-                    <DialogHeader>
-                        <DialogTitle>{t('Preview')}</DialogTitle>
-                        <DialogDescription>{t('PreviewDescription')}</DialogDescription>
-                    </DialogHeader>
-                    <ReportBody title={state.title} content={state.content} onEvidence={() => undefined} previewOnly />
-                </DialogContent>
-            </Dialog>
-            <Dialog open={review} onOpenChange={setReview}>
-                <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-4xl">
-                    <DialogHeader>
-                        <DialogTitle>{t('ReviewSave')}</DialogTitle>
-                        <DialogDescription>{t('ReviewDescription')}</DialogDescription>
-                    </DialogHeader>
-                    <ul className="space-y-1 text-sm">
-                        {changes.map(item => (
-                            <li key={item.id}>
-                                {t(item.type)}: {item.title}
-                            </li>
-                        ))}
-                    </ul>
-                    <ReportBody title={state.title} content={state.content} onEvidence={() => undefined} previewOnly />
-                    <label className="flex gap-2 text-sm">
-                        <input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />
-                        {t('Reviewed')}
-                    </label>
-                    {safeError && (
-                        <p role="alert" className="text-sm text-destructive">
-                            {safeError}
-                        </p>
+                            </div>
+                        ),
+                    }}
+                    tabs={{
+                        tabs: uiTabs,
+                        activeTabId: active?.id ?? null,
+                        setActiveTabId: selectTab,
+                        addTab: () => addTab(),
+                        closeTab: id => updateTab(id, { hidden: true }),
+                        closeOtherTabs: id => change(previous => ({ ...previous, tabs: previous.tabs.map(tab => ({ ...tab, hidden: tab.id !== id })) })),
+                        updateTab: (id, patch) => updateTab(id, { title: patch.tabName ?? t('NewQuery') }),
+                        reorderTabs: (id, targetId) =>
+                            change(previous => {
+                                const tabs = [...previous.tabs];
+                                const from = tabs.findIndex(tab => tab.id === id);
+                                const to = tabs.findIndex(tab => tab.id === targetId);
+                                if (from >= 0 && to >= 0) tabs.splice(to, 0, tabs.splice(from, 1)[0]);
+                                return { ...previous, tabs };
+                            }),
+                    }}
+                    rail={
+                        <SqlWorkspacePanelToggle active={panel} label={t('Report')} onClick={() => setPanel(!panel)}>
+                            <PanelRight />
+                        </SqlWorkspacePanelToggle>
+                    }
+                    onRightPanelClose={() => setPanel(false)}
+                    rightPanelLabel={t('Report')}
+                    rightPanelFloating={Boolean(dragItem) || expanded}
+                    rightPanelExpanded={expanded}
+                    rightPanel={
+                        panel ? (
+                            <ReportCanvas
+                                state={state}
+                                source={canvasSource}
+                                draggingBlock={dragItem?.kind === 'block' ? dragItem.blockId : undefined}
+                                selectedId={selectedBlock}
+                                onSelect={setSelectedBlock}
+                                onPlace={place}
+                                onCancel={() => {
+                                    setCanvasSource(undefined);
+                                    setError(undefined);
+                                }}
+                                onOperation={operation => void applyOperation(operation)}
+                                busy={busy}
+                                error={safeError}
+                                notice={feedback}
+                                onClose={() => setPanel(false)}
+                                expanded={expanded}
+                                onExpand={() => setExpanded(value => !value)}
+                            />
+                        ) : undefined
+                    }
+                >
+                    {active ? (
+                        <SqlQueryPane
+                            toolbar={
+                                <SqlQueryToolbar
+                                    runLabel={w('Run')}
+                                    running={running.includes(active.id)}
+                                    disabled={busy || !sourceInfo.data?.available}
+                                    onRun={run}
+                                    onCancel={() => controllers.current[active.id]?.abort()}
+                                    cancelLabel={w('Cancel')}
+                                    actions={
+                                        <Button size="sm" variant="ghost" onClick={() => addTab(true)}>
+                                            <Copy />
+                                            {t('DuplicateQuery')}
+                                        </Button>
+                                    }
+                                />
+                            }
+                            editor={{
+                                ref: editor,
+                                tabs: uiTabs,
+                                activeTab: uiTabs.find(tab => tab.tabId === active.id),
+                                workspaceActive: true,
+                                updateTab: (id, patch) => {
+                                    if ('content' in patch) updateTab(id, { sql: patch.content });
+                                },
+                                onRunQuery: run,
+                                onNewTab: () => addTab(),
+                                sourceContext:
+                                    source && source.kind !== 'unavailable'
+                                        ? { connectionId: source.kind === 'database' ? source.connectionId : undefined, dialect: source.dialect }
+                                        : undefined,
+                            }}
+                            results={
+                                <SqlResults
+                                    testId="report-workspace-result"
+                                    tabs={<SqlResultTabs items={resultChoices} value={selectedResultId ?? ''} onChange={id => updateTab(active.id, { selectedResultId: id })} />}
+                                    notice={
+                                        runErrors[active.id] ? (
+                                            <p role="alert" className="p-2 text-destructive">
+                                                {workspaceErrorMessage(runErrors[active.id], t('ResultUnavailable'))}
+                                            </p>
+                                        ) : undefined
+                                    }
+                                    meta={{ runningRemote: running.includes(active.id), runningLocal: false, rowsReturned: selected?.rowCount ?? 0 }}
+                                >
+                                    {selected ? (
+                                        <WorkspaceResult
+                                            key={`${active.id}:${selectedResultId}`}
+                                            resultSetId={resultSetId}
+                                            evidence={selected}
+                                            charts={state.charts?.filter(chart => chart.resultSetId === resultSetId) ?? []}
+                                            onSaveChart={chart =>
+                                                change(previous => ({ ...previous, charts: [...(previous.charts ?? []).filter(item => item.id !== chart.id), chart] }))
+                                            }
+                                            adoptedVisuals={state.content.visuals}
+                                            baselineVisuals={state.baseline?.content.visuals ?? []}
+                                            isSnapshot={selectedResultId === 'snapshot'}
+                                            resultLabel={resultChoices.find(item => item.id === selectedResultId)?.label ?? t('Result')}
+                                            onLocate={id => {
+                                                setSelectedBlock(id);
+                                                setPanel(true);
+                                            }}
+                                            onPlace={choosePlacement}
+                                            reportSource={{
+                                                resultId: selectedResultId === 'snapshot' ? `snapshot:${selected.artifactId}` : (resultSetId ?? ''),
+                                                artifactId: selected.artifactId,
+                                                tabTitle: active.title,
+                                                resultLabel: resultChoices.find(item => item.id === selectedResultId)?.label ?? t('Result'),
+                                                sourceLabel: selected.connectionName ?? t('Attachment'),
+                                            }}
+                                            disabled={busy || Boolean(pending)}
+                                        />
+                                    ) : (
+                                        <p className="p-4 text-sm text-muted-foreground">{t('RunToExplore')}</p>
+                                    )}
+                                </SqlResults>
+                            }
+                        />
+                    ) : (
+                        <div className="p-4">
+                            <Button onClick={() => addTab()}>
+                                <Plus />
+                                {t('NewQuery')}
+                            </Button>
+                        </div>
                     )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setReview(false)}>
-                            {w('Cancel')}
-                        </Button>
-                        <Button disabled={!reviewed || busy} onClick={() => void save()}>
-                            {t('SaveVersion')}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </div>
+                </SqlWorkspace>
+                <ReportReplacementDialog
+                    pending={pending}
+                    onChange={setPending}
+                    busy={busy}
+                    error={safeError}
+                    onApply={() =>
+                        pending &&
+                        void applyOperation({
+                            type: 'replace',
+                            resultId: pending.source.resultId,
+                            blockIds: [pending.target.id],
+                            chartSpec: pending.source.chartSpec,
+                            fieldMappings: { [pending.target.id]: pending.fields },
+                        })
+                    }
+                />
+                <Dialog open={showChanges} onOpenChange={setShowChanges}>
+                    <DialogContent className="max-h-[80vh] overflow-auto">
+                        <DialogHeader>
+                            <DialogTitle>{t('Changes')}</DialogTitle>
+                            <DialogDescription>{t('ChangesDescription')}</DialogDescription>
+                        </DialogHeader>
+                        {!changes.length && <p className="text-sm text-muted-foreground">{t('NoChanges')}</p>}
+                        {changes.map(item => (
+                            <div key={item.id} className="flex items-center gap-2 rounded border p-3 text-sm">
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-xs text-muted-foreground">{t(item.type)}</p>
+                                    <Button
+                                        variant="link"
+                                        className="h-auto max-w-full truncate p-0"
+                                        onClick={() => {
+                                            setSelectedBlock(item.id);
+                                            setPanel(true);
+                                            setShowChanges(false);
+                                        }}
+                                    >
+                                        {item.title}
+                                    </Button>
+                                </div>
+                                <Button size="sm" variant="ghost" disabled={busy} onClick={() => void applyOperation({ type: 'revert', blockId: item.id })}>
+                                    {t(item.type === 'remove' ? 'Restore' : 'Undo')}
+                                </Button>
+                            </div>
+                        ))}
+                        {safeError && (
+                            <p role="alert" className="text-sm text-destructive">
+                                {safeError}
+                            </p>
+                        )}
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={preview} onOpenChange={setPreview}>
+                    <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-4xl">
+                        <DialogHeader>
+                            <DialogTitle>{t('Preview')}</DialogTitle>
+                            <DialogDescription>{t('PreviewDescription')}</DialogDescription>
+                        </DialogHeader>
+                        <ReportBody title={state.title} content={state.content} onEvidence={() => undefined} previewOnly />
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={review} onOpenChange={setReview}>
+                    <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-4xl">
+                        <DialogHeader>
+                            <DialogTitle>{t('ReviewSave')}</DialogTitle>
+                            <DialogDescription>{t('ReviewDescription')}</DialogDescription>
+                        </DialogHeader>
+                        <ul className="space-y-1 text-sm">
+                            {changes.map(item => (
+                                <li key={item.id}>
+                                    {t(item.type)}: {item.title}
+                                </li>
+                            ))}
+                        </ul>
+                        <ReportBody title={state.title} content={state.content} onEvidence={() => undefined} previewOnly />
+                        <label className="flex gap-2 text-sm">
+                            <input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />
+                            {t('Reviewed')}
+                        </label>
+                        {safeError && (
+                            <p role="alert" className="text-sm text-destructive">
+                                {safeError}
+                            </p>
+                        )}
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setReview(false)}>
+                                {w('Cancel')}
+                            </Button>
+                            <Button disabled={!reviewed || busy} onClick={() => void save()}>
+                                {t('SaveVersion')}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
+        </ReportCanvasDnd>
     );
 }

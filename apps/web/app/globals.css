@@ -723,3 +723,10 @@ body {
 .report-component-dialog [data-slot="dialog-close"] { display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; top: .75rem; right: .75rem; }
 
 .report-metric-grid { grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); }
+
+/* Report canvas: keep the report typography, with compact space between draggable blocks. */
+.report-canvas [data-canvas-block] .report-prose > :first-child { margin-top: 0; }
+.report-canvas [data-canvas-block] .report-prose > :last-child { margin-bottom: 0; }
+.report-canvas [data-canvas-block] figure { margin-block: 0; }
+.report-canvas [data-canvas-block] .work-table-scroll { margin-block: .75rem; }
+.report-canvas [data-canvas-block] th, .report-canvas [data-canvas-block] td { padding: .375rem .5rem; }

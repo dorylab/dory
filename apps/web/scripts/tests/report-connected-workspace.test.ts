@@ -43,7 +43,7 @@ function fixture(): ReportWorkingDraft {
         baseRevision: 1,
         expectedReportRevision: 1,
         revision: 1,
-        state: initialWorkingState('Logs report', raw),
+        state: initialWorkingState('Logs report', structuredClone(raw)),
         results: {
             result: {
                 tabId: 'new-tab',
@@ -246,10 +246,44 @@ test('explicit field mapping preserves legacy area series and validates all targ
         type: 'chart',
         chart: { type: 'area', xKey: 'old_level', yKeys: [{ key: 'old_count', label: 'Errors' }] },
     };
+    draft.state.content.body = draft.state.content.body!.replace('<DataTable source="logs"', '<Chart source="logs"');
     const op = { type: 'replace' as const, resultId: 'result', blockIds: ['logs'], fieldMappings: { logs: { old_level: 'level', old_count: 'count' } } };
     const next = changeReportDraft(draft, op);
     assert.deepEqual(next.content.visuals[0].chart, { type: 'area', xKey: 'level', yKeys: [{ key: 'count', label: 'Errors' }] });
     assert.equal(draft.state.content.visuals[0].evidenceId, 'old');
     assert.throws(() => changeReportDraft(draft, { ...op, fieldMappings: { logs: { old_level: 'level', old_count: 'absent' } } }), /fields changed/);
     assert.throws(() => changeReportDraft(draft, { ...op, blockIds: ['logs', 'gone'] }), /target changed/);
+});
+
+test('an undo-only result stays retained after deletion and is released when the undo is replaced', async () => {
+    const f = await reportRetentionFixture();
+    try {
+        const original = await f.seedEvidence('old');
+        const adopted = await f.seedEvidence('undo-only');
+        const owner = { organizationId: 'org', userId: 'alice' };
+        const report = await f.reports.create({ ...owner, creationKey: 'canvas-undo', title: 'Report', scope: { connectionIds: [] }, content: { ...raw, evidence: [original] } });
+        const target = { ...owner, documentId: report.id, baseRevision: report.revision };
+        let draft = await f.reports.initializeWorkingDraft({ ...target, state: initialWorkingState(report.title, report.content) });
+        await f.reports.recordWorkingResult({ ...target, resultId: 'new', result: { sourceArtifactId: '', evidence: adopted } });
+        draft = (await f.reports.workingDraft(target))!;
+        for (const operation of [
+            { type: 'insert' as const, resultId: 'new', visual: { id: 'inserted', title: 'Inserted', type: 'table' as const }, anchorId: 'root', position: 'end' as const },
+            { type: 'remove' as const, blockId: 'inserted' },
+        ])
+            draft = await f.reports.saveWorkingDraft({ ...target, expectedDraftRevision: draft.revision, state: changeReportDraft(draft, operation) });
+        assert.ok(!draft.state.content.evidence.some(item => item.artifactId === adopted.artifactId));
+        assert.ok(draft.state.canvas?.undo?.content.evidence.some(item => item.artifactId === adopted.artifactId));
+        await f.db.update(resultSets).set({ expiresAt: new Date(Date.now() - 1000) });
+        await f.db.update(artifacts).set({ expiresAt: new Date(Date.now() - 1000) });
+        assert.equal((await f.results.cleanupWorkspaceStorage({ organizationId: 'org', maxStorageBytes: 0 })).deletedResultSets, 0);
+        draft = await f.reports.saveWorkingDraft({
+            ...target,
+            expectedDraftRevision: draft.revision,
+            state: changeReportDraft(draft, { type: 'rename', blockId: 'logs', title: 'Renamed' }),
+        });
+        assert.ok(!draft.state.canvas?.undo?.content.evidence.some(item => item.artifactId === adopted.artifactId));
+        assert.equal((await f.results.cleanupWorkspaceStorage({ organizationId: 'org', maxStorageBytes: 0 })).deletedResultSets, 1);
+    } finally {
+        await f.close();
+    }
 });

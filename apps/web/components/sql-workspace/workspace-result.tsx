@@ -8,7 +8,9 @@ import type { WorkEvidence, WorkVisual } from '@dory/shared/types/work-document'
 import type { WorkspaceChart, WorkspaceChartSpec } from '@dory/shared/types/workspace-chart';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
-import { ChevronDown } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
+import type { ReportCanvasSource } from '@/components/work-documents/report-canvas-dnd';
 import { resultUsedBy, workspaceErrorMessage } from '@/lib/work-documents/workspace-presentation';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -55,8 +57,8 @@ export function WorkspaceResult({
     evidence,
     charts,
     onSaveChart,
-    onAdd,
-    recommendedTarget,
+    onPlace,
+    reportSource,
     adoptedVisuals,
     baselineVisuals,
     isSnapshot,
@@ -68,8 +70,8 @@ export function WorkspaceResult({
     evidence: WorkEvidence;
     charts: WorkspaceChart[];
     onSaveChart: (chart: WorkspaceChart) => void;
-    onAdd: (kind: 'insert' | 'replace', spec?: WorkspaceChartSpec, title?: string) => void;
-    recommendedTarget?: WorkVisual;
+    onPlace: (source: ReportCanvasSource) => void;
+    reportSource: Omit<ReportCanvasSource, 'title' | 'chartSpec'>;
     adoptedVisuals: WorkVisual[];
     baselineVisuals: WorkVisual[];
     isSnapshot: boolean;
@@ -79,6 +81,7 @@ export function WorkspaceResult({
 }) {
     const t = useTranslations('WorkDocuments.ConnectedWorkspace');
     const organizationId = useOrganizationId();
+    const [objectSelected, setObjectSelected] = useState(false);
     const [view, setView] = useState<SqlResultViewMode>('table');
     const [query, setQuery] = useState('');
     const [filters, setFilters] = useState<ColumnFilter[]>([]);
@@ -124,16 +127,33 @@ export function WorkspaceResult({
     const spec = chart ? { version: 1 as const, ...chart, ...operations } : undefined;
     const selectedChart = charts.find(item => item.id === chartId);
     const currentSpec = view === 'charts' ? spec : undefined;
-    const target = view === 'charts' && recommendedTarget?.type !== 'chart' ? undefined : recommendedTarget;
     const adopted = view === 'charts' && !spec ? [] : resultUsedBy(adoptedVisuals, evidence, currentSpec);
     const baseline = view === 'charts' && !spec ? [] : resultUsedBy(baselineVisuals, evidence, currentSpec);
-    const alreadyUsed = Boolean(target && adopted.some(item => item.id === target.id));
     const unavailable = disabled || !resultSetId || Boolean(rowsQuery.error) || (view === 'charts' && !spec);
-    const add = (kind: 'insert' | 'replace') => onAdd(kind, currentSpec, view === 'charts' ? title : undefined);
+    const canvasSource: ReportCanvasSource = { ...reportSource, title: view === 'charts' ? title.trim() || evidence.title : evidence.title, chartSpec: currentSpec };
+    const drag = useDraggable({ id: `result:${resultSetId}:${view}:${chartId ?? 'new'}`, data: { item: { kind: 'result', source: canvasSource } }, disabled: unavailable });
     return (
-        <div className="flex h-full min-h-0 flex-col">
+        <div ref={drag.setNodeRef} className={`flex h-full min-h-0 flex-col ${objectSelected ? 'ring-1 ring-inset ring-primary/40' : ''}`}>
             <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/20 px-3 py-1.5 text-xs" data-testid="report-result-status">
-                <span className="font-medium">{resultLabel}</span>
+                <Button
+                    ref={drag.setActivatorNodeRef}
+                    {...drag.listeners}
+                    {...drag.attributes}
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 cursor-grab touch-none"
+                    disabled={unavailable}
+                    aria-label={t('DragResult')}
+                >
+                    <GripVertical className="size-4" />
+                </Button>
+                <button type="button" className="max-w-56 truncate text-left font-medium" onClick={() => setObjectSelected(true)} aria-pressed={objectSelected}>
+                    {canvasSource.title}
+                </button>
+                <span className="text-muted-foreground">{resultLabel}</span>
+                <span className="max-w-40 truncate text-muted-foreground" title={reportSource.sourceLabel}>
+                    {reportSource.sourceLabel}
+                </span>
                 <span className="text-muted-foreground">{t('RowCount', { count: evidence.rowCount ?? evidence.rows.length })}</span>
                 <span role="status" className="rounded bg-muted px-2 py-0.5">
                     {t(adopted.length ? (baseline.length ? 'CurrentSnapshot' : 'AddedToDraft') : 'NotInReport')}
@@ -144,6 +164,18 @@ export function WorkspaceResult({
                     </Button>
                 ))}
                 {!adopted.length && !isSnapshot && <span className="text-muted-foreground">{t('RunComplete')}</span>}
+                <Button
+                    className="ml-auto"
+                    size="sm"
+                    disabled={unavailable}
+                    onClick={() => {
+                        setObjectSelected(true);
+                        onPlace(structuredClone(canvasSource));
+                    }}
+                >
+                    {t('PlaceInReport')}
+                </Button>
+                {objectSelected && <span className="basis-full text-muted-foreground">{t('DragHint')}</span>}
             </div>
             {(error || rowsQuery.error || exportResult.error) && (
                 <p role="alert" className="p-2 text-sm text-destructive">
@@ -234,26 +266,6 @@ export function WorkspaceResult({
                                 ))}
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <div className="flex items-center gap-0.5">
-                            <Button size="sm" disabled={unavailable || alreadyUsed} onClick={() => add(target ? 'replace' : 'insert')}>
-                                {alreadyUsed
-                                    ? t('AlreadyUsed')
-                                    : target
-                                      ? t('UpdateTarget', { title: target.title })
-                                      : t(view === 'charts' ? 'AddChartToReport' : 'AddTableToReport')}
-                            </Button>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button size="sm" variant="outline" aria-label={t('ReportActions')} disabled={unavailable}>
-                                        <ChevronDown className="size-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => add('insert')}>{t(view === 'charts' ? 'AddChartToReport' : 'AddTableToReport')}</DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => add('replace')}>{t(view === 'charts' ? 'UpdateExistingChart' : 'UpdateExisting')}</DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
                     </>
                 }
                 tables={

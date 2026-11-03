@@ -86,6 +86,20 @@ export function remapChartFields(visual: WorkVisual, fields: Record<string, stri
     return next;
 }
 
+export function canonicalValue(value: unknown): string {
+    const normalize = (item: unknown): unknown => {
+        if (Array.isArray(item)) return item.map(normalize);
+        if (item && typeof item === 'object')
+            return Object.fromEntries(
+                Object.entries(item)
+                    .filter(([, value]) => value !== undefined)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([key, value]) => [key, normalize(value)]),
+            );
+        return item;
+    };
+    return JSON.stringify(normalize(value));
+}
 export function sameChartSpec(left: WorkspaceChartSpec | undefined, right: WorkspaceChartSpec | undefined): boolean {
     if (!left || !right) return left === right;
     return (
@@ -95,7 +109,7 @@ export function sameChartSpec(left: WorkspaceChartSpec | undefined, right: Works
         left.yKey === right.yKey &&
         left.groupKey === right.groupKey &&
         (left.chartColorPreset ?? 'blue') === (right.chartColorPreset ?? 'blue') &&
-        JSON.stringify(left.filters ?? []) === JSON.stringify(right.filters ?? []) &&
+        canonicalValue(left.filters ?? []) === canonicalValue(right.filters ?? []) &&
         (left.search?.text ?? '') === (right.search?.text ?? '') &&
         JSON.stringify(left.search?.columns ?? []) === JSON.stringify(right.search?.columns ?? [])
     );

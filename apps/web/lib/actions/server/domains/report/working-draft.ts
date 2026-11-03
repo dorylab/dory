@@ -6,6 +6,8 @@ import { z } from 'zod';
 
 import { reportWorkspaceContext } from '@/lib/server/report-workspace-context';
 import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-groups';
+import { withReportCanvas } from '@/lib/work-documents/report-canvas';
+import { canonicalValue, sameChartSpec } from '@/lib/work-documents/workspace-presentation';
 import { editableReport, parseReport } from '@/lib/work-documents/report-core';
 import { reportEvidenceGroupsSchema, reviewedEvidenceGroupIdsSchema, workspaceChartSpecSchema, workVisualSchema } from '@/lib/work-documents/schema';
 import { applyWorkingResult, changeReportDraft, initialWorkingState, materializeWorkingContent, upgradeWorkingState, versionContent } from '@/lib/work-documents/working-draft';
@@ -100,12 +102,12 @@ const context = defineWebAction({
                 }),
             ),
         );
-        if (draft.state.bindingVersion !== 2) {
+        if (draft.state.bindingVersion !== 2 || !draft.state.canvas) {
             draft = await ctx.services.db.workDocuments.saveWorkingDraft({
                 ...target,
                 baseRevision: draft.baseRevision,
                 expectedDraftRevision: draft.revision,
-                state: upgradeWorkingState(draft, document.content),
+                state: withReportCanvas(upgradeWorkingState(draft, document.content)),
             });
         }
         draft.state.tabs = draft.state.tabs.map(tab => ({ ...tab, source: tab.source ?? sources.find(source => source.reference.artifactId === tab.sourceArtifactId)?.source }));
@@ -185,9 +187,12 @@ const save = defineWebAction({
             throw new DatabaseError('Choose evidence already in this working report.', 403);
         const visuals = input.visuals.map(visual => {
             const previous = draft.state.content.visuals.find(item => item.id === visual.id);
-            if (visual.chartSpec && JSON.stringify(visual.chartSpec) !== JSON.stringify(previous?.chartSpec))
-                throw new DatabaseError('Apply the chart to update its frozen configuration.', 400);
-            return { ...visual, ...(previous?.chartData ? { chartData: previous.chartData } : { chartData: undefined }) };
+            if (!sameChartSpec(visual.chartSpec, previous?.chartSpec)) throw new DatabaseError('Apply the chart to update its frozen configuration.', 400);
+            return {
+                ...visual,
+                ...(previous?.chartSpec ? { chartSpec: previous.chartSpec } : {}),
+                ...(previous?.chartData ? { chartData: previous.chartData } : { chartData: undefined }),
+            };
         });
         const state: ReportWorkingState = {
             ...draft.state,
@@ -207,8 +212,11 @@ const save = defineWebAction({
         state.content = materializeWorkingContent(state, draft.results);
         if (state.content.visuals.some(visual => draft.state.content.visuals.find(previous => previous.id === visual.id)?.evidenceId !== visual.evidenceId))
             state.proseNeedsReview = true;
-        if (Buffer.byteLength(JSON.stringify(state)) > 4 * 1024 * 1024) throw new DatabaseError('The working report exceeds 4 MiB. Reduce the result range.', 400);
-        return ctx.services.db.workDocuments.saveWorkingDraft({ ...owner(ctx), ...input, state });
+        if (draft.state.canvas?.undo && (canonicalValue(draft.state.content.visuals) !== canonicalValue(state.content.visuals) || draft.state.content.body !== state.content.body))
+            state.canvas = { ...draft.state.canvas, undo: undefined };
+        const prepared = withReportCanvas(state);
+        if (Buffer.byteLength(JSON.stringify(prepared)) > 4 * 1024 * 1024) throw new DatabaseError('The working report exceeds 4 MiB. Reduce the result range.', 400);
+        return ctx.services.db.workDocuments.saveWorkingDraft({ ...owner(ctx), ...input, state: prepared });
     },
 });
 const apply = defineWebAction({
@@ -248,6 +256,9 @@ const apply = defineWebAction({
                     anchorId: z.string(),
                     position: z.enum(['before', 'after', 'end']),
                 }),
+                z.object({ type: z.literal('move'), blockId: z.string(), anchorId: z.string(), position: z.enum(['before', 'after']) }),
+                z.object({ type: z.literal('rename'), blockId: z.string(), title: z.string().trim().min(1).max(300) }),
+                z.object({ type: z.literal('undo') }),
                 z.object({ type: z.literal('remove'), blockId: z.string() }),
                 z.object({ type: z.literal('revert'), blockId: z.string() }),
             ])

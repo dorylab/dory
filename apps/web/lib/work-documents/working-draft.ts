@@ -2,6 +2,9 @@ import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { ReportApplyTarget, ReportQueryTab, ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
 
+import { withReportCanvas, movedCanvasBlocks } from './report-canvas';
+import { reportEvidenceParagraphs } from './evidence-groups';
+import { canonicalValue } from './workspace-presentation';
 import { reportNumber } from './format';
 import { remapChartFields, resultUsedBy } from './workspace-presentation';
 import { referencedEvidence } from './markdown';
@@ -193,10 +196,22 @@ export function upgradeWorkingState(draft: ReportWorkingDraft, baseline: WorkDoc
 export type ReportDraftOperation =
     | { type: 'replace'; resultId: string; blockIds: string[]; chartSpec?: WorkVisual['chartSpec']; fieldMappings?: Record<string, Record<string, string>> }
     | { type: 'insert'; resultId: string; visual: Pick<WorkVisual, 'id' | 'type' | 'title' | 'chartSpec'>; anchorId: string; position: 'before' | 'after' | 'end' }
+    | { type: 'move'; blockId: string; anchorId: string; position: 'before' | 'after' }
+    | { type: 'rename'; blockId: string; title: string }
+    | { type: 'undo' }
     | { type: 'remove' | 'revert'; blockId: string };
 
 export function changeReportDraft(draft: ReportWorkingDraft, operation: ReportDraftOperation): ReportWorkingState {
-    const state = structuredClone(draft.state);
+    const state = withReportCanvas(structuredClone(draft.state));
+    const before = { content: structuredClone(state.content), blocks: structuredClone(state.canvas.blocks), proseNeedsReview: state.proseNeedsReview };
+    if (operation.type === 'undo') {
+        if (!state.canvas.undo) return state;
+        const undo = state.canvas.undo;
+        state.content = undo.content;
+        state.proseNeedsReview = undo.proseNeedsReview;
+        state.canvas = { ...state.canvas, blocks: undo.blocks, undo: undefined };
+        return withReportCanvas(state);
+    }
     if (state.bindingVersion !== 2) throw new DatabaseError('Reopen the workspace to upgrade this draft.', 409);
     const content = state.content;
     const body = content.body ?? '';
@@ -230,54 +245,103 @@ export function changeReportDraft(draft: ReportWorkingDraft, operation: ReportDr
             const visual: WorkVisual = { ...operation.visual, evidenceId: result.evidence.artifactId };
             if (visual.type === 'chart' && !visual.chartSpec) throw new DatabaseError('Choose a chart configuration.', 400);
             validateWorkingVisual(visual, result.evidence);
-            const anchor = outline.find(item => item.id === operation.anchorId);
+            const blockIndex = state.canvas.blocks.findIndex(item => item.id === operation.anchorId);
+            const anchor = blockIndex >= 0 ? outline[blockIndex + 1] : outline.find(item => item.id === operation.anchorId);
             if (!anchor) throw new DatabaseError('The insertion position changed. Select it again.', 409);
             const offset = operation.position === 'before' ? anchor.start : operation.position === 'after' ? anchor.end : anchor.sectionEnd;
             content.body = body.slice(0, offset) + '\n\n' + reportTagSource(visual) + '\n\n' + body.slice(offset);
             content.visuals.push(visual);
         }
     } else {
-        const node = outline.find(item => item.visualId === operation.blockId);
-        const baseline = state.baseline?.content;
-        const original = baseline?.visuals.find(item => item.id === operation.blockId);
-        if (operation.type === 'revert' && original && baseline) {
-            const current = content.visuals.find(item => item.id === original.id);
-            if (current) Object.assign(current, { chart: undefined, chartSpec: undefined, chartData: undefined, metric: undefined }, structuredClone(original));
-            else {
-                const baseOutline = reportOutline(baseline.body ?? '', baseline.visuals);
-                const index = baseOutline.findIndex(item => item.visualId === original.id);
-                const baselineBody = baseline.body ?? '';
-                const matches = (item: (typeof baseOutline)[number]) =>
-                    outline.filter(current =>
-                        item.visualId
-                            ? current.visualId === item.visualId
-                            : current.kind === item.kind && body.slice(current.start, current.end) === baselineBody.slice(item.start, item.end),
-                    );
-                const next = baseOutline.slice(index + 1).find(item => matches(item).length === 1);
-                const offset = next ? matches(next)[0].start : body.length;
-                content.body = body.slice(0, offset) + '\n\n' + reportTagSource(original) + '\n\n' + body.slice(offset);
-                content.visuals.push(structuredClone(original));
-            }
-            const evidence = baseline.evidence.find(item => item.artifactId === original.evidenceId);
-            if (evidence && !content.evidence.some(item => item.artifactId === evidence.artifactId)) content.evidence.push(evidence);
+        const blocks = state.canvas.blocks;
+        const index = blocks.findIndex(item => item.id === operation.blockId);
+        const block = blocks[index];
+        if (operation.type === 'rename') {
+            const visual = content.visuals.find(item => item.id === block?.visualId);
+            if (!visual || !operation.title.trim()) throw new DatabaseError('Choose a data block and a title.', 400);
+            visual.title = operation.title.trim();
+        } else if (operation.type === 'move') {
+            const target = blocks.find(item => item.id === operation.anchorId);
+            if (!block || !target) throw new DatabaseError('The target changed. Select it again.', 409);
+            if (block.id === target.id) return state;
+            blocks.splice(index, 1);
+            blocks.splice(blocks.indexOf(target) + (operation.position === 'after' ? 1 : 0), 0, block);
+            content.body = blocks.map(item => item.source).join('\n\n');
+        } else if (operation.type === 'remove') {
+            if (!block) throw new DatabaseError('The block is no longer present.', 409);
+            blocks.splice(index, 1);
+            content.body = blocks.map(item => item.source).join('\n\n');
+            content.visuals = content.visuals.filter(item => item.id !== block.visualId);
         } else {
-            if (!node) throw new DatabaseError('The block is no longer present.', 409);
-            content.body = body.slice(0, node.start) + body.slice(node.end);
-            content.visuals = content.visuals.filter(item => item.id !== operation.blockId);
+            const baseline = state.baseline?.content;
+            const originalIndex = state.canvas.baselineBlocks.findIndex(item => item.id === operation.blockId);
+            const original = state.canvas.baselineBlocks[originalIndex];
+            if (index >= 0) blocks.splice(index, 1);
+            if (original && baseline) {
+                const after = state.canvas.baselineBlocks.slice(originalIndex + 1).find(item => blocks.some(current => current.id === item.id));
+                blocks.splice(after ? blocks.findIndex(item => item.id === after.id) : blocks.length, 0, structuredClone(original));
+                if (original.visualId) {
+                    const restored = structuredClone(baseline.visuals.find(item => item.id === original.visualId)!);
+                    const existing = content.visuals.findIndex(item => item.id === original.visualId);
+                    if (existing >= 0) content.visuals[existing] = restored;
+                    else
+                        content.visuals.splice(
+                            Math.min(
+                                baseline.visuals.findIndex(item => item.id === original.visualId),
+                                content.visuals.length,
+                            ),
+                            0,
+                            restored,
+                        );
+                }
+                for (const evidence of baseline.evidence)
+                    if (!content.evidence.some(item => item.artifactId === evidence.artifactId)) content.evidence.push(structuredClone(evidence));
+                for (const group of baseline.evidenceGroups ?? [])
+                    if (!content.evidenceGroups?.some(item => item.id === group.id)) (content.evidenceGroups ??= []).push(structuredClone(group));
+            } else if (block?.visualId) content.visuals = content.visuals.filter(item => item.id !== block.visualId);
+            content.body = blocks.map(item => item.source).join('\n\n');
         }
+        const liveGroups = new Set(reportEvidenceParagraphs(content.body ?? '').flatMap(item => (item.groupId ? [item.groupId] : [])));
+        content.evidenceGroups = content.evidenceGroups?.filter(item => liveGroups.has(item.id));
     }
     state.content = materializeWorkingContent(state, draft.results, true);
     state.proseNeedsReview = true;
-    return state;
+    const next = withReportCanvas(state);
+    // Compare parsed blocks, not whitespace introduced by MDX splicing.
+    if (
+        canonicalValue(before.blocks.map(item => [item.id, item.source])) !== canonicalValue(next.canvas.blocks.map(item => [item.id, item.source])) ||
+        canonicalValue(before.content.visuals) !== canonicalValue(next.content.visuals)
+    )
+        next.canvas.undo = before;
+    return next;
 }
 
-export function reportDraftChanges(state: ReportWorkingState) {
-    const before = state.baseline?.content.visuals ?? [];
-    const after = state.content.visuals;
+export function reportDraftChanges(raw: ReportWorkingState) {
+    const state = withReportCanvas(raw);
+    const before = state.canvas.baselineBlocks;
+    const after = state.canvas.blocks;
+    const moved = movedCanvasBlocks(
+        before.map(item => item.id),
+        after.map(item => item.id),
+    );
     return [...new Set([...before, ...after].map(item => item.id))].flatMap(id => {
-        const original = before.find(item => item.id === id);
-        const current = after.find(item => item.id === id);
-        if (JSON.stringify(original) === JSON.stringify(current)) return [];
-        return [{ id, title: (current ?? original)!.title, type: !original ? ('insert' as const) : !current ? ('remove' as const) : ('replace' as const) }];
+        const oldBlock = before.find(item => item.id === id);
+        const block = after.find(item => item.id === id);
+        const original = state.baseline?.content.visuals.find(item => item.id === oldBlock?.visualId);
+        const current = state.content.visuals.find(item => item.id === block?.visualId);
+        const changedVisual = canonicalValue(original) !== canonicalValue(current);
+        const renamedOnly = original && current && original.title !== current.title && canonicalValue({ ...original, title: current.title }) === canonicalValue(current);
+        const type = !oldBlock
+            ? ('insert' as const)
+            : !block
+              ? ('remove' as const)
+              : changedVisual
+                ? renamedOnly
+                    ? ('rename' as const)
+                    : ('replace' as const)
+                : moved.has(id)
+                  ? ('move' as const)
+                  : undefined;
+        return type ? [{ id, title: (current ?? original)?.title ?? (block ?? oldBlock)!.title, type }] : [];
     });
 }
