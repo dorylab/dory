@@ -14,7 +14,7 @@ import { legacyToMdx, parseReport, reportEmbeds, reportTagSource, resolvedReport
 import { applyReportTextPatch } from '@/lib/work-documents/report-patch';
 import { analysisScopeSchema, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
 
-import { resolveReportChatCharts } from './report-chat-charts';
+import { reportChatChartAxes, resolveReportChatCharts } from './report-chat-charts';
 
 type Owner = { organizationId: string; userId: string };
 export const emptyWorkContent = (): WorkDocumentContent => ({ markdown: '', visuals: [], evidence: [], knowledge: [] });
@@ -104,9 +104,11 @@ export async function saveWorkDraft(
 
     if (input.source !== 'user' && draft.reviewedEvidenceGroupIds?.length) throw new DatabaseError('Only a person can mark evidence as reviewed.', 403);
     const sourceBody = draft.format === 'restricted-mdx' ? (draft.body ?? draft.markdown) : draft.markdown;
+    let chatCharts: ReturnType<typeof resolveReportChatCharts> | undefined;
     if (input.source === 'agent' && existing.chatId && sourceBody.includes('dory://chart/')) {
         const history = await db.chat.listMessages({ ...input, sessionId: existing.chatId });
-        const converted = resolveReportChatCharts(sourceBody, draft.visuals, [...history, ...(input.chatMessages ?? [])], Boolean(draft.format));
+        const converted = resolveReportChatCharts(sourceBody, draft.visuals, [...history, ...(input.chatMessages ?? [])], Boolean(draft.format), existing.content.evidence);
+        chatCharts = converted;
         draft.visuals = converted.visuals;
         if (draft.format) draft.body = converted.body;
         else draft.markdown = converted.body;
@@ -282,6 +284,20 @@ export async function saveWorkDraft(
         }
         if (visual.chart) {
             const source = evidence.find(item => item.artifactId === visual.evidenceId);
+            const chatChart = chatCharts?.charts.get(visual.id);
+            if (
+                source &&
+                chatChart &&
+                [visual.chart.xKey, ...(visual.chart.yKeys?.map(series => series.key) ?? [visual.chart.yKey])].some(key => !key || !source.columns.includes(key))
+            ) {
+                const axes = reportChatChartAxes(chatChart, source);
+                if (!axes)
+                    throw new DatabaseError(
+                        `WORK_REFERENCE_INVALID: This automatic chat chart cannot be represented by the original evidence columns without changing its data. ${JSON.stringify({ visualId: visual.id, evidenceId: visual.evidenceId, availableColumns: source.columns })} Re-run the query with the chart's grouping, buckets and numeric values computed in SQL, then use the returned Artifact and its exact columns in the report visual.`,
+                        400,
+                    );
+                visual.chart = axes;
+            }
             const yKeys = visual.chart.yKeys ? visual.chart.yKeys.map(series => series.key) : [visual.chart.yKey];
             const missingKeys = [visual.chart.xKey, ...yKeys].filter(key => !source?.columns.includes(key));
             if (!source || missingKeys.length)

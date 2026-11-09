@@ -1530,6 +1530,49 @@ test('completed answers omit redundant status cards before and after reload', as
     await expectAppHealthy(appErrors);
 });
 
+test('a historical incomplete report does not start generating when a follow-up runs', async ({ page, appErrors }, testInfo) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const session = { id: 'incomplete-report-chat', title: 'Incomplete report', type: 'global', connectionId: null };
+    const document = { ...makeDocument(), status: 'draft', chatId: session.id, sourceMessageId: 'report-request' };
+    const messages = [
+        { id: 'report-request', role: 'user', parts: [{ type: 'text', text: 'Generate a report' }] },
+        {
+            id: 'report-answer',
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'The report update was not saved.' }],
+            metadata: { userMessageId: 'report-request', reportSave: { status: 'failed', error: 'Chart columns do not match its evidence.' } },
+        },
+    ];
+    await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [session] } }));
+    await page.route(`**/api/chat/session/${session.id}`, route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [document] } }));
+    let release: () => void = () => {};
+    const pending = new Promise<void>(resolve => {
+        release = resolve;
+    });
+    await page.route('**/api/chat', async route => {
+        await pending;
+        await route.fulfill({ contentType: 'text/event-stream', headers: { 'x-vercel-ai-ui-message-stream': 'v1' }, body: 'data: [DONE]\n\n' });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.goto(`/${organization}/work?chat=${session.id}&panel=closed`);
+    const card = page.getByTestId('message-reports');
+    await expect(card).toContainText('Incomplete');
+    const composer = page.getByTestId('agent-composer');
+    try {
+        await composer.getByRole('textbox').fill('Continue the unfinished steps');
+        await composer.getByRole('button', { name: 'Send', exact: true }).click();
+        await expect(composer.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+        await expect(card).toContainText('Incomplete');
+        await expect(card).not.toContainText('Generating');
+        await page.screenshot({ path: testInfo.outputPath('historical-incomplete-report.png'), animations: 'disabled' });
+    } finally {
+        release();
+    }
+    await expectAppHealthy(appErrors);
+});
+
 test('one report generation displays v1 across cards, completion and history despite five internal saves', async ({ page, appErrors }) => {
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     const session = { id: 'version-chat', title: 'Key Findings Report', type: 'global', connectionId: null };
