@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/
 import type { ReportCanvasBlock } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
 import { flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable, type SortingState } from '@tanstack/react-table';
-import { ArrowUpRight, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { reportMetrics } from '@/lib/work-documents/format';
@@ -138,17 +138,13 @@ export function SnapshotTable({ evidence, compact = false }: { evidence: WorkEvi
 export function ReportVisual({
     visual,
     evidence,
-    onEvidence,
     onEditComponent,
-    previewOnly,
     compact = false,
 }: {
     compact?: boolean;
     visual: WorkVisual;
     evidence: WorkEvidence;
-    onEvidence: (id: string, componentId?: string) => void;
     onEditComponent?: (id: string) => void;
-    previewOnly?: boolean;
 }) {
     const t = useTranslations('WorkDocuments.Report');
     const evidenceT = useTranslations('WorkDocuments.Evidence');
@@ -205,12 +201,6 @@ export function ReportVisual({
                         ? evidenceT('UnknownRange', { shown: evidence.rows.length })
                         : evidenceT('DisplayRange', { shown: evidence.rows.length, total: evidence.rowCount })}
                 </span>
-                {!previewOnly && (
-                    <Button className="h-7 gap-1 px-2 text-xs" variant="ghost" size="sm" onClick={() => onEvidence(evidence.artifactId, visual.id)}>
-                        {evidenceT('ViewSource')}
-                        <ArrowUpRight className="size-3.5" />
-                    </Button>
-                )}
             </div>
         </figure>
     );
@@ -218,17 +208,13 @@ export function ReportVisual({
 export function ReportBody({
     content,
     title,
-    onEvidence,
     onEvidenceGroup,
     onEditComponent,
-    previewOnly,
 }: {
     content: WorkDocumentContent;
     title: string;
-    onEvidence: (id: string, componentId?: string) => void;
     onEvidenceGroup?: (id: string) => void;
     onEditComponent?: (id: string) => void;
-    previewOnly?: boolean;
 }) {
     const evidenceT = useTranslations('WorkDocuments.Evidence');
     const labels = (html: string) =>
@@ -286,9 +272,7 @@ export function ReportBody({
         const visual = prepared.visuals.find(item => item.id === component.visualId)!;
         const evidence = prepared.evidence.find(item => item.artifactId === visual.evidenceId);
         if (!evidence) return <p role="alert">Missing report snapshot.</p>;
-        sections.push(
-            <ReportVisual key={component.start} visual={visual} evidence={evidence} onEvidence={onEvidence} onEditComponent={onEditComponent} previewOnly={previewOnly} />,
-        );
+        sections.push(<ReportVisual key={component.start} visual={visual} evidence={evidence} onEditComponent={onEditComponent} />);
         offset = component.end;
     }
     sections.push(prose(editable.body!.slice(offset), offset));
@@ -315,7 +299,7 @@ export function ReportBlockView({
     if (block.visualId) {
         const visual = content.visuals.find(item => item.id === block.visualId);
         const evidence = content.evidence.find(item => item.artifactId === visual?.evidenceId);
-        return visual && evidence ? <ReportVisual visual={visual} evidence={evidence} onEvidence={() => undefined} previewOnly compact /> : <p role="alert">{t('Unavailable')}</p>;
+        return visual && evidence ? <ReportVisual visual={visual} evidence={evidence} compact /> : <p role="alert">{t('Unavailable')}</p>;
     }
     const html = renderWorkMarkdown({ ...content, format: undefined, markdown: `${block.source}\n\n${definitions}` }).replace(
         /(<a\b[^>]*data-evidence-group="([^"]+)"[^>]*>)[\s\S]*?<\/a>/g,

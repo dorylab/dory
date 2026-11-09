@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { WorkVisual } from '@dory/shared/types/work-document';
+import { effectiveChart, getChartOverride } from '@dory/shared/utils/chat-chart';
 
 import { getChartResultFromPart } from '@/lib/agent-runs/chart-result';
 import { record } from '@/lib/agent-runs/sql-result';
@@ -7,6 +8,14 @@ import { workVisualSchema } from '@/lib/work-documents/schema';
 
 /** Convert only complete chart tool results from this conversation, never copied preview rows. */
 export function resolveReportChatCharts(body: string, visuals: WorkVisual[], messages: readonly unknown[], mdx: boolean) {
+    // Persisted metadata is also applied to repeated model-history copies of the same tool output.
+    const overrides = new Map<string, unknown>();
+    for (const value of messages) {
+        const metadata = record(value).metadata;
+        for (const id of Object.keys(record(record(metadata).chartOverrides))) {
+            if (getChartOverride(metadata, id).version > getChartOverride(overrides.get(id), id).version) overrides.set(id, metadata);
+        }
+    }
     const matches = new Map<string, WorkVisual[]>();
     for (const value of messages) {
         const message = record(value);
@@ -16,7 +25,8 @@ export function resolveReportChatCharts(body: string, visuals: WorkVisual[], mes
             const part = record(value);
             if ((part.toolName ?? part.type) !== 'chartBuilder' && part.type !== 'tool-chartBuilder') continue;
             if (typeof part.toolCallId !== 'string' || part.state === 'output-error') continue;
-            const chart = getChartResultFromPart(part);
+            const original = getChartResultFromPart(part);
+            const chart = original ? effectiveChart(original, overrides.get(part.toolCallId) ?? message.metadata, part.toolCallId) : null;
             const xKey = chart?.xKey ?? chart?.categoryKey;
             const yKeys = chart?.yKeys?.length ? chart.yKeys.map(({ key, label }) => ({ key, ...(label ? { label } : {}) })) : chart?.valueKey ? [{ key: chart.valueKey }] : [];
             if (!chart || chart.dataState !== 'ready' || !chart.source?.artifactId || !xKey || !yKeys.length) continue;
@@ -26,7 +36,7 @@ export function resolveReportChatCharts(body: string, visuals: WorkVisual[], mes
                 type: 'chart',
                 title: (chart.title || 'Chart').slice(0, 300),
                 evidenceId: chart.source.artifactId,
-                chart: { type: chart.chartType, xKey, yKeys },
+                chart: { type: chart.chartType, xKey, yKeys, ...(chart.options ? { options: chart.options } : {}) },
             });
             if (!visual.success) continue;
             const prior = matches.get(part.toolCallId) ?? [];

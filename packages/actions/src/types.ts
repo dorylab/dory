@@ -13,6 +13,7 @@ export type ActionDomain =
     | 'tab'
     | 'savedQuery'
     | 'chart'
+    | 'chat'
     | 'ai'
     | 'comparison'
     | 'knowledge'

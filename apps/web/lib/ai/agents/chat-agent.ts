@@ -1,11 +1,15 @@
 import { MAX_PROGRESS_PUBLICATIONS, type CheckpointResult } from '@dory/shared/types/chat-checkpoints';
+
 import 'server-only';
 
+import { chartGrainDiagnostic, isChartTimeAxis } from '@dory/shared/utils/chat-chart';
 import { isStepCount, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
 
+import { getSqlResultFromPart } from '@/lib/agent-runs/sql-result';
 import { recordAiUsage, type AiDebugInput, type AiGatewayContext } from '@/lib/ai/gateway';
 
 import { formatChatToolError, repairWorkToolInput } from './work-tool-input';
+import { emptyQueryReminder } from './empty-query-reminder';
 
 type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     model: LanguageModel;
@@ -124,6 +128,33 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                 ? `\nThe requested report is ${reportStatus === 'missing' ? 'not created: call createWorkReport to save its draft' : 'still a draft: gather any necessary verified evidence, readWorkReport and updateWorkReport with status: ready'}. Report tools are available; the server manages execution stages. Do not substitute a Markdown chat response for saving the report. Do not confuse the previous ready report with a successful update in this turn.`
                 : '';
 
+            const queryCompleted = steps
+                .at(-1)
+                ?.toolResults.some(
+                    result =>
+                        ['sqlRunner', 'queryAttachment'].includes(result.toolName) &&
+                        result.output &&
+                        typeof result.output === 'object' &&
+                        !('control' in result.output) &&
+                        (!('ok' in result.output) || result.output.ok !== false),
+                );
+            const chartReminder =
+                queryCompleted && 'chartBuilder' in options.tools
+                    ? '\nBefore answering, consider whether these verified results support a useful trend, comparison or composition chart. If so call chartBuilder with the result Artifact and correct grain. Respect SQL-only/no-chart requests; do not chart a single fact, ambiguous grain or insufficient data. Never substitute YTD for annual values.'
+                    : '';
+            const grainHints = chartReminder
+                ? (steps.at(-1)?.toolResults ?? [])
+                      .flatMap(result => {
+                          if (!['sqlRunner', 'queryAttachment'].includes(result.toolName)) return [];
+                          const query = getSqlResultFromPart(result);
+                          if (!query?.ok) return [];
+                          const rows = query.previewRows ?? [];
+                          const x = Object.keys(rows[0] ?? {}).find(key => isChartTimeAxis({ chartType: 'line', xKey: key }, rows));
+                          const hint = x && chartGrainDiagnostic(rows, x);
+                          return hint ? [`\nChart data check: ${hint}`] : [];
+                      })
+                      .join('')
+                : '';
             return {
                 toolChoice: reportPending ? ('required' as const) : ('auto' as const),
                 ...(reportStatus
@@ -131,7 +162,7 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
                           activeTools: Object.keys(options.tools).filter(name => name !== 'finishAnalysis') as (keyof TOOLS & string)[],
                       }
                     : {}),
-                instructions: `${options.instructions}${reportInstruction}`,
+                instructions: `${options.instructions}${reportInstruction}${emptyQueryReminder(steps)}${chartReminder}${grainHints}`,
             };
         },
         headers: options.headers ?? undefined,

@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
-import { renderWorkHtml, workChartSvg } from '@/lib/work-documents/render';
-import { chatContinuity } from '@/lib/server/chat-continuity';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
 import { Readable } from 'node:stream';
+import test from 'node:test';
 import type { ToolExecutionOptions } from 'ai';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
+
+import { chatContinuity } from '@/lib/server/chat-continuity';
+import { renderWorkHtml, workChartSvg } from '@/lib/work-documents/render';
 
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
@@ -275,7 +276,7 @@ test('private attachments produce reusable full-data evidence, charts and report
         );
         const visual = updated.content.visuals.find(item => item.id === 'activity-pie')!;
         const chartEvidence = updated.content.evidence.find(item => item.artifactId === proportions.artifactId)!;
-        assert.match(workChartSvg(visual, chartEvidence), /6400/);
+        assert.match(workChartSvg(visual, chartEvidence), /6,400\.00/);
         assert.match(workChartSvg(visual, chartEvidence), /25.6%/);
         // A replay after a lost save response returns its receipt without a second write.
         await edits.tools.updateWorkReport.execute!(input, { ...call, toolCallId: 'retry-save' });

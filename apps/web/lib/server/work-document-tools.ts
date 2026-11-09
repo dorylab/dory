@@ -13,6 +13,11 @@ function agentDocument(document: Awaited<ReturnType<DBService['workDocuments']['
         createdAt: document.createdAt.toISOString(),
         updatedAt: document.updatedAt.toISOString(),
         archivedAt: document.archivedAt?.toISOString() ?? null,
+        editTarget: {
+            field: document.content.format === 'restricted-mdx' ? 'content.body' : 'content.markdown',
+            format: document.content.format ?? 'markdown',
+            revision: document.revision,
+        },
         content: {
             ...document.content,
             evidence: document.content.evidence.map(item => ({ ...item, rows: item.rows.slice(0, 10), truncated: item.truncated || item.rows.length > 10 })),
@@ -119,9 +124,9 @@ export function createWorkDocumentTools(options: {
                     ? `This request requires an embedded ${options.requiredChartType ?? ''} chart in the saved report. A chat chart alone is not completion. Save the visual and its body reference before answering.`
                     : '',
                 'Input validation failures are recoverable argument errors, not unsupported capabilities or service outages. Use only document IDs returned by a successful create/read or an error recovery hint. Never guess IDs. A chart MUST include chart:{type:"line",xKey:"date",yKey:"value"} for one metric, or chart:{type:"line",xKey:"month",yKeys:[{key:"net_revenue",label:"Net revenue"},{key:"order_count",label:"Orders"}]} for multiple metrics, using exact column names from that Artifact, not display labels or columns from a different result. Check the selected Artifact columns before saving each chart. If validation returns missingKeys and availableColumns, correct those keys or query the missing data; do not repeat the same invalid visual. Use either yKey or yKeys, never both. Multiple metrics render with separately labeled scales. Embed visuals using the registered MDX tags, or ![Title](dory://visual/VISUAL_ID) for legacy Markdown. Do not copy dory://chart links from chat into a report. A table needs no chart or metric field. Knowledge references are recorded separately; do not put dory://knowledge links or footnotes in Markdown. Report draft saved and report completed are different outcomes.',
-                'Complete update example: {"documentId":"RETURNED_DOCUMENT_ID","expectedRevision":1,"patch":{"edits":[{"oldText":"","newText":"## Results\\n\\n![Results](dory://visual/results)"}],"visuals":[{"id":"results","type":"table","title":"Results","evidenceId":"RETURNED_ARTIFACT_ID"}],"status":"ready"}}. All outer JSON objects must be closed.',
+                'Complete update example: {"documentId":"RETURNED_DOCUMENT_ID","expectedRevision":1,"patch":{"edits":[],"appendText":"## Results\\n\\n![Results](dory://visual/results)","visuals":[{"id":"results","type":"table","title":"Results","evidenceId":"RETURNED_ARTIFACT_ID"}],"status":"ready"}}. All outer JSON objects must be closed.',
                 'Query selected sources separately with explicit connectionId, never cross-source SQL joins. Read schemas before SQL. Cite only returned Artifact IDs. Never invent figures or causal claims. For refreshes rerun relevant queries and update prose with new evidence. Keep the old ready report on failure; explain missing work in chat.',
-                'Updates use patch: {edits:[{oldText,newText}],visuals?:[...],title?:string,status:draft|ready}. Keep edits small and use the shortest unique anchor; avoid copying entire sections or tables. Each oldText must match EXACTLY ONCE in the latest Markdown; use an empty oldText ONLY when the document is empty. To append, replace a unique existing ending with itself plus the new section. Preserve human edits and untouched prose. visuals, if supplied, upserts only the listed IDs; new visual IDs are embedded automatically and existing visuals are retained. To create a table card for the same query as a chart, use a NEW visual ID with type:table and the SAME evidenceId. Unreferenced visuals are removed automatically. Use explicit dory://evidence links, never footnotes such as [^1]. Read the current version before every edit and use expectedRevision. Conflicts require a fresh read and reconciliation.',
+                'Updates use patch: {edits:[{oldText,newText}],appendText?:string,visuals?:[...],title?:string,status:draft|ready}. Keep edits small and use the shortest unique anchor; avoid copying entire sections or tables. Each oldText must match EXACTLY ONCE in the latest editable text identified by editTarget; use an empty oldText ONLY when the document is empty. To append, use edits:[] and appendText with only the new section; do not copy or match the previous ending. For replacements, copy oldText from the exact editTarget field returned by the latest readWorkReport, not from a prior tool input or rendered preview. Preserve human edits and untouched prose. visuals, if supplied, upserts only the listed IDs; new visual IDs are embedded automatically and existing visuals are retained. To create a table card for the same query as a chart, use a NEW visual ID with type:table and the SAME evidenceId. Unreferenced visuals are removed automatically. Use explicit dory://evidence links, never footnotes such as [^1]. Read the current version before every edit and use expectedRevision. Conflicts require a fresh read and reconciliation.',
                 local
                     ? 'Use dory_finish_work report: {draft:{title,markdown,visuals,status}} for creation; to update use report:{documentId,expectedRevision,patch}. Save a draft early without finalAnswer. Before each update or after conflicts, read the latest report via dory_finish_work with status:active, findings:[], steps:["Read latest report"], report:{documentId,read:true}, without finalAnswer. Reading does not save or finish. Use returned reportDocumentId/reportRevision; include finalAnswer to finish a ready report. Do not call host-only report tools. Use dory_list_connections, dory_explore_schema, dory_run_readonly_sql, dory_search_assets, dory_read_asset; generic dory_read/dory_write are unavailable.'
                     : options.requireUpdate
@@ -193,13 +198,14 @@ export function createWorkDocumentTools(options: {
                 },
             }),
             readWorkReport: tool({
-                description: 'Read the latest Markdown, human changes, visual registry and revision of a private report.',
+                description:
+                    'Read the latest report, human changes, visual registry and revision. editTarget identifies the exact field to copy oldText anchors from. content.markdown is a rendered representation when editTarget.field is content.body.',
                 inputSchema: z.object({ documentId: z.string() }),
                 execute: async input => agentDocument(await options.db.workDocuments.get({ ...owner, documentId: input.documentId })),
             }),
             updateWorkReport: tool({
                 description:
-                    'Apply unique text replacements to the latest Markdown. Preserve human edits; reread on conflict. Save visuals and evidence atomically with the prose.',
+                    'Update a report at expectedRevision. Prefer patch:{edits:[],appendText:"new sections",status:"ready"} to append prose without anchors, and embedVisualIds to add charts. For replacements copy unique oldText from the last read editTarget field, never from a previous input or rendered preview. Preserve human edits; reread on conflict. Save visuals and evidence atomically with prose.',
                 inputSchema: z.object({ documentId: z.string(), expectedRevision: z.number().int().positive(), patch: workPatchSchema }),
                 execute: async (input, call) => {
                     if (options.requireUpdate && input.documentId !== options.documentId) throw new Error('Update the selected report, not another document.');

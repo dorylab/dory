@@ -3016,6 +3016,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dory/analysis@workspace:packages/analysis"
   dependencies:
+    "@dory/shared": "workspace:*"
     typescript: "npm:^6.0.2"
   languageName: unknown
   linkType: soft
@@ -3205,7 +3206,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dory/shared@npm:0.1.0, @dory/shared@workspace:packages/shared":
+"@dory/shared@npm:0.1.0, @dory/shared@workspace:*, @dory/shared@workspace:packages/shared":
   version: 0.0.0-use.local
   resolution: "@dory/shared@workspace:packages/shared"
   dependencies:

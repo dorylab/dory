@@ -1,8 +1,10 @@
 import { z } from 'zod';
 
+import { chartBuilderInputSchema } from '@/lib/charts/schema';
 import { workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
 
-const reportInputs = {
+const repairableInputs = {
+    chartBuilder: chartBuilderInputSchema,
     createWorkReport: workDraftSchema,
     readWorkReport: z.object({ documentId: z.string().min(1) }),
     updateWorkReport: z.object({ documentId: z.string().min(1), expectedRevision: z.number().int().positive(), patch: workPatchSchema }),
@@ -11,7 +13,7 @@ const reportInputs = {
 // Only close containers after a complete JSON value. Never repair strings,
 // commas, values or field names: those need a new, explicit model decision.
 export function repairWorkToolInput(toolName: string, input: string): string | null {
-    const schema = reportInputs[toolName as keyof typeof reportInputs];
+    const schema = repairableInputs[toolName as keyof typeof repairableInputs];
     if (!schema) return null;
     try {
         JSON.parse(input);

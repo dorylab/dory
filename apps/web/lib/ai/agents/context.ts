@@ -1,13 +1,13 @@
 import 'server-only';
 
-import { buildSchemaContext, buildSchemaContextForTables, getDefaultSchemaSampleLimits } from '@/lib/ai/prompts';
-import { buildDialectSqlPrompt, SYSTEM_PROMPT } from '@/lib/ai/prompts';
-import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
-import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
+import { getDBService } from '@dory/database';
 import type { Locale } from '@dory/i18n/routing';
 import type { ConnectionType } from '@dory/shared/types/connections';
-import { getDBService } from '@dory/database';
+
+import { buildDialectSqlPrompt, buildSchemaContext, buildSchemaContextForTables, CHART_BUILDER_GUIDE, getDefaultSchemaSampleLimits, SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import { resolveSemanticModelContext, type SemanticModelUsage } from '@/lib/server/semantic-model-context';
+import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
+import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
 
 export type DoryAgentSchemaTableRef = {
     database?: string | null;
@@ -35,6 +35,7 @@ type BuildDoryAgentContextOptions = {
     tableSchema?: string | null;
     connectionType?: ConnectionType | null;
     sqlToolEnabled?: boolean;
+    chartToolEnabled?: boolean;
     candidateTables?: DoryAgentSchemaTableRef[] | null;
     copilotEnvelope?: CopilotEnvelopeV1 | null;
     locale?: Locale;
@@ -150,7 +151,16 @@ export async function buildDoryAgentContext(options: BuildDoryAgentContextOption
     const sqlToolSection = options.sqlToolEnabled ? buildDialectSqlPrompt(options.connectionType ?? null) : '';
 
     return {
-        instructions: [options.baseSystem, options.userLanguageInstruction, SYSTEM_PROMPT, sqlToolSection, copilotContextSection, semanticContext, schemaSection]
+        instructions: [
+            options.baseSystem,
+            options.userLanguageInstruction,
+            SYSTEM_PROMPT,
+            sqlToolSection,
+            options.chartToolEnabled ? CHART_BUILDER_GUIDE : '',
+            copilotContextSection,
+            semanticContext,
+            schemaSection,
+        ]
             .filter(Boolean)
             .join('\n\n'),
         schemaContext,

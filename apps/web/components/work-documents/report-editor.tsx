@@ -22,7 +22,6 @@ export default function ReportEditor({
     restrictSources,
     title,
     onChange,
-    onEvidence,
     onEvidenceGroup,
 }: {
     ref?: Ref<ReportEditorHandle>;
@@ -31,7 +30,6 @@ export default function ReportEditor({
     restrictSources?: boolean;
     title: string;
     onChange: (content: WorkDocumentContent) => void;
-    onEvidence: (id: string, componentId?: string) => void;
     onEvidenceGroup?: (id: string) => void;
 }) {
     const t = useTranslations('WorkDocuments.Report');
@@ -110,7 +108,6 @@ export default function ReportEditor({
                         <ReportBody
                             content={current}
                             title={title}
-                            onEvidence={onEvidence}
                             onEvidenceGroup={onEvidenceGroup}
                             onEditComponent={id => {
                                 const visual = current.visuals.find(item => item.id === id);

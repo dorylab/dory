@@ -1,5 +1,6 @@
 import type { WorkDocumentView, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
 import { CHART_COLOR_PRESETS } from '@dory/shared/types/workspace-chart';
+import { chartRows, formatChartNumber } from '@dory/shared/utils/chat-chart';
 import { Marked, Renderer } from 'marked';
 
 import { reportMetrics, reportNumber } from './format';
@@ -21,12 +22,14 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
         // counts) readable without implying that they share the same units.
         const { type, xKey, yKeys } = visual.chart;
         const panels = yKeys.map(({ key, label }, index) => {
-            const svg = workChartSvg({ ...visual, title: label ?? key, chart: { type: type === 'pie' ? 'pie' : type, xKey, yKey: key } }, evidence);
+            const svg = workChartSvg({ ...visual, title: label ?? key, chart: { type: type === 'pie' ? 'pie' : type, xKey, yKey: key, options: visual.chart?.options } }, evidence);
             return `<g transform="translate(0,${index * 314})"><text x="65" y="20" fill="currentColor" font-size="14">${escapeHtml(label ?? key)}</text>${svg.replace('<svg ', '<svg y="24" width="660" height="290" ')}</g>`;
         });
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 ${314 * yKeys.length}" data-multiple-series="true" role="img" aria-label="${escapeHtml(visual.title)}">${panels.join('')}</svg>`;
     }
-    const { xKey, yKey, type } = visual.chart;
+    const { xKey, yKey, type, options } = visual.chart;
+    const formatValue = (value: unknown) => formatChartNumber(value, options?.valueFormat);
+    evidence = { ...evidence, rows: chartRows({ type: 'chart', chartType: type, xKey, yKeys: [{ key: yKey }], options, data: evidence.rows }) };
     const points = evidence.rows
         .map((row, index) => ({ label: formatWorkValue(row[xKey]), value: reportNumber(row[yKey]), index }))
         .filter((point): point is { label: string; value: number; index: number } => point.value !== null);
@@ -50,7 +53,7 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
                     'oklch(42.4% 0.199 265.638)',
                 ];
                 const color = `var(--chart-${(index % 5) + 1},${defaults[index % 5]})`;
-                const title = `${escapeHtml(point.label)}: ${point.value} (${((point.value / total) * 100).toFixed(1)}%)`;
+                const title = `${escapeHtml(point.label)}: ${escapeHtml(formatValue(point.value))} (${((point.value / total) * 100).toFixed(1)}%)`;
                 const slice =
                     point.value === total
                         ? `<circle cx="180" cy="145" r="100" fill="${color}"><title>${title}</title></circle>`
@@ -63,10 +66,13 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
     }
     const low = Math.min(0, ...points.map(point => point.value));
     const high = Math.max(0, ...points.map(point => point.value));
+    const ticks = [low, (low + high) / 2, high];
+    const formatTick = (value: number) => formatChartNumber(value, options?.valueFormat, 'en', true);
+    const left = Math.min(180, Math.max(65, ...ticks.map(value => formatTick(value).length * 7 + (options?.yAxisLabel ? 30 : 10))));
     const range = high - low || 1;
     const y = (value: number) => 230 - ((value - low) / range) * 200;
-    const step = 560 / Math.max(1, evidence.rows.length);
-    const x = (i: number) => 65 + step * (i + 0.5);
+    const step = (625 - left) / Math.max(1, evidence.rows.length);
+    const x = (i: number) => left + step * (i + 0.5);
     const segments: (typeof points)[] = [];
     for (const point of points) {
         const previous = segments.at(-1);
@@ -87,7 +93,7 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
                           segment
                               .map(
                                   p =>
-                                      `<circle cx="${x(p.index)}" cy="${y(p.value)}" r="3" fill="var(--chart-1,currentColor)"><title>${escapeHtml(p.label)}: ${p.value}</title></circle>`,
+                                      `<circle cx="${x(p.index)}" cy="${y(p.value)}" r="3" fill="var(--chart-1,currentColor)"><title>${escapeHtml(p.label)}: ${escapeHtml(formatValue(p.value))}</title></circle>`,
                               )
                               .join('')
                       );
@@ -96,10 +102,11 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
             : points
                   .map(
                       p =>
-                          `<rect x="${x(p.index) - step * 0.35}" y="${Math.min(y(0), y(p.value))}" width="${step * 0.7}" height="${Math.max(1, Math.abs(y(0) - y(p.value)))}" fill="var(--chart-1,currentColor)"><title>${escapeHtml(p.label)}: ${p.value}</title></rect>`,
+                          `<rect x="${x(p.index) - step * 0.35}" y="${Math.min(y(0), y(p.value))}" width="${step * 0.7}" height="${Math.max(1, Math.abs(y(0) - y(p.value)))}" fill="var(--chart-1,currentColor)"><title>${escapeHtml(p.label)}: ${escapeHtml(formatValue(p.value))}</title></rect>`,
                   )
                   .join('');
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 290" role="img" aria-label="${escapeHtml(visual.title)}"><line x1="65" x2="625" y1="${y(0)}" y2="${y(0)}" stroke="currentColor" opacity=".3"/>${[low, (low + high) / 2, high].map(value => `<text x="58" y="${y(value) + 4}" text-anchor="end" fill="currentColor" font-size="11">${escapeHtml(value.toLocaleString(undefined, { maximumFractionDigits: 2 }))}</text>`).join('')}${body}${points
+    const axisLabels = `${options?.xAxisLabel ? `<text x="${(left + 625) / 2}" y="280" text-anchor="middle" fill="currentColor" font-size="12">${escapeHtml(options.xAxisLabel)}</text>` : ''}${options?.yAxisLabel ? `<text transform="translate(14 130) rotate(-90)" text-anchor="middle" fill="currentColor" font-size="12">${escapeHtml(options.yAxisLabel)}</text>` : ''}`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 290" role="img" aria-label="${escapeHtml(visual.title)}"><line x1="${left}" x2="625" y1="${y(0)}" y2="${y(0)}" stroke="currentColor" opacity=".3"/>${ticks.map(value => `<text x="${left - 7}" y="${y(value) + 4}" text-anchor="end" fill="currentColor" font-size="11">${escapeHtml(formatTick(value))}</text>`).join('')}${axisLabels}${body}${points
         .filter((_, i) => i % Math.max(1, Math.ceil(points.length / 8)) === 0)
         .map(p => `<text x="${x(p.index)}" y="257" text-anchor="middle" fill="currentColor" font-size="11">${escapeHtml(p.label.slice(0, 18))}</text>`)
         .join('')}</svg>`;

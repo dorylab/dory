@@ -365,7 +365,7 @@ export default function ReportComponentDialog({
                                     {t('PendingBinding')}
                                 </p>
                             ) : valid ? (
-                                <ReportBody content={preview} title="" onEvidence={() => {}} previewOnly />
+                                <ReportBody content={preview} title="" />
                             ) : (
                                 <p className="text-sm text-muted-foreground">{t('CheckComponent')}</p>
                             )}

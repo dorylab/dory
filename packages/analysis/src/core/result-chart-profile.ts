@@ -89,22 +89,7 @@ export type ResultAutoChartOverrides = Omit<Partial<ResultAutoChartState>, 'char
     categoryKey?: string;
 };
 
-export type ResultAutoChartPart = {
-    type: 'chart';
-    chartType: 'bar' | 'line' | 'area' | 'pie';
-    title?: string;
-    description?: string;
-    data: Array<Record<string, unknown>>;
-    xKey?: string;
-    yKeys?: Array<{ key: string; label?: string; color?: string }>;
-    categoryKey?: string;
-    valueKey?: string;
-    options?: {
-        stacked?: boolean;
-        xKeyType?: 'time' | 'category' | 'number';
-        sortBy?: 'x' | 'value';
-    };
-};
+export type ResultAutoChartPart = import('@dory/shared/types/chat-chart').ChartResultPart;
 
 type RawColumn = Partial<ResultAutoChartColumnInput> & {
     normalizedType?: unknown;

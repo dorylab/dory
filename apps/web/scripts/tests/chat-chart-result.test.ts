@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { ModelMessage } from 'ai';
+
 import { buildQueryChart, getChartResultFromPart } from '@/lib/agent-runs/chart-result';
 import { createChartBuilderTool } from '@/app/api/chat/tools/chart-builder';
-import type { ModelMessage } from 'ai';
 
 const rows = [
     { status: 'succeeded', count: 7829 },
@@ -131,4 +132,56 @@ test('truncated query previews remain labeled and cannot become complete pie pro
     assert.equal(buildQueryChart(config, history).source?.truncated, true);
     assert.equal(buildQueryChart(config, history).source?.rowCount, 1000);
     assert.equal(buildQueryChart({ chartType: 'pie', categoryKey: 'status', valueKey: 'count' }, history).dataState, 'incomplete');
+});
+
+test('chronological metadata survives tool serialization, with separate numeric series', async () => {
+    const tool = createChartBuilderTool('en');
+    const result = await tool.execute!(
+        {
+            chartType: 'bar',
+            title: 'Annual performance',
+            xKey: 'year',
+            yKeys: [
+                { key: 'revenue', label: 'Revenue' },
+                { key: 'profit', label: 'Profit' },
+            ],
+            options: { valueFormat: { scale: 100000000, suffix: '亿元', precision: 2 }, xAxisLabel: 'Fiscal year' },
+        },
+        {
+            toolCallId: 'chronological',
+            context: {},
+            messages: messages({
+                ...saved,
+                result: [
+                    { year: 2026, revenue: 1000000000, profit: -100000000 },
+                    { year: 2024, revenue: 2000000000, profit: null },
+                    { year: 2025, revenue: 1500000000, profit: 100000000 },
+                ],
+            }) as ModelMessage[],
+        },
+    );
+    const restored = getChartResultFromPart({ output: JSON.parse(JSON.stringify(result)) })!;
+    assert.equal(restored.options?.xKeyType, 'time');
+    assert.equal(restored.options?.sortDirection, 'asc');
+    assert.equal(restored.options?.valueFormat?.scale, 100000000);
+    assert.equal(restored.yKeys?.length, 2);
+    assert.equal(restored.data.find(row => row.year === 2024)?.profit, null);
+});
+
+test('long-form and mixed-period duplicates require a new query rather than implicit aggregation', async () => {
+    const input = { chartType: 'line' as const, xKey: 'year', yKeys: [{ key: 'amount' }] };
+    const history = messages({
+        ...saved,
+        result: [
+            { year: 2025, metric: 'revenue', amount: 100 },
+            { year: 2025, metric: 'profit', amount: 10 },
+        ],
+    });
+    assert.equal(buildQueryChart(input, history).dataState, 'duplicate-x');
+    await assert.rejects(
+        createChartBuilderTool('en').execute!(input, { toolCallId: 'duplicates', context: {}, messages: history as ModelMessage[] }) as Promise<unknown>,
+        /Repeated X values/,
+    );
+    // Inferred axes cannot silently aggregate the same ambiguous source either.
+    assert.equal(buildQueryChart({ chartType: 'line' }, history).dataState, 'duplicate-x');
 });

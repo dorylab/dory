@@ -174,9 +174,9 @@ export function WorkReport({
         navigate();
     };
     const evidenceOpener = useRef<HTMLElement | null>(null);
-    const openEvidence = (artifactId: string, componentId?: string) => {
+    const openEvidence = (artifactId: string) => {
         evidenceOpener.current = window.document.activeElement as HTMLElement;
-        setEvidenceSelection({ artifactId, componentId });
+        setEvidenceSelection({ artifactId });
     };
     const openEvidenceGroup = (groupId: string) => {
         evidenceOpener.current = window.document.activeElement as HTMLElement;
@@ -549,7 +549,6 @@ export function WorkReport({
                                         content={document.content}
                                         title={document.title}
                                         onChange={content => change({ ...document, content })}
-                                        onEvidence={openEvidence}
                                         onEvidenceGroup={openEvidenceGroup}
                                     />
                                 ) : (
@@ -557,7 +556,6 @@ export function WorkReport({
                                         key={document.revision}
                                         content={document.content}
                                         title={document.title}
-                                        onEvidence={openEvidence}
                                         onEvidenceGroup={openEvidenceGroup}
                                     />
                                 )}

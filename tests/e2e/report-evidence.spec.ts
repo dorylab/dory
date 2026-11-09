@@ -203,7 +203,7 @@ test('source dialog previews SQL and distinguishes complete, unknown and unavail
         truncated: false,
         runId: null,
     };
-    const body = '# Source dialog\n\n<DataTable source="logs" />';
+    const body = '# Source dialog\n\n[Log query](dory://evidence/dialog-source)\n\n<DataTable source="logs" />';
     const visuals = [{ id: 'logs', type: 'table' as const, title: 'Logs', evidenceId: evidence.artifactId }];
     const document: WorkDocumentView = {
         id: 'dialog-report',
@@ -233,7 +233,7 @@ test('source dialog previews SQL and distinguishes complete, unknown and unavail
     await page.route('**/api/actions/execute', route => {
         const { actionId, input } = route.request().postDataJSON();
         if (actionId === 'report.evidence.inspect') {
-            expect(input.componentId).toBe('logs');
+            expect(input.artifactId).toBe(evidence.artifactId);
             expect(input.snapshotId).toBe('dialog-snapshot');
             return route.fulfill({ json: { ok: true, data: { evidence, fullResultAvailable: fullAvailable, artifactAvailable: true, canOpenWorkspace: true } } });
         }
@@ -245,7 +245,7 @@ test('source dialog previews SQL and distinguishes complete, unknown and unavail
     const organization = new URL(page.url()).pathname.split('/')[1];
     const url = `/${organization}/reports/dialog-report`;
     await page.goto(url);
-    const trigger = page.getByRole('button', { name: 'View source and data', exact: true });
+    const trigger = page.getByRole('link', { name: 'Log query', exact: true });
     await trigger.click();
     const dialog = page.getByTestId('report-evidence-panel');
     await expect(dialog.getByRole('heading', { name: 'Sources and data', exact: true })).toBeVisible();
@@ -264,7 +264,7 @@ test('source dialog previews SQL and distinguishes complete, unknown and unavail
     await dialog.getByRole('textbox', { name: 'Search loaded rows' }).fill('missing');
     await expect(dialog.getByText('No matching rows in the loaded data.')).toBeVisible();
     await dialog.getByRole('textbox', { name: 'Search loaded rows' }).fill('');
-    await expect(dialog.getByRole('link', { name: 'Edit SQL', exact: true })).toHaveAttribute('href', /componentId=logs/);
+    await expect(dialog.getByRole('link', { name: 'Edit SQL', exact: true })).toHaveAttribute('href', /workspace\/dialog-source\?/);
     const bounds = await dialog.boundingBox();
     expect(bounds!.width).toBeLessThanOrEqual(960);
     expect(Math.abs(bounds!.x + bounds!.width / 2 - page.viewportSize()!.width / 2)).toBeLessThan(2);

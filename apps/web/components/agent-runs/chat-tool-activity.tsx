@@ -12,12 +12,15 @@ import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-r
 import type { SqlResultBodyProps } from '@/components/@dory/ui/ai/sql-result/type';
 import { Tool, ToolContent, ToolHeader } from '@/components/ai-elements/tool';
 
+import { ChatToolError } from './chat-tool-error';
+
 export type ChatMessageToolRow = ChatMessageTool & {
     title?: string;
     state: ChatToolState;
     content: ReactNode;
     input?: unknown;
     output?: unknown;
+    errorText?: string;
     noResults?: boolean;
 };
 
@@ -88,8 +91,8 @@ function RecordedToolDetail({ activity, open, workId, ...actions }: SqlActions &
     const event = activity.events.at(-1);
     const input = event?.inputSummary ?? {};
     const output = event?.outputSummary ?? {};
-    const error = activity.events.find(item => item.errorMessage)?.errorMessage;
-    if (error) return <p className="whitespace-pre-wrap text-destructive">{error}</p>;
+    const error = event?.errorMessage;
+    if (error && chatToolActivityState(activity) === 'output-error') return <ChatToolError error={error} toolName={activity.toolName} />;
     if (activity.toolName === 'sqlRunner' && workId && typeof output.sessionId === 'string') {
         return <SavedSqlDetail workId={workId} sessionId={output.sessionId} open={open} {...actions} />;
     }
@@ -247,7 +250,7 @@ function ChatToolActivityRow({ activity, workId, ended, ...actions }: SqlActions
                     <details className="text-xs text-muted-foreground">
                         <summary className="cursor-pointer">{t('Timeline.ShowRawDetails')}</summary>
                         <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 p-2">
-                            {JSON.stringify(activity.events.length ? activity.events : { input: message?.input, output: message?.output }, null, 2)}
+                            {JSON.stringify(activity.events.length ? activity.events : { input: message?.input, output: message?.output, error: message?.errorText }, null, 2)}
                         </pre>
                     </details>
                 </div>

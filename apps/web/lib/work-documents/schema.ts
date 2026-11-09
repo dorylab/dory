@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { chartOptionsSchema } from '@/lib/charts/schema';
+
 export const databaseSelectionsSchema = z.record(z.string().min(1), z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]));
 
 export const analysisScopeSchema = z
@@ -40,7 +42,7 @@ export const workspaceChartSpecSchema = z.object({
         .optional(),
     search: z.object({ text: z.string().max(1000), columns: z.array(z.string()).optional() }).optional(),
 });
-const chartAxes = { type: z.enum(['bar', 'line', 'area', 'pie']), xKey: z.string().min(1) };
+const chartAxes = { type: z.enum(['bar', 'line', 'area', 'pie']), xKey: z.string().min(1), options: chartOptionsSchema.optional() };
 const workChartSchema = z.union([
     z.object({ ...chartAxes, yKey: z.string().min(1) }).strict(),
     z
@@ -160,7 +162,17 @@ export const workPatchSchema = z
                 'Complete evidence group list for paragraph links [Evidence](dory://evidence-group/GROUP_ID). Each group contains id and references:[{artifactId,explanation?}]. Omit to preserve groups; removing the paragraph link removes its group.',
             ),
         format: z.literal('restricted-mdx').optional(),
-        edits: z.array(z.object({ oldText: z.string().max(200000), newText: z.string().max(200000) })).max(100),
+        edits: z
+            .array(z.object({ oldText: z.string().max(200000), newText: z.string().max(200000) }))
+            .max(100)
+            .describe(
+                'Exact replacements in the editTarget field returned by readWorkReport. For adding sections, use edits:[] and appendText instead of matching a previous ending.',
+            ),
+        appendText: z
+            .string()
+            .max(200000)
+            .optional()
+            .describe('Append new prose after the existing body, without an oldText anchor. Uses the stored format and expectedRevision. Use embedVisualIds for charts.'),
         visuals: z
             .array(workVisualSchema)
             .max(100)
@@ -176,13 +188,16 @@ export const workPatchSchema = z
     .strict();
 
 export function applyMarkdownEdits(markdown: string, edits: z.infer<typeof workPatchSchema>['edits']): string {
-    for (const { oldText, newText } of edits) {
+    for (const [editIndex, { oldText, newText }] of edits.entries()) {
         if (!oldText) {
             if (markdown) throw new Error('An empty anchor is only allowed for an empty document. Read the latest report.');
             markdown = newText;
         } else {
             const index = markdown.indexOf(oldText);
-            if (index < 0 || markdown.indexOf(oldText, index + 1) >= 0) throw new Error('Edit anchor must match exactly once. Read the latest report and use a unique anchor.');
+            if (index < 0 || markdown.indexOf(oldText, index + 1) >= 0)
+                throw new Error(
+                    `Edit anchor must match exactly once. Edit ${editIndex + 1}: ${index < 0 ? 'anchor not found' : 'anchor matches multiple locations'}. Read the latest report and copy a unique anchor from its editTarget field. To add sections use edits:[] and appendText; to add charts use embedVisualIds.`,
+                );
             markdown = markdown.slice(0, index) + newText + markdown.slice(index + oldText.length);
         }
     }

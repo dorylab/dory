@@ -1,31 +1,32 @@
 'use client';
 
-import { inlineMessageMentions } from '@/components/work-documents/inline-message-mentions';
-
-import { ChatCompletionCard } from '@/components/agent-runs/chat-completion';
 import { ReactNode } from 'react';
-import type { ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
 import Image from 'next/image';
-import { chatReferenceSchema, referenceKey } from '@/lib/chat-context/types';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenuItem } from '@/registry/new-york-v4/ui/dropdown-menu';
+import type { ChartOverride } from '@dory/shared/types/chat-chart';
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
-import { getAssistantResponseError, getChatCompletion, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
 
 import { buildChatChartLayout } from '@/lib/agent-runs/chat-chart-layout';
 import { getChatResponseText } from '@/lib/agent-runs/chat-response';
+import type { ChatTimelineItem } from '@/lib/agent-runs/chat-timeline';
 import { getAgentActivityTitleKey } from '@/lib/agent-runs/summary';
+import { getAssistantResponseError, getChatCompletion, getReportSaveError, hasLaterAssistantResponse } from '@/lib/ai/chat-response-state';
+import { chatReferenceSchema, referenceKey } from '@/lib/chat-context/types';
 import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
 import { ChartResultCard, ChartResultPart } from '@/components/@dory/ui/ai/charts-result';
+import { ChatChart } from '@/components/@dory/ui/ai/charts-result/chat-chart';
 import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
 import { SqlResultManualExecutionMode, SqlResultPart } from '@/components/@dory/ui/ai/sql-result/type';
 import { buildAutoChartFromSql } from '@/components/@dory/ui/ai/utils/auto-charts';
+import { ChatCompletionCard } from '@/components/agent-runs/chat-completion';
 import { ChatAnalysisProcess, ChatRunActivity, ChatTimeline } from '@/components/agent-runs/chat-run-activity';
 import { type ChatMessageToolRow } from '@/components/agent-runs/chat-tool-activity';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
+import { inlineMessageMentions } from '@/components/work-documents/inline-message-mentions';
 
 import type { CopilotActionExecutor } from '../copilot/action-bridge';
 import { ChatMode } from '../core/types';
@@ -57,6 +58,8 @@ import {
 } from './message-tool-compat';
 
 type MessageRendererProps = {
+    sessionId?: string | null;
+    onChartUpdated?: (toolCallId: string, entry: ChartOverride) => void;
     message: UIMessage;
     messageIndex: number;
     messages: UIMessage[];
@@ -74,6 +77,8 @@ type MessageRendererProps = {
 
 const MessageRenderer = ({
     message,
+    sessionId,
+    onChartUpdated,
     messageIndex,
     messages,
     status,
@@ -197,7 +202,16 @@ const MessageRenderer = ({
                         part.type === 'text' ? (
                             renderTextPart(part.text, `${key}-prose-${index}`, false)
                         ) : (
-                            <ChartResultCard key={`${key}-chart-${part.chartId}`} result={inlineCharts.get(part.chartId)!} source="tool" />
+                            <ChatChart
+                                key={`${key}-chart-${part.chartId}`}
+                                result={inlineCharts.get(part.chartId)!}
+                                metadata={message.metadata}
+                                toolCallId={part.chartId}
+                                messageId={message.id}
+                                sessionId={sessionId}
+                                editable={!isStreaming}
+                                onUpdated={onChartUpdated}
+                            />
                         ),
                     )}
                 </div>
@@ -318,6 +332,7 @@ const MessageRenderer = ({
             state,
             input,
             output,
+            errorText,
             noResults: getToolName(part) === 'search_assets' && Array.isArray(output?.assets) && output.assets.length === 0,
             content: resultContent ? (
                 <div className="space-y-3">
@@ -361,7 +376,18 @@ const MessageRenderer = ({
             chartResults.push(chartResult);
             renderToolStateCard({ part, key, fallbackInput: inferToolArgsFromResult(part) });
             if (chartLayout.placed.has(chart.id) || (isLatestAssistant && isStreaming)) return null;
-            return <ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />;
+            return (
+                <ChatChart
+                    key={`${key}-chart`}
+                    result={chartResult}
+                    metadata={message.metadata}
+                    toolCallId={getToolCallId(part) ?? `part-${index}`}
+                    messageId={message.id}
+                    sessionId={sessionId}
+                    editable={!isStreaming}
+                    onUpdated={onChartUpdated}
+                />
+            );
         }
         if (!toolName) return null;
         return renderToolStateCard({ part, key, fallbackInput: inferToolArgsFromResult(part) });

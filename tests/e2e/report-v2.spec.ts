@@ -209,7 +209,7 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
         expect(visual.border).toBe('0px');
     }
     await expect(page.getByRole('button', { name: 'View source', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'View source and data', exact: true })).toHaveCount(3);
+    await expect(page.getByRole('button', { name: 'View source and data', exact: true })).toHaveCount(0);
 
     const surface = page.getByTestId('work-report');
     expect(

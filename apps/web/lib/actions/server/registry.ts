@@ -4,6 +4,7 @@ import { aiActions } from './domains/ai';
 import { artifactActions } from './domains/artifact';
 import { catalogActions } from './domains/catalog';
 import { chartActions } from './domains/chart';
+import { chatActions } from './domains/chat';
 import { comparisonActions } from './domains/comparison';
 import { connectionActions } from './domains/connection';
 import { knowledgeActions } from './domains/knowledge';
@@ -28,6 +29,7 @@ webActionRegistry.registerMany([
     ...tabActions,
     ...savedQueryActions,
     ...chartActions,
+    ...chatActions,
     ...catalogActions,
     ...aiActions,
     ...artifactActions,

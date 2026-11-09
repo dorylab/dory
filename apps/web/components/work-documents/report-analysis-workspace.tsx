@@ -851,7 +851,7 @@ function Analysis({
                             <DialogTitle>{t('Preview')}</DialogTitle>
                             <DialogDescription>{t('PreviewDescription')}</DialogDescription>
                         </DialogHeader>
-                        <ReportBody title={state.title} content={state.content} onEvidence={() => undefined} previewOnly />
+                        <ReportBody title={state.title} content={state.content} />
                     </DialogContent>
                 </Dialog>
                 <Dialog open={review} onOpenChange={setReview}>
@@ -867,7 +867,7 @@ function Analysis({
                                 </li>
                             ))}
                         </ul>
-                        <ReportBody title={state.title} content={state.content} onEvidence={() => undefined} previewOnly />
+                        <ReportBody title={state.title} content={state.content} />
                         <label className="flex gap-2 text-sm">
                             <input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />
                             {t('Reviewed')}

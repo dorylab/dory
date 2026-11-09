@@ -11,7 +11,8 @@ import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-gro
 import { reportNumber } from '@/lib/work-documents/format';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
 import { legacyToMdx, parseReport, reportEmbeds, reportTagSource, resolvedReport } from '@/lib/work-documents/report-core';
-import { analysisScopeSchema, applyMarkdownEdits, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
+import { applyReportTextPatch } from '@/lib/work-documents/report-patch';
+import { analysisScopeSchema, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
 
 import { resolveReportChatCharts } from './report-chat-charts';
 
@@ -442,18 +443,11 @@ export async function patchWorkDocument(
         return existing;
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const patch = workPatchSchema.parse(input.patch);
-    // Older callers omit format even when emitting the registered MDX components.
-    // Legacy dory://visual edits keep using the presentation Markdown contract.
-    if (!patch.format && !patch.edits.some(edit => /dory:\/\/visual\//.test(edit.oldText + edit.newText))) {
-        patch.format = existing.content.format;
-    }
-    if (!patch.format && patch.edits.some(edit => /<(?:Chart|DataTable|Metric)\s+source=/.test(edit.newText))) patch.format = 'restricted-mdx';
     let markdown: string;
     try {
-        markdown = applyMarkdownEdits(
-            patch.format ? (existing.content.body ?? legacyToMdx(existing.content.markdown, existing.content.visuals)) : existing.content.markdown,
-            patch.edits,
-        );
+        const edited = applyReportTextPatch(existing.content, patch);
+        markdown = edited.markdown;
+        patch.format = edited.format;
     } catch (error) {
         throw new DatabaseError(error instanceof Error ? error.message : 'Invalid edit.', 409);
     }

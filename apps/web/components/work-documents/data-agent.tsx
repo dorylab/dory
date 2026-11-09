@@ -420,7 +420,7 @@ function AgentConversation({
             }),
         );
     }
-    const { messages, sendMessage, status, error, stop } = useChat({ chat: chats.get(chatId)! });
+    const { messages, sendMessage, status, error, stop, setMessages } = useChat({ chat: chats.get(chatId)! });
     useEffect(() => {
         onMessages(messages);
     }, [messages, onMessages]);
@@ -507,6 +507,25 @@ function AgentConversation({
                         {messages.map((message, index) => (
                             <div key={message.id}>
                                 <MessageRenderer
+                                    sessionId={chatId}
+                                    onChartUpdated={(toolCallId, entry) =>
+                                        setMessages(previous =>
+                                            previous.map(item =>
+                                                item.id === message.id
+                                                    ? {
+                                                          ...item,
+                                                          metadata: {
+                                                              ...(item.metadata as Record<string, unknown> | undefined),
+                                                              chartOverrides: {
+                                                                  ...((item.metadata as { chartOverrides?: Record<string, unknown> } | undefined)?.chartOverrides ?? {}),
+                                                                  [toolCallId]: entry,
+                                                              },
+                                                          },
+                                                      }
+                                                    : item,
+                                            ),
+                                        )
+                                    }
                                     message={message}
                                     messageIndex={index}
                                     messages={messages}

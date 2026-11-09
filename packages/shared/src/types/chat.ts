@@ -1,3 +1,5 @@
+import type { ChartOverride, ChatChartUpdate } from './chat-chart';
+
 // -----------------------------
 // Session
 // -----------------------------
@@ -100,6 +102,14 @@ export interface ChatSessionPatchById {
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export type ChatMessagePart =
+    | {
+          type: `tool-${string}`;
+          toolCallId: string;
+          state: 'input-streaming' | 'input-available' | 'output-available' | 'output-error' | 'output-denied';
+          input?: unknown;
+          output?: unknown;
+          errorText?: string;
+      }
     | { type: 'file'; filename?: string; mediaType: string; url: string; byteSize?: number }
     | { type: 'text'; text: string }
     | { type: 'code'; lang?: string; text: string }
@@ -171,6 +181,7 @@ export interface ChatMessageInsert {
 }
 
 export interface ChatRepository {
+    updateChartPresentation(params: ChatChartUpdate & { organizationId: string; userId: string }): Promise<ChartOverride>;
     init(): Promise<void>;
 
     createOrGetCopilotSession(input: ChatSessionCreateOrGetCopilot): Promise<ChatSessionRecord>;

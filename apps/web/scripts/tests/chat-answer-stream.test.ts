@@ -64,3 +64,18 @@ test('the plain-text reply after a failed save supersedes its draft answer', () 
         '42 orders. The conclusion could not be saved.',
     );
 });
+
+test('model history includes the saved presentation while leaving original tool evidence intact', () => {
+    const chart = { type: 'chart', chartType: 'line', data: [{ year: 2025, revenue: 42 }] };
+    const history = prepareChatHistory([
+        {
+            id: 'edited',
+            role: 'assistant',
+            metadata: { chartOverrides: { call: { version: 1, presentation: { chartType: 'bar', title: 'Reviewed chart', xKey: 'year', yKeys: [{ key: 'revenue' }] } } } },
+            parts: [{ type: 'tool-chartBuilder', toolCallId: 'call', input: {}, state: 'output-available', output: chart }],
+        },
+    ]);
+    assert.deepEqual((history[0].parts[0] as { output: unknown }).output, chart);
+    assert.equal(history[0].parts[1].type, 'text');
+    assert.match(JSON.stringify(history[0].parts[1]), /Reviewed chart/);
+});

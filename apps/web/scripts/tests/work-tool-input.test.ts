@@ -239,3 +239,14 @@ test('invalid SDK tool inputs enter recovery accounting and unchanged repeated f
     assert.equal(writes, 0);
     assert.equal(state.actionAttempts, 2);
 });
+
+test('chart repair closes missing braces without changing fields or accepting data rows', () => {
+    const chart = { artifactId: 'verified-result', chartType: 'bar', xKey: 'year', yKeys: [{ key: 'value' }], options: { valueFormat: { scale: 100000000, suffix: '亿' } } };
+    const valid = JSON.stringify(chart);
+    assert.equal(repairWorkToolInput('chartBuilder', valid.slice(0, -1)), valid);
+    assert.equal(repairWorkToolInput('chartBuilder', valid.slice(0, -2)), valid);
+    assert.equal(repairWorkToolInput('chartBuilder', valid), null);
+    assert.equal(repairWorkToolInput('chartBuilder', JSON.stringify({ ...chart, data: [{ value: 1 }] }).slice(0, -1)), null);
+    assert.equal(repairWorkToolInput('chartBuilder', valid.replace('"bar"', '"unsupported"').slice(0, -1)), null);
+    assert.equal(repairWorkToolInput('chartBuilder', valid.slice(0, -5)), null);
+});

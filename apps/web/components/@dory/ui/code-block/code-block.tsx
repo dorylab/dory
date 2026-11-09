@@ -1,15 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Button } from '@/registry/new-york-v4/ui/button';
+import { cn } from '@dory/web-utils';
+import { Check, Copy } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import type { SyntaxHighlighterProps } from 'react-syntax-highlighter';
-import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
-import { useTheme } from 'next-themes';
+import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 
-import { cn } from '@dory/web-utils';
-import { Button } from '@/registry/new-york-v4/ui/button';
 import { studioPrismDarkTheme, studioPrismLightTheme } from './studio-prism-theme';
 
 SyntaxHighlighter.registerLanguage('sql', sql);
@@ -28,6 +28,7 @@ interface SmartCodeBlockProps {
     variant?: 'default' | 'soft' | 'bare' | 'codex';
     forceThemeMode?: 'light' | 'dark';
     onCopy?: () => void;
+    copyLabel?: string;
     actions?: React.ReactNode;
 }
 
@@ -42,6 +43,7 @@ export function SmartCodeBlock({
     variant = 'default',
     forceThemeMode,
     onCopy,
+    copyLabel,
     actions,
 }: SmartCodeBlockProps) {
     const [copied, setCopied] = React.useState(false);
@@ -163,7 +165,7 @@ export function SmartCodeBlock({
                 <div
                     className={cn(
                         'absolute right-1 top-1 z-10 flex items-center gap-1.5',
-                        'opacity-0 transition-opacity group-hover:opacity-100',
+                        'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100',
                         (copied || actions) && 'opacity-100',
                     )}
                 >
@@ -177,6 +179,7 @@ export function SmartCodeBlock({
                                 : 'h-6 w-6 rounded-full bg-background/68 shadow-sm backdrop-blur-[2px]',
                             variant === 'soft' || variant === 'bare' || variant === 'codex' ? 'border-0' : 'border',
                         )}
+                        aria-label={copyLabel}
                         onClick={handleCopy}
                     >
                         {copied ? (

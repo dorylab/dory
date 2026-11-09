@@ -1,4 +1,7 @@
 import { jsonSchema, type ToolSet } from 'ai';
+import { z } from 'zod';
+
+import { chartPresentationSchema } from '@/lib/charts/schema';
 
 type JsonSchema = Record<string, unknown>;
 
@@ -30,44 +33,7 @@ export const SQL_RUNNER_INPUT_SCHEMA: JsonSchema = {
     },
 };
 
-export const CHART_BUILDER_INPUT_SCHEMA: JsonSchema = {
-    type: 'object',
-    additionalProperties: false,
-    required: ['chartType'],
-    properties: {
-        title: { type: 'string' },
-        description: { type: 'string' },
-        chartType: {
-            type: 'string',
-            enum: ['bar', 'line', 'area', 'pie'],
-        },
-        xKey: { type: 'string' },
-        yKeys: {
-            type: 'array',
-            items: {
-                type: 'object',
-                additionalProperties: false,
-                required: ['key'],
-                properties: {
-                    key: { type: 'string', minLength: 1 },
-                    label: { type: 'string' },
-                    color: { type: 'string' },
-                },
-            },
-        },
-        categoryKey: { type: 'string' },
-        valueKey: { type: 'string' },
-        options: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-                stacked: { type: 'boolean' },
-                xKeyType: { type: 'string', enum: ['time', 'category', 'number'] },
-                sortBy: { type: 'string', enum: ['x', 'value'] },
-            },
-        },
-    },
-};
+export const CHART_BUILDER_INPUT_SCHEMA: JsonSchema = z.toJSONSchema(chartPresentationSchema.extend({ artifactId: z.string().min(1).optional() }));
 
 export function buildCloudToolDeclarations(options: {
     includeSqlRunner: boolean;

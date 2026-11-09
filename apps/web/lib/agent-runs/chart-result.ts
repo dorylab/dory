@@ -1,5 +1,6 @@
-import { buildResultAutoChartProfile, toChartResultPart } from '@dory/analysis/core/result-chart-profile';
-import type { ChartResultPart } from '@/components/@dory/ui/ai/charts-result';
+import type { ChartResultPart } from '@dory/shared/types/chat-chart';
+import { chartNumber, isChartTimeAxis, readStoredChart, validateChartPresentation } from '@dory/shared/utils/chat-chart';
+
 import { getSqlResultFromPart, isSqlToolPart, record, toolResultValue } from './sql-result';
 
 type Message = { role: string; content?: unknown; parts?: unknown[] };
@@ -59,17 +60,37 @@ export function buildChartFromQuery(config: ChartConfig, query: ChartQuery | nul
         type: 'chart',
         data: [],
         source: query
-            ? { ...query.source, rowCount: query.result?.rowCount, truncated: query.result?.truncated, columns: query.result?.columns?.map(column => column.name) }
+            ? {
+                  ...query.source,
+                  rowCount: query.result?.rowCount,
+                  truncated: query.result?.truncated,
+                  columns: query.result?.columns?.map(column => column.name),
+                  sql: query.result?.sql ?? undefined,
+                  database: query.result?.database ?? undefined,
+              }
             : undefined,
     };
     if (config.chartType === 'pie' && query?.result?.truncated) return { ...base, dataState: 'incomplete' };
     if (!query?.result?.ok) return { ...base, dataState: 'missing' };
     const rows = query.result.previewRows ?? [];
     if (!rows.length) return { ...base, dataState: 'empty' };
-    const x = config.xKey ?? config.categoryKey;
-    const ys = config.yKeys?.length ? config.yKeys.map(series => series.key) : config.valueKey ? [config.valueKey] : [];
+    const columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
+    const x =
+        config.xKey ??
+        config.categoryKey ??
+        columns.find(key => isChartTimeAxis({ ...config, xKey: key }, rows)) ??
+        columns.find(key => rows.some(row => row[key] != null && chartNumber(row[key]) === null)) ??
+        columns[0];
+    const ys = config.yKeys?.length
+        ? config.yKeys.map(series => series.key)
+        : config.valueKey
+          ? [config.valueKey]
+          : columns.filter(key => key !== x && !/(?:^|_)id$/i.test(key) && rows.some(row => chartNumber(row[key]) !== null)).slice(0, 10);
     const fields = [x, ...ys].filter((key): key is string => Boolean(key));
-    if ((requireExplicitFields && (!x || !ys.length)) || fields.some(key => !rows.some(row => Object.hasOwn(row, key)))) {
+    if (
+        (requireExplicitFields && (!(config.xKey ?? config.categoryKey) || !(config.yKeys?.length || config.valueKey))) ||
+        fields.some(key => !rows.some(row => Object.hasOwn(row, key)))
+    ) {
         return { ...base, dataState: 'invalid-fields' };
     }
     if (ys.some(key => !rows.some(row => row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== '' && Number.isFinite(Number(row[key]))))) {
@@ -85,61 +106,24 @@ export function buildChartFromQuery(config: ChartConfig, query: ChartQuery | nul
     ) {
         return { ...base, dataState: 'invalid-fields' };
     }
-    // Explicit axes already describe the SQL result. Do not aggregate it again:
-    // a real column named "count" also happens to be the auto-chart row-count key.
-    if (x && ys.length)
-        return {
-            ...base,
-            data: rows.map(row => ({
-                ...row,
-                ...Object.fromEntries(
-                    ys.map(key => [
-                        key,
-                        row[key] === null || row[key] === undefined || String(row[key]).trim() === '' || !Number.isFinite(Number(row[key])) ? null : Number(row[key]),
-                    ]),
-                ),
-            })),
-            dataState: 'ready',
-        };
-    const profile = buildResultAutoChartProfile({ rows, overrides: config });
-    const chart = toChartResultPart(profile, { title: config.title, description: config.description });
-    return chart ? { ...chart, source: base.source, dataState: 'ready' } : { ...base, dataState: 'invalid-fields' };
+    const chart: ChartResultPart = {
+        ...base,
+        xKey: x,
+        yKeys: ys.map(key => config.yKeys?.find(series => series.key === key) ?? { key }),
+        categoryKey: config.chartType === 'pie' ? x : config.categoryKey,
+        valueKey: config.chartType === 'pie' ? ys[0] : config.valueKey,
+        data: rows,
+        options: { ...config.options },
+        dataState: 'ready',
+    };
+    if (isChartTimeAxis(chart, rows)) chart.options = { xKeyType: 'time', sortBy: 'x', sortDirection: 'asc', ...chart.options };
+    const invalid = validateChartPresentation(chart);
+    return invalid ? { ...chart, data: [], dataState: invalid } : chart;
 }
 
 export function getChartResultFromPart(value: unknown, precedingMessages?: readonly Message[]): ChartResultPart | null {
-    const candidate = toolResultValue(value);
-    if (candidate.type !== 'chart' || !['bar', 'line', 'area', 'pie'].includes(String(candidate.chartType))) return null;
-    const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
-    const source = record(candidate.source);
-    const chart: ChartResultPart = {
-        type: 'chart',
-        chartType: candidate.chartType as ChartResultPart['chartType'],
-        title: text(candidate.title),
-        description: text(candidate.description),
-        data: Array.isArray(candidate.data) ? candidate.data.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row)) : [],
-        xKey: text(candidate.xKey),
-        yKeys: Array.isArray(candidate.yKeys)
-            ? candidate.yKeys
-                  .map(record)
-                  .filter(series => typeof series.key === 'string')
-                  .map(series => ({ key: String(series.key), label: text(series.label), color: text(series.color) }))
-            : undefined,
-        categoryKey: text(candidate.categoryKey),
-        valueKey: text(candidate.valueKey),
-        options: candidate.options && typeof candidate.options === 'object' ? { stacked: record(candidate.options).stacked === true } : undefined,
-        source: candidate.source
-            ? {
-                  toolCallId: text(source.toolCallId),
-                  artifactId: text(source.artifactId),
-                  rowCount: typeof source.rowCount === 'number' ? source.rowCount : undefined,
-                  truncated: source.truncated === true,
-                  columns: Array.isArray(source.columns) ? source.columns.filter((column): column is string => typeof column === 'string') : undefined,
-              }
-            : undefined,
-        dataState: ['ready', 'empty', 'missing', 'invalid-fields', 'incomplete'].includes(String(candidate.dataState))
-            ? (candidate.dataState as ChartResultPart['dataState'])
-            : undefined,
-    };
+    const chart = readStoredChart({ output: toolResultValue(value) });
+    if (!chart) return null;
     const normalized = chart;
     // Explicit new empty/error states must never be replaced by a different query.
     if (normalized.data.length || chart.dataState || !precedingMessages) return normalized;

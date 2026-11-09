@@ -14,7 +14,10 @@ import type {
 } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
+import type { ChartOverride, ChatChartUpdate } from '@dory/shared/types/chat-chart';
+import { getChartOverride, readStoredChart, validateChartPresentation } from '@dory/shared/utils/chat-chart';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+
 import { readWorkSources } from './work-sources';
 
 type DBLike = PostgresDBClient;
@@ -305,6 +308,43 @@ export class PostgresChatRepository implements ChatRepository {
      * - archived not allowed
      * - lastMessageAt is monotonic (avoid rollback)
      */
+    async updateChartPresentation(params: ChatChartUpdate & { organizationId: string; userId: string }): Promise<ChartOverride> {
+        this.assertInited();
+        return this.db.transaction(async tx => {
+            await this.getScopedSessionOn(tx as unknown as DBLike, { ...params, allowArchived: false });
+            // Use the same lock order as message persistence.
+            await tx.select({ id: chatSessions.id }).from(chatSessions).where(eq(chatSessions.id, params.sessionId)).for('update');
+            const [message] = await tx
+                .select()
+                .from(chatMessages)
+                .where(and(eq(chatMessages.id, params.messageId), eq(chatMessages.sessionId, params.sessionId), eq(chatMessages.organizationId, params.organizationId)))
+                .for('update');
+            if (!message || message.role !== 'assistant') throw new DatabaseError('Chart message not found', 404);
+            if (message.metadata?.responseStatus && message.metadata.responseStatus !== 'completed')
+                throw new DatabaseError('Wait for the response to complete before editing its charts', 409);
+            const parts = Array.isArray(message.parts) ? (message.parts as Array<Record<string, unknown>>) : [];
+            const part = parts.find(part => (part.toolCallId ?? part.callId) === params.toolCallId && readStoredChart(part));
+            const chart = part && readStoredChart(part);
+            if (!chart || !chart.data.length || (chart.dataState && chart.dataState !== 'ready')) throw new DatabaseError('Chart not found or unavailable', 404);
+            const current = getChartOverride(message.metadata, params.toolCallId);
+            if (current.version !== params.expectedVersion) throw new DatabaseError('This chart changed in another window. Reload before saving.', 409);
+            if (params.presentation) {
+                const problem = validateChartPresentation({ ...chart, ...params.presentation });
+                if (problem) throw new DatabaseError(`Invalid chart presentation: ${problem}`, 400);
+            }
+            // Retain the revision on reset to prevent an old editor overwriting a newer edit.
+            const entry: ChartOverride = { version: current.version + 1, presentation: params.presentation };
+            const previous = message.metadata?.chartOverrides;
+            const overrides = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {};
+            await tx
+                .update(chatMessages)
+                .set({ metadata: { ...message.metadata, chartOverrides: { ...overrides, [params.toolCallId]: entry } } })
+                .where(eq(chatMessages.id, params.messageId));
+            await tx.update(chatSessions).set({ updatedAt: new Date() }).where(eq(chatSessions.id, params.sessionId));
+            return entry;
+        });
+    }
+
     async appendMessage(params: {
         organizationId: string;
         sessionId: string;
@@ -341,7 +381,11 @@ export class PostgresChatRepository implements ChatRepository {
                         .update(chatMessages)
                         .set({
                             parts: params.message.parts,
-                            metadata: { ...params.message.metadata, summarySaved: existing.metadata?.summarySaved === true || params.message.metadata?.summarySaved === true },
+                            metadata: {
+                                ...params.message.metadata,
+                                ...(existing.metadata?.chartOverrides ? { chartOverrides: existing.metadata.chartOverrides } : {}),
+                                summarySaved: existing.metadata?.summarySaved === true || params.message.metadata?.summarySaved === true,
+                            },
                         })
                         .where(and(eq(chatMessages.id, messageId), eq(chatMessages.organizationId, params.organizationId)))
                         .returning();

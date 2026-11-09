@@ -1,7 +1,8 @@
-import type { AgentWorkSummary } from '../../packages/shared/src/types/agent-work';
 import { expect, type Page } from '@playwright/test';
 
-import { test, expectAppHealthy } from './fixtures';
+import { reportEmbeds } from '../../apps/web/lib/work-documents/report-core';
+import type { AgentWorkSummary } from '../../packages/shared/src/types/agent-work';
+import { expectAppHealthy, test } from './fixtures';
 import { mockWorkbenchApis } from './helpers/workbench';
 
 async function chooseOutput(page: Page, title: string) {
@@ -405,3 +406,295 @@ for (const chartType of ['bar', 'heatmap'])
         await download.saveAs(testInfo.outputPath(`shared-artifact-${chartType}.png`));
         await expectAppHealthy(appErrors);
     });
+
+test('chat charts sort periods, expose data and sources, persist edits and export in both themes', async ({ page, appErrors }, testInfo) => {
+    test.setTimeout(120_000);
+    await setupWorks(page);
+    const output = {
+        type: 'chart',
+        chartType: 'bar',
+        title: 'Annual performance',
+        description: 'Complete fiscal years · test data',
+        dataState: 'ready',
+        xKey: 'year',
+        yKeys: [
+            { key: 'revenue', label: 'Revenue' },
+            { key: 'profit', label: 'Profit' },
+        ],
+        options: { xKeyType: 'time', valueFormat: { scale: 100000000, precision: 2, suffix: '亿元' } },
+        source: { artifactId: 'result-1', rowCount: 3, truncated: false },
+        data: [
+            { year: 2026, revenue: 120000000000, profit: -2000000000 },
+            { year: 2024, revenue: 100000000000, profit: null },
+            { year: 2025, revenue: 110000000000, profit: 3000000000 },
+        ],
+    };
+    let entry: { version: number; presentation: Record<string, unknown> | null } = { version: 0, presentation: null };
+    let rejectSave = true;
+    await page.route('**/api/chat/session/work-1', route =>
+        route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    session: { id: 'work-1', type: 'global' },
+                    messages: [
+                        {
+                            id: 'answer',
+                            role: 'assistant',
+                            metadata: { responseStatus: 'completed', chartOverrides: { 'chart-call': entry } },
+                            parts: [
+                                { type: 'text', text: 'The latest complete fiscal years show a revenue increase.' },
+                                { type: 'tool-chartBuilder', toolCallId: 'chart-call', state: 'output-available', input: {}, output },
+                            ],
+                        },
+                    ],
+                },
+            },
+        }),
+    );
+    await page.route('**/api/actions/execute', async route => {
+        const body = route.request().postDataJSON();
+        if (body.actionId !== 'chat.chart.update') return route.fallback();
+        expect(body.input.expectedVersion).toBe(entry.version);
+        expect(body.input).not.toHaveProperty('data');
+        if (rejectSave) {
+            rejectSave = false;
+            return route.fulfill({ status: 409, json: { ok: false, message: 'Save unavailable; your draft is preserved.' } });
+        }
+        entry = { version: entry.version + 1, presentation: body.input.presentation };
+        return route.fulfill({ json: { ok: true, data: entry } });
+    });
+    await page.reload();
+    let card = page.getByRole('region', { name: 'Annual performance', exact: true });
+    await expect(card.getByRole('heading', { name: 'Annual performance' })).toBeVisible();
+    await expect(card.locator('svg text').filter({ hasText: /^202[456]$/ })).toHaveText(['2024', '2025', '2026']);
+    await card.getByRole('button', { name: 'Profit', exact: true }).click();
+    await expect(card.getByRole('button', { name: 'Profit', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await card.getByRole('button', { name: 'Profit', exact: true }).click();
+    await card.getByRole('button', { name: 'Data', exact: true }).click();
+    await expect(card.locator('tbody tr').first()).toContainText('2024');
+    await expect(card.locator('tbody tr').first()).toContainText('—');
+    await expect(card.locator('tbody tr').last()).toContainText('-20.00亿元');
+    const csvPending = page.waitForEvent('download');
+    await card.getByRole('button', { name: 'Download', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Download CSV' }).click();
+    const csv = await csvPending;
+    await csv.saveAs(testInfo.outputPath('chart-data.csv'));
+    await card.getByRole('button', { name: 'Source', exact: true }).click();
+    await expect(card.locator('pre')).toContainText('SELECT private_secret');
+    await card.getByRole('button', { name: 'Edit chart', exact: true }).click();
+    let editor = page.getByRole('dialog');
+    await editor.getByRole('textbox', { name: 'Chart', exact: true }).fill('Unsaved draft');
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(card.getByRole('heading', { name: 'Annual performance' })).toBeVisible();
+    await card.getByRole('button', { name: 'Edit chart', exact: true }).click();
+    editor = page.getByRole('dialog');
+    await editor.getByRole('textbox', { name: 'Chart', exact: true }).fill('Reviewed annual performance');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByRole('alert')).toContainText('your draft is preserved');
+    await expect(editor.getByRole('textbox', { name: 'Chart', exact: true })).toHaveValue('Reviewed annual performance');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor).not.toBeVisible();
+    await page.reload();
+    card = page.getByRole('region', { name: 'Reviewed annual performance', exact: true });
+    await expect(card.getByRole('heading', { name: 'Reviewed annual performance' })).toBeVisible();
+    for (const dark of [false, true]) {
+        await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), dark);
+        await page.setViewportSize({ width: dark ? 480 : 1280, height: 1000 });
+        const pngPending = page.waitForEvent('download');
+        await card.getByRole('button', { name: 'Download', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Download PNG' }).click();
+        const png = await pngPending;
+        await png.saveAs(testInfo.outputPath(dark ? 'chart-dark.png' : 'chart-light.png'));
+        await card.screenshot({ path: testInfo.outputPath(dark ? 'chart-dark-screen.png' : 'chart-light-screen.png') });
+    }
+    await card.getByRole('button', { name: 'Edit chart', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Restore original' }).click();
+    await expect(page.getByRole('region', { name: 'Annual performance', exact: true })).toBeVisible();
+    expect(entry.version).toBe(2);
+    await expectAppHealthy(appErrors);
+});
+
+test('chart and report recovery errors show readable guidance with raw diagnostics collapsed', async ({ page, appErrors }, testInfo) => {
+    await setupWorks(page);
+    const failures = [
+        { toolName: 'chartBuilder', code: 'INVALID_FIELDS', message: 'Repeated X values have ambiguous grain. Columns varying: metric, value.', input: { chartType: 'line' } },
+        { toolName: 'updateWorkReport', code: 'REPORT_CONFLICT', message: 'Edit anchor must match exactly once. Read the latest report.', input: { documentId: 'report-1' } },
+    ];
+    await page.route('**/api/chat/session/work-1', route =>
+        route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    session: { id: 'work-1', type: 'global' },
+                    messages: [
+                        {
+                            id: 'recovery-answer',
+                            role: 'assistant',
+                            metadata: { responseStatus: 'completed' },
+                            parts: [
+                                ...failures.map(({ toolName, input, ...failure }) => ({
+                                    type: `tool-${toolName}`,
+                                    toolCallId: toolName,
+                                    state: 'output-error',
+                                    input,
+                                    errorText: JSON.stringify({ ...failure, retryable: true, recovery: 'Read the result and retry.', affectedTool: toolName }),
+                                })),
+                                { type: 'text', text: 'The earlier steps need corrected inputs.' },
+                            ],
+                        },
+                    ],
+                },
+            },
+        }),
+    );
+    await page.reload();
+    const group = page.getByTestId('chat-tool-group').first();
+    await page.getByTestId('chat-analysis-process').locator('summary').first().click();
+    await expect(group.locator('summary').first()).toContainText('Chart attempts: 1');
+    await group.locator('summary').first().click();
+    const chart = page.locator('[data-testid="chat-tool-activity"][data-tool-name="chartBuilder"]');
+    const report = page.locator('[data-testid="chat-tool-activity"][data-tool-name="updateWorkReport"]');
+    await chart.getByRole('button').first().click();
+    await report.getByRole('button').first().click();
+    await expect(chart.getByRole('status')).toContainText('Several rows share a time or category');
+    await expect(report.getByRole('status')).toContainText('This edit was not saved');
+    await expect(chart.locator('pre')).not.toBeVisible();
+    await expect(report.locator('pre')).not.toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('readable-recovery.png'), fullPage: true });
+    await chart.getByText('Show raw details', { exact: true }).click();
+    await expect(chart.locator('pre')).toContainText('Repeated X values');
+    await expectAppHealthy(appErrors);
+});
+
+test('report charts use compact independent controls, snapshot SQL and downloads in every view', async ({ page, appErrors }, testInfo) => {
+    test.setTimeout(120_000);
+    await setupWorks(page);
+    const title = 'Revenue with a deliberately long descriptive title for the latest complete fiscal years';
+    const sql = "SELECT fiscal_year, revenue, profit, cash_flow FROM annual_financials WHERE ticker = 'EXAMPLE' ORDER BY fiscal_year DESC";
+    const report = {
+        ...document,
+        content: {
+            ...document.content,
+            format: 'restricted-mdx' as const,
+            schemaVersion: 1 as const,
+            body: 'Revenue increased.\n\n<Chart source="trend" />',
+            visuals: [
+                {
+                    id: 'trend',
+                    type: 'chart' as const,
+                    title: 'Annual financial performance',
+                    evidenceId: 'private-artifact',
+                    chart: {
+                        type: 'bar' as const,
+                        xKey: 'fiscal_year',
+                        yKeys: [
+                            { key: 'revenue', label: title },
+                            { key: 'profit', label: 'Profit' },
+                            { key: 'cash_flow', label: 'Cash flow' },
+                        ],
+                        options: { valueFormat: { scale: 100000000, precision: 2, suffix: '亿元' } },
+                    },
+                },
+            ],
+            evidence: [
+                {
+                    ...document.content.evidence[0],
+                    snapshotId: 'annual-snapshot',
+                    sql,
+                    columns: ['fiscal_year', 'revenue', 'profit', 'cash_flow'],
+                    rowCount: 3,
+                    rows: [
+                        { fiscal_year: '2025', revenue: '129079000000.00000000', profit: '5589000000.00000000', cash_flow: '-3013000000.00000000' },
+                        { fiscal_year: '2024', revenue: '133125000000.00000000', profit: null, cash_flow: '21234000000.00000000' },
+                        { fiscal_year: '2023', revenue: '134598000000.00000000', profit: '20315000000.00000000', cash_flow: '36615000000.00000000' },
+                    ],
+                },
+            ],
+        },
+    };
+    await page.route('**/api/work-documents/report-1', route =>
+        route.fulfill({ json: { document: { ...report, content: { ...report.content, embeds: reportEmbeds(report.content.visuals, report.content.evidence) } }, versions: [] } }),
+    );
+    let liveSourceReads = 0;
+    await page.route('**/api/actions/execute', route => {
+        if (route.request().postDataJSON().actionId !== 'artifact.get') return route.fallback();
+        liveSourceReads++;
+        return route.fulfill({ status: 503, json: { ok: false, message: 'Live source unavailable' } });
+    });
+    await page.goto(`${new URL(page.url()).pathname}?chat=work-1&panel=report&document=report-1`);
+    const figure = page.locator('[data-visual="trend"]').last();
+    await expect(figure.getByRole('region')).toHaveCount(3);
+    // Only the chart's own legend remains, with no report-level series switches.
+    await expect(figure.getByRole('button', { name: 'Profit', exact: true })).toHaveCount(1);
+    const revenue = figure.getByRole('region', { name: title, exact: true });
+    const profit = figure.getByRole('region', { name: 'Profit', exact: true });
+    const cash = figure.getByRole('region', { name: 'Cash flow', exact: true });
+    await expect(cash.locator('svg text').filter({ hasText: /^202[345]$/ })).toHaveText(['2023', '2024', '2025']);
+    await revenue.getByRole('heading').focus();
+    await expect(page.getByRole('tooltip')).toContainText('Period: 2023 – 2025');
+    await page.keyboard.press('Escape');
+    for (const card of [revenue, profit, cash]) {
+        await card.getByRole('button', { name: 'Source', exact: true }).click();
+        await expect(card.locator('pre')).toContainText(sql);
+        await expect(card.getByText('Source details are unavailable.', { exact: true })).toHaveCount(0);
+        await expect(card.getByRole('button', { name: 'Source', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    }
+    expect(liveSourceReads).toBe(0);
+    await page.evaluate(() => {
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: {
+                writeText: async (value: string) => {
+                    (window as unknown as { copiedSql: string }).copiedSql = value;
+                },
+            },
+        });
+    });
+    await cash.getByRole('button', { name: 'Copy SQL' }).focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => (window as unknown as { copiedSql: string }).copiedSql)).toBe(sql);
+    await cash.getByRole('button', { name: 'Data', exact: true }).click();
+    await expect(cash.locator('tbody tr')).toHaveText(['2023366.15亿元', '2024212.34亿元', '2025-30.13亿元']);
+    await expect(profit.getByRole('button', { name: 'Source', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const csvPending = page.waitForEvent('download');
+    await cash.getByRole('button', { name: 'Download', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Download CSV' }).click();
+    const csv = await csvPending;
+    const stream = await csv.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+    const raw = Buffer.concat(chunks).toString('utf8');
+    expect(raw).toContain('-3013000000.00000000');
+    expect(raw.indexOf('2023')).toBeLessThan(raw.indexOf('2025'));
+    expect(raw).not.toContain('revenue');
+    for (const view of ['Data', 'Source', 'Chart']) {
+        await cash.getByRole('button', { name: view, exact: true }).click();
+        const pending = page.waitForEvent('download');
+        await cash.getByRole('button', { name: 'Download', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Download PNG' }).click();
+        const png = await pending;
+        await png.saveAs(testInfo.outputPath(`cash-flow-from-${view}.png`));
+        await expect(cash.getByRole('button', { name: view, exact: true })).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.locator('[data-chart-export]')).toHaveCount(0);
+    }
+    for (const dark of [false, true]) {
+        await page.setViewportSize({ width: dark ? 375 : 1280, height: 1000 });
+        await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), dark);
+        await revenue.getByRole('button', { name: 'Chart', exact: true }).click();
+        const header = revenue.locator('[data-chart-header]');
+        const headingBox = await header.getByRole('heading').boundingBox();
+        const actionBox = await header.getByRole('button', { name: 'Download', exact: true }).boundingBox();
+        expect(Math.abs(headingBox!.y + headingBox!.height / 2 - actionBox!.y - actionBox!.height / 2)).toBeLessThan(3);
+        expect(await header.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+        for (const button of await header.getByRole('button').all()) expect(await button.innerText()).toBe('');
+        await revenue.screenshot({ path: testInfo.outputPath(dark ? 'compact-dark-mobile.png' : 'compact-light.png') });
+    }
+    report.content.evidence[0].sql = '';
+    await page.reload();
+    await cash.getByRole('button', { name: 'Source', exact: true }).click();
+    await expect(cash.getByText('Source details are unavailable.', { exact: true })).toBeVisible();
+    await expect(cash.locator('pre')).toHaveCount(0);
+    expect(liveSourceReads).toBe(0);
+    await expectAppHealthy(appErrors);
+});

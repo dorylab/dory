@@ -2,17 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { Button } from '@/registry/new-york-v4/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import type { AgentWorkSummary } from '@dory/shared/types/agent-work';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 
-import { Button } from '@/registry/new-york-v4/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
-import { loadSharePreview } from '@/lib/work-documents/share-client';
-import { downloadShare, shareCsv, shareFilename } from '@/lib/work-documents/share';
 import { formatWorkValue } from '@/lib/work-documents/render';
+import { downloadShare, shareCsv, shareFilename } from '@/lib/work-documents/share';
+import { loadSharePreview } from '@/lib/work-documents/share-client';
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 
 const ChartResultCard = dynamic(() => import('@/components/@dory/ui/ai/charts-result').then(module => module.ChartResultCard), { ssr: false });
 const Charts = dynamic(() => import('@/app/(app)/[organization]/[connectionId]/sql-console/components/result-table/components/charts').then(module => module.Charts), {
@@ -146,7 +146,7 @@ export function WorkShareDialog({ work, onClose }: { work: AgentWorkSummary; onC
                                 {data.type === 'message' ? (
                                     <>
                                         <p className="mb-3 text-sm text-muted-foreground">{t('PreviewRows', { count: data.chart.data.length })}</p>
-                                        <ChartResultCard result={data.chart} />
+                                        <ChartResultCard result={data.chart} interactive={false} />
                                     </>
                                 ) : null}
                                 {data.type === 'artifact' ? (

@@ -1,14 +1,16 @@
 import type { AgentWorkOutput } from '@dory/shared/types/agent-work';
 import type { WorkDocumentView } from '@dory/shared/types/work-document';
+import { effectiveChart } from '@dory/shared/utils/chat-chart';
 
-import type { ArtifactDetail } from '@/lib/artifacts/types';
 import { executeActionClient } from '@/lib/actions/client';
-import { getPreviewColumnNames } from '@/lib/agent-runs/report';
 import { getChartResultFromPart } from '@/lib/agent-runs/chart-result';
+import { getPreviewColumnNames } from '@/lib/agent-runs/report';
+import type { ArtifactDetail } from '@/lib/artifacts/types';
 import type { ChartResultPart } from '@/components/@dory/ui/ai/charts-result';
+
 import { workRequest } from './client';
-import { renderSharedReport } from './share';
 import { workVisualHtml } from './render';
+import { renderSharedReport } from './share';
 
 type Rows = { rows: Record<string, unknown>[]; columns: unknown[]; rowCount: number | null; dataAvailability: string };
 export type SharePreview =
@@ -36,7 +38,7 @@ export async function loadSharePreview(output: AgentWorkOutput, chatId: string, 
         const part = message?.parts.find(item => 'toolCallId' in item && item.toolCallId === origin.toolCallId);
         const chart = part && getChartResultFromPart(part);
         if (!chart || chart.dataState === 'missing' || chart.dataState === 'invalid-fields' || !chart.data.length) throw new Error('Unavailable');
-        return { type: 'message', chart };
+        return { type: 'message', chart: effectiveChart(chart, message?.metadata, origin.toolCallId) };
     }
     const artifact = await executeActionClient<ArtifactDetail>('artifact.get', { artifactId: origin.artifactId }, { organizationId, signal });
     if (artifact.status !== 'ready' || !artifact.sourceResultSetId || (artifact.expiresAt && Date.parse(artifact.expiresAt) <= Date.now())) throw new Error('Unavailable');

@@ -1,4 +1,5 @@
 import type { ChatAttachmentSource } from './chat-attachment';
+import type { ChartOptions } from './chat-chart';
 
 export type AnalysisScope = {
     connectionMode?: 'auto' | 'manual';
@@ -33,7 +34,10 @@ export type WorkVisual = {
     type: 'metric' | 'chart' | 'table';
     title: string;
     evidenceId: string;
-    chart?: { type: 'bar' | 'line' | 'area' | 'pie'; xKey: string } & ({ yKey: string; yKeys?: never } | { yKey?: never; yKeys: Array<{ key: string; label?: string }> });
+    chart?: { type: 'bar' | 'line' | 'area' | 'pie'; xKey: string; options?: ChartOptions } & (
+        | { yKey: string; yKeys?: never }
+        | { yKey?: never; yKeys: Array<{ key: string; label?: string }> }
+    );
     metric?: {
         column: string;
         rowIndex: number;

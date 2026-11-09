@@ -173,6 +173,34 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         await assert.rejects(reports.assertReady(), /still a draft/);
         // The SDK validates tool outputs as JSON before sending the next model step.
         assert.deepEqual(created, JSON.parse(JSON.stringify(created)));
+        await t.test('report tools expose the exact edit target and append once without losing prose', async () => {
+            const tools = createWorkDocumentTools({
+                db,
+                ...owner,
+                chatId: 'reports',
+                requestId: 'turn-1',
+                creationKey: 'reports:append-regression',
+                scope: { connectionIds: [] },
+                runId: async () => run.workId,
+            });
+            const draft = await tools.tools.createWorkReport.execute!(
+                { title: 'Append regression', format: 'restricted-mdx', markdown: '## Findings\n\nHuman note.', visuals: [], status: 'draft' },
+                call,
+            );
+            assert.ok('id' in draft);
+            const read = await tools.tools.readWorkReport.execute!({ documentId: draft.id }, call);
+            assert.ok('editTarget' in read);
+            assert.equal(read.editTarget.field, 'content.body');
+            const input = { documentId: draft.id, expectedRevision: read.revision, patch: { edits: [], appendText: '## Outlook\n\nNew analysis.', status: 'draft' as const } };
+            const saved = await tools.tools.updateWorkReport.execute!(input, call);
+            const retry = await tools.tools.updateWorkReport.execute!(input, call);
+            assert.ok('revision' in saved && 'revision' in retry);
+            assert.equal(retry.revision, saved.revision);
+            assert.match(saved.content.body!, /Human note\.[\s\S]*New analysis\./);
+            assert.equal(saved.content.body!.split('New analysis.').length, 2);
+            await assert.rejects(tools.tools.updateWorkReport.execute!({ ...input, patch: { ...input.patch, appendText: 'Stale write' } }, call) as Promise<unknown>, /changed/);
+            await db.workDocuments.archive({ ...owner, documentId: draft.id, archived: true });
+        });
         // Transport mocks below vary previews, while retention validates real persisted sources.
         for (const artifactId of ['orders', 'ads']) {
             const saved = await db.resultSets.persistQueryResultSet({

@@ -1,41 +1,35 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { Sheet, SheetContent, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
+import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/shared/stores/app.store';
+import { useChat } from '@ai-sdk/react';
+import type { UIMessage } from 'ai';
+import { useAtom, useAtomValue } from 'jotai';
+import { useTranslations } from 'next-intl';
+import { parseAsString, useQueryState } from 'nuqs';
+import posthog from 'posthog-js';
+import { toast } from 'sonner';
+import type { StickToBottomContext } from 'use-stick-to-bottom';
+
+import type { ChatSubmission } from '@/lib/chat-context/types';
+import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
+import type { SqlResultManualExecutionMode } from '@/components/@dory/ui/ai/sql-result/type';
+import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
+import { Loader } from '@/components/ai-elements/loader';
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from '@/components/ai-elements/prompt-input';
 import { AgentComposer } from '@/components/work-documents/agent-composer';
 import { AgentMessageReports, useChatReports } from '@/components/work-documents/agent-message-reports';
 import { WorkReport, type WorkReportHandle } from '@/components/work-documents/work-report';
-import type { ChatSubmission } from '@/lib/chat-context/types';
-import { Sheet, SheetContent, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
-import { parseAsString, useQueryState } from 'nuqs';
-
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { useChat } from '@ai-sdk/react';
-import posthog from 'posthog-js';
-import type { UIMessage } from 'ai';
-import { useAtom, useAtomValue } from 'jotai';
-import type { StickToBottomContext } from 'use-stick-to-bottom';
-import type { CopilotEnvelopeV1 } from '../copilot/types/copilot-envelope';
-import { toast } from 'sonner';
-import { useTranslations } from 'next-intl';
-import type { SqlResultManualExecutionMode } from '@/components/@dory/ui/ai/sql-result/type';
-
-import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
-import { Loader } from '@/components/ai-elements/loader';
-
-import { PromptInput, PromptInputBody, PromptInputSubmit, PromptInputTextarea, PromptInputFooter } from '@/components/ai-elements/prompt-input';
-
-import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
-
-import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/shared/stores/app.store';
-
-import MessageRenderer from './message-render';
-
-import { getSqlResultFromPart, getChartResultFromPart } from '../core/utils';
 import { getSidebarConfig } from '../../../components/sql-console-sidebar/sidebar-config';
+import { DatabaseSchemaSelect } from '../components/database-schema-select';
 
 import { CopilotActionExecutor } from '../copilot/action-bridge';
+import type { CopilotEnvelopeV1 } from '../copilot/types/copilot-envelope';
 import { apiGetOrCreateCopilotSession } from '../core/api';
-import { DatabaseSchemaSelect } from '../components/database-schema-select';
+import { getChartResultFromPart, getSqlResultFromPart } from '../core/utils';
+import MessageRenderer from './message-render';
 
 type ChatBotCompProps = {
     sessionId?: string | null;
@@ -484,6 +478,25 @@ const ChatBotComp = ({
                     {renderedMessages.map((message, messageIndex) => (
                         <div key={message.id}>
                             <MessageRenderer
+                                sessionId={sessionId}
+                                onChartUpdated={(toolCallId, entry) =>
+                                    setMessages(previous =>
+                                        previous.map(item =>
+                                            item.id === message.id
+                                                ? {
+                                                      ...item,
+                                                      metadata: {
+                                                          ...(item.metadata as Record<string, unknown> | undefined),
+                                                          chartOverrides: {
+                                                              ...((item.metadata as { chartOverrides?: Record<string, unknown> } | undefined)?.chartOverrides ?? {}),
+                                                              [toolCallId]: entry,
+                                                          },
+                                                      },
+                                                  }
+                                                : item,
+                                        ),
+                                    )
+                                }
                                 message={message as any}
                                 messageIndex={messageIndex}
                                 messages={renderedMessages as any}

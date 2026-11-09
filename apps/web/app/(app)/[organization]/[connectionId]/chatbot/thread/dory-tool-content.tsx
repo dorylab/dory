@@ -1,5 +1,7 @@
 import { useTranslations } from 'next-intl';
 
+import { ChatToolError } from '@/components/agent-runs/chat-tool-error';
+
 import { formatToolValue, getObjectKeys } from './message-render-utils';
 import { getToolName } from './message-tool-compat';
 
@@ -117,7 +119,7 @@ export function DoryToolContent({ part, state, input, output, errorText }: DoryT
     }
 
     if (state === 'output-error') {
-        return <div className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm text-destructive">{errorText || 'Tool failed.'}</div>;
+        return <ChatToolError error={errorText} toolName={toolName ?? 'tool'} />;
     }
 
     const result = output && typeof output === 'object' ? output : {};
@@ -125,11 +127,7 @@ export function DoryToolContent({ part, state, input, output, errorText }: DoryT
     const toolOutput = (result as any).ok === true ? result : output;
 
     if (!ok) {
-        return (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm text-destructive">
-                {formatToolValue((result as any).error?.message ?? errorText ?? 'Tool failed.')}
-            </div>
-        );
+        return <ChatToolError error={result.error ?? errorText} toolName={toolName ?? 'tool'} />;
     }
 
     if (toolName === 'finishAnalysis') {

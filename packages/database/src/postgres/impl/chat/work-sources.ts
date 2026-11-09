@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
 import type { WorkVisual } from '@dory/shared/types/work-document';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { artifacts, chatMessages, chatSessions, resultSets, workDocuments, works } from '../../schemas';
 
@@ -71,7 +71,7 @@ export async function readWorkSources(db: PostgresDBClient, owner: { organizatio
                 runId: sql<string | null>`${chatMessages.metadata}->>'agentRunId'`,
                 createdAt: chatMessages.createdAt,
                 charts: sql<Array<{ toolCallId: string; title: string | null; available: boolean }>>`coalesce((
-                select jsonb_agg(jsonb_build_object('toolCallId', part->>'toolCallId', 'title', output->>'title',
+                select jsonb_agg(jsonb_build_object('toolCallId', part->>'toolCallId', 'title', coalesce(${chatMessages.metadata}->'chartOverrides'->(part->>'toolCallId')->'presentation'->>'title', output->>'title'),
                     'available', coalesce(output->>'dataState', 'ready') = 'ready'
                         and case when jsonb_typeof(output->'data') = 'array' then jsonb_array_length(output->'data') > 0 else false end))
                 from jsonb_array_elements(case when jsonb_typeof(${chatMessages.parts}) = 'array' then ${chatMessages.parts} else '[]'::jsonb end) part

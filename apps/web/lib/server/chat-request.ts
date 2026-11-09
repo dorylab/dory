@@ -560,6 +560,7 @@ export async function handleChatRequest(req: Request) {
             tableSchema,
             connectionType,
             sqlToolEnabled,
+            chartToolEnabled: Boolean(tools.chartBuilder),
             candidateTables,
             copilotEnvelope,
             locale,
