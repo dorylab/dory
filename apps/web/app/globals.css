@@ -684,6 +684,14 @@ body {
 .work-prose .report-wide p { margin: 0; }
 .work-prose .report-wide th, .work-prose .report-wide td { white-space: nowrap; }
 
+/* Block controls use the same report typography and theme tokens. */
+.report-edit-block .report-prose > :first-child { margin-top: .25rem; }
+.report-edit-block .report-prose > :last-child { margin-bottom: .25rem; }
+.report-edit-block .tableWrapper { overflow-x: auto; }
+@media (hover: none) {
+    .report-edit-block > [contenteditable="false"] { opacity: 1; }
+}
+
 /* Report controls respond to the report pane, including embedded Work panels. */
 .report-surface { container: report / inline-size; }
 .report-editor-columns { grid-template-columns: minmax(0, 1fr); }

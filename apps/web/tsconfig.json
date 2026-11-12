@@ -141,7 +141,11 @@
     ".next-url-switch-test/types/**/*.ts",
     ".next-url-switch-test/dev/types/**/*.ts",
     ".next/test-knowledge/types/**/*.ts",
-    ".next/test-knowledge/dev/types/**/*.ts"
+    ".next/test-knowledge/dev/types/**/*.ts",
+    ".next-report-block-check/types/**/*.ts",
+    ".next-report-block-check/dev/types/**/*.ts",
+    ".next-report-block-finalcheck/types/**/*.ts",
+    ".next-report-block-finalcheck/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

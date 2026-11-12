@@ -18,10 +18,14 @@ import {
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { WorkDocumentView, WorkVisual } from '@dory/shared/types/work-document';
-import { ArrowLeft, ChevronDown, Download, MoreHorizontal, Pencil, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Download, MoreHorizontal, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { ReportMode } from '@/lib/work-documents/report-blocks';
+
 type Props = {
+    mode: ReportMode;
+    onMode: (mode: ReportMode) => void;
     document: WorkDocumentView;
     standalone: boolean;
     historical: boolean;
@@ -198,23 +202,46 @@ export function ReportToolbar(p: Props) {
                     </DropdownMenuContent>
                 </DropdownMenu>
             )}
-            {p.editing ? (
-                <Button size="sm" className="h-7 shrink-0 px-2.5 text-xs" variant="outline" disabled={p.saving} onClick={p.onEdit}>
+            {compact ? (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" aria-label={r('Mode')}>
+                            {r(p.mode === 'view' ? 'ViewMode' : p.mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
+                            <ChevronDown className="ml-1 size-3" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuRadioGroup value={p.mode} onValueChange={value => p.onMode(value as ReportMode)}>
+                            {(['view', 'blocks', 'source'] as const).map(mode => (
+                                <DropdownMenuRadioItem key={mode} value={mode} disabled={p.unavailable || (mode !== 'view' && p.disabled) || (mode === 'view' && p.saving)}>
+                                    {r(mode === 'view' ? 'ViewMode' : mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
+                                </DropdownMenuRadioItem>
+                            ))}
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            ) : (
+                <div role="group" aria-label={r('Mode')} className="flex shrink-0 rounded-md border p-0.5">
+                    {(['view', 'blocks', 'source'] as const).map(mode => (
+                        <Button
+                            key={mode}
+                            type="button"
+                            size="sm"
+                            variant={p.mode === mode ? 'secondary' : 'ghost'}
+                            className="h-6 px-2 text-xs"
+                            aria-pressed={p.mode === mode}
+                            disabled={p.unavailable || (mode !== 'view' && p.disabled) || (mode === 'view' && p.saving)}
+                            onClick={() => p.onMode(mode)}
+                        >
+                            {r(mode === 'view' ? 'ViewMode' : mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
+                        </Button>
+                    ))}
+                </div>
+            )}
+            {p.editing && (
+                <Button size="sm" className="h-7 shrink-0 px-2 text-xs" variant="outline" disabled={p.saving} onClick={p.onEdit}>
                     {t('Done')}
                 </Button>
-            ) : (
-                <IconHint label={t('Edit')}>
-                    <Button
-                        size="icon"
-                        className="report-toolbar-secondary size-7 shrink-0"
-                        variant="ghost"
-                        aria-label={t('Edit')}
-                        disabled={p.disabled || p.unavailable}
-                        onClick={p.onEdit}
-                    >
-                        <Pencil className="size-3.5" />
-                    </Button>
-                </IconHint>
             )}
             <DropdownMenu>
                 <IconHint label={t('Export')}>
@@ -240,11 +267,6 @@ export function ReportToolbar(p: Props) {
                             <DropdownMenuItem disabled={p.disabled} onSelect={p.onContinue}>
                                 {t('Continue')}
                             </DropdownMenuItem>
-                            {!p.editing && (
-                                <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onEdit}>
-                                    {t('Edit')}
-                                </DropdownMenuItem>
-                            )}
                             {p.editing && (
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>{r('InsertComponent')}</DropdownMenuSubTrigger>

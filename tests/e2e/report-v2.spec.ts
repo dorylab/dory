@@ -1,3 +1,4 @@
+import { chooseReportMode } from './helpers/report';
 import { initialWorkingState, materializeWorkingContent } from '../../apps/web/lib/work-documents/working-draft';
 import type { ReportWorkingDraft } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentView, WorkVisual } from '@dory/shared/types/work-document';
@@ -219,7 +220,7 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
         }),
     ).toBeLessThanOrEqual(96);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('report-compact-desktop.png') });
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     const editMetric = page.getByRole('button', { name: 'Edit Revenue', exact: true });
     await editMetric.click();
     const component = page.getByTestId('report-component-dialog');
@@ -253,7 +254,8 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     await page.getByRole('button', { name: 'More actions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
+    await chooseReportMode(page, 'Source');
     const source = page.getByTestId('markdown-source').locator('textarea').first();
     await source.press('ControlOrMeta+Home');
     await page.keyboard.insertText('Updated summary.\n\n');
@@ -319,7 +321,7 @@ test('Compact report toolbar handles long titles, empty sources, archives and sa
     await expect(page.locator('[data-slot="sheet-content"]')).toHaveCount(0);
     document.archivedAt = null;
     await page.reload();
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Keep my unsaved title');
     await expect(page.getByTestId('report-toolbar').getByRole('status')).toHaveText('Save failed');
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Keep my unsaved title');
@@ -352,3 +354,110 @@ for (const chartType of ['bar', 'line', 'area', 'pie'] as const) {
         await expectAppHealthy(appErrors);
     });
 }
+
+test('Report block editing preserves source through mode switches, saves prose, splits blocks and supports undo', async ({ page, appErrors }, testInfo) => {
+    test.setTimeout(120_000);
+    let document = fixture();
+    const body = '## Overview\n\nOriginal paragraph.\n\n<Metric source="metric" />\n\n[Reference][ref]\n\n[ref]: https://example.com';
+    document.content = { ...document.content, body, markdown: parseReport(body, document.content.visuals).presentation };
+    let saves = 0;
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/actions/execute', route => route.fulfill({ json: { ok: true, data: { rows: [], total: 0 } } }));
+    await page.route('**/api/work-documents/report-v2*', async route => {
+        if (route.request().method() === 'PATCH') {
+            const { draft } = route.request().postDataJSON();
+            saves++;
+            document = {
+                ...document,
+                revision: document.revision + 1,
+                title: draft.title,
+                content: {
+                    ...document.content,
+                    body: draft.body,
+                    visuals: draft.visuals,
+                    embeds: reportEmbeds(draft.visuals, document.content.evidence),
+                    markdown: parseReport(draft.body, draft.visuals).presentation,
+                },
+            };
+            return route.fulfill({ json: { document } });
+        }
+        return route.fulfill({ json: { document, versions: [], publications: [] } });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    await page.goto(`/${organization}/reports/report-v2`);
+    await expect(page.getByTestId('report-toolbar').getByRole('button', { name: 'View', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await chooseReportMode(page, 'Edit');
+    const editor = page.getByTestId('report-block-editor');
+    await expect(editor).toBeVisible();
+    await expect(editor.getByText('Original paragraph.', { exact: true })).toBeVisible();
+    await chooseReportMode(page, 'Source');
+    await expect(page.getByTestId('markdown-source')).toBeVisible();
+    await chooseReportMode(page, 'Edit');
+    await chooseReportMode(page, 'View');
+    expect(saves).toBe(0);
+    expect(document.content.body).toBe(body);
+    await chooseReportMode(page, 'Edit');
+    const paragraph = editor.locator('[data-node-view-content] p').filter({ hasText: 'Original paragraph.' });
+    await paragraph.click();
+    await page.keyboard.press('End');
+    await page.keyboard.insertText(' 中文输入。');
+    await expect.poll(() => document.content.body).toContain('中文输入。');
+    await page.keyboard.insertText(' Still focused.');
+    await expect.poll(() => document.content.body).toContain('中文输入。 Still focused.');
+    expect(document.content.body).toContain('[Reference][ref]\n\n[ref]: https://example.com');
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText('Second block.');
+    await expect(editor.locator('[data-report-block]').filter({ hasText: 'Second block.' })).toHaveCount(1);
+    await expect.poll(() => document.content.body).toContain('Second block.');
+    const second = editor.locator('[data-report-block]').filter({ hasText: 'Second block.' });
+    await second.hover();
+    await second.getByRole('button', { name: 'Block actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Move up', exact: true }).click();
+    await expect.poll(() => document.content.body!.indexOf('Second block.') < document.content.body!.indexOf('Original paragraph.')).toBe(true);
+    await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect.poll(() => document.content.body!.indexOf('Second block.') > document.content.body!.indexOf('Original paragraph.')).toBe(true);
+    await second.hover();
+    await second.getByRole('button', { name: 'Block actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
+    await expect.poll(() => document.content.body).not.toContain('Second block.');
+    await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect.poll(() => document.content.body).toContain('Second block.');
+    await second.getByRole('button', { name: 'Insert block', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Metric', exact: true }).click();
+    const dialog = page.getByTestId('report-component-dialog');
+    await dialog.getByRole('combobox', { name: 'Artifact source', exact: true }).click();
+    await page.getByRole('option', { name: 'Revenue query', exact: true }).click();
+    await dialog.getByRole('combobox', { name: 'Column', exact: true }).click();
+    await page.getByRole('option', { name: 'value', exact: true }).click();
+    await dialog.getByRole('textbox', { name: 'Component title', exact: true }).fill('Inserted metric');
+    await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+    await expect.poll(() => document.content.visuals.some(visual => visual.title === 'Inserted metric')).toBe(true);
+    const inserted = document.content.visuals.find(visual => visual.title === 'Inserted metric')!;
+    expect(document.content.body).toContain(`Second block.\n\n<Metric source="${inserted.id}" />`);
+    await editor.getByRole('button', { name: 'Insert block', exact: true }).first().click();
+    await page.getByRole('menuitem', { name: 'Text table', exact: true }).click();
+    await editor.locator('[data-node-view-content] th p').first().click();
+    await page.keyboard.insertText('Definition');
+    await expect.poll(() => document.content.body).toContain('Definition');
+    const firstProseBlock = editor.locator('[data-report-block]').filter({ hasText: 'Original paragraph.' });
+    await firstProseBlock.hover();
+    const targetBox = await second.boundingBox();
+    await firstProseBlock.locator('[data-drag-handle]').dragTo(second, { targetPosition: { x: 20, y: targetBox!.height - 2 } });
+    await expect.poll(() => document.content.body!.indexOf('Original paragraph.') > document.content.body!.indexOf('Second block.')).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('report-block-editor-light.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.document.documentElement.classList.add('dark'));
+    await expect(page.getByTestId('report-toolbar').getByRole('button', { name: 'Report mode', exact: true })).toHaveText('Edit');
+    await page.screenshot({ path: testInfo.outputPath('report-block-editor-dark-mobile.png'), fullPage: true });
+    expect(await page.getByTestId('work-report').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await chooseReportMode(page, 'Source');
+    const source = page.getByTestId('markdown-source').locator('textarea').first();
+    await source.press('ControlOrMeta+Home');
+    await page.keyboard.insertText('{invalid}\n\n');
+    await chooseReportMode(page, 'Edit');
+    await expect(page.getByTestId('markdown-source')).toBeVisible();
+    await expect(editor).toHaveCount(0);
+    await expect(page.getByText('Fix the MDX errors in Source before opening block editing.')).toBeVisible();
+    await expectAppHealthy(appErrors);
+});

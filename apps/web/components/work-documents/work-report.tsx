@@ -14,7 +14,8 @@ import { toast } from 'sonner';
 import { workRequest } from '@/lib/work-documents/client';
 import { reportListParsers, serializeReportList } from '@/lib/work-documents/list-state';
 import { renderWorkHtml } from '@/lib/work-documents/render';
-import { editableReport, reportEmbeds } from '@/lib/work-documents/report-core';
+import { editableReport, parseReport, reportEmbeds } from '@/lib/work-documents/report-core';
+import type { ReportMode } from '@/lib/work-documents/report-blocks';
 import { buildReportWorkspacePath } from '@/lib/work-documents/workspace-url';
 
 import { AddDefinitionDialog } from './add-definition-dialog';
@@ -94,6 +95,7 @@ export function WorkReport({
     });
     const editorRef = useRef<ReportEditorHandle>(null);
     const [editing, setEditing] = useState<WorkDocumentView | null>(null);
+    const [editMode, setEditMode] = useState<'blocks' | 'source'>('blocks');
     const [dirty, setDirty] = useState(false);
     const [leaveDecision, setLeaveDecision] = useState<((leave: boolean) => void) | null>(null);
     const leaveAfterSave = useRef(false);
@@ -106,10 +108,11 @@ export function WorkReport({
     const [saveError, setSaveError] = useState(false);
     const [definition, setDefinition] = useState<{ title: string; text: string } | null>(null);
     const [evidenceSelection, setEvidenceSelection] = useState<ReportEvidenceSelection | null>(null);
+    const editingActive = Boolean(editing);
     useEffect(() => {
-        onEditingChange?.(Boolean(editing));
-        return () => onEditingChange?.(false);
-    }, [editing, onEditingChange]);
+        onEditingChange?.(editingActive);
+    }, [editingActive, onEditingChange]);
+    useEffect(() => () => onEditingChange?.(false), [onEditingChange]);
     const editRef = useRef(editing);
     editRef.current = editing;
     const mutation = useMutation({
@@ -287,6 +290,30 @@ export function WorkReport({
         setDirty(true);
         setSaveError(false);
     };
+    const switchMode = async (mode: ReportMode) => {
+        if (mode === (isEditing ? editMode : 'view')) return;
+        if (historical && mode !== 'view') {
+            setRestoreOpen(true);
+            return;
+        }
+        if (!((await editorRef.current?.requestLeave()) ?? true)) return;
+        if (mode === 'view') {
+            if (dirty) {
+                finishAfterSave.current = true;
+                save();
+            } else setEditing(null);
+            return;
+        }
+        const content = editableReport(editRef.current?.content ?? document.content);
+        if (mode === 'blocks' && parseReport(content.body ?? '', content.visuals).diagnostics.length) {
+            toast.error(reportT('FixSourceFirst'));
+            return;
+        }
+        // Both editing surfaces share the same draft. Entering an editor alone is not a mutation.
+        if (!editRef.current) setEditing({ ...structuredClone(document), content });
+        finishAfterSave.current = false;
+        setEditMode(mode);
+    };
     const exportReport = async (format: 'html' | 'pdf' | 'markdown' | 'mdx') => {
         if (viewUnavailable) return;
         let html: string;
@@ -423,24 +450,9 @@ export function WorkReport({
                         })
                     }
                     onTitle={title => change({ ...document, title })}
-                    onEdit={() => {
-                        if (historical) {
-                            setRestoreOpen(true);
-                            return;
-                        }
-                        if (isEditing) {
-                            void (async () => {
-                                if (!((await editorRef.current?.requestLeave()) ?? true)) return;
-                                if (dirty) {
-                                    finishAfterSave.current = true;
-                                    save();
-                                } else setEditing(null);
-                            })();
-                            return;
-                        }
-                        setEditing({ ...structuredClone(document), content: editableReport(document.content) });
-                        if (!document.content.format) setDirty(true);
-                    }}
+                    mode={isEditing ? editMode : 'view'}
+                    onMode={mode => void switchMode(mode)}
+                    onEdit={() => void switchMode(isEditing ? 'view' : 'blocks')}
                     onPublish={() => publish.mutate({ revision: document.revision })}
                     onVersion={value => {
                         if (value === 'draft') void switchVersion(null);
@@ -545,6 +557,8 @@ export function WorkReport({
                                 {isEditing ? (
                                     <ReportEditor
                                         ref={editorRef}
+                                        mode={editMode}
+                                        onSource={() => void switchMode('source')}
                                         documentId={documentId}
                                         content={document.content}
                                         title={document.title}
@@ -552,12 +566,7 @@ export function WorkReport({
                                         onEvidenceGroup={openEvidenceGroup}
                                     />
                                 ) : (
-                                    <ReportBody
-                                        key={document.revision}
-                                        content={document.content}
-                                        title={document.title}
-                                        onEvidenceGroup={openEvidenceGroup}
-                                    />
+                                    <ReportBody key={document.revision} content={document.content} title={document.title} onEvidenceGroup={openEvidenceGroup} />
                                 )}
                             </div>
                             {!isEditing ? (

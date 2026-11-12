@@ -1,3 +1,4 @@
+import { chooseReportMode } from './helpers/report';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
 import { expect, type Page } from '@playwright/test';
 import type { UIMessage } from 'ai';
@@ -113,7 +114,7 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     await page.goto(`/${organization}/reports/doc-report`);
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Monthly revenue' })).toBeVisible();
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Source');
     await expect(page.getByTestId('markdown-source')).toBeVisible();
     await page.getByTestId('work-markdown').getByRole('link', { name: 'Source', exact: true }).click();
     await expect(page.getByRole('dialog')).toContainText('SELECT month');
@@ -369,12 +370,12 @@ test('unsupported Markdown stays intact in source mode and never executes HTML',
     await page.goto(`/${organization}/reports/doc-report`);
     await expect(page.getByTestId('work-markdown')).toContainText('<div onclick=');
     await expect(page.getByTestId('work-markdown').locator('[onclick]')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Source');
     await expect(page.getByTestId('markdown-source')).toBeVisible();
-    await expect.poll(() => writes).toBeGreaterThan(0);
+    expect(writes).toBe(0);
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(page.getByTestId('work-markdown')).toContainText('Raw HTML stays literal');
-    expect(writes).toBeGreaterThan(0);
+    expect(writes).toBe(0);
     await expectAppHealthy(appErrors);
 });
 
@@ -393,7 +394,7 @@ test('data components retain snapshots while moving and deleting MDX references'
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/reports/doc-report`);
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Source');
     const source = page.getByTestId('markdown-source').locator('textarea').first();
     await source.press('ControlOrMeta+A');
     await page.keyboard.insertText('<Chart source="chart" />\n\n## Move target\n\nParagraph before the chart.\n\nClosing note.');
@@ -615,7 +616,7 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await expect(page.getByRole('link', { name: 'View Agent Run' })).toHaveCount(0);
     await page.getByRole('button', { name: /Revenue analysis Report/ }).click();
     expect((await page.getByTestId('data-agent').locator('main').boundingBox())!.width).toBe(chatWidth);
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Unsaved analysis');
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
     const dialog = page.getByRole('alertdialog');
@@ -631,7 +632,7 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await page.getByRole('button', { name: 'Work resources', exact: true }).click();
     await page.getByRole('button', { name: /Unsaved analysis Report/ }).click();
     await expect(page.getByRole('heading', { name: 'Unsaved analysis' })).toBeVisible();
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Discard this');
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -934,7 +935,7 @@ test('version switching protects dirty edits and remains on the draft after a fa
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/reports/doc-report`);
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Unsaved draft');
     await expect.poll(() => writes).toBe(1);
     await selectReportVersion(page, 1);
@@ -950,7 +951,7 @@ test('version switching protects dirty edits and remains on the draft after a fa
     expect(latest.title).toBe('Unsaved draft');
     await page.getByRole('button', { name: 'More actions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Back to latest', exact: true }).click();
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     failSave = true;
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Discard me');
     await selectReportVersion(page, 1);
@@ -2320,7 +2321,7 @@ test('report navigation protects unsaved changes and exports a complete Markdown
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/reports/doc-report?q=Revenue&archiveState=all`);
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Human changes');
     await expect.poll(() => writes).toBe(1);
     await page.getByRole('button', { name: 'Continue analysis', exact: true }).click();
@@ -2358,7 +2359,7 @@ test('report navigation protects unsaved changes and exports a complete Markdown
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('report-detail-dark-mobile.png'), animations: 'disabled', fullPage: true });
     failSave = true;
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Discard this');
     await page.getByRole('button', { name: 'Back to Reports', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes', exact: true }).click();

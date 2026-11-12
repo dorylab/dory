@@ -1,3 +1,4 @@
+import { chooseReportMode } from './helpers/report';
 import { expect, type Page } from '@playwright/test';
 
 import { reportEmbeds } from '../../apps/web/lib/work-documents/report-core';
@@ -364,7 +365,7 @@ test('Share retries failed reads and protects unsaved report edits', async ({ pa
         .getByTestId('agent-resources')
         .getByRole('button', { name: /Revenue report/ })
         .click();
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Unsaved revenue review');
     await header.getByRole('button', { name: 'Share', exact: true }).click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
@@ -696,5 +697,34 @@ test('report charts use compact independent controls, snapshot SQL and downloads
     await expect(cash.getByText('Source details are unavailable.', { exact: true })).toBeVisible();
     await expect(cash.locator('pre')).toHaveCount(0);
     expect(liveSourceReads).toBe(0);
+    await expectAppHealthy(appErrors);
+});
+
+test('Embedded report offers view, block editing and Source without saving on mode changes', async ({ page, appErrors }) => {
+    test.setTimeout(150_000);
+    await setupWorks(page);
+    let saves = 0;
+    await page.route('**/api/work-documents/report-1', route => {
+        if (route.request().method() === 'PATCH') saves++;
+        return route.fulfill({ json: { document, versions: [] } });
+    });
+    await page.goto(`${new URL(page.url()).pathname}?chat=work-1&panel=report&document=report-1`);
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    const debug = await page.context().newCDPSession(page);
+    await debug.send('Debugger.enable');
+    debug.on('Debugger.paused', async event => {
+        const frame = event.callFrames.find(frame => frame.functionName === 'beginWork' || frame.functionName === 'performUnitOfWork');
+        if (frame) console.log('EDITOR FIBERS', JSON.stringify(await debug.send('Debugger.evaluateOnCallFrame', { callFrameId: frame.callFrameId, expression: "(() => { let f=workInProgress; const out=[]; while(f) {out.push({name:f.type?.name||f.type?.render?.name||f.type?.displayName||String(f.type),keys:Object.keys(f.pendingProps||{}),flags:f.flags});f=f.return;} return out; })()", returnByValue: true })));
+        await debug.send('Debugger.resume');
+    });
+    setTimeout(() => { void debug.send('Debugger.pause').catch(() => {}); }, 5000);
+    await chooseReportMode(page, 'Edit');
+    await expect(page.getByTestId('report-block-editor')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('report-block-editor').locator('[data-visual="trend"]')).toBeVisible();
+    await chooseReportMode(page, 'Source');
+    await expect(page.getByTestId('markdown-source')).toBeVisible();
+    await chooseReportMode(page, 'View');
+    await expect(page.getByTestId('report-block-editor')).toHaveCount(0);
+    expect(saves).toBe(0);
     await expectAppHealthy(appErrors);
 });
