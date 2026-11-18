@@ -158,7 +158,12 @@ export function ReportVisual({
                             variant="outline"
                             className="report-component-edit absolute right-2 top-2 z-10 size-9 bg-background"
                             aria-label={t('EditNamedComponent', { title: visual.title })}
-                            onClick={() => onEditComponent(visual.id)}
+                            onClick={event => {
+                                // The block editor selects the atomic node on mousedown.
+                                // Restore the actual opener before the dialog captures it.
+                                event.currentTarget.focus({ preventScroll: true });
+                                onEditComponent(visual.id);
+                            }}
                         >
                             <Pencil className="size-4" />
                         </Button>

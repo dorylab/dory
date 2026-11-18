@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useCallback, useContext, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/registry/new-york-v4/ui/alert-dialog';
@@ -23,6 +24,7 @@ import { ReportBody } from './report-body';
 import type { ReportEditorHandle } from './report-editor';
 import type { ReportEvidenceSelection } from './report-evidence-panel';
 import { ReportToolbar } from './report-toolbar';
+import { ReportHeaderActions } from './report-header-actions';
 
 const ReportEditor = dynamic(() => import('./report-editor'), { ssr: false });
 const ReportEvidencePanel = dynamic(() => import('./report-evidence-panel').then(module => module.ReportEvidencePanel), { ssr: false });
@@ -55,6 +57,7 @@ export function WorkReport({
     const evidenceT = useTranslations('WorkDocuments.Evidence');
     const analysisT = useTranslations('WorkDocuments.Analysis');
     const router = useRouter();
+    const headerActions = useContext(ReportHeaderActions);
     const [listState] = useQueryStates(reportListParsers);
     const client = useQueryClient();
     const key = ['work-document', organization, documentId];
@@ -234,13 +237,13 @@ export function WorkReport({
     }, [editing, dirty, busy, saveError, mutation.isPending, save, leaveDecision]);
     useEffect(() => {
         const warn = (event: BeforeUnloadEvent) => {
-            if (dirty) event.preventDefault();
+            if (dirty || editorRef.current?.hasPendingChanges()) event.preventDefault();
         };
         const guard = (event: MouseEvent) => {
             if (event.target instanceof Element && event.target.closest('[data-report-evidence-navigation]')) return;
             if (event.target instanceof Element && event.target.closest('[data-evidence], [data-evidence-group], a[href^="dory://evidence/"], a[href^="dory://evidence-group/"]'))
                 return;
-            if (dirty && event.target instanceof Element && event.target.closest('a[href]')) {
+            if ((dirty || editorRef.current?.hasPendingChanges()) && event.target instanceof Element && event.target.closest('a[href]')) {
                 event.preventDefault();
                 event.stopPropagation();
                 toast.info(t('LeaveUnsaved'));
@@ -348,8 +351,32 @@ export function WorkReport({
             toast.error(error instanceof Error ? error.message : reportT('Invalid'));
         }
     };
+    const openWorkspace = () =>
+        void leaveReport(() =>
+            router.push(
+                buildReportWorkspacePath(organization, {
+                    documentId: document.id,
+                    artifactId: '',
+                    revision: document.revision,
+                    publicationId: document.publication?.id,
+                }),
+            ),
+        );
     return (
         <article className="report-surface h-full min-w-0 overflow-auto bg-background text-foreground" data-testid="work-report">
+            {headerActions &&
+                createPortal(
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        disabled={viewUnavailable || busy || restore.isPending || Boolean(document.archivedAt)}
+                        onClick={openWorkspace}
+                    >
+                        {t('ConnectedWorkspace.OpenWorkspace')}
+                    </Button>,
+                    headerActions,
+                )}
             {evidenceSelection ? (
                 <ReportEvidencePanel
                     key={`${document.id}:${document.revision}:${'groupId' in evidenceSelection ? evidenceSelection.groupId : evidenceSelection.artifactId}`}
@@ -406,18 +433,7 @@ export function WorkReport({
                     </AlertDialogContent>
                 </AlertDialog>
                 <ReportToolbar
-                    onOpenWorkspace={() =>
-                        void leaveReport(() =>
-                            router.push(
-                                buildReportWorkspacePath(organization, {
-                                    documentId: document.id,
-                                    artifactId: '',
-                                    revision: document.revision,
-                                    publicationId: document.publication?.id,
-                                }),
-                            ),
-                        )
-                    }
+                    onOpenWorkspace={headerActions ? undefined : openWorkspace}
                     document={document}
                     standalone={presentation === 'standalone'}
                     historical={historical}

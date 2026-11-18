@@ -2,6 +2,8 @@
 
 @import 'tw-animate-css';
 
+@source '../../../node_modules/@blocknote/shadcn/src';
+
 @import 'react-day-picker/dist/style.css';
 
 @custom-variant dark (&:is(.dark *));
@@ -684,13 +686,33 @@ body {
 .work-prose .report-wide p { margin: 0; }
 .work-prose .report-wide th, .work-prose .report-wide td { white-space: nowrap; }
 
-/* Block controls use the same report typography and theme tokens. */
-.report-edit-block .report-prose > :first-child { margin-top: .25rem; }
-.report-edit-block .report-prose > :last-child { margin-bottom: .25rem; }
-.report-edit-block .tableWrapper { overflow-x: auto; }
-@media (hover: none) {
-    .report-edit-block > [contenteditable="false"] { opacity: 1; }
+/* BlockNote shares application theme tokens, including portalled menus. */
+.bn-root[data-color-scheme] {
+    --bn-colors-editor-text: var(--foreground);
+    --bn-colors-editor-background: var(--background);
+    --bn-colors-menu-text: var(--popover-foreground);
+    --bn-colors-menu-background: var(--popover);
+    --bn-colors-tooltip-text: var(--popover-foreground);
+    --bn-colors-tooltip-background: var(--popover);
+    --bn-colors-hovered-text: var(--accent-foreground);
+    --bn-colors-hovered-background: var(--accent);
+    --bn-colors-selected-text: var(--primary-foreground);
+    --bn-colors-selected-background: var(--primary);
+    --bn-colors-disabled-text: var(--muted-foreground);
+    --bn-colors-disabled-background: var(--muted);
+    --bn-colors-border: var(--border);
+    --bn-colors-side-menu: var(--muted-foreground);
+    --bn-font-family: var(--font-sans);
+    --bn-border-radius: var(--radius);
 }
+.report-blocknote .bn-editor { padding: 0 36px; min-height: 15rem; }
+.report-blocknote .bn-block-content { min-width: 0; }
+.report-blocknote .bn-shadcn .bn-editor a { color: var(--primary); text-decoration: underline; }
+.report-blocknote .bn-editor [data-content-type='table'] .tableWrapper { overflow-x: auto; }
+.report-blocknote .bn-editor [data-content-type='table'] th,
+.report-blocknote .bn-editor [data-content-type='table'] td { border-color: var(--border); }
+.bn-root.bn-shadcn .bn-side-menu .bn-button,
+.bn-root.bn-shadcn .bn-table-handle { color: var(--muted-foreground); }
 
 /* Report controls respond to the report pane, including embedded Work panels. */
 .report-surface { container: report / inline-size; }

@@ -11,3 +11,12 @@ export async function chooseReportMode(page: Page, mode: 'View' | 'Edit' | 'Sour
         await page.getByRole('menuitemradio', { name: mode, exact: true }).click();
     }
 }
+
+export async function replaceReportSource(page: Page, body: string) {
+    const input = page.getByTestId('markdown-source').locator('textarea').first();
+    // Monaco chooses shortcuts from the browser user agent, which can differ
+    // from the host OS when Playwright emulates Desktop Chrome.
+    const modifier = (await page.evaluate(() => navigator.userAgent.includes('Macintosh'))) ? 'Meta' : 'Control';
+    await input.press(`${modifier}+A`);
+    await page.keyboard.insertText(body);
+}

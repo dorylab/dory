@@ -6087,6 +6087,7 @@
             "rename": "已重命名"
         },
         "BlockEditor": {
+            "InitializationFailed": "无法打开块编辑器。报告正文已保留，请在 Source 中继续编辑。",
             "Paragraph": "段落",
             "Heading": "标题",
             "BulletList": "无序列表",

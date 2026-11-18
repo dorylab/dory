@@ -6080,6 +6080,7 @@
             "rename": "名前を変更済み"
         },
         "BlockEditor": {
+            "InitializationFailed": "ブロックエディターを開けませんでした。レポートの内容は保持されています。Source で編集を続けてください。",
             "Paragraph": "段落",
             "Heading": "見出し",
             "BulletList": "箇条書き",

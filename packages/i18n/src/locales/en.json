@@ -6083,6 +6083,7 @@
             "rename": "Renamed"
         },
         "BlockEditor": {
+            "InitializationFailed": "The block editor could not open this report. Your content is preserved; continue editing in Source.",
             "Paragraph": "Paragraph",
             "Heading": "Heading",
             "BulletList": "Bulleted list",

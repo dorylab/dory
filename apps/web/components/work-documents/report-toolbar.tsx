@@ -87,7 +87,7 @@ export function ReportToolbar(p: Props) {
     return (
         <header ref={host} className="report-toolbar sticky top-0 z-20 mb-4 flex h-11 items-center gap-1.5 border-b bg-background px-3" data-testid="report-toolbar">
             {p.onOpenWorkspace && (
-                <Button size="sm" variant="ghost" disabled={p.disabled || p.unavailable} onClick={p.onOpenWorkspace}>
+                <Button className="report-toolbar-secondary shrink-0" size="sm" variant="ghost" disabled={p.disabled || p.unavailable} onClick={p.onOpenWorkspace}>
                     {t('ConnectedWorkspace.OpenWorkspace')}
                 </Button>
             )}
@@ -114,57 +114,57 @@ export function ReportToolbar(p: Props) {
                         </h1>
                     )}
                 </div>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            className="report-status h-6 max-w-40 shrink-0 gap-1 px-1.5 text-[11px]"
-                            variant="ghost"
-                            size="sm"
-                            disabled={p.unavailable}
-                            aria-label={r('VersionMenu')}
-                        >
-                            <span className="truncate">{status}</span>
-                            <ChevronDown className="size-3 shrink-0" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="max-h-[70dvh] max-w-[calc(100vw-2rem)] overflow-y-auto">
-                        <DropdownMenuRadioGroup value={version} onValueChange={p.onVersion}>
-                            <DropdownMenuRadioItem value="draft">{r('Draft')}</DropdownMenuRadioItem>
-                            {p.publications.length > 0 && (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuLabel>{r('PublishedVersions')}</DropdownMenuLabel>
-                                    {p.publications.map(item => (
-                                        <DropdownMenuRadioItem key={item.id} value={`publication:${item.id}`}>
-                                            {r('Published', { number: item.number })}
-                                        </DropdownMenuRadioItem>
-                                    ))}
-                                </>
-                            )}
-                            {p.versions.length > 0 && (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuLabel>{r('History')}</DropdownMenuLabel>
-                                    {p.versions.map(item => (
-                                        <DropdownMenuRadioItem key={item.revision} value={`revision:${item.revision}`}>
-                                            r{item.revision} · {new Date(item.createdAt).toLocaleString()}
-                                            {item.revision === p.latestRevision ? ` · ${t('VersionHistory.Latest')}` : ''}
-                                        </DropdownMenuRadioItem>
-                                    ))}
-                                </>
-                            )}
-                        </DropdownMenuRadioGroup>
-                        {!p.historical && (
+            </div>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        className="report-status h-6 max-w-40 shrink-0 gap-1 px-1.5 text-[11px]"
+                        variant="ghost"
+                        size="sm"
+                        disabled={p.unavailable}
+                        aria-label={r('VersionMenu')}
+                    >
+                        <span className="truncate">{status}</span>
+                        <ChevronDown className="size-3 shrink-0" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-[70dvh] max-w-[calc(100vw-2rem)] overflow-y-auto">
+                    <DropdownMenuRadioGroup value={version} onValueChange={p.onVersion}>
+                        <DropdownMenuRadioItem value="draft">{r('Draft')}</DropdownMenuRadioItem>
+                        {p.publications.length > 0 && (
                             <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem disabled={!p.canPublish} onSelect={p.onPublish}>
-                                    {r('Publish')}
-                                </DropdownMenuItem>
+                                <DropdownMenuLabel>{r('PublishedVersions')}</DropdownMenuLabel>
+                                {p.publications.map(item => (
+                                    <DropdownMenuRadioItem key={item.id} value={`publication:${item.id}`}>
+                                        {r('Published', { number: item.number })}
+                                    </DropdownMenuRadioItem>
+                                ))}
                             </>
                         )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+                        {p.versions.length > 0 && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel>{r('History')}</DropdownMenuLabel>
+                                {p.versions.map(item => (
+                                    <DropdownMenuRadioItem key={item.revision} value={`revision:${item.revision}`}>
+                                        r{item.revision} · {new Date(item.createdAt).toLocaleString()}
+                                        {item.revision === p.latestRevision ? ` · ${t('VersionHistory.Latest')}` : ''}
+                                    </DropdownMenuRadioItem>
+                                ))}
+                            </>
+                        )}
+                    </DropdownMenuRadioGroup>
+                    {!p.historical && (
+                        <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem disabled={!p.canPublish} onSelect={p.onPublish}>
+                                {r('Publish')}
+                            </DropdownMenuItem>
+                        </>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
             {p.editing && (
                 <span
                     role="status"
@@ -264,6 +264,11 @@ export function ReportToolbar(p: Props) {
                     </IconHint>
                     <DropdownMenuContent align="end">
                         <div className="report-toolbar-overflow" style={{ display: compact ? undefined : 'none' }}>
+                            {p.onOpenWorkspace && (
+                                <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onOpenWorkspace}>
+                                    {t('ConnectedWorkspace.OpenWorkspace')}
+                                </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem disabled={p.disabled} onSelect={p.onContinue}>
                                 {t('Continue')}
                             </DropdownMenuItem>

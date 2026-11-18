@@ -1,4 +1,4 @@
-import { chooseReportMode } from './helpers/report';
+import { chooseReportMode, replaceReportSource } from './helpers/report';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
 import { expect, type Page } from '@playwright/test';
 import type { UIMessage } from 'ai';
@@ -88,6 +88,10 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.route('**/api/actions/execute', async route => {
         const body = route.request().postDataJSON();
+        if (body.actionId === 'report.evidence.inspect')
+            return route.fulfill({
+                json: { ok: true, data: { evidence: document.content.evidence[0], artifactAvailable: false, fullResultAvailable: false, canOpenWorkspace: true } },
+            });
         if (body.actionId === 'knowledge.list')
             return route.fulfill({
                 json: { ok: true, data: { models: [{ id: 'commerce', name: 'Commerce', dataSources: [{ connectionId: connection.connection.id, name: 'Orders' }] }] } },
@@ -395,12 +399,9 @@ test('data components retain snapshots while moving and deleting MDX references'
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/reports/doc-report`);
     await chooseReportMode(page, 'Source');
-    const source = page.getByTestId('markdown-source').locator('textarea').first();
-    await source.press('ControlOrMeta+A');
-    await page.keyboard.insertText('<Chart source="chart" />\n\n## Move target\n\nParagraph before the chart.\n\nClosing note.');
+    await replaceReportSource(page, '<Chart source="chart" />\n\n## Move target\n\nParagraph before the chart.\n\nClosing note.');
     await expect.poll(() => document.content.markdown.indexOf('![Monthly revenue]') < document.content.markdown.indexOf('## Move target')).toBe(true);
-    await source.press('ControlOrMeta+A');
-    await page.keyboard.insertText('## Move target\n\nParagraph before the chart.\n\nClosing note.');
+    await replaceReportSource(page, '## Move target\n\nParagraph before the chart.\n\nClosing note.');
     await expect.poll(() => document.content.markdown).not.toContain('dory://visual/chart');
     expect(document.content.evidence[0].rows).toHaveLength(2);
     await expectAppHealthy(appErrors);
@@ -873,6 +874,11 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
         }
         return route.fulfill({ json: { document: revision ? old : latest, versions } });
     });
+    await page.route('**/api/actions/execute', async route => {
+        if (route.request().postDataJSON().actionId === 'report.evidence.inspect')
+            return route.fulfill({ json: { ok: true, data: { evidence: old.content.evidence[0], artifactAvailable: false, fullResultAvailable: false, canOpenWorkspace: true } } });
+        return route.fallback();
+    });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/reports/doc-report`);
@@ -883,7 +889,7 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeEnabled();
     await expect(page.getByRole('img', { name: 'Monthly revenue' })).toBeVisible();
     expect(writes).toBe(0);
-    await page.getByRole('button', { name: 'Evidence', exact: true }).click();
+    await page.getByTestId('work-markdown').getByRole('link', { name: 'Source', exact: true }).click();
     await expect(page.getByRole('dialog')).toContainText('September');
     await page.keyboard.press('Escape');
     const download = page.waitForEvent('download');
@@ -892,7 +898,7 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     const stream = await (await download).createReadStream();
     let html = '';
     for await (const chunk of stream!) html += chunk.toString();
-    expect(html).toContain('v1');
+    expect(html).toContain('r1');
     expect(html).toContain('September');
     expect(html).not.toContain('Latest content');
     await page.reload();
@@ -908,7 +914,8 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Draft');
     expect(writes).toBe(1);
     await selectReportVersion(page, 1);
-    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    await expect(page).toHaveURL(/revision=1/);
+    await expect(page.getByTestId('work-markdown')).toContainText('Revenue');
     await expectAppHealthy(appErrors);
 });
 
@@ -960,7 +967,7 @@ test('version switching protects dirty edits and remains on the draft after a fa
     expect(latest.title).toBe('Unsaved draft');
 });
 
-test('history requests cannot replace a newer selection and restore conflicts preserve the old snapshot', async ({ page }) => {
+test('history loading protects selection and restore conflicts preserve the old snapshot', async ({ page }) => {
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     const old = makeDocument();
     const second = { ...structuredClone(old), title: 'Second version', revision: 2 };
@@ -998,9 +1005,10 @@ test('history requests cannot replace a newer selection and restore conflicts pr
     await expect.poll(() => Boolean(releaseFirst)).toBe(true);
     await expect(page.getByTestId('work-markdown')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeDisabled();
-    await selectReportVersion(page, 2);
-    await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toBeDisabled();
     releaseFirst!();
+    await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
+    await selectReportVersion(page, 2);
     await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
     await page.getByRole('button', { name: 'More actions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();

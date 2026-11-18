@@ -15,6 +15,7 @@ import { executionStatus, useAgentResources } from '@/hooks/use-agent-resources'
 
 import { AgentOutputs } from './agent-outputs';
 import { AgentQueries } from './agent-queries';
+import { ReportHeaderActions } from './report-header-actions';
 
 export function AgentResources({
     open,
@@ -56,6 +57,7 @@ export function AgentResources({
     const t = useTranslations('WorkDocuments.Resources');
     const { organization } = useParams<{ organization: string }>();
     const closeButton = useRef<HTMLButtonElement>(null);
+    const [headerActions, setHeaderActions] = useState<HTMLDivElement | null>(null);
     const restoreFocus = useRef(false);
     const previousView = useRef({ open, detailVisible });
     useEffect(() => {
@@ -95,28 +97,33 @@ export function AgentResources({
         <>
             <div className="flex shrink-0 items-center justify-between gap-2 border-b p-3">
                 {detailVisible ? (
-                    <Button variant="ghost" size="sm" onClick={onBack}>
-                        <ArrowLeft className="size-4" />
-                        {t('Back')}
+                    <Button variant="ghost" size="sm" className="min-w-0 shrink" onClick={onBack}>
+                        <ArrowLeft className="size-4 shrink-0" />
+                        <span className="truncate">{t('Back')}</span>
                     </Button>
                 ) : (
                     <h2 className="px-2 text-sm font-medium">{t('Title')}</h2>
                 )}
-                <Button
-                    ref={closeButton}
-                    size="icon"
-                    variant="ghost"
-                    aria-label={t('Close')}
-                    onClick={() => {
-                        restoreFocus.current = true;
-                        onClose();
-                    }}
-                >
-                    <X className="size-4" />
-                </Button>
+                <div className="flex shrink-0 items-center gap-1" data-testid="resource-preview-actions">
+                    <div ref={setHeaderActions} className="flex items-center" />
+                    <Button
+                        ref={closeButton}
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t('Close')}
+                        onClick={() => {
+                            restoreFocus.current = true;
+                            onClose();
+                        }}
+                    >
+                        <X className="size-4" />
+                    </Button>
+                </div>
             </div>
             {detailVisible ? (
-                <div className="min-h-0 flex-1">{children}</div>
+                <ReportHeaderActions.Provider value={headerActions}>
+                    <div className="min-h-0 flex-1">{children}</div>
+                </ReportHeaderActions.Provider>
             ) : (
                 <div className="min-h-0 flex-1 space-y-5 overflow-auto p-4">
                     <section aria-label={t('Outputs')} className="space-y-2">

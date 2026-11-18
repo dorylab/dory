@@ -87,6 +87,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+    interactiveWidget: 'resizes-content',
     themeColor: META_THEME_COLORS.light,
 };
 

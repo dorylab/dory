@@ -6017,6 +6017,7 @@
             "rename": "Renombrado"
         },
         "BlockEditor": {
+            "InitializationFailed": "No se pudo abrir el editor de bloques. El contenido se ha conservado; continúa editando en Source.",
             "Paragraph": "Párrafo",
             "Heading": "Encabezado",
             "BulletList": "Lista con viñetas",

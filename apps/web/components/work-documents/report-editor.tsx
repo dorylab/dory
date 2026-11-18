@@ -15,12 +15,16 @@ import type { ComponentDialogHandle } from './report-component-dialog';
 
 function EditorLoading() {
     const t = useTranslations('WorkDocuments');
-    return <p role="status" className="py-4 text-sm text-muted-foreground">{t('Loading')}</p>;
+    return (
+        <p role="status" className="py-4 text-sm text-muted-foreground">
+            {t('Loading')}
+        </p>
+    );
 }
 const BlockEditor = dynamic(() => import('./report-block-editor'), { ssr: false, loading: EditorLoading });
 const SourceEditor = dynamic(() => import('./source-editor'), { ssr: false });
 const ComponentDialog = dynamic(() => import('./report-component-dialog'), { ssr: false });
-export type ReportEditorHandle = { requestLeave: () => Promise<boolean>; insert: (type: WorkVisual['type']) => void };
+export type ReportEditorHandle = { requestLeave: () => Promise<boolean>; hasPendingChanges: () => boolean; insert: (type: WorkVisual['type']) => void };
 export default function ReportEditor({
     ref,
     mode,
@@ -47,10 +51,7 @@ export default function ReportEditor({
     // Autosave prunes unreferenced metadata on the server. Keep the editing
     // session's bindings available for undo and for switching editing surfaces.
     const retained = useRef(incoming);
-    const retain = <T,>(latest: T[], previous: T[], key: (value: T) => string) => [
-        ...latest,
-        ...previous.filter(value => !latest.some(item => key(item) === key(value))),
-    ];
+    const retain = <T,>(latest: T[], previous: T[], key: (value: T) => string) => [...latest, ...previous.filter(value => !latest.some(item => key(item) === key(value)))];
     const current = {
         ...incoming,
         visuals: retain(incoming.visuals, retained.current.visuals, value => value.id),
@@ -91,6 +92,8 @@ export default function ReportEditor({
             true,
         );
     useImperativeHandle(ref, () => ({
+        // Invalid block operations remain in the editor until corrected or undone.
+        hasPendingChanges: () => mode === 'blocks' && blockEditor.current?.requestLeave() === false,
         requestLeave: async () => {
             if (mode === 'blocks' && blockEditor.current?.requestLeave() === false) return false;
             if (!((await dialog.current?.requestLeave()) ?? true)) return false;

@@ -1,7 +1,7 @@
 import { chooseReportMode } from './helpers/report';
 import { expect, type Page } from '@playwright/test';
 
-import { reportEmbeds } from '../../apps/web/lib/work-documents/report-core';
+import { parseReport, reportEmbeds } from '../../apps/web/lib/work-documents/report-core';
 import type { AgentWorkSummary } from '../../packages/shared/src/types/agent-work';
 import { expectAppHealthy, test } from './fixtures';
 import { mockWorkbenchApis } from './helpers/workbench';
@@ -700,31 +700,101 @@ test('report charts use compact independent controls, snapshot SQL and downloads
     await expectAppHealthy(appErrors);
 });
 
-test('Embedded report offers view, block editing and Source without saving on mode changes', async ({ page, appErrors }) => {
+test('Embedded report offers view, block editing and Source without saving on mode changes', async ({ page, appErrors }, testInfo) => {
     test.setTimeout(150_000);
     await setupWorks(page);
     let saves = 0;
+    let saved = {
+        ...structuredClone(document),
+        title: 'Revenue analysis with a very long report title that must not crowd the report controls',
+        content: {
+            ...structuredClone(document.content),
+            format: 'restricted-mdx' as const,
+            body: 'Revenue increased. **`revenue`** [Evidence](dory://evidence/private-artifact)\n\n<Chart source="trend" />',
+            schemaVersion: 1 as const,
+            evidence: document.content.evidence.map(item => ({ ...item, snapshotId: 'report-snapshot' })),
+            visuals: [{ ...document.content.visuals[0], type: 'chart' as const, chart: { ...document.content.visuals[0].chart, type: 'bar' as const } }],
+        },
+    };
     await page.route('**/api/work-documents/report-1', route => {
-        if (route.request().method() === 'PATCH') saves++;
-        return route.fulfill({ json: { document, versions: [] } });
+        if (route.request().method() === 'PATCH') {
+            saves++;
+            const { draft } = route.request().postDataJSON();
+            const parsed = parseReport(draft.body, draft.visuals);
+            saved = {
+                ...saved,
+                revision: saved.revision + 1,
+                content: {
+                    ...saved.content,
+                    body: draft.body,
+                    markdown: parsed.presentation,
+                    visuals: draft.visuals.filter((visual: { id: string }) => parsed.components.some(component => component.visualId === visual.id)),
+                },
+            };
+        }
+        return route.fulfill({
+            json: { document: { ...saved, content: { ...saved.content, embeds: reportEmbeds(saved.content.visuals, saved.content.evidence) } }, versions: [] },
+        });
     });
     await page.goto(`${new URL(page.url()).pathname}?chat=work-1&panel=report&document=report-1`);
     await expect(page.getByTestId('work-report')).toBeVisible();
-    const debug = await page.context().newCDPSession(page);
-    await debug.send('Debugger.enable');
-    debug.on('Debugger.paused', async event => {
-        const frame = event.callFrames.find(frame => frame.functionName === 'beginWork' || frame.functionName === 'performUnitOfWork');
-        if (frame) console.log('EDITOR FIBERS', JSON.stringify(await debug.send('Debugger.evaluateOnCallFrame', { callFrameId: frame.callFrameId, expression: "(() => { let f=workInProgress; const out=[]; while(f) {out.push({name:f.type?.name||f.type?.render?.name||f.type?.displayName||String(f.type),keys:Object.keys(f.pendingProps||{}),flags:f.flags});f=f.return;} return out; })()", returnByValue: true })));
-        await debug.send('Debugger.resume');
-    });
-    setTimeout(() => { void debug.send('Debugger.pause').catch(() => {}); }, 5000);
+    const headerActions = page.getByTestId('resource-preview-actions');
+    await expect(page.getByTestId('work-report').locator('[data-visual="trend"]')).toBeVisible();
+    const toolbar = page.getByTestId('report-toolbar');
+    await expect(headerActions.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toBeVisible();
+    await expect(toolbar.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toHaveCount(0);
+    const title = await toolbar.getByRole('heading').boundingBox();
+    const versions = await toolbar.getByRole('button', { name: 'Report versions', exact: true }).boundingBox();
+    const resume = await toolbar.getByRole('button', { name: 'Continue analysis', exact: true }).boundingBox();
+    expect(title!.x + title!.width).toBeLessThanOrEqual(versions!.x);
+    expect(versions!.x + versions!.width).toBeLessThanOrEqual(resume!.x);
+    await page.screenshot({ path: testInfo.outputPath('report-preview-controls.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(headerActions.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toBeVisible();
+    expect(await page.getByTestId('agent-resources').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('report-preview-controls-narrow.png') });
+    await page.setViewportSize({ width: 1280, height: 720 });
     await chooseReportMode(page, 'Edit');
     await expect(page.getByTestId('report-block-editor')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('report-block-editor').locator('[data-visual="trend"]')).toBeVisible();
+    await expect(page.getByTestId('report-block-editor').locator('code').filter({ hasText: 'revenue' })).toBeVisible();
     await chooseReportMode(page, 'Source');
     await expect(page.getByTestId('markdown-source')).toBeVisible();
     await chooseReportMode(page, 'View');
     await expect(page.getByTestId('report-block-editor')).toHaveCount(0);
     expect(saves).toBe(0);
+    await chooseReportMode(page, 'Edit');
+    const editor = page.getByTestId('report-block-editor');
+    const paragraph = editor.locator('.bn-inline-content').filter({ hasText: 'Revenue increased.' });
+    await paragraph.click();
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
+    await page.keyboard.insertText(' Updated in chat.');
+    await headerActions.getByRole('button', { name: 'Open SQL Workspace', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await chooseReportMode(page, 'Source');
+    await expect(page.getByTestId('markdown-source')).toBeVisible();
+    await chooseReportMode(page, 'Edit');
+    await expect(paragraph).toContainText('Updated in chat.');
+    await expect.poll(() => saved.content.body).toContain('Updated in chat.');
+    await editor.getByRole('button', { name: 'Edit Revenue trend', exact: true }).click();
+    const dialog = page.getByTestId('report-component-dialog');
+    await dialog.getByRole('textbox', { name: 'Component title', exact: true }).fill('Updated chart');
+    await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+    await expect.poll(() => saved.content.visuals[0]?.title).toBe('Updated chart');
+    // The native side menu hides during ancestor scrolling; hover again once
+    // scrolling the chart header into view has settled.
+    await expect(async () => {
+        await editor.locator('[data-visual="trend"] figcaption').hover();
+        await page.getByRole('button', { name: 'Open block menu', exact: true }).click({ timeout: 1500 });
+        await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible();
+    }).toPass();
+    await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
+    await expect.poll(() => saved.content.visuals.length).toBe(0);
+    await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect.poll(() => saved.content.visuals[0]?.title).toBe('Updated chart');
+    await expect(editor.locator('[data-visual="trend"]')).toBeVisible();
+    await chooseReportMode(page, 'View');
+    await expect(editor).toHaveCount(0);
     await expectAppHealthy(appErrors);
 });

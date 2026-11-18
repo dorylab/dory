@@ -398,9 +398,9 @@ test('Report block editing preserves source through mode switches, saves prose, 
     expect(saves).toBe(0);
     expect(document.content.body).toBe(body);
     await chooseReportMode(page, 'Edit');
-    const paragraph = editor.locator('[data-node-view-content] p').filter({ hasText: 'Original paragraph.' });
+    const paragraph = editor.locator('.bn-inline-content').filter({ hasText: 'Original paragraph.' });
     await paragraph.click();
-    await page.keyboard.press('End');
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
     await page.keyboard.insertText(' 中文输入。');
     await expect.poll(() => document.content.body).toContain('中文输入。');
     await page.keyboard.insertText(' Still focused.');
@@ -408,22 +408,26 @@ test('Report block editing preserves source through mode switches, saves prose, 
     expect(document.content.body).toContain('[Reference][ref]\n\n[ref]: https://example.com');
     await page.keyboard.press('Enter');
     await page.keyboard.insertText('Second block.');
-    await expect(editor.locator('[data-report-block]').filter({ hasText: 'Second block.' })).toHaveCount(1);
+    await expect(editor.locator('.bn-block-outer').filter({ hasText: 'Second block.' })).toHaveCount(1);
     await expect.poll(() => document.content.body).toContain('Second block.');
-    const second = editor.locator('[data-report-block]').filter({ hasText: 'Second block.' });
+    const second = editor.locator('.bn-block-outer').filter({ hasText: 'Second block.' });
     await second.hover();
-    await second.getByRole('button', { name: 'Block actions', exact: true }).click();
+    await second.locator('.bn-inline-content').click();
+    await second.hover();
+    await page.getByRole('button', { name: 'Open block menu', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Move up', exact: true }).click();
     await expect.poll(() => document.content.body!.indexOf('Second block.') < document.content.body!.indexOf('Original paragraph.')).toBe(true);
     await editor.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect.poll(() => document.content.body!.indexOf('Second block.') > document.content.body!.indexOf('Original paragraph.')).toBe(true);
     await second.hover();
-    await second.getByRole('button', { name: 'Block actions', exact: true }).click();
+    await second.locator('.bn-inline-content').click();
+    await editor.getByRole('button', { name: 'Block actions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
     await expect.poll(() => document.content.body).not.toContain('Second block.');
     await editor.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect.poll(() => document.content.body).toContain('Second block.');
-    await second.getByRole('button', { name: 'Insert block', exact: true }).click();
+    await second.locator('.bn-inline-content').click();
+    await editor.getByRole('button', { name: 'Insert block', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Metric', exact: true }).click();
     const dialog = page.getByTestId('report-component-dialog');
     await dialog.getByRole('combobox', { name: 'Artifact source', exact: true }).click();
@@ -436,14 +440,20 @@ test('Report block editing preserves source through mode switches, saves prose, 
     const inserted = document.content.visuals.find(visual => visual.title === 'Inserted metric')!;
     expect(document.content.body).toContain(`Second block.\n\n<Metric source="${inserted.id}" />`);
     await editor.getByRole('button', { name: 'Insert block', exact: true }).first().click();
-    await page.getByRole('menuitem', { name: 'Text table', exact: true }).click();
-    await editor.locator('[data-node-view-content] th p').first().click();
+    await page.getByRole('menuitem', { name: 'Table', exact: true }).click();
+    await editor.getByRole('cell').first().locator('p').click();
     await page.keyboard.insertText('Definition');
     await expect.poll(() => document.content.body).toContain('Definition');
-    const firstProseBlock = editor.locator('[data-report-block]').filter({ hasText: 'Original paragraph.' });
+    const firstProseBlock = editor.locator('.bn-block-outer').filter({ hasText: 'Original paragraph.' });
     await firstProseBlock.hover();
-    const targetBox = await second.boundingBox();
-    await firstProseBlock.locator('[data-drag-handle]').dragTo(second, { targetPosition: { x: 20, y: targetBox!.height - 2 } });
+    const handle = await page.locator('[data-test="dragHandle"]').boundingBox();
+    const target = await second.boundingBox();
+    await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle!.x + handle!.width + 10, handle!.y + handle!.height / 2, { steps: 5 });
+    await page.mouse.move(target!.x + 100, target!.y + target!.height + 5, { steps: 15 });
+    await page.mouse.move(target!.x + 101, target!.y + target!.height + 6);
+    await page.mouse.up();
     await expect.poll(() => document.content.body!.indexOf('Original paragraph.') > document.content.body!.indexOf('Second block.')).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('report-block-editor-light.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -461,3 +471,61 @@ test('Report block editing preserves source through mode switches, saves prose, 
     await expect(page.getByText('Fix the MDX errors in Source before opening block editing.')).toBeVisible();
     await expectAppHealthy(appErrors);
 });
+
+for (const status of [409, 500]) {
+    test(`BlockNote keeps new input during autosave and preserves the draft after ${status}`, async ({ page, appErrors }) => {
+        let document = fixture();
+        document.content.body = 'Original paragraph.';
+        document.content.markdown = 'Original paragraph.';
+        let saving = false;
+        let fail = true;
+        let releaseSave: () => void = () => {};
+        const firstSave = new Promise<void>(resolve => {
+            releaseSave = resolve;
+        });
+        await mockWorkbenchApis(page, { initialConnections: [connection] });
+        await page.route('**/api/work-documents/report-v2*', async route => {
+            if (route.request().method() !== 'PATCH') return route.fulfill({ json: { document, versions: [], publications: [] } });
+            const { draft } = route.request().postDataJSON();
+            if (!saving) {
+                saving = true;
+                await firstSave;
+            } else if (fail) return route.fulfill({ status, json: { error: status === 409 ? 'Report changed. Read the latest version.' : 'Could not save report.' } });
+            document = {
+                ...document,
+                revision: document.revision + 1,
+                content: { ...document.content, body: draft.body, markdown: parseReport(draft.body, draft.visuals).presentation, visuals: draft.visuals },
+            };
+            return route.fulfill({ json: { document } });
+        });
+        await page.goto('/');
+        const organization = new URL(page.url()).pathname.split('/')[1];
+        await page.goto(`/${organization}/reports/report-v2`);
+        await chooseReportMode(page, 'Edit');
+        const editor = page.getByTestId('report-block-editor');
+        const paragraph = editor.locator('.bn-inline-content').filter({ hasText: 'Original paragraph.' });
+        await paragraph.click();
+        await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
+        await page.keyboard.insertText(' First edit.');
+        await expect.poll(() => saving).toBe(true);
+        await page.keyboard.insertText(' New input.');
+        releaseSave();
+        await expect(page.getByTestId('report-toolbar').getByRole('status')).toHaveText('Save failed');
+        await expect(paragraph).toContainText('First edit. New input.');
+        await page.keyboard.insertText(' Caret retained.');
+        await expect(paragraph).toContainText('New input. Caret retained.');
+        await chooseReportMode(page, 'View');
+        await expect(editor).toBeVisible();
+        await chooseReportMode(page, 'Source');
+        await expect(page.getByTestId('markdown-source')).toBeVisible();
+        await chooseReportMode(page, 'Edit');
+        await expect(paragraph).toContainText('New input. Caret retained.');
+        fail = false;
+        await chooseReportMode(page, 'View');
+        await expect(editor).toHaveCount(0);
+        expect(document.content.body).toContain('New input. Caret retained.');
+        await expectAppHealthy(
+            appErrors.filter(error => status !== 500 || error !== 'console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)'),
+        );
+    });
+}
