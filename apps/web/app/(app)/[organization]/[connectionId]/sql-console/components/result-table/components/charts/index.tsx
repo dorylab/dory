@@ -159,8 +159,12 @@ export function Charts({
     const [chartColorPreset, setChartColorPreset] = useState<ChartColorPreset>(() => (mergedInitialState.chartColorPreset as ChartColorPreset | undefined) ?? 'blue');
 
     const metricOptions = autoChartProfile.metricOptions as MetricOption[];
-    const selectedMetric = useMemo(() => metricOptions.find(option => option.key === yKey) ?? metricOptions[0] ?? null, [metricOptions, yKey]);
+    const selectedMetric = useMemo(
+        () => metricOptions.find(option => option.key === yKey) ?? metricOptions.find(option => option.key === suggestedState.yKey) ?? metricOptions[0] ?? null,
+        [metricOptions, suggestedState.yKey, yKey],
+    );
 
+    const effectiveYKey = selectedMetric?.key ?? yKey;
     const effectiveXKey = columnNames.includes(xKey) ? xKey : suggestedState.xKey;
     const effectiveGroupKey = groupKey !== NONE_VALUE && columnNames.includes(groupKey) ? groupKey : NONE_VALUE;
 
@@ -222,7 +226,7 @@ export function Charts({
     }, [columnNames, groupKey, hasPersistedState, stateSyncEnabled, suggestedState.groupKey]);
 
     useEffect(() => {
-        if (!stateSyncEnabled) {
+        if (!stateSyncEnabled || !columnNames.length) {
             return;
         }
         if (skipNextStateEmitRef.current) {
@@ -231,14 +235,15 @@ export function Charts({
         }
         onStateChange?.({
             chartType,
-            xKey,
-            yKey,
-            groupKey,
+            xKey: effectiveXKey,
+            yKey: effectiveYKey,
+            groupKey: effectiveGroupKey,
             chartColorPreset,
         });
-    }, [chartColorPreset, chartType, groupKey, onStateChange, stateSyncEnabled, xKey, yKey]);
+    }, [chartColorPreset, chartType, columnNames.length, effectiveGroupKey, effectiveXKey, effectiveYKey, onStateChange, stateSyncEnabled]);
 
-    const chartStateIsAuto = chartType === suggestedState.chartType && xKey === suggestedState.xKey && yKey === suggestedState.yKey && groupKey === suggestedState.groupKey;
+    const chartStateIsAuto =
+        chartType === suggestedState.chartType && effectiveXKey === suggestedState.xKey && effectiveYKey === suggestedState.yKey && effectiveGroupKey === suggestedState.groupKey;
 
     const localAggregated = useMemo<AggregatedChartData>(() => {
         if (!effectiveXKey || !selectedMetric) {
@@ -255,11 +260,21 @@ export function Charts({
             overrides: toEngineState({
                 chartType,
                 xKey: effectiveXKey,
-                yKey,
+                yKey: effectiveYKey,
                 groupKey: effectiveGroupKey,
             }),
         }) as AggregatedChartData;
-    }, [autoChartProfile.chartState, autoChartProfile.columnProfiles, autoChartProfile.metricOptions, chartType, effectiveGroupKey, effectiveXKey, rows, selectedMetric, yKey]);
+    }, [
+        autoChartProfile.chartState,
+        autoChartProfile.columnProfiles,
+        autoChartProfile.metricOptions,
+        chartType,
+        effectiveGroupKey,
+        effectiveXKey,
+        rows,
+        selectedMetric,
+        effectiveYKey,
+    ]);
     const [remoteAggregated, setRemoteAggregated] = useState<AggregatedChartData | null>(null);
 
     useEffect(() => {
@@ -275,7 +290,7 @@ export function Charts({
                 {
                     chartType,
                     xKey: effectiveXKey,
-                    yKey,
+                    yKey: effectiveYKey,
                     groupKey: effectiveGroupKey,
                     chartColorPreset,
                 },
@@ -296,7 +311,7 @@ export function Charts({
         return () => {
             controller.abort();
         };
-    }, [chartColorPreset, chartType, effectiveGroupKey, effectiveXKey, remoteSource, remoteSource?.cacheKey, selectedMetric, yKey]);
+    }, [chartColorPreset, chartType, effectiveGroupKey, effectiveXKey, remoteSource, remoteSource?.cacheKey, selectedMetric, effectiveYKey]);
 
     const aggregated = remoteSource ? (remoteAggregated ?? { data: [], series: [], bucketHint: null }) : localAggregated;
 
@@ -380,7 +395,7 @@ export function Charts({
             <div className="flex min-h-0 flex-1 flex-col px-3 py-3">
                 <ChartView
                     presentationOnly={presentationOnly}
-                    chartState={{ chartType, xKey, yKey, groupKey }}
+                    chartState={{ chartType, xKey: effectiveXKey, yKey: effectiveYKey, groupKey: effectiveGroupKey }}
                     chartStateIsAuto={chartStateIsAuto}
                     columnNames={columnNames}
                     metricOptions={metricOptions}
@@ -438,7 +453,9 @@ export function Charts({
                         setYKey(suggestedState.yKey);
                         setGroupKey(suggestedState.groupKey);
                     }}
-                    onSaveArtifact={onSaveArtifact ? () => onSaveArtifact({ chartType, xKey, yKey, groupKey, chartColorPreset }) : undefined}
+                    onSaveArtifact={
+                        onSaveArtifact ? () => onSaveArtifact({ chartType, xKey: effectiveXKey, yKey: effectiveYKey, groupKey: effectiveGroupKey, chartColorPreset }) : undefined
+                    }
                     saveArtifactLabel={saveArtifactLabel}
                     saveArtifactPending={saveArtifactPending}
                     saveArtifactDisabled={saveArtifactDisabled}

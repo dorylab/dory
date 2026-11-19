@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { SqlResults, SqlResultView, SqlResultTablePane, SqlResultChartPane } from '@/components/sql-workspace/sql-result-view';
 
@@ -61,6 +62,11 @@ type ResultSetSummaryMeta = {
     expiresAt?: number | null;
 };
 type CurrentSessionMeta = Partial<ResultSetMeta> & { columns: ResultSetMeta['columns'] };
+type ResultChartSnapshot = {
+    sessionId: string;
+    rows: Array<{ rowData: Record<string, unknown> }>;
+    columns: unknown;
+};
 type SessionUiSnapshot = {
     indices?: number[];
     setsMeta?: ResultSetSummaryMeta[];
@@ -264,7 +270,7 @@ export function ResultTable({ tabId: tabIdProp, onActiveResultChange, onOpenCopi
     const persistedViewStateRef = useRef<string | null>(null);
     const [chartStatesByKey, setChartStatesByKey] = useAtom(chartStatesByKeyAtom);
     const [chartStateVersionByTab, setChartStateVersionByTab] = useAtom(chartStateRevisionAtom);
-    const [chartSnapshotsBySet, setChartSnapshotsBySet] = useState<Record<number, { rows: Array<{ rowData: Record<string, unknown> }>; columnsRaw?: unknown }>>({});
+    const [chartSnapshotsBySet, setChartSnapshotsBySet] = useState<Record<number, ResultChartSnapshot>>({});
     const [tablePaneSnapshotsBySet, setTablePaneSnapshotsBySet] = useState<Record<number, ResultTablePaneSnapshot>>({});
     const [remoteEffectiveRowCountBySet, setRemoteEffectiveRowCountBySet] = useState<Record<number, number | null>>({});
     const remoteEffectiveRowCount = activeSet >= 0 ? (remoteEffectiveRowCountBySet[activeSet] ?? null) : null;
@@ -284,16 +290,16 @@ export function ResultTable({ tabId: tabIdProp, onActiveResultChange, onOpenCopi
     }, [setViewModesByKey, viewModeKey, viewModesByKey]);
 
     const chartSetIndices = useMemo(() => {
-        const indicesFromSnapshot = Object.keys(chartSnapshotsBySet)
-            .map(value => Number(value))
-            .filter(value => Number.isFinite(value) && value >= 0);
+        const indicesFromSnapshot = Object.entries(chartSnapshotsBySet)
+            .filter(([, snapshot]) => snapshot.sessionId === sessionId)
+            .map(([index]) => Number(index));
 
         if (activeSet >= 0 && !indicesFromSnapshot.includes(activeSet)) {
             indicesFromSnapshot.push(activeSet);
         }
 
         return indicesFromSnapshot.sort((a, b) => a - b);
-    }, [activeSet, chartSnapshotsBySet]);
+    }, [activeSet, chartSnapshotsBySet, sessionId]);
 
     const setUserPickedFalse = useSetAtom(useMemo(() => makeSetUserPickedAtom(tabId, sessionId), [tabId, sessionId]));
 
@@ -549,22 +555,47 @@ export function ResultTable({ tabId: tabIdProp, onActiveResultChange, onOpenCopi
         replaceFilters(deserializeViewFilters(viewState?.filters));
     }, [activeSet, hydratedViewStateKey, replaceFilters, sessionId, sessionMetas.sessionId, sessionMetas.setIndex, sessionMetas.viewState]);
 
-    useEffect(() => {
-        if (activeSet < 0) {
-            return;
-        }
-        if (isRemoteFullResult) {
-            return;
-        }
+    const chartResultId = isRemoteFullResult && sessionMetas.sessionId === sessionId && sessionMetas.setIndex === activeSet ? remoteResultSetId : null;
+    const needsChartSample = Boolean(chartResultId && currentViewMode === 'charts' && !sessionMetas.stats?.autoChartProfile && !streamedPreviewResults.length);
+    const savedChartSample = useQuery({
+        queryKey: ['result-chart-sample', organizationId, chartResultId],
+        enabled: needsChartSample,
+        staleTime: Infinity,
+        retry: false,
+        queryFn: ({ signal }) => readResultSetRows({ resultSetId: chartResultId!, limit: 50, signal }),
+    });
+    const chartSamplePending = needsChartSample && savedChartSample.isPending;
+    const chartSample = useMemo(() => savedChartSample.data?.rows?.map(rowData => ({ rowData })) ?? streamedPreviewResults, [savedChartSample.data?.rows, streamedPreviewResults]);
+    const activeChart = useMemo<ResultChartSnapshot | null>(() => {
+        if (!sessionId || activeSet < 0 || sessionMetas.sessionId !== sessionId || sessionMetas.setIndex !== activeSet) return null;
+        return {
+            sessionId,
+            // Samples provide chart dimensions and metrics. The remote aggregation still uses every stored row.
+            rows: isRemoteFullResult ? chartSample : columnFilteredResults,
+            columns: savedChartSample.data?.columns ?? sessionMetas.columns,
+        };
+    }, [activeSet, savedChartSample.data?.columns, chartSample, columnFilteredResults, isRemoteFullResult, sessionId, sessionMetas]);
+    const remoteChartSource = useMemo<ComponentProps<typeof SqlResultChartPane>['remoteSource']>(() => {
+        if (!chartResultId) return null;
+        return {
+            cacheKey: `${chartResultId}:${remoteOperationKey}:chart`,
+            readChart: (state, signal) =>
+                readResultSetChart({
+                    resultSetId: chartResultId,
+                    xKey: state.xKey,
+                    yKey: state.yKey,
+                    groupKey: state.groupKey,
+                    chartType: state.chartType,
+                    filters: remoteOperations.filters,
+                    search: remoteOperations.search,
+                    signal,
+                }),
+        };
+    }, [chartResultId, readResultSetChart, remoteOperationKey, remoteOperations.filters, remoteOperations.search]);
 
-        setChartSnapshotsBySet(prev => ({
-            ...prev,
-            [activeSet]: {
-                rows: columnFilteredResults as Array<{ rowData: Record<string, unknown> }>,
-                columnsRaw: sessionMetas.columns,
-            },
-        }));
-    }, [activeSet, columnFilteredResults, isRemoteFullResult, sessionMetas.columns]);
+    useEffect(() => {
+        if (activeChart) setChartSnapshotsBySet(previous => ({ ...previous, [activeSet]: activeChart }));
+    }, [activeChart, activeSet]);
 
     useEffect(() => {
         if (!sessionId || activeSet < 0) {
@@ -674,6 +705,7 @@ export function ResultTable({ tabId: tabIdProp, onActiveResultChange, onOpenCopi
             setSetsMeta([]);
             setMeta({});
             setSessionStatus(null);
+            setChartSnapshotsBySet({});
             setTablePaneSnapshotsBySet({});
             setRemoteEffectiveRowCountBySet({});
             return;
@@ -682,6 +714,7 @@ export function ResultTable({ tabId: tabIdProp, onActiveResultChange, onOpenCopi
             lastSessionRef.current = sessionId;
 
             setResults([]);
+            setChartSnapshotsBySet({});
             setTablePaneSnapshotsBySet({});
             setRemoteEffectiveRowCountBySet({});
 
@@ -1115,43 +1148,32 @@ export function ResultTable({ tabId: tabIdProp, onActiveResultChange, onOpenCopi
                 }
                 charts={
                     <>
+                        {chartSamplePending && (
+                            <div role="status" className="m-auto p-2 text-sm text-muted-foreground">
+                                {t('Results.LoadingResults')}
+                            </div>
+                        )}
                         {chartSetIndices.map(setIndex => {
                             const setChartStateKey = tabId ? `tab:${tabId}:set:${setIndex}` : 'unknown';
-                            const snapshot =
-                                chartSnapshotsBySet[setIndex] ??
-                                (setIndex === activeSet ? { rows: isRemoteFullResult ? [] : columnFilteredResults, columnsRaw: sessionMetas.columns } : undefined);
+                            const isActiveSet = setIndex === activeSet;
+                            if (isActiveSet && chartSamplePending) return null;
+                            const snapshot = isActiveSet ? activeChart : chartSnapshotsBySet[setIndex];
                             if (!snapshot) {
                                 return null;
                             }
 
                             const setVersion = chartStateVersionByTab[setChartStateKey] ?? 0;
                             const setInitialState = setChartStateKey !== 'unknown' ? chartStatesByKey[setChartStateKey] : undefined;
-                            const visible = setIndex === activeSet;
+                            const visible = isActiveSet && currentViewMode === 'charts';
 
                             return (
                                 <SqlResultChartPane
                                     visible={visible}
-                                    key={`${setChartStateKey}:${setVersion}`}
+                                    key={`${snapshot.sessionId}:${setChartStateKey}:${setVersion}`}
                                     rows={snapshot.rows}
-                                    columnsRaw={snapshot.columnsRaw}
-                                    resultStats={setIndex === activeSet ? sessionMetas.stats : undefined}
-                                    remoteSource={
-                                        visible && isRemoteFullResult && remoteResultSetId
-                                            ? {
-                                                  cacheKey: `${remoteResultSetId}:${remoteOperationKey}:chart`,
-                                                  readChart: state =>
-                                                      readResultSetChart({
-                                                          resultSetId: remoteResultSetId,
-                                                          xKey: state.xKey,
-                                                          yKey: state.yKey,
-                                                          groupKey: state.groupKey,
-                                                          chartType: state.chartType,
-                                                          filters: remoteOperations.filters,
-                                                          search: remoteOperations.search,
-                                                      }),
-                                              }
-                                            : null
-                                    }
+                                    columnsRaw={snapshot.columns}
+                                    resultStats={isActiveSet ? sessionMetas.stats : undefined}
+                                    remoteSource={visible ? remoteChartSource : null}
                                     stateKey={setChartStateKey}
                                     initialState={setInitialState}
                                     stateSyncEnabled={visible}

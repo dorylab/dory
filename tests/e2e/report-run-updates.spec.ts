@@ -4,7 +4,7 @@ import { createWorkbenchConnection, mockWorkbenchApis } from './helpers/workbenc
 import type { ReportUpdateItem } from '@dory/shared/types/report-updates';
 
 test('Report uses the linked data source, hands failed SQL to AI, and updates across tabs', async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(180000);
     const connection = createWorkbenchConnection({ id: 'report-finance' }),
         unrelated = createWorkbenchConnection(),
         connectionId = connection.connection.id,
@@ -18,6 +18,33 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
     const tab = { tabId: 'baidu-metrics', tabType: 'sql', tabName: '核心财务指标', content: originalSql, connectionId, userId: 'fixture', workId };
     const tabs = new Map([[tab.tabId, tab]]);
     const sessions = new Map<string, any>();
+    const originalRows = [
+        { year: 2023, amount: 366.15 },
+        { year: 2024, amount: 212.34 },
+        { year: 2025, amount: -30.13 },
+    ];
+    const originalColumns = [
+        { name: 'year', type: 'INTEGER' },
+        { name: 'amount', type: 'DECIMAL' },
+    ];
+    sessions.set('original', {
+        session: { sessionId: 'original', tabId: tab.tabId, connectionId, status: 'success', sqlText: originalSql, resultSetCount: 1 },
+        queryResultSets: [
+            {
+                sessionId: 'original',
+                setIndex: 0,
+                resultSetId: 'old-set',
+                title: 'Historical financial metrics',
+                sqlText: originalSql,
+                rowCount: originalRows.length,
+                columns: [],
+                status: 'success',
+                dataAvailability: 'full',
+            },
+        ],
+        results: [originalRows],
+    });
+    const chartReads: string[] = [];
     const content = {
         sourceWorkId: workId,
         body: '## 财务概览\n\n<DataTable source="metrics" />\n\n## 现金流分析\n\n现金流分析正文。',
@@ -33,7 +60,18 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
     await mockWorkbenchApis(page, { initialConnections: [unrelated, connection] });
     await page.route('**/api/works/' + workId + '/events', route => route.fulfill({ json: { code: 0 } }));
     await page.route('**/api/works/' + workId + '/snapshot', route =>
-        route.fulfill({ json: { code: 0, data: { snapshot: { work: { workId, title: '百度最近 3 年财报怎么样', connectionId }, tabs: [...tabs.values()], sessions: [] } } } }),
+        route.fulfill({
+            json: {
+                code: 0,
+                data: {
+                    snapshot: {
+                        work: { workId, title: '百度最近 3 年财报怎么样', connectionId },
+                        tabs: [...tabs.values()],
+                        sessions: [{ ...sessions.get('original'), results: [[]] }],
+                    },
+                },
+            },
+        }),
     );
     await page.route('**/api/actions/execute', route => {
         const { actionId, input } = route.request().postDataJSON(),
@@ -56,7 +94,7 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
                             connectionId,
                             database: sourceDatabase,
                             resultSetId: 'old-set',
-                            rowCount: 9,
+                            rowCount: originalRows.length,
                         },
                     },
                 });
@@ -100,6 +138,18 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
                 return reply(input.state);
             case 'query.resultSets.list':
                 return reply({ resultSets: sessions.get(input.sessionId)?.queryResultSets ?? [] });
+            case 'resultSet.chart.read': {
+                chartReads.push(input.resultSetId);
+                expect(['year', 'amount']).toContain(input.xKey);
+                expect(input.yKey).toMatch(/^(count|(?:sum|avg|min|max|count_distinct):(year|amount))$/);
+                const payload = [...sessions.values()].find(session => session.queryResultSets.some((set: { resultSetId: string }) => set.resultSetId === input.resultSetId));
+                const index = payload?.queryResultSets.findIndex((set: { resultSetId: string }) => set.resultSetId === input.resultSetId);
+                const rows: typeof originalRows = index === undefined ? [] : payload.results[index];
+                return reply({
+                    data: rows.map(row => ({ xLabel: String(row.year), value: row.amount })),
+                    series: [{ key: 'value', label: 'Amount' }],
+                });
+            }
             case 'resultSet.rows.read': {
                 const payload = [...sessions.values()].find(session => session.queryResultSets.some((set: { resultSetId: string }) => set.resultSetId === input.resultSetId));
                 const set = payload?.queryResultSets.find((set: { resultSetId: string }) => set.resultSetId === input.resultSetId);
@@ -110,7 +160,7 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
                     limit: input.limit,
                     rowCount: rows.length,
                     rows: rows.slice(input.offset ?? 0, (input.offset ?? 0) + (input.limit ?? rows.length)),
-                    columns: set?.columns ?? [],
+                    columns: input.resultSetId === 'old-set' ? originalColumns : (set?.columns ?? []),
                     dataAvailability: 'full',
                 });
             }
@@ -174,7 +224,12 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
             payload.results.push(rows);
         }
         sessions.set(input.sessionId, payload);
-        return route.fulfill({ contentType: 'application/x-ndjson', body: JSON.stringify({ type: 'session-finished', payload }) + '\n' });
+        const preview = {
+            ...payload,
+            queryResultSets: payload.queryResultSets.map(set => ({ ...set, previewRowCount: failed ? 0 : 2 })),
+            results: payload.results.map(result => result.slice(0, 2)),
+        };
+        return route.fulfill({ contentType: 'application/x-ndjson', body: JSON.stringify({ type: 'session-finished', payload: preview }) + '\n' });
     });
     await page.route('**/api/copilot/action', route =>
         route.fulfill({ json: { title: 'Correct the table name', explanation: 'Use the linked table.', fixedSql: originalSql, risk: 'low' } }),
@@ -182,7 +237,7 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
     await page.goto('/');
     const org = new URL(page.url()).pathname.split('/')[1];
     const href = '/' + org + '/reports/' + documentId + '/workspace?revision=1&run=' + workId + '&connection=' + unrelated.connection.id;
-    await page.goto(href);
+    await page.goto(href, { waitUntil: 'domcontentloaded' });
     const panel = page.getByTestId('report-updates');
     await expect(panel.getByRole('heading', { name: 'Report updates' })).toBeVisible();
     await expect(page.getByText('China data', { exact: true })).toBeVisible();
@@ -194,12 +249,21 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
     await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(originalSql);
     const update = panel.getByRole('button', { name: 'AI update report' });
     await expect(update).toBeDisabled();
+    const results = page.getByTestId('result-table').filter({ visible: true });
+    await results.getByRole('tab', { name: 'Charts', exact: true }).click();
+    await expect(results.locator('.recharts-wrapper')).toBeVisible();
+    expect(chartReads).toContain('old-set');
+    await expect(results.getByText('No columns available for charting.')).toHaveCount(0);
+    await results.getByRole('tab', { name: 'Table', exact: true }).click();
     await edit(failedSql);
     await page.getByTestId('run-query').click();
+    const executedResult = results.getByRole('tab', { name: 'Result 1: 指标', exact: true });
+    await expect(executedResult).toBeVisible();
+    await executedResult.click();
     const error = page.getByTestId('sql-error-alert');
     await expect(error).toContainText(queryError);
     await expect(update).toBeDisabled();
-    const repairRequest = page.waitForRequest(request => request.url().endsWith('/api/copilot/action'));
+    const repairRequest = page.waitForRequest(request => request.url().endsWith('/api/copilot/action'), { timeout: 10000 });
     await error.getByRole('button', { name: 'AI Fix' }).click();
     const { intent, input: repairInput } = (await repairRequest).postDataJSON();
     expect(intent).toBe('fix-sql-error');
@@ -220,6 +284,11 @@ test('Report uses the linked data source, hands failed SQL to AI, and updates ac
     await expect(update).toBeDisabled();
     await page.getByTestId('run-query').click();
     await expect(panel.getByText('Ran · 9 rows')).toBeVisible();
+    await results.getByRole('tab', { name: 'Result 1: 指标', exact: true }).click();
+    await results.getByRole('tab', { name: 'Charts', exact: true }).click();
+    await expect(results.locator('.recharts-wrapper')).toBeVisible();
+    expect(chartReads).toContain([...sessions.values()].at(-1)?.queryResultSets[0].resultSetId);
+    await results.getByRole('tab', { name: 'Table', exact: true }).click();
     await page.getByRole('button', { name: /Add tab/i }).click();
     await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe('');
     await expect(panel.locator('section')).toHaveCount(1);

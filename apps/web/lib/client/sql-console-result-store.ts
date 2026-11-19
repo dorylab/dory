@@ -56,6 +56,7 @@ type ChartInput = {
     chartType?: string | null;
     filters?: ResultSetRemoteFilter[];
     search?: ResultSetRemoteSearch | null;
+    signal?: AbortSignal;
 };
 type ChartOutput = {
     data: Array<Record<string, unknown>>;
@@ -201,8 +202,8 @@ export function useSqlConsoleResultStore() {
         return executeActionClient<ExportOutput>('resultSet.export.create', params);
     }, []);
 
-    const readResultSetChart = useCallback((params: ChartInput) => {
-        return executeActionClient<ChartOutput>('resultSet.chart.read', params);
+    const readResultSetChart = useCallback(({ signal, ...input }: ChartInput) => {
+        return executeActionClient<ChartOutput>('resultSet.chart.read', input, actionOptions(signal));
     }, []);
 
     const readResultSetProfile = useCallback((params: { resultSetId: string; sampleRows?: number; signal?: AbortSignal }) => {
