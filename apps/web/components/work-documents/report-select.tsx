@@ -1,8 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
+import { useId, type ComponentProps, type ReactNode } from 'react';
 import { Select, SelectContent, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
+import { useTranslations } from 'next-intl';
+
+import { SearchableSelect } from '@/components/@dory/ui/searchable-select';
 
 export function ReportSelect({
     value,
@@ -28,15 +30,21 @@ export function ReportSelect({
         </Select>
     );
 }
-export function ReportMultiSelect({ value, onValueChange, options }: { value: string[]; onValueChange: (value: string[]) => void; options: string[] }) {
+export function ReportColumnSelect({ label, ...props }: ComponentProps<typeof SearchableSelect> & { label: string }) {
+    const t = useTranslations('WorkDocuments.Report');
+    const id = useId();
     return (
-        <div className="max-h-36 space-y-2 overflow-auto rounded-md border bg-background p-3">
-            {options.map(option => (
-                <label key={option} className="flex items-center gap-2 text-sm">
-                    <Checkbox checked={value.includes(option)} onCheckedChange={checked => onValueChange(checked ? [...value, option] : value.filter(item => item !== option))} />
-                    {option}
-                </label>
-            ))}
+        <div className="min-w-0">
+            <label htmlFor={id} className="block text-sm">
+                {label}
+            </label>
+            <SearchableSelect
+                {...props}
+                id={id}
+                searchPlaceholder={t('FindColumns')}
+                triggerSize="default"
+                popoverClassName="w-64 max-w-(--radix-popover-content-available-width)"
+            />
         </div>
     );
 }

@@ -77,6 +77,7 @@ export type ReportCanvasState = {
     undo?: { content: import('./work-document').WorkDocumentContent; blocks: ReportCanvasBlock[]; proseNeedsReview: boolean };
 };
 export type ReportWorkingState = {
+    updates?: import('./report-updates').StoredReportUpdate[];
     canvas?: ReportCanvasState;
     title: string;
     bindingVersion?: 2;

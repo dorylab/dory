@@ -136,7 +136,7 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
                 },
             });
         if (actionId === 'report.workspace.source') return route.fulfill({ json: { ok: true, data: { available: false, reason: 'Original source unavailable.', tables: [] } } });
-        if (actionId === 'artifact.list') return route.fulfill({ json: { ok: true, data: { rows: [], total: 0 } } });
+        if (actionId === 'report.component.sources') return route.fulfill({ json: { ok: true, data: { rows: [] } } });
         if (actionId === 'artifact.get') {
             originalRequests++;
             return route.fulfill({ status: 404, json: { ok: false, error: { message: 'Expired' } } });
@@ -355,6 +355,250 @@ for (const chartType of ['bar', 'line', 'area', 'pie'] as const) {
     });
 }
 
+test('Editable SQL blocks use the report theme in light and dark mode', async ({ page }) => {
+    const report = fixture();
+    report.content.body = 'Query the `financial_metrics` table.\n\n```sql\nSELECT fiscal_year\nFROM financial_metrics\n```';
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'));
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/work-documents/report-v2*', route => route.fulfill({ json: { document: report, versions: [], publications: [] } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    await page.goto(`/${organization}/reports/report-v2`);
+    await chooseReportMode(page, 'Edit');
+    const editor = page.getByTestId('report-block-editor');
+    const block = editor.locator('[data-content-type="codeBlock"]');
+    const code = block.locator('pre > code');
+    await expect(code).toHaveText('SELECT fiscal_year\nFROM financial_metrics');
+    await code.click();
+    for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        await expect(editor.locator('.bn-root')).toHaveAttribute('data-color-scheme', colorScheme);
+        const palette = await page.evaluate(() => {
+            const sample = document.createElement('span');
+            sample.style.cssText = 'color: var(--code-foreground); background-color: var(--code)';
+            document.body.append(sample);
+            const { color, backgroundColor } = getComputedStyle(sample);
+            sample.remove();
+            return { color, backgroundColor };
+        });
+        await expect(code).toHaveCSS('color', palette.color);
+        await expect(block).toHaveCSS('background-color', palette.backgroundColor);
+        await expect(block.locator('pre')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+        await expect(code).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    }
+});
+
+test('Wide report tables scroll within the editor and keep their theme colors when selected', async ({ page, baseURL }) => {
+    const report = fixture();
+    report.content.body = 'A stable report.\n\n<DataTable source="rows" />';
+    const evidence = report.content.evidence[0];
+    const extraValues = Object.fromEntries(Array.from({ length: 24 }, (_, index) => [`financial_period_${index + 1}`, 'FY2025 financial results']));
+    evidence.columns.push(...Object.keys(extraValues));
+    evidence.rows = evidence.rows.map(row => ({ ...row, ...extraValues }));
+    await page.context().addCookies([{ name: 'active_theme', value: 'green', url: baseURL! }]);
+    await page.addInitScript(() => localStorage.setItem('theme', 'system'));
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/work-documents/report-v2*', route => route.fulfill({ json: { document: report, versions: [], publications: [] } }));
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    await page.goto(`/${organization}/reports/report-v2`);
+    await chooseReportMode(page, 'Edit');
+    const editor = page.getByTestId('report-block-editor');
+    const table = editor.locator('figure[data-visual="rows"]');
+    const scrollArea = table.locator('.work-table-scroll');
+    const lastHeader = table.getByRole('columnheader').last();
+    await expect(lastHeader).not.toBeInViewport();
+    const layout = await scrollArea.evaluate(element => ({
+        fitsEditor: element.clientWidth <= element.closest('.bn-editor')!.clientWidth,
+        cellsFit: [...element.querySelectorAll('tr:first-child > td')].every(cell => cell.scrollWidth <= cell.clientWidth + 1),
+    }));
+    expect(layout).toEqual({ fitsEditor: true, cellsFit: true });
+    await scrollArea.hover();
+    await page.mouse.wheel(10000, 0);
+    await expect(lastHeader).toBeInViewport();
+    await table.locator('summary').click();
+    await editor.getByText('A stable report.', { exact: true }).click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('ArrowDown');
+    for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme });
+        await expect(editor.locator('.bn-root')).toHaveAttribute('data-color-scheme', colorScheme);
+        await expect(editor.locator('.ProseMirror-selectednode')).toContainText('Saved details');
+        const cell = table.getByRole('cell').first();
+        const colors = await cell.evaluate(element => {
+            const reference = document.createElement('span');
+            reference.style.cssText = 'color: var(--foreground); accent-color: var(--primary)';
+            document.body.append(reference);
+            const { color: foreground, accentColor: primary } = getComputedStyle(reference);
+            reference.remove();
+            return { text: getComputedStyle(element).color, selected: getComputedStyle(element, '::selection').color, foreground, primary };
+        });
+        expect(colors.selected).toBe(colors.foreground);
+        expect(colors.text).toBe(colors.foreground);
+        const checkbox = table.getByRole('checkbox', { name: 'category' });
+        await expect(checkbox).toHaveCSS('accent-color', colors.primary);
+    }
+});
+
+test('A long metric column list scrolls to the last field in the component dialog', async ({ page }) => {
+    const document = fixture();
+    const evidence = document.content.evidence[0];
+    const fields = Array.from({ length: 25 }, (_, index) => `field_${index + 1}`);
+    evidence.columns.push(...fields);
+    const values = Object.fromEntries(fields.map((field, index) => [field, index + 1]));
+    evidence.rows = evidence.rows.map(row => ({ ...row, ...values }));
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/work-documents/report-v2*', route => route.fulfill({ json: { document, versions: [], publications: [] } }));
+    await page.route('**/api/actions/execute', route =>
+        route.request().postDataJSON().actionId === 'report.component.sources' ? route.fulfill({ json: { ok: true, data: { rows: [] } } }) : route.fallback(),
+    );
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    await page.goto(`/${organization}/reports/report-v2`);
+    await chooseReportMode(page, 'Edit');
+    await page.getByRole('button', { name: 'Edit Revenue', exact: true }).click();
+    const column = page.getByTestId('report-component-dialog').getByRole('combobox', { name: 'Column', exact: true });
+    await column.click();
+    const lastField = page.getByRole('option', { name: 'field_25', exact: true });
+    await expect(lastField).not.toBeInViewport();
+    await page.getByRole('listbox').hover();
+    await page.mouse.wheel(0, 1200);
+    await expect(lastField).toBeInViewport();
+    await lastField.click();
+    await expect(column).toHaveText('field_25');
+});
+
+test('Report chart fields are searchable and the series layout updates before and after applying', async ({ page, appErrors }) => {
+    test.setTimeout(120_000);
+    let document = fixture();
+    const columns = ['category', 'revenue', 'profit'].map(name => ({ name }));
+    const rows = [
+        { category: 'First', revenue: 125, profit: 25 },
+        { category: 'Second', revenue: 150, profit: 30 },
+    ];
+    let saves = 0;
+    let rowRequests = 0;
+    let releaseSave!: () => void;
+    const saveGate = new Promise<void>(resolve => {
+        releaseSave = resolve;
+    });
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/work-documents/report-v2*', async route => {
+        if (route.request().method() === 'PATCH') {
+            const { draft } = route.request().postDataJSON();
+            expect(draft).not.toHaveProperty('evidence');
+            saves++;
+            await saveGate;
+            const evidence = [
+                ...document.content.evidence,
+                {
+                    ...document.content.evidence[0],
+                    artifactId: 'financials',
+                    snapshotId: 'financial-snapshot',
+                    columns: columns.map(column => column.name),
+                    rows,
+                    rowCount: rows.length,
+                },
+            ];
+            document = {
+                ...document,
+                revision: document.revision + 1,
+                content: { ...document.content, evidence, body: draft.body, visuals: draft.visuals, embeds: reportEmbeds(draft.visuals, evidence) },
+            };
+        }
+        return route.fulfill({ json: { document, versions: [], publications: [] } });
+    });
+    await page.route('**/api/actions/execute', route => {
+        const { actionId, input } = route.request().postDataJSON();
+        if (actionId === 'report.component.sources') {
+            expect(input.documentId).toBe(document.id);
+            return route.fulfill({ json: { ok: true, data: { rows: [{ id: 'financials', title: 'Financial results' }] } } });
+        }
+        if (actionId === 'artifact.get' && input.artifactId === 'financials') {
+            return route.fulfill({
+                json: {
+                    ok: true,
+                    data: {
+                        title: 'Financial results',
+                        resultSet: { id: 'financial-rows', columns, sql: null },
+                        createdAt: now,
+                        connectionName: 'Orders',
+                        connectionId: connection.connection.id,
+                        workId: null,
+                    },
+                },
+            });
+        }
+        if (actionId === 'resultSet.rows.read' && input.resultSetId === 'financial-rows') {
+            rowRequests++;
+            return route.fulfill({ json: { ok: true, data: { columns, rows, rowCount: rows.length, dataAvailability: 'full' } } });
+        }
+        return route.fallback();
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    await page.goto(`/${organization}/reports/report-v2`);
+    await chooseReportMode(page, 'Edit');
+    await page.getByRole('button', { name: 'Insert component', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Chart', exact: true }).click();
+    const dialog = page.getByTestId('report-component-dialog');
+    const preview = dialog.getByTestId('report-component-preview');
+    const columnSearch = page.getByRole('combobox', { name: 'Search columns', exact: true });
+    await expect(dialog.getByRole('textbox', { name: 'Search columns', exact: true })).toHaveCount(0);
+    await dialog.getByRole('combobox', { name: 'Artifact source', exact: true }).click();
+    await page.getByRole('option', { name: 'Financial results', exact: true }).click();
+    await dialog.getByRole('combobox', { name: 'X', exact: true }).click();
+    await columnSearch.fill('cate');
+    await expect(page.getByRole('option', { name: 'profit', exact: true })).toHaveCount(0);
+    await page.getByRole('option', { name: 'category', exact: true }).click();
+    await expect(columnSearch).toHaveCount(0);
+    await dialog.getByRole('combobox', { name: 'Y', exact: true }).click();
+    await columnSearch.fill('rev');
+    const revenue = page.getByRole('option', { name: 'revenue', exact: true });
+    await revenue.click();
+    await expect(revenue).toHaveAttribute('aria-checked', 'true');
+    await expect(preview.locator('.recharts-bar')).toHaveCount(1);
+    await columnSearch.fill('prof');
+    const profit = page.getByRole('option', { name: 'profit', exact: true });
+    await profit.click();
+    await expect(preview.locator('.recharts-bar')).toHaveCount(2);
+    await expect(preview.locator('.recharts-wrapper')).toHaveCount(2);
+    await profit.click();
+    await expect(preview.locator('.recharts-bar')).toHaveCount(1);
+    await profit.click();
+    await columnSearch.press('Escape');
+    await expect(columnSearch).toHaveCount(0);
+    const layout = dialog.getByRole('combobox', { name: 'Series layout', exact: true });
+    await expect(layout).toHaveText('One chart per field');
+    await layout.click();
+    await page.getByRole('option', { name: 'One chart', exact: true }).click();
+    await expect(preview.locator('.recharts-wrapper')).toHaveCount(1);
+    await expect(preview.locator('.recharts-bar')).toHaveCount(2);
+    await dialog.getByRole('combobox', { name: 'Chart type', exact: true }).click();
+    await page.getByRole('option', { name: 'line', exact: true }).click();
+    await expect(preview.locator('.recharts-line-curve')).toHaveCount(2);
+    expect(rowRequests).toBe(1);
+    expect(saves).toBe(0);
+    const apply = dialog.getByRole('button', { name: 'Apply', exact: true });
+    const inlineChart = page.getByTestId('report-block-editor').locator('.recharts-line-curve');
+    try {
+        await apply.click();
+        await expect(dialog).toHaveCount(0);
+        await expect(inlineChart).toHaveCount(2);
+        await expect.poll(() => saves).toBe(1);
+    } finally {
+        releaseSave();
+    }
+    await expect.poll(() => document.revision).toBe(2);
+    const inserted = document.content.visuals.find(visual => visual.evidenceId === 'financials')!;
+    expect(inserted.chart?.seriesLayout).toBe('combined');
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    const savedChart = page.getByTestId('report-content').locator(`[data-visual="${inserted.id}"]`);
+    await expect(savedChart.locator('.recharts-wrapper')).toHaveCount(1);
+    await expect(savedChart.locator('.recharts-line-curve')).toHaveCount(2);
+    await expectAppHealthy(appErrors);
+});
+
 test('Report block editing preserves source through mode switches, saves prose, splits blocks and supports undo', async ({ page, appErrors }, testInfo) => {
     test.setTimeout(120_000);
     let document = fixture();
@@ -362,7 +606,12 @@ test('Report block editing preserves source through mode switches, saves prose, 
     document.content = { ...document.content, body, markdown: parseReport(body, document.content.visuals).presentation };
     let saves = 0;
     await mockWorkbenchApis(page, { initialConnections: [connection] });
-    await page.route('**/api/actions/execute', route => route.fulfill({ json: { ok: true, data: { rows: [], total: 0 } } }));
+    await page.route('**/api/actions/execute', route => {
+        const { actionId, input } = route.request().postDataJSON();
+        if (actionId !== 'report.component.sources') return route.fallback();
+        const rows = input.query === 'older report' ? [{ id: 'older-result', title: 'Older report result' }] : [];
+        return route.fulfill({ json: { ok: true, data: { rows } } });
+    });
     await page.route('**/api/work-documents/report-v2*', async route => {
         if (route.request().method() === 'PATCH') {
             const { draft } = route.request().postDataJSON();
@@ -392,7 +641,24 @@ test('Report block editing preserves source through mode switches, saves prose, 
     await expect(editor).toBeVisible();
     await expect(editor.getByText('Original paragraph.', { exact: true })).toBeVisible();
     await chooseReportMode(page, 'Source');
-    await expect(page.getByTestId('markdown-source')).toBeVisible();
+    const sourceEditor = page.getByTestId('markdown-source');
+    await expect(sourceEditor).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Manage evidence', exact: true })).toHaveCount(0);
+    for (const viewport of [
+        { width: 1280, height: 900 },
+        { width: 390, height: 844 },
+    ]) {
+        await page.setViewportSize(viewport);
+        await expect
+            .poll(() =>
+                sourceEditor.evaluate(element => {
+                    const report = element.closest('[data-testid="work-report"]')!;
+                    return Math.abs(report.getBoundingClientRect().bottom - element.getBoundingClientRect().bottom);
+                }),
+            )
+            .toBeLessThanOrEqual(20);
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
     await chooseReportMode(page, 'Edit');
     await chooseReportMode(page, 'View');
     expect(saves).toBe(0);
@@ -430,8 +696,21 @@ test('Report block editing preserves source through mode switches, saves prose, 
     await editor.getByRole('button', { name: 'Insert block', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Metric', exact: true }).click();
     const dialog = page.getByTestId('report-component-dialog');
-    await dialog.getByRole('combobox', { name: 'Artifact source', exact: true }).click();
+    const sourceSelect = dialog.getByRole('combobox', { name: 'Artifact source', exact: true });
+    const sourceSearch = page.getByRole('combobox', { name: 'Find data source', exact: true });
+    await expect(sourceSearch).toHaveCount(0);
+    await sourceSelect.click();
+    await expect(sourceSearch).toBeFocused();
+    await sourceSearch.fill('older report');
+    await expect(page.getByRole('option', { name: 'Older report result', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Revenue query', exact: true })).toHaveCount(0);
+    await sourceSearch.press('Escape');
+    await expect(sourceSelect).toBeFocused();
+    await sourceSelect.click();
+    await expect(sourceSearch).toHaveValue('');
+    await sourceSearch.fill('revenue');
     await page.getByRole('option', { name: 'Revenue query', exact: true }).click();
+    await expect(sourceSelect).toHaveText('Revenue query');
     await dialog.getByRole('combobox', { name: 'Column', exact: true }).click();
     await page.getByRole('option', { name: 'value', exact: true }).click();
     await dialog.getByRole('textbox', { name: 'Component title', exact: true }).fill('Inserted metric');

@@ -1,5 +1,5 @@
 import type { WorkDocumentView } from '@dory/shared/types/work-document';
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 
 import { reconcileReportEvidenceGroups } from '../../apps/web/lib/work-documents/evidence-groups';
 import { parseReport, reportEmbeds } from '../../apps/web/lib/work-documents/report-core';
@@ -27,7 +27,10 @@ test('Report evidence stays in context, pages preserved results and lets authors
             ? { attachmentSource: { userId: 'fixture', chatId: 'chat', files: [{ attachmentId: 'file', filename: 'baseline.csv', sha256: 'hash', table: 'baseline' }] } }
             : {}),
     }));
-    const body = '# Reliability report\n\nErrors increased relative to request volume. [Evidence](dory://evidence-group/error-rate)';
+    const conclusion = 'Errors increased relative to request volume.';
+    const body = ['# Reliability report', conclusion, conclusion + ' [Evidence](dory://evidence-group/error-rate)', '- Parent item\n  - Nested claim', '> Quoted claim'].join(
+        '\n\n',
+    );
     let document: WorkDocumentView = {
         id: 'report-evidence',
         title: 'Reliability report',
@@ -152,10 +155,28 @@ test('Report evidence stays in context, pages preserved results and lets authors
     await page.keyboard.press('Escape');
     await expect(page.getByRole('link', { name: 'View evidence · 3', exact: true })).toBeFocused();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
-    await page.getByRole('combobox', { name: 'Paragraph', exact: true }).click();
-    await page.getByRole('option', { name: 'Errors increased relative to request volume.', exact: true }).click();
-    await page.getByRole('button', { name: 'Manage evidence', exact: true }).click();
+    const blocks = page.getByTestId('report-block-editor');
+    const conclusions = blocks.locator('.bn-inline-content').filter({ hasText: conclusion });
+    const blockActions = blocks.getByRole('button', { name: 'Block actions', exact: true });
+    const manage = page.getByRole('menuitem', { name: 'Manage evidence', exact: true });
+    const openFor = async (block: Locator) => {
+        await block.click({ position: { x: 3, y: 5 } });
+        await blockActions.click();
+        await manage.click();
+    };
+    await expect(page.getByRole('combobox', { name: 'Paragraph', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Manage evidence', exact: true })).toHaveCount(0);
+    await expect(conclusions).toHaveCount(2);
+    await conclusions.first().click();
+    await conclusions.last().hover();
+    await page.getByRole('button', { name: 'Open block menu', exact: true }).click();
+    await manage.click();
     const editor = page.getByTestId('report-evidence-editor');
+    const chooseEvidence = async (name: string) => {
+        await editor.getByRole('combobox', { name: 'Choose a result', exact: true }).click();
+        await page.getByRole('option', { name, exact: true }).click();
+        await editor.getByRole('button', { name: 'Add', exact: true }).click();
+    };
     await editor.getByRole('textbox', { name: 'How this supports the conclusion' }).first().fill('Errors and requests use the same time range.');
     await editor.getByRole('button', { name: 'Remove', exact: true }).last().click();
     await editor.getByRole('checkbox').check();
@@ -166,17 +187,48 @@ test('Report evidence stays in context, pages preserved results and lets authors
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(page.getByRole('link', { name: 'View evidence · 2', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
-    await page.getByRole('combobox', { name: 'Paragraph', exact: true }).click();
-    await page.getByRole('option', { name: 'Errors increased relative to request volume.', exact: true }).click();
-    await page.getByRole('button', { name: 'Manage evidence', exact: true }).click();
-    await editor.getByRole('combobox', { name: 'Choose a result', exact: true }).click();
-    await page.getByRole('option', { name: 'New Work result', exact: true }).click();
-    await editor.getByRole('button', { name: 'Add', exact: true }).click();
+    await openFor(conclusions.last());
+    await chooseEvidence('New Work result');
     await editor.getByRole('checkbox').check();
     await editor.getByRole('button', { name: 'Apply to draft', exact: true }).click();
     await expect(page.getByText('Missing report evidence.', { exact: true })).toHaveCount(0);
     await expect.poll(() => document.content.evidenceGroups?.[0].references.some(reference => reference.artifactId === 'work-result')).toBe(true);
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await openFor(conclusions.first());
+    await expect(editor.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
+    await chooseEvidence('Request totals');
+    await editor.getByRole('button', { name: 'Apply to draft', exact: true }).click();
+    await expect.poll(() => document.content.evidenceGroups?.length).toBe(2);
+    const addedId = document.content.evidenceGroups!.find(group => group.id !== 'error-rate')!.id;
+    const addedLink = 'dory://evidence-group/' + addedId;
+    expect(document.content.body!.indexOf(addedLink)).toBeLessThan(document.content.body!.indexOf('dory://evidence-group/error-rate'));
+    await conclusions.first().click({ position: { x: 3, y: 5 } });
+    await blockActions.click();
+    await page.getByRole('menuitem', { name: 'Move down', exact: true }).click();
+    await expect.poll(() => document.content.evidenceGroups?.map(group => group.id)).toEqual(['error-rate', addedId]);
+    await conclusions.last().click({ position: { x: 3, y: 5 } });
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowLeft' : 'Home');
+    await page.keyboard.insertText('Updated: ');
+    await expect.poll(() => document.content.body).toContain('Updated: ' + conclusion + ' [Evidence](' + addedLink + ')');
+    await page.reload();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await openFor(conclusions.last());
+    await expect(editor.getByText('Updated: ' + conclusion, { exact: true })).toBeVisible();
+    await expect(editor.getByText('Request totals', { exact: true })).toBeVisible();
+    await editor.getByRole('button', { name: 'Remove', exact: true }).click();
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await openFor(conclusions.last());
+    await expect(editor.getByText('Request totals', { exact: true })).toBeVisible();
+    await editor.getByRole('button', { name: 'Remove', exact: true }).click();
+    await editor.getByRole('button', { name: 'Apply to draft', exact: true }).click();
+    await expect.poll(() => document.content.body).not.toContain(addedLink);
+    expect(document.content.evidenceGroups?.map(group => group.id)).toEqual(['error-rate']);
+    for (const claim of ['Nested claim', 'Quoted claim']) {
+        await openFor(blocks.getByText(claim, { exact: true }));
+        await expect(editor.getByText(claim, { exact: true })).toBeVisible();
+        await chooseEvidence('Error totals');
+        await editor.getByRole('button', { name: 'Apply to draft', exact: true }).click();
+        await expect.poll(() => document.content.body).toContain(claim + ' [Evidence](dory://evidence-group/');
+    }
     await page.goto(`${reportUrl}?revision=1`);
     await expect(page.getByRole('link', { name: 'View evidence · 3', exact: true })).toBeVisible();
     expect(history.get(1)!.content.evidenceGroups![0].references[0].explanation).toBe('Evidence explanation 1');

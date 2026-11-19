@@ -35,6 +35,7 @@ function getOpenFilesTableLabel(tableName: string) {
 }
 
 export function SQLConsoleSidebar({
+    source,
     onOpenTableTab,
     onOpenQueryConsole,
     onQueryTable,
@@ -48,15 +49,18 @@ export function SQLConsoleSidebar({
     const [localFilter, setFilter] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const deferredFilter = useDeferredValue(localFilter);
-    const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
-    const currentConnection = useAtomValue(currentConnectionAtom);
+    const [globalDatabase, setGlobalDatabase] = useAtom(activeDatabaseAtom);
+    const globalConnection = useAtomValue(currentConnectionAtom);
+    const activeDatabase = source?.database ?? globalDatabase;
+    const setActiveDatabase = source?.setDatabase ?? setGlobalDatabase;
+    const currentConnection = source ? source.connection : globalConnection;
     const sidebarConfig = useMemo(() => getSidebarConfig(currentConnection?.connection?.type), [currentConnection?.connection?.type]);
     const isLocalFilesDataset = useMemo(
         () => isLocalFilesDatasetConnection(parseConnectionOptions(currentConnection?.connection?.options)),
         [currentConnection?.connection?.options],
     );
 
-    const { databases, loading: databasesLoading, error: databasesError } = useDatabases();
+    const { databases, loading: databasesLoading, error: databasesError } = useDatabases(source?.connectionId);
 
     const databaseOptions = useMemo(
         () =>
@@ -68,7 +72,7 @@ export function SQLConsoleSidebar({
     );
 
     useEffect(() => {
-        if (!databaseOptions.length) return;
+        if (!databaseOptions.length || (source && activeDatabase)) return;
         const initialDatabase = getInitialDatabase(databaseOptions, currentConnection?.connection?.database);
         if (!initialDatabase) return;
 
@@ -77,13 +81,14 @@ export function SQLConsoleSidebar({
 
         setActiveDatabase(initialDatabase);
         onSelectDatabase?.(initialDatabase);
-    }, [activeDatabase, currentConnection?.connection?.database, databaseOptions, onSelectDatabase, setActiveDatabase, sidebarConfig]);
+    }, [activeDatabase, currentConnection?.connection?.database, databaseOptions, onSelectDatabase, setActiveDatabase, source]);
 
-    const { tables, loading: tablesLoading, refresh: refreshTables } = useTables(activeDatabase);
-    const { schemas, refresh: refreshSchemas } = useSchemas(activeDatabase, sidebarConfig.supportsSchemas);
-    const { refresh: getTableColumns } = useColumns();
+    const { tables, loading: tablesLoading, refresh: refreshTables } = useTables(activeDatabase, source?.connectionId);
+    const { schemas, refresh: refreshSchemas } = useSchemas(activeDatabase, sidebarConfig.supportsSchemas, source?.connectionId);
+    const { refresh: getTableColumns } = useColumns(source?.connectionId);
 
-    const [activeSchema, setActiveSchema] = useState('');
+    const [schemaSelection, setSchemaSelection] = useState<{ database: string; preferredSchema?: string | null; schema: string }>();
+    const setActiveSchema = (schema: string) => setSchemaSelection({ database: activeDatabase, preferredSchema: source?.preferredSchema, schema });
     const [expandedTableKeys, setExpandedTableKeys] = useState<Set<string>>(new Set());
     const [columnsByTableKey, setColumnsByTableKey] = useState<Record<string, TableColumn[]>>({});
     const [loadingTableKeys, setLoadingTableKeys] = useState<Set<string>>(new Set());
@@ -94,32 +99,14 @@ export function SQLConsoleSidebar({
         return defaultIdentity?.username?.trim() || sidebarConfig.defaultSchemaName || '';
     }, [currentConnection?.identities, sidebarConfig.defaultSchemaName]);
 
-    useEffect(() => {
-        if (!sidebarConfig.supportsSchemas) {
-            if (activeSchema) {
-                setActiveSchema('');
-            }
-            return;
-        }
-
-        if (schemaOptions.length === 0) {
-            if (activeSchema) {
-                setActiveSchema('');
-            }
-            return;
-        }
-
-        if (activeSchema && schemaOptions.some(schema => schema.value === activeSchema)) {
-            return;
-        }
-
-        const defaultSchema =
-            schemaOptions.find(schema => schema.value.toLowerCase() === preferredSchema.toLowerCase())?.value ??
-            schemaOptions.find(schema => schema.value === sidebarConfig.defaultSchemaName)?.value ??
-            schemaOptions[0]?.value ??
-            '';
-        setActiveSchema(defaultSchema);
-    }, [activeSchema, preferredSchema, schemaOptions, sidebarConfig.defaultSchemaName, sidebarConfig.supportsSchemas]);
+    const selectedSchema = schemaSelection?.database === activeDatabase && schemaSelection?.preferredSchema === source?.preferredSchema ? schemaSelection?.schema : undefined;
+    const activeSchema =
+        schemaOptions.find(schema => schema.value === selectedSchema)?.value ??
+        schemaOptions.find(schema => schema.value === source?.preferredSchema)?.value ??
+        schemaOptions.find(schema => schema.value.toLowerCase() === preferredSchema.toLowerCase())?.value ??
+        schemaOptions.find(schema => schema.value === sidebarConfig.defaultSchemaName)?.value ??
+        schemaOptions[0]?.value ??
+        '';
 
     const filteredTables = useMemo(() => {
         const normalizedFilter = deferredFilter.trim().toLowerCase();
@@ -144,7 +131,7 @@ export function SQLConsoleSidebar({
 
     const handleDatabaseChange = (database: string) => {
         setActiveDatabase(database);
-        setActiveSchema('');
+        setSchemaSelection(undefined);
         onSelectDatabase?.(database);
     };
 

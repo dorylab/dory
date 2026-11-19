@@ -13,7 +13,8 @@ import { useTranslations } from 'next-intl';
 
 import { reportMetrics } from '@/lib/work-documents/format';
 import { escapeHtml, formatWorkValue, renderWorkMarkdown } from '@/lib/work-documents/render';
-import { editableReport, parseReport, resolvedReport } from '@/lib/work-documents/report-core';
+import { canvasBlocks } from '@/lib/work-documents/report-canvas';
+import { reportOutline, editableReport, parseReport, resolvedReport } from '@/lib/work-documents/report-core';
 
 const ReportChart = dynamic(() => import('./report-chart'));
 
@@ -84,7 +85,7 @@ export function SnapshotTable({ evidence, compact = false }: { evidence: WorkEvi
                     <div className="flex flex-wrap gap-3 py-2">
                         {table.getAllLeafColumns().map(column => (
                             <label key={column.id} className="text-sm">
-                                <input type="checkbox" checked={column.getIsVisible()} onChange={column.getToggleVisibilityHandler()} /> {column.id}
+                                <input type="checkbox" className="accent-primary" checked={column.getIsVisible()} onChange={column.getToggleVisibilityHandler()} /> {column.id}
                             </label>
                         ))}
                     </div>
@@ -211,6 +212,7 @@ export function ReportVisual({
     );
 }
 export function ReportBody({
+    onOpenSql,
     content,
     title,
     onEvidenceGroup,
@@ -218,6 +220,7 @@ export function ReportBody({
 }: {
     content: WorkDocumentContent;
     title: string;
+    onOpenSql?: (origin: { artifactId?: string; componentId?: string; section?: string }) => void;
     onEvidenceGroup?: (id: string) => void;
     onEditComponent?: (id: string) => void;
 }) {
@@ -236,7 +239,7 @@ export function ReportBody({
             onEvidenceGroup(id);
         }
     };
-    if (!content.format)
+    if (!content.format && !onOpenSql)
         return (
             <div data-testid="work-markdown" className="report-prose" onClick={groupClick} dangerouslySetInnerHTML={{ __html: labels(renderWorkMarkdown(content, true, title)) }} />
         );
@@ -260,9 +263,36 @@ export function ReportBody({
         );
     let offset = 0;
     const sections: React.ReactNode[] = [];
-    const prose = (body: string, key: number) => (
+    const renderProse = (body: string, key: number) => (
         <div key={`prose-${key}`} className="report-prose" dangerouslySetInnerHTML={{ __html: labels(renderWorkMarkdown({ ...prepared, format: undefined, markdown: body })) }} />
     );
+    const headings = onOpenSql ? reportOutline(editable.body!, prepared.visuals).filter(node => node.kind === 'section' && node.id !== 'root') : [];
+    const headingBlocks = onOpenSql ? canvasBlocks(editable).filter(block => block.kind === 'section') : [];
+    const prose = (body: string, key: number) => {
+        if (!onOpenSql) return renderProse(body, key);
+        const chunks: React.ReactNode[] = [];
+        let from = key;
+        headings.forEach((heading, index) => {
+            if (heading.start < key || heading.end > key + body.length) return;
+            if (heading.start > from) chunks.push(renderProse(editable.body!.slice(from, heading.start), from));
+            chunks.push(
+                <div key={'heading-' + heading.start} className="group relative">
+                    {renderProse(editable.body!.slice(heading.start, heading.end), heading.start)}
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="absolute right-0 top-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                        onClick={() => onOpenSql({ section: headingBlocks[index].id })}
+                    >
+                        {evidenceT('OpenWorkspace')}
+                    </Button>
+                </div>,
+            );
+            from = heading.end;
+        });
+        if (from < key + body.length) chunks.push(renderProse(editable.body!.slice(from, key + body.length), from));
+        return <div key={'section-' + key}>{chunks}</div>;
+    };
     // Suppress only a matching leading H1; the stored content stays untouched.
     const first = parsed.tree?.children[0];
     if (
@@ -277,7 +307,21 @@ export function ReportBody({
         const visual = prepared.visuals.find(item => item.id === component.visualId)!;
         const evidence = prepared.evidence.find(item => item.artifactId === visual.evidenceId);
         if (!evidence) return <p role="alert">Missing report snapshot.</p>;
-        sections.push(<ReportVisual key={component.start} visual={visual} evidence={evidence} onEditComponent={onEditComponent} />);
+        sections.push(
+            <div key={component.start} id={'visual:' + visual.id} className="group relative">
+                <ReportVisual visual={visual} evidence={evidence} onEditComponent={onEditComponent} />
+                {onOpenSql && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                        onClick={() => onOpenSql({ artifactId: evidence.artifactId, componentId: visual.id })}
+                    >
+                        {evidenceT('OpenWorkspace')}
+                    </Button>
+                )}
+            </div>,
+        );
         offset = component.end;
     }
     sections.push(prose(editable.body!.slice(offset), offset));

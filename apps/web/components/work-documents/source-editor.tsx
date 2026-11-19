@@ -7,7 +7,7 @@ import { vsPlusTheme } from '@/components/@dory/ui/monaco-editor/theme';
 import type * as Monaco from 'monaco-editor';
 import { loadSqlMonaco } from '@/app/(app)/[organization]/[connectionId]/sql-console/components/sql-editor/monaco-loader';
 
-export default function SourceEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export default function SourceEditor({ value, onChange, fill = false }: { value: string; onChange: (value: string) => void; fill?: boolean }) {
     const host = useRef<HTMLDivElement>(null);
     const editor = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
     const latest = useRef({ value, onChange });
@@ -54,5 +54,5 @@ export default function SourceEditor({ value, onChange }: { value: string; onCha
     useEffect(() => {
         editor.current?.updateOptions({ theme: resolvedTheme === 'dark' ? 'github-dark' : 'github-light' });
     }, [resolvedTheme]);
-    return <div ref={host} className="h-[60vh] min-h-96 overflow-hidden rounded border" data-testid="markdown-source" />;
+    return <div ref={host} className={`${fill ? 'h-full min-h-0 shrink-0' : 'h-[60vh] min-h-96'} overflow-hidden rounded border`} data-testid="markdown-source" />;
 }

@@ -34,7 +34,7 @@ export type WorkVisual = {
     type: 'metric' | 'chart' | 'table';
     title: string;
     evidenceId: string;
-    chart?: { type: 'bar' | 'line' | 'area' | 'pie'; xKey: string; options?: ChartOptions } & (
+    chart?: { type: 'bar' | 'line' | 'area' | 'pie'; xKey: string; options?: ChartOptions; seriesLayout?: 'combined' | 'separate' } & (
         | { yKey: string; yKeys?: never }
         | { yKey?: never; yKeys: Array<{ key: string; label?: string }> }
     );

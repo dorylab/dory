@@ -17,29 +17,18 @@ const booleanStorage = createJSONStorage<boolean>();
 const numberStorage = createJSONStorage<number>();
 export const copilotPanelOpenAtom = atomWithStorage<boolean>('sqlConsole.copilotPanelOpen', true, booleanStorage);
 export const copilotPanelWidthAtom = atomWithStorage<number>('sqlConsole.copilotPanelWidth', 30, numberStorage);
-export const copilotPanelTabAtom = atomWithStorage<'ask' | 'action' | 'context'>(
-    'sqlConsole.copilotPanelTab',
-    'ask',
-    createJSONStorage(),
-);
+export const copilotPanelTabAtom = atomWithStorage<'ask' | 'action' | 'context'>('sqlConsole.copilotPanelTab', 'ask', createJSONStorage());
 
 export type SqlEditorResultLayout = [number, number];
 
-export const sqlEditorResultLayoutByScopeAtom = atomWithStorage<Record<string, SqlEditorResultLayout>>(
-    'sqlConsole.editorResultLayoutByScope',
-    {},
-    createJSONStorage(),
-    { getOnInit: true },
-);
+export const sqlEditorResultLayoutByScopeAtom = atomWithStorage<Record<string, SqlEditorResultLayout>>('sqlConsole.editorResultLayoutByScope', {}, createJSONStorage(), {
+    getOnInit: true,
+});
 
 export type SavedQueriesView = 'my-queries' | 'query-history';
 export const QUERY_HISTORY_UPDATED_EVENT = 'query-history-updated';
 
-export const savedQueriesViewByConnectionAtom = atomWithStorage<Record<string, SavedQueriesView>>(
-    'sqlConsole.savedQueriesViewByConnection',
-    {},
-    createJSONStorage(),
-);
+export const savedQueriesViewByConnectionAtom = atomWithStorage<Record<string, SavedQueriesView>>('sqlConsole.savedQueriesViewByConnection', {}, createJSONStorage());
 
 export const sessionIdByTabAtom = atom<Record<string, string>>({});
 
@@ -49,6 +38,7 @@ export const editorSelectionByTabAtom = atom<Record<string, EditorSelectionRange
 
 export type CopilotActionRequest = {
     id: string;
+    tabId?: string;
     intent: ActionIntent;
 };
 
@@ -94,11 +84,7 @@ export type CopilotAnalysisRequest = {
 
 export const copilotAnalysisRequestAtom = atom<CopilotAnalysisRequest | null>(null);
 
-export const analysisWorkspaceStateAtom = atomWithStorage<Record<string, AnalysisWorkspaceState>>(
-    'sqlConsole.analysisWorkspaceState',
-    {},
-    createJSONStorage(),
-);
+export const analysisWorkspaceStateAtom = atomWithStorage<Record<string, AnalysisWorkspaceState>>('sqlConsole.analysisWorkspaceState', {}, createJSONStorage());
 
 function makeAnalysisWorkspaceKey(tabId?: string | null, sessionId?: string | null, setIndex?: number | null) {
     if (!tabId || !sessionId || typeof setIndex !== 'number' || setIndex < 0) return null;

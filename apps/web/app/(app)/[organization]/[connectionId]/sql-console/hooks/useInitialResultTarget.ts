@@ -1,5 +1,6 @@
 'use client';
 
+import { useReportUpdates } from '@/components/work-documents/report-update-context';
 import { useEffect, useRef } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 
@@ -8,6 +9,7 @@ import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
 import { resolveInitialResultTargetTabId, type SqlWorkspaceInitialResultTarget } from '../initial-result-target';
 import { markQueryHistoryRestoredSession } from '../query-history-result-restore';
+import { chartStateRevisionAtom, chartStatesByKeyAtom, viewModesByTabAtom } from '../components/result-table/components/charts/stores/chart-state.atoms';
 import { upsertActiveSetAtom } from '../components/result-table/stores/active-set.atoms';
 import { getSessionStorageKey, type SqlWorkspaceScope } from '../workspace-scope';
 
@@ -28,6 +30,10 @@ export function useInitialResultTarget({
     setActiveTabId: (tabId: string) => void;
     workspaceScope: SqlWorkspaceScope;
 }) {
+    const report = useReportUpdates();
+    const setChartRevision = useSetAtom(chartStateRevisionAtom);
+    const setCharts = useSetAtom(chartStatesByKeyAtom),
+        setViews = useSetAtom(viewModesByTabAtom);
     const sessionIdMap = useAtomValue(sessionIdByTabAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
     const setActiveSet = useSetAtom(upsertActiveSetAtom);
@@ -45,6 +51,14 @@ export function useInitialResultTarget({
             const existingTabId = resolveInitialResultTargetTabId(tabsRef.current, sessionIdMap, target);
             const resolvedTabId = existingTabId ?? (await addTab({ tabName: target.title, content: target.sql ?? '', activate: true }));
 
+            if (resolvedTabId !== target.tabId) report?.onRestoreTab(target.tabId, resolvedTabId);
+            const key = 'tab:' + resolvedTabId + ':set:' + target.setIndex;
+            if (report && !target.chart) setViews(previous => ({ ...previous, [key]: 'table' }));
+            if (target.chart) {
+                setChartRevision(previous => ({ ...previous, [key]: (previous[key] ?? 0) + 1 }));
+                setCharts(previous => ({ ...previous, [key]: target.chart! }));
+                setViews(previous => ({ ...previous, [key]: 'charts' }));
+            }
             setActiveTabId(resolvedTabId);
             setSessionIdMap(previous => ({ ...previous, [resolvedTabId]: target.sessionId }));
             setActiveSet({
@@ -70,5 +84,20 @@ export function useInitialResultTarget({
             .finally(() => {
                 if (restoringRef.current === targetKey) restoringRef.current = null;
             });
-    }, [addTab, areTabsHydrated, isLoading, sessionIdMap, setActiveSet, setActiveTabId, setSessionIdMap, target, targetKey, workspaceScope]);
+    }, [
+        report,
+        setChartRevision,
+        setCharts,
+        setViews,
+        addTab,
+        areTabsHydrated,
+        isLoading,
+        sessionIdMap,
+        setActiveSet,
+        setActiveTabId,
+        setSessionIdMap,
+        target,
+        targetKey,
+        workspaceScope,
+    ]);
 }

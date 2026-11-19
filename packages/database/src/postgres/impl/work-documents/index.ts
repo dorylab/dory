@@ -1,3 +1,4 @@
+import { reportUpdateResults } from '@dory/shared/types/report-updates';
 import { createHash } from 'node:crypto';
 import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
 import type { PostgresDBClient } from '@dory/shared';
@@ -232,7 +233,7 @@ export class PostgresWorkDocumentsRepository {
         const [row] = await this.db.select().from(reportWorkingDrafts).where(this.draftOwned(input));
         return row ?? null;
     }
-    async initializeWorkingDraft(input: Target & { baseRevision: number; state: ReportWorkingState }) {
+    async initializeWorkingDraft(input: Target & { baseRevision: number; state: ReportWorkingState; recoverUpdates?: boolean }) {
         return this.db.transaction(async tx => {
             const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
             if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
@@ -252,6 +253,41 @@ export class PostgresWorkDocumentsRepository {
                 )
                 .orderBy(desc(reportWorkingDrafts.updatedAt))
                 .limit(1);
+            let state = input.state;
+            if (input.recoverUpdates && current.revision === input.baseRevision) {
+                const stale = await tx
+                    .select()
+                    .from(reportWorkingDrafts)
+                    .where(
+                        and(
+                            eq(reportWorkingDrafts.documentId, input.documentId),
+                            eq(reportWorkingDrafts.userId, input.userId),
+                            eq(reportWorkingDrafts.organizationId, input.organizationId),
+                            sql`${reportWorkingDrafts.expectedReportRevision} < ${current.revision} and jsonb_array_length(coalesce(${reportWorkingDrafts.state}->'updates', '[]'::jsonb)) > 0`,
+                        ),
+                    )
+                    .orderBy(desc(reportWorkingDrafts.updatedAt))
+                    .for('update');
+                if (stale.length) {
+                    const updates = new Map((existing?.state.updates ?? []).map(item => [item.id, item]));
+                    for (const previous of stale) {
+                        for (const item of previous.state.updates ?? []) if (!updates.has(item.id)) updates.set(item.id, { ...item, selected: false, needsReview: true });
+                        await tx
+                            .update(reportWorkingDrafts)
+                            .set({ state: { ...previous.state, updates: [] }, revision: previous.revision + 1 })
+                            .where(eq(reportWorkingDrafts.id, previous.id));
+                    }
+                    state = { ...(existing?.state ?? input.state), updates: [...updates.values()] };
+                    if (existing) {
+                        const [recovered] = await tx
+                            .update(reportWorkingDrafts)
+                            .set({ state, revision: existing.revision + 1 })
+                            .where(eq(reportWorkingDrafts.id, existing.id))
+                            .returning();
+                        return recovered;
+                    }
+                }
+            }
             if (existing) return existing;
             const [base] = await tx
                 .select()
@@ -267,18 +303,26 @@ export class PostgresWorkDocumentsRepository {
                     userId: input.userId,
                     baseRevision: input.baseRevision,
                     expectedReportRevision: current.revision,
-                    state: input.state,
+                    state,
                 })
                 .onConflictDoNothing();
             const [draft] = await tx.select().from(reportWorkingDrafts).where(this.draftOwned(input));
             return draft;
         });
     }
-    async saveWorkingDraft(input: Target & { baseRevision: number; expectedDraftRevision: number; state: ReportWorkingState }) {
+    async saveWorkingDraft(input: Target & { revision?: number; baseRevision: number; expectedDraftRevision: number; state: ReportWorkingState }) {
         return this.db.transaction(async tx => {
             const [document] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
             if (!document || document.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            if (input.revision !== undefined && input.revision !== document.revision) throw new DatabaseError('The report changed. Review the latest version.', 409);
             await retainReportEvidence(tx, input.organizationId, [...input.state.content.evidence, ...(input.state.canvas?.undo?.content.evidence ?? [])], input.documentId);
+            if (input.revision !== undefined)
+                await retainReportEvidence(
+                    tx,
+                    input.organizationId,
+                    (input.state.updates ?? []).flatMap(item => reportUpdateResults(item).map(result => ({ artifactId: 'artifact_' + result.resultSetId }))),
+                    input.documentId,
+                );
             const [row] = await tx
                 .update(reportWorkingDrafts)
                 .set({ state: input.state, revision: sql`${reportWorkingDrafts.revision} + 1`, updatedAt: new Date() })
@@ -313,7 +357,15 @@ export class PostgresWorkDocumentsRepository {
             throw new DatabaseError('Save request already used for another draft.', 409);
         return this.getPublication({ ...input, publicationId: row.id });
     }
-    async saveWorkingVersion(input: Target & { baseRevision: number; expectedDraftRevision: number; requestId: string; content: WorkDocumentContent }) {
+    async saveWorkingVersion(
+        input: Target & {
+            baseRevision: number;
+            expectedDraftRevision: number;
+            requestId: string;
+            content: WorkDocumentContent;
+            selection?: { revision: number; remaining: NonNullable<ReportWorkingState['updates']>; title: string; state: ReportWorkingState };
+        },
+    ) {
         const publicationId = await this.db.transaction(async tx => {
             const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
             if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
@@ -331,8 +383,10 @@ export class PostgresWorkDocumentsRepository {
             const [draft] = await tx.select().from(reportWorkingDrafts).where(this.draftOwned(input)).for('update');
             if (!draft || draft.revision !== input.expectedDraftRevision || current.revision !== draft.expectedReportRevision)
                 throw new DatabaseError('The report or working draft changed. Your draft is preserved; open the latest version to resolve the conflict.', 409);
-            if (draft.state.proseNeedsReview) throw new DatabaseError('Review the report text after applying new data.', 400);
-            if (input.content.evidenceGroups?.some(group => group.needsReview)) throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
+            if (input.selection && current.revision !== input.selection.revision) throw new DatabaseError('Report changed. Review the latest revision.', 409);
+            if (!input.selection && draft.state.proseNeedsReview) throw new DatabaseError('Review the report text after applying new data.', 400);
+            if (!input.selection && input.content.evidenceGroups?.some(group => group.needsReview))
+                throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
             const [base] = await tx
                 .select()
                 .from(workDocumentVersions)
@@ -348,19 +402,21 @@ export class PostgresWorkDocumentsRepository {
                 .update(workDocuments)
                 .set({
                     content,
-                    scope: {
-                        ...base.scope,
-                        connectionIds: [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))],
-                        databasesByConnection: Object.fromEntries(
-                            [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))].flatMap(connectionId => {
-                                const databases = [
-                                    ...new Set(content.evidence.flatMap(e => (e.connectionId === connectionId && e.sourceDatabaseName ? [e.sourceDatabaseName] : []))),
-                                ];
-                                return databases.length ? [[connectionId, databases]] : [];
-                            }),
-                        ),
-                    },
-                    title: draft.state.title,
+                    scope: input.selection
+                        ? current.scope
+                        : {
+                              ...base.scope,
+                              connectionIds: [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))],
+                              databasesByConnection: Object.fromEntries(
+                                  [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))].flatMap(connectionId => {
+                                      const databases = [
+                                          ...new Set(content.evidence.flatMap(e => (e.connectionId === connectionId && e.sourceDatabaseName ? [e.sourceDatabaseName] : []))),
+                                      ];
+                                      return databases.length ? [[connectionId, databases]] : [];
+                                  }),
+                              ),
+                          },
+                    title: input.selection?.title ?? draft.state.title,
                     revision: current.revision + 1,
                     status: 'ready',
                     updatedAt: new Date(),
@@ -388,6 +444,22 @@ export class PostgresWorkDocumentsRepository {
                 })
                 .returning();
             await tx.update(workDocuments).set({ publishedVersionId: publication.id }).where(this.owned(input));
+            if (input.selection) {
+                // Leave the previous version's independent report edits available to its author.
+                await tx
+                    .update(reportWorkingDrafts)
+                    .set({ state: { ...draft.state, updates: [] }, revision: draft.revision + 1 })
+                    .where(this.draftOwned(input));
+                await tx.insert(reportWorkingDrafts).values({
+                    organizationId: input.organizationId,
+                    documentId: input.documentId,
+                    userId: input.userId,
+                    baseRevision: row.revision,
+                    expectedReportRevision: row.revision,
+                    state: { ...input.selection.state, content, baseline: { revision: row.revision, title: row.title, content }, updates: input.selection.remaining },
+                });
+                return publication.id;
+            }
             await tx
                 .update(reportWorkingDrafts)
                 .set({
@@ -397,7 +469,7 @@ export class PostgresWorkDocumentsRepository {
                         ...draft.state,
                         content,
                         proseNeedsReview: false,
-                        baseline: { revision: row.revision, title: draft.state.title, content },
+                        baseline: { revision: row.revision, title: row.title, content },
                         canvas: draft.state.canvas
                             ? { ...draft.state.canvas, baselineBlocks: draft.state.canvas.blocks, baselineRevision: row.revision, undo: undefined }
                             : undefined,

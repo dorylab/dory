@@ -42,7 +42,12 @@ export const workspaceChartSpecSchema = z.object({
         .optional(),
     search: z.object({ text: z.string().max(1000), columns: z.array(z.string()).optional() }).optional(),
 });
-const chartAxes = { type: z.enum(['bar', 'line', 'area', 'pie']), xKey: z.string().min(1), options: chartOptionsSchema.optional() };
+const chartAxes = {
+    type: z.enum(['bar', 'line', 'area', 'pie']),
+    xKey: z.string().min(1),
+    options: chartOptionsSchema.optional(),
+    seriesLayout: z.enum(['combined', 'separate']).optional(),
+};
 const workChartSchema = z.union([
     z.object({ ...chartAxes, yKey: z.string().min(1) }).strict(),
     z
@@ -76,7 +81,7 @@ export const workVisualSchema = z
         chart: workChartSchema
             .optional()
             .describe(
-                'Required for chart. Use xKey and either yKey for one metric or yKeys:[{key,label?}] for multiple metrics. Every key must be an exact evidence column. Multiple metrics have separately labeled scales. Omit for table.',
+                'Required for chart. Use xKey and either yKey for one metric or yKeys:[{key,label?}] for multiple metrics. Every key must be an exact evidence column. Multiple metrics render separately by default. Set seriesLayout:"combined" to share one chart and Y-axis. Omit for table.',
             ),
         allowSubset: z.boolean().optional(),
         metric: z

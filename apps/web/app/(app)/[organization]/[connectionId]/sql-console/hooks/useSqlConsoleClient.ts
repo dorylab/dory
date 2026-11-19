@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSqlNamingRefresh } from './useSqlNamingRefresh';
 import { useAtom } from 'jotai';
 import { authClient } from '@/lib/auth-client';
@@ -16,7 +16,15 @@ import { normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace
 import type { SqlWorkspaceInitialResultTarget } from '../initial-result-target';
 import { useInitialResultTarget } from './useInitialResultTarget';
 
-export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspaceScope?: SqlWorkspaceScope, initialResultTarget?: SqlWorkspaceInitialResultTarget | null) {
+type QuerySource = { database: string | null; schema?: string | null };
+export type ReportQuerySources = { fallback?: QuerySource; byTab: ReadonlyMap<string, QuerySource> };
+
+export function useSqlConsoleClient(
+    defaultLayout: number[] | undefined,
+    workspaceScope?: SqlWorkspaceScope,
+    initialResultTarget?: SqlWorkspaceInitialResultTarget | null,
+    reportSources?: ReportQuerySources,
+) {
     const { normalizedLayout, onLayout } = useSqlLayout(defaultLayout);
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const { data: session } = authClient.useSession();
@@ -38,20 +46,34 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
         applyTabNames,
     } = useSQLTabs(normalizedWorkspaceScope);
     const activeTab = useMemo(() => tabs.find(t => t.tabId === activeTabId), [tabs, activeTabId]);
-    const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
+    const [globalDatabase, setGlobalDatabase] = useAtom(activeDatabaseAtom);
+    const [selectedDatabases, setSelectedDatabases] = useState<Record<string, string>>({});
+    const tabSource = reportSources?.byTab.get(activeTabId) ?? reportSources?.fallback;
+    const activeDatabase = reportSources
+        ? ((activeTab?.tabType === 'table' ? activeTab.databaseName : undefined) ?? selectedDatabases[activeTabId] ?? tabSource?.database ?? '')
+        : globalDatabase;
+    const activeSchema = tabSource?.database === activeDatabase ? tabSource.schema : undefined;
+    const setActiveDatabase = useCallback(
+        (database: string, tabId = activeTabId) => {
+            if (reportSources) setSelectedDatabases(prev => ({ ...prev, [tabId]: database }));
+            else setGlobalDatabase(database);
+        },
+        [activeTabId, reportSources, setGlobalDatabase],
+    );
 
     useEffect(() => {
-        if (activeTab?.tabType !== 'table' || !activeTab.databaseName || activeTab.databaseName === activeDatabase) {
+        if (reportSources || activeTab?.tabType !== 'table' || !activeTab.databaseName || activeTab.databaseName === activeDatabase) {
             return;
         }
 
         setActiveDatabase(activeTab.databaseName);
-    }, [activeDatabase, activeTab, setActiveDatabase]);
+    }, [activeDatabase, activeTab, reportSources, setActiveDatabase]);
 
     const { manualRenameTab } = useSqlAiTabTitle(activeDatabase, updateTab);
 
     const { editorRef, runQuery, cancelQuery, runningTabs } = useSqlQueryRunner({
         activeDatabase,
+        activeSchema,
         userId,
         prepareTab: (tabId, content) => saveWorkspaceNow({ activeTabId: tabId, activeSqlContent: content }),
         workspaceScope: normalizedWorkspaceScope,
@@ -120,5 +142,8 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
         handleCloseTab,
         handleCloseOthers,
         saveWorkspaceNow,
+        activeDatabase,
+        activeSchema,
+        setActiveDatabase,
     };
 }

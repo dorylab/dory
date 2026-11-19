@@ -1,5 +1,7 @@
 import type { ReportEvidenceInspection } from '@dory/shared/types/report-workspace';
 
+export const REPORT_SNAPSHOT_ROW_LIMIT = 500;
+
 export function hasCompleteReportSnapshot({ evidence, fullResultAvailable }: ReportEvidenceInspection) {
     return fullResultAvailable && evidence.truncated === false && evidence.rowCount !== null && evidence.rowCount === evidence.rows.length;
 }

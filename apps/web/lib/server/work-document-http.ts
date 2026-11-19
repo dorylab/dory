@@ -1,8 +1,10 @@
 import type { NextRequest } from 'next/server';
 import { getDBService } from '@dory/database';
+import { reportWorkspaceRunId } from '@dory/shared/types/report-updates';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { z } from 'zod';
 
+import { resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { canReadWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
@@ -36,7 +38,19 @@ export async function documentHttp(req: NextRequest, documentId?: string) {
                     db.workDocuments.publications(target),
                 ]);
                 workDraftSchema.parse({ title: document.title, markdown: document.content.markdown, visuals: document.content.visuals, status: document.status });
-                return Response.json({ document, versions, publications });
+                // Older reports may carry their originating run only on their evidence.
+                const evidenceRuns = new Set(document.content.evidence.map(item => item.runId).filter(Boolean));
+                const workId = document.content.sourceWorkId ?? (evidenceRuns.size === 1 ? [...evidenceRuns][0] : null);
+                const snapshot = workId ? await db.works.getSnapshot({ ...owner, workId }) : null;
+                const targetWorkspace = snapshot && resolveAgentWorkspaceTarget(snapshot);
+                const fallbackConnection = document.scope.connectionIds[0];
+                const workspace =
+                    snapshot && targetWorkspace?.connectionId
+                        ? { workId: snapshot.work.workId, ...targetWorkspace }
+                        : fallbackConnection
+                          ? { workId: snapshot?.work.workId ?? reportWorkspaceRunId(documentId), connectionId: fallbackConnection }
+                          : null;
+                return Response.json({ document, versions, publications, workspace });
             }
             return Response.json({
                 documents: await db.workDocuments.list({

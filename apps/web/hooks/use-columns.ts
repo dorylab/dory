@@ -4,13 +4,13 @@ import { columnsAtom, columnsCacheAtom, currentConnectionAtom } from '@/shared/s
 import { executeActionClient } from '@/lib/actions/client';
 import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
 
-export function useColumns() {
+export function useColumns(scopedConnectionId?: string) {
     const [tableColumns, setTableColumns] = useAtom(columnsAtom);
     const [columnsCache, setColumnsCache] = useAtom(columnsCacheAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
 
     const refresh = async (database: string, table: string) => {
-        const connectionId = currentConnection?.connection?.id as string | undefined;
+        const connectionId = scopedConnectionId ?? currentConnection?.connection?.id;
         if (!connectionId) {
             return;
         }
@@ -24,7 +24,7 @@ export function useColumns() {
         }
 
         const cacheKey = buildColumnCacheKey(connectionId, database, table);
-        const cachedColumns = cacheKey ? columnsCache[cacheKey]?.columns ?? null : null;
+        const cachedColumns = cacheKey ? (columnsCache[cacheKey]?.columns ?? null) : null;
         if (cachedColumns) {
             setTableColumns(cachedColumns);
             return cachedColumns;

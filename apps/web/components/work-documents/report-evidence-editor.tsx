@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 
 import { executeActionClient } from '@/lib/actions/client';
-import { attachReportEvidenceGroup, reconcileReportEvidenceGroups, removeReportEvidenceGroup, reportEvidenceParagraphs } from '@/lib/work-documents/evidence-groups';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -16,24 +15,26 @@ import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 
 import { ReportSelect } from './report-select';
 
-type Paragraph = ReturnType<typeof reportEvidenceParagraphs>[number];
-
-function EvidenceDialog({
+export function ReportEvidenceDialog({
     content,
-    paragraph,
+    text,
+    groupId,
+    error,
     documentId,
     onApply,
     onClose,
 }: {
     content: WorkDocumentContent;
-    paragraph: Paragraph;
+    text: string;
+    groupId?: string;
+    error: string;
     documentId?: string;
     onApply: (references: ReportEvidenceGroup['references'], reviewed: boolean) => void;
     onClose: () => void;
 }) {
     const t = useTranslations('WorkDocuments.Evidence');
     const { organization } = useParams<{ organization: string }>();
-    const group = content.evidenceGroups?.find(item => item.id === paragraph.groupId);
+    const group = content.evidenceGroups?.find(item => item.id === groupId);
     const [references, setReferences] = useState<ReportEvidenceGroup['references']>(() => structuredClone(group?.references ?? []));
     const [reviewed, setReviewed] = useState(false);
     const [source, setSource] = useState('');
@@ -59,7 +60,7 @@ function EvidenceDialog({
                     <DialogDescription>{t('ManageDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 space-y-4 overflow-y-auto">
-                    <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{paragraph.text}</p>
+                    <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{text}</p>
                     {references.map((reference, index) => (
                         <div key={reference.artifactId} className="space-y-2 rounded-md border p-3">
                             <div className="flex items-start justify-between gap-2">
@@ -115,6 +116,11 @@ function EvidenceDialog({
                         </label>
                     )}
                 </div>
+                {error && (
+                    <p role="alert" className="text-sm text-destructive">
+                        {error}
+                    </p>
+                )}
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>
                         {t('Cancel')}
@@ -123,68 +129,5 @@ function EvidenceDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    );
-}
-
-export function ReportEvidenceEditor({ content, documentId, onChange }: { content: WorkDocumentContent; documentId?: string; onChange: (content: WorkDocumentContent) => void }) {
-    const t = useTranslations('WorkDocuments.Evidence');
-    const body = content.body ?? content.markdown;
-    const [selection, setSelection] = useState('');
-    const [editing, setEditing] = useState<Paragraph | null>(null);
-    let paragraphs: Paragraph[];
-    try {
-        paragraphs = reportEvidenceParagraphs(body);
-    } catch {
-        return <p className="text-sm text-muted-foreground">{t('FixBodyFirst')}</p>;
-    }
-    const selected = paragraphs.find(item => String(item.start) === selection);
-    return (
-        <section className="space-y-3 rounded-md border p-3" aria-label={t('Manage')}>
-            <p className="text-sm font-medium">{t('Manage')}</p>
-            <div className="flex items-end gap-2">
-                <label className="grid min-w-0 flex-1 gap-1 text-sm">
-                    {t('Paragraph')}
-                    <ReportSelect value={selection} onValueChange={setSelection} aria-label={t('Paragraph')}>
-                        <SelectItem value="__none">{t('ChooseParagraph')}</SelectItem>
-                        {paragraphs.map(paragraph => (
-                            <SelectItem key={paragraph.start} value={String(paragraph.start)}>
-                                {paragraph.text.slice(0, 100)}
-                                {paragraph.text.length > 100 ? '…' : ''}
-                            </SelectItem>
-                        ))}
-                    </ReportSelect>
-                </label>
-                <Button variant="outline" disabled={!selected} onClick={() => selected && setEditing(selected)}>
-                    {t('Manage')}
-                </Button>
-            </div>
-            {content.evidenceGroups?.some(group => group.needsReview) && (
-                <p role="status" className="text-sm text-muted-foreground">
-                    {t('ReviewRequired')}
-                </p>
-            )}
-            {editing && (
-                <EvidenceDialog
-                    content={content}
-                    paragraph={editing}
-                    documentId={documentId}
-                    onClose={() => setEditing(null)}
-                    onApply={(references, reviewed) => {
-                        const id = editing.groupId ?? `evidence_${crypto.randomUUID().replaceAll('-', '')}`;
-                        const groups = (content.evidenceGroups ?? []).filter(group => group.id !== id);
-                        const reviewedIds = (content.reviewedEvidenceGroupIds ?? []).filter(groupId => groupId !== id);
-                        const nextBody = references.length ? (editing.groupId ? body : attachReportEvidenceGroup(body, editing.start, id)) : removeReportEvidenceGroup(body, id);
-                        const nextReviewedIds = reviewed ? [...reviewedIds, id] : reviewedIds;
-                        onChange({
-                            ...content,
-                            body: nextBody,
-                            evidenceGroups: reconcileReportEvidenceGroups(content, nextBody, references.length ? [...groups, { id, references }] : groups, nextReviewedIds),
-                            reviewedEvidenceGroupIds: nextReviewedIds,
-                        });
-                        setEditing(null);
-                    }}
-                />
-            )}
-        </section>
     );
 }

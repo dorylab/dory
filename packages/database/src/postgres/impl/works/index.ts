@@ -1,3 +1,4 @@
+import { reportWorkspaceRunId } from '@dory/shared/types/report-updates';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
 import { isAnalysisDatabaseAllowed } from '@dory/shared/utils/analysis-scope';
 import { canReadAttachmentSource } from '@dory/shared/types/chat-attachment';
@@ -322,6 +323,13 @@ export class PostgresWorksRepository {
         return this.insertWork(input);
     }
 
+    async ensureReportWorkspace(input: { organizationId: string; userId: string; documentId: string; connectionId: string; title: string }) {
+        const workId = reportWorkspaceRunId(input.documentId);
+        const existing = await this.getById({ ...input, workId });
+        if (existing) return existing;
+        return this.insertWork({ ...input, workId, externalSessionId: workId, metadata: { source: 'report_workspace', documentId: input.documentId } });
+    }
+
     private async insertWork(input: ResolveWorkInput): Promise<WorkRecord> {
         const now = new Date();
         const [row] = await this.db
@@ -346,7 +354,7 @@ export class PostgresWorksRepository {
             .onConflictDoNothing()
             .returning();
 
-        if (!row && input.workId && input.metadata?.source === 'internal_chat') {
+        if (!row && input.workId && (input.metadata?.source === 'internal_chat' || input.metadata?.source === 'report_workspace')) {
             const existing = await this.getById({ ...input, workId: input.workId });
             if (existing && existing.externalSessionId === input.externalSessionId && !existing.archivedAt) return this.prepareExistingWork(existing, input, now);
         }

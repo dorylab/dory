@@ -1,3 +1,4 @@
+import type { ConnectionListItem } from '@dory/shared/types/connections';
 import type { useSqlConsoleClient } from '../../hooks/useSqlConsoleClient';
 
 type SqlConsoleState = ReturnType<typeof useSqlConsoleClient>;
@@ -13,4 +14,6 @@ export type BaseModeProps = Pick<SqlConsoleState, 'tabs' | 'activeTab' | 'active
 export type SqlModeProps = BaseModeProps &
     Pick<SqlConsoleState, 'editorRef' | 'runQuery' | 'cancelQuery' | 'runningTabs'> & {
         workspaceActive: boolean;
+        onOpenCopilot?: () => void;
+        source?: { connectionId: string; connection?: ConnectionListItem; database: string; schema?: string | null };
     };

@@ -6,6 +6,7 @@ export type SqlWorkspaceInitialResultTarget = {
     setIndex: number;
     sql: string | null;
     title: string;
+    chart?: import('@dory/shared/types/workspace-chart').WorkspaceChartSpec;
 };
 
 export function resolveInitialResultTargetTabId(tabs: UITabPayload[], sessionIdByTab: Record<string, string>, target: SqlWorkspaceInitialResultTarget): string | null {

@@ -23,6 +23,7 @@ import { ResultTable } from '../result-table/result-table';
 import { SqlQueryPane, SqlQueryToolbar } from '@/components/sql-workspace/sql-query-pane';
 import CopilotPanel from '../copilot-panel';
 import { SaveSqlDialog } from './save-sql-dialog';
+import type { ResultSetMeta } from '@/lib/client/type';
 import type { SqlModeProps } from './types';
 import { authClient } from '@/lib/auth-client';
 import { executeActionClient } from '@/lib/actions/client';
@@ -167,21 +168,27 @@ export function SqlMode({
     onCloseChatbot,
     reserveRightRail = true,
     workspaceActive,
+    onOpenCopilot,
+    source,
 }: SqlModeProps) {
     const t = useTranslations('SqlConsole');
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const { data: session } = authClient.useSession();
-    const activeDatabase = useAtomValue(activeDatabaseAtom);
-    const { tables } = useTables(activeDatabase);
+    const globalDatabase = useAtomValue(activeDatabaseAtom);
+    const activeDatabase = source?.database ?? globalDatabase;
+    const { tables } = useTables(activeDatabase, source?.connectionId);
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
-    const activeSchema = useAtomValue(activeSchemaAtom);
+    const globalSchema = useAtomValue(activeSchemaAtom);
+    const activeSchema = source ? source.schema : globalSchema;
     const [editorSettings, setEditorSettings] = useAtom(sqlEditorSettingsAtom);
     const [editorResultLayouts, setEditorResultLayouts] = useAtom(sqlEditorResultLayoutByScopeAtom);
     const [inlineAskByTab, setInlineAskByTab] = useAtom(inlineSqlAskByTabAtom);
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [authSheetOpen, setAuthSheetOpen] = useState(false);
     const [savedQueries, setSavedQueries] = useState<SavedQueryItem[]>([]);
+    const [activeResult, setActiveResult] = useState<{ tabId: string; result: Partial<ResultSetMeta> | null }>();
+    const handleActiveResultChange = useCallback((tabId: string, result: Partial<ResultSetMeta> | null) => setActiveResult({ tabId, result }), []);
     const [queryLimit, setQueryLimit] = useState(editorSettings.queryLimit);
     const editorResultGroupRef = useGroupRef();
     const selection = activeTab?.tabId ? selectionByTab[activeTab.tabId] : null;
@@ -191,8 +198,8 @@ export function SqlMode({
     const defaultSaveTitle = useMemo(() => activeTab?.tabName ?? t('Tabs.NewQuery'), [activeTab?.tabName, t]);
     const currentConnection = useAtomValue(currentConnectionAtom);
     const routeConnectionId = useRouteConnectionId();
-    const connectionId = routeConnectionId ?? currentConnection?.connection?.id ?? null;
-    const currentRouteConnection = currentConnection?.connection?.id === connectionId ? currentConnection.connection : null;
+    const connectionId = source?.connectionId ?? routeConnectionId ?? currentConnection?.connection?.id ?? null;
+    const currentRouteConnection = source ? source.connection?.connection : currentConnection?.connection?.id === connectionId ? currentConnection.connection : null;
     const limitDialect: SelectLimitDialect = currentRouteConnection?.type === 'sqlserver' ? 'sqlserver' : currentRouteConnection?.type === 'oracle' ? 'oracle' : 'default';
     const generateSqlFromPrompt = useSqlInlineAskAI();
     const editorResultLayoutScopeKey = useMemo(
@@ -552,6 +559,7 @@ export function SqlMode({
                             tabs: tabs,
                             activeTab: activeTab,
                             workspaceActive: workspaceActive,
+                            sourceContext: source ? { connectionId: source.connectionId, dialect: currentRouteConnection?.type, database: activeDatabase } : undefined,
                             updateTab: updateTab,
                             onRunQuery: handleRunQuery,
                             onNewTab: () => void addTab({ activate: true }),
@@ -585,7 +593,11 @@ export function SqlMode({
                                                     isActiveResult ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none',
                                                 ].join(' ')}
                                             >
-                                                <ResultTable tabId={tab.tabId} />
+                                                <ResultTable
+                                                    tabId={tab.tabId}
+                                                    onActiveResultChange={isActiveResult ? handleActiveResultChange : undefined}
+                                                    onOpenCopilot={onOpenCopilot}
+                                                />
                                             </div>
                                         );
                                     })}
@@ -600,6 +612,8 @@ export function SqlMode({
                     <Panel id="copilot-panel" defaultSize={`${chatWidth}%`} minSize="30%" className="min-h-0">
                         <div className="flex h-full flex-col min-h-0 border-l bg-card">
                             <CopilotPanel
+                                source={source}
+                                result={activeResult?.tabId === activeTabId ? (activeResult?.result ?? null) : null}
                                 tabs={tabs}
                                 activeTabId={activeTabId}
                                 activeTab={activeTab}

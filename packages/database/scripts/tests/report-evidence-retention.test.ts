@@ -18,6 +18,47 @@ function state(value: WorkDocumentContent): ReportWorkingState {
     return { title: 'Analysis', content: value, tabs: [], activeTabId: null, proseNeedsReview: false };
 }
 
+test('component source search filters by the report connection, database, attachment chat and result availability', async () => {
+    const f = await reportRetentionFixture();
+    try {
+        const sources = [
+            { id: 'allowed', connectionId: 'orders', database: 'sales' },
+            { id: 'other-connection', connectionId: 'finance', database: 'sales' },
+            { id: 'other-database', connectionId: 'orders', database: 'staging' },
+            { id: 'unavailable', connectionId: 'orders', database: 'sales' },
+            { id: 'allowed-attachment', chatId: 'report-chat', userId: 'alice' },
+            { id: 'other-chat', chatId: 'other-chat', userId: 'alice' },
+            { id: 'other-user', chatId: 'report-chat', userId: 'bob' },
+        ];
+        for (const source of sources) {
+            await f.seedEvidence(source.id);
+            const artifact = await f.catalog.get({ ...owner, artifactId: source.id });
+            await f.db
+                .update(artifacts)
+                .set({ title: `Reference ${source.id}`, namingSource: 'manual', connectionId: source.connectionId ?? null, visibility: 'catalog' })
+                .where(eq(artifacts.id, source.id));
+            await f.db
+                .update(resultSets)
+                .set({
+                    sourceDatabaseName: source.database ?? null,
+                    attachmentSource: source.chatId ? { chatId: source.chatId, userId: source.userId, files: [] } : null,
+                    ...(source.id === 'unavailable' ? { dataAvailability: 'none' as const } : {}),
+                })
+                .where(eq(resultSets.id, artifact.sourceResultSetId!));
+        }
+        const request = { ...owner, scope: { connectionIds: ['orders'], databasesByConnection: { orders: 'sales' } }, chatId: 'report-chat', query: 'reference' };
+        const allowed = await f.catalog.listReportSources(request);
+        assert.deepEqual(allowed.map(row => row.id).sort(), ['allowed', 'allowed-attachment']);
+        assert.deepEqual(await f.catalog.listReportSources({ ...request, query: 'staging' }), []);
+        assert.deepEqual(
+            (await f.catalog.listReportSources({ ...request, scope: { connectionIds: [] } })).map(row => row.id),
+            ['allowed-attachment'],
+        );
+    } finally {
+        await f.close();
+    }
+});
+
 test('drafts, historical versions, publications and archived reports retain full data through expiration and capacity cleanup', async () => {
     const f = await reportRetentionFixture();
     try {

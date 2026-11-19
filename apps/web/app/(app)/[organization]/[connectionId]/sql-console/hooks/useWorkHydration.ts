@@ -1,5 +1,6 @@
 'use client';
 
+import { useReportUpdates } from '@/components/work-documents/report-update-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -93,6 +94,7 @@ export function useWorkHydration({
     workspaceScope?: SqlWorkspaceScope;
     initialResultTarget?: SqlWorkspaceInitialResultTarget | null;
 }) {
+    const reportMode = Boolean(useReportUpdates());
     const searchParams = useSearchParams();
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const workId = normalizedWorkspaceScope.workspaceMode === 'agent' ? normalizedWorkspaceScope.workId : null;
@@ -106,6 +108,7 @@ export function useWorkHydration({
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
     const setActiveResult = useSetAtom(upsertActiveSetAtom);
     const hydratedWorkRef = useRef<string | null>(null);
+    const appliedReportWorkRef = useRef<string | null>(null);
     const activatedWorkRef = useRef<string | null>(null);
     const snapshotRef = useRef<WorkSnapshot | null>(null);
     const [snapshotRevision, setSnapshotRevision] = useState(0);
@@ -172,7 +175,7 @@ export function useWorkHydration({
             if (cancelled) return;
 
             const hydratedSnapshot =
-                normalizedWorkspaceScope.workspaceMode === 'agent'
+                normalizedWorkspaceScope.workspaceMode === 'agent' && !reportMode
                     ? {
                           ...snapshot,
                           sessions: consolidateAgentWorkspaceSessions(
@@ -215,12 +218,13 @@ export function useWorkHydration({
         return () => {
             cancelled = true;
         };
-    }, [initialResultTarget, isLoading, normalizedWorkspaceScope.workspaceMode, setActiveResult, workId]);
+    }, [initialResultTarget, isLoading, normalizedWorkspaceScope.workspaceMode, reportMode, setActiveResult, workId]);
 
     useEffect(() => {
         if (!workId || hydratedWorkRef.current !== workId) return;
         const snapshot = snapshotRef.current;
-        if (!snapshot) return;
+        if (!snapshot || (reportMode && appliedReportWorkRef.current === workId)) return;
+        if (reportMode) appliedReportWorkRef.current = workId;
         applyHydrationTarget(snapshot);
-    }, [applyHydrationTarget, snapshotRevision, workId]);
+    }, [applyHydrationTarget, reportMode, snapshotRevision, workId]);
 }

@@ -13,26 +13,38 @@ export function formatWorkValue(value: unknown) {
     return value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
 }
 
-/** Same snapshot and SVG are used on screen, in HTML and when printing to PDF. */
+// Match the report theme when a standalone SVG has no host stylesheet.
+const chartColors = ['oklch(80.9% 0.105 251.813)', 'oklch(62.3% 0.214 259.815)', 'oklch(54.6% 0.245 262.881)', 'oklch(48.8% 0.243 264.376)', 'oklch(42.4% 0.199 265.638)'];
+const chartColor = (index: number) => `var(--chart-${(index % chartColors.length) + 1},${chartColors[index % chartColors.length]})`;
+
 export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string {
     if (visual.chartSpec) return workspaceChartSvg(visual);
-    if (!visual.chart) return '';
-    if (visual.chart.yKeys) {
-        // Separate scales keep differently sized metrics (e.g. revenue and order
-        // counts) readable without implying that they share the same units.
-        const { type, xKey, yKeys } = visual.chart;
+    const chart = visual.chart;
+    if (!chart) return '';
+    const { type, xKey, yKeys, options } = chart;
+    if (yKeys && chart.seriesLayout !== 'combined') {
         const panels = yKeys.map(({ key, label }, index) => {
-            const svg = workChartSvg({ ...visual, title: label ?? key, chart: { type: type === 'pie' ? 'pie' : type, xKey, yKey: key, options: visual.chart?.options } }, evidence);
+            const svg = workChartSvg({ ...visual, title: label ?? key, chart: { type, xKey, yKey: key, options } }, evidence);
             return `<g transform="translate(0,${index * 314})"><text x="65" y="20" fill="currentColor" font-size="14">${escapeHtml(label ?? key)}</text>${svg.replace('<svg ', '<svg y="24" width="660" height="290" ')}</g>`;
         });
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 ${314 * yKeys.length}" data-multiple-series="true" role="img" aria-label="${escapeHtml(visual.title)}">${panels.join('')}</svg>`;
     }
-    const { xKey, yKey, type, options } = visual.chart;
     const formatValue = (value: unknown) => formatChartNumber(value, options?.valueFormat);
-    evidence = { ...evidence, rows: chartRows({ type: 'chart', chartType: type, xKey, yKeys: [{ key: yKey }], options, data: evidence.rows }) };
-    const points = evidence.rows
-        .map((row, index) => ({ label: formatWorkValue(row[xKey]), value: reportNumber(row[yKey]), index }))
-        .filter((point): point is { label: string; value: number; index: number } => point.value !== null);
+    const series = yKeys ?? [{ key: chart.yKey! }];
+    const rows = chartRows({ type: 'chart', chartType: type, xKey, yKeys: series, options, data: evidence.rows });
+    const stacked = options?.stacked && (type === 'bar' || type === 'area');
+    const baselines = rows.map(() => 0);
+    const plotted = series.map(item =>
+        rows.flatMap((row, index) => {
+            const value = reportNumber(row[item.key]);
+            if (value === null) return [];
+            const base = stacked ? baselines[index] : 0;
+            const end = base + value;
+            if (stacked) baselines[index] = end;
+            return [{ label: formatWorkValue(row[xKey]), value, index, base, end }];
+        }),
+    );
+    const points = plotted.flat();
     if (!points.length)
         return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 100" role="img" aria-label="No plottable values"><text x="20" y="50" fill="currentColor">No plottable values / 无可绘制的数据</text></svg>';
     if (type === 'pie') {
@@ -44,15 +56,7 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
                 const next = angle + (point.value / total) * Math.PI * 2;
                 const start = [180 + 100 * Math.cos(angle), 145 + 100 * Math.sin(angle)];
                 const end = [180 + 100 * Math.cos(next), 145 + 100 * Math.sin(next)];
-                // Match the existing blue theme defaults when an SVG is exported without host CSS.
-                const defaults = [
-                    'oklch(80.9% 0.105 251.813)',
-                    'oklch(62.3% 0.214 259.815)',
-                    'oklch(54.6% 0.245 262.881)',
-                    'oklch(48.8% 0.243 264.376)',
-                    'oklch(42.4% 0.199 265.638)',
-                ];
-                const color = `var(--chart-${(index % 5) + 1},${defaults[index % 5]})`;
+                const color = chartColor(index);
                 const title = `${escapeHtml(point.label)}: ${escapeHtml(formatValue(point.value))} (${((point.value / total) * 100).toFixed(1)}%)`;
                 const slice =
                     point.value === total
@@ -64,50 +68,71 @@ export function workChartSvg(visual: WorkVisual, evidence: WorkEvidence): string
             .join('');
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 ${Math.max(290, 70 + points.length * 22)}" role="img" aria-label="${escapeHtml(visual.title)}" data-chart-type="pie">${slices}</svg>`;
     }
-    const low = Math.min(0, ...points.map(point => point.value));
-    const high = Math.max(0, ...points.map(point => point.value));
+    const values = points.flatMap(point => [point.base, point.end]);
+    const low = Math.min(0, ...values);
+    const high = Math.max(0, ...values);
     const ticks = [low, (low + high) / 2, high];
     const formatTick = (value: number) => formatChartNumber(value, options?.valueFormat, 'en', true);
     const left = Math.min(180, Math.max(65, ...ticks.map(value => formatTick(value).length * 7 + (options?.yAxisLabel ? 30 : 10))));
     const range = high - low || 1;
     const y = (value: number) => 230 - ((value - low) / range) * 200;
-    const step = (625 - left) / Math.max(1, evidence.rows.length);
+    const step = (625 - left) / rows.length;
     const x = (i: number) => left + step * (i + 0.5);
-    const segments: (typeof points)[] = [];
-    for (const point of points) {
-        const previous = segments.at(-1);
-        if (previous && previous.at(-1)!.index === point.index - 1) previous.push(point);
-        else segments.push([point]);
-    }
-    const body =
-        type === 'line' || type === 'area'
-            ? segments
-                  .map(segment => {
-                      const coordinates = segment.map(p => `${x(p.index)},${y(p.value)}`).join(' ');
-                      const shape =
-                          type === 'area'
-                              ? `<polygon fill="var(--chart-1,currentColor)" fill-opacity=".25" stroke="var(--chart-1,currentColor)" points="${x(segment[0].index)},${y(0)} ${coordinates} ${x(segment.at(-1)!.index)},${y(0)}"/>`
-                              : `<polyline fill="none" stroke="var(--chart-1,currentColor)" stroke-width="3" points="${coordinates}"/>`;
-                      return (
-                          shape +
-                          segment
-                              .map(
-                                  p =>
-                                      `<circle cx="${x(p.index)}" cy="${y(p.value)}" r="3" fill="var(--chart-1,currentColor)"><title>${escapeHtml(p.label)}: ${escapeHtml(formatValue(p.value))}</title></circle>`,
-                              )
-                              .join('')
-                      );
-                  })
-                  .join('')
-            : points
-                  .map(
-                      p =>
-                          `<rect x="${x(p.index) - step * 0.35}" y="${Math.min(y(0), y(p.value))}" width="${step * 0.7}" height="${Math.max(1, Math.abs(y(0) - y(p.value)))}" fill="var(--chart-1,currentColor)"><title>${escapeHtml(p.label)}: ${escapeHtml(formatValue(p.value))}</title></rect>`,
-                  )
-                  .join('');
+    const multiple = series.length > 1;
+    const names = series.map(item => item.label ?? item.key);
+    const barWidth = (step * 0.7) / (stacked ? 1 : series.length);
+    const body = plotted
+        .map((points, index) => {
+            const color = chartColor(index);
+            const hint = (point: (typeof points)[number]) =>
+                `<title>${escapeHtml(point.label)}${multiple ? ` / ${escapeHtml(names[index])}` : ''}: ${escapeHtml(formatValue(point.value))}</title>`;
+            if (type === 'bar') {
+                const offset = -step * 0.35 + (stacked ? 0 : index * barWidth);
+                return points
+                    .map(point => {
+                        const top = Math.min(y(point.base), y(point.end));
+                        const height = Math.max(1, Math.abs(y(point.base) - y(point.end)));
+                        return `<rect x="${x(point.index) + offset}" y="${top}" width="${barWidth}" height="${height}" fill="${color}">${hint(point)}</rect>`;
+                    })
+                    .join('');
+            }
+            const segments: (typeof points)[] = [];
+            for (const point of points) {
+                const previous = segments.at(-1);
+                if (previous && previous.at(-1)!.index === point.index - 1) previous.push(point);
+                else segments.push([point]);
+            }
+            return segments
+                .map(segment => {
+                    const coordinates = segment.map(point => `${x(point.index)},${y(point.end)}`).join(' ');
+                    const base = [...segment]
+                        .reverse()
+                        .map(point => `${x(point.index)},${y(point.base)}`)
+                        .join(' ');
+                    const shape =
+                        type === 'area'
+                            ? `<polygon fill="${color}" fill-opacity=".25" stroke="${color}" points="${coordinates} ${base}"/>`
+                            : `<polyline fill="none" stroke="${color}" stroke-width="3" points="${coordinates}"/>`;
+                    return shape + segment.map(point => `<circle cx="${x(point.index)}" cy="${y(point.end)}" r="3" fill="${color}">${hint(point)}</circle>`).join('');
+                })
+                .join('');
+        })
+        .join('');
+    const legend = multiple
+        ? names
+              .map((name, index) => {
+                  const left = 65 + (index % 3) * 195;
+                  const top = 292 + Math.floor(index / 3) * 20;
+                  const label = name.length > 22 ? `${name.slice(0, 22)}…` : name;
+                  return `<g><title>${escapeHtml(name)}</title><rect x="${left}" y="${top}" width="10" height="10" fill="${chartColor(index)}"/><text x="${left + 15}" y="${top + 9}" fill="currentColor" font-size="11">${escapeHtml(label)}</text></g>`;
+              })
+              .join('')
+        : '';
+    const height = multiple ? 290 + Math.ceil(series.length / 3) * 20 : 290;
     const axisLabels = `${options?.xAxisLabel ? `<text x="${(left + 625) / 2}" y="280" text-anchor="middle" fill="currentColor" font-size="12">${escapeHtml(options.xAxisLabel)}</text>` : ''}${options?.yAxisLabel ? `<text transform="translate(14 130) rotate(-90)" text-anchor="middle" fill="currentColor" font-size="12">${escapeHtml(options.yAxisLabel)}</text>` : ''}`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 290" role="img" aria-label="${escapeHtml(visual.title)}"><line x1="${left}" x2="625" y1="${y(0)}" y2="${y(0)}" stroke="currentColor" opacity=".3"/>${ticks.map(value => `<text x="${left - 7}" y="${y(value) + 4}" text-anchor="end" fill="currentColor" font-size="11">${escapeHtml(formatTick(value))}</text>`).join('')}${axisLabels}${body}${points
-        .filter((_, i) => i % Math.max(1, Math.ceil(points.length / 8)) === 0)
+    const categories = multiple ? rows.map((row, index) => ({ label: formatWorkValue(row[xKey]), index })) : points;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 ${height}" role="img" aria-label="${escapeHtml(visual.title)}"><line x1="${left}" x2="625" y1="${y(0)}" y2="${y(0)}" stroke="currentColor" opacity=".3"/>${ticks.map(value => `<text x="${left - 7}" y="${y(value) + 4}" text-anchor="end" fill="currentColor" font-size="11">${escapeHtml(formatTick(value))}</text>`).join('')}${axisLabels}${body}${legend}${categories
+        .filter((_, i) => i % Math.max(1, Math.ceil(categories.length / 8)) === 0)
         .map(p => `<text x="${x(p.index)}" y="257" text-anchor="middle" fill="currentColor" font-size="11">${escapeHtml(p.label.slice(0, 18))}</text>`)
         .join('')}</svg>`;
 }

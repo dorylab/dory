@@ -3,13 +3,12 @@
 import { useImperativeHandle, useRef, useState, type Ref } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import type { WorkDocumentContent, WorkVisual } from '@dory/shared/types/work-document';
+import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
 import { useTranslations } from 'next-intl';
 
 import { editableReport, parseReport, reportEmbeds, reportTagSource } from '@/lib/work-documents/report-core';
 
 import { ReportBody } from './report-body';
-import { ReportEvidenceEditor } from './report-evidence-editor';
 import type { ReportBlockEditorHandle } from './report-block-editor';
 import type { ComponentDialogHandle } from './report-component-dialog';
 
@@ -40,7 +39,7 @@ export default function ReportEditor({
     mode: 'blocks' | 'source';
     onSource: () => void;
     content: WorkDocumentContent;
-    documentId?: string;
+    documentId: string;
     restrictSources?: boolean;
     title: string;
     onChange: (content: WorkDocumentContent) => void;
@@ -60,6 +59,10 @@ export default function ReportEditor({
     };
     current.embeds = reportEmbeds(current.visuals, current.evidence);
     retained.current = current;
+    const [previews, setPreviews] = useState<WorkEvidence[]>([]);
+    // Pending rows are for rendering only. The report service saves its own snapshots.
+    const displayEvidence = retain(current.evidence, previews, value => value.artifactId);
+    const displayContent = { ...current, evidence: displayEvidence, embeds: reportEmbeds(current.visuals, displayEvidence) };
     const [session, setSession] = useState<{ visual: WorkVisual; insert: boolean } | null>(null);
     const blockEditor = useRef<ReportBlockEditorHandle>(null);
     const dialog = useRef<ComponentDialogHandle>(null);
@@ -104,33 +107,30 @@ export default function ReportEditor({
     }));
     const update = (visuals: WorkVisual[], body = current.body!) =>
         onChange({ ...current, body, visuals, reviewedEvidenceGroupIds: [], embeds: reportEmbeds(visuals, current.evidence) });
-    const pending = current.visuals.filter(visual => !current.evidence.some(evidence => evidence.artifactId === visual.evidenceId));
+    const pending = current.visuals.filter(visual => !displayEvidence.some(evidence => evidence.artifactId === visual.evidenceId));
     const pendingEvidence = current.evidenceGroups?.some(group =>
         group.references.some(reference => !current.evidence.some(evidence => evidence.artifactId === reference.artifactId)),
     );
     const diagnostics = parseReport(current.body!, current.visuals).diagnostics;
     return (
         <>
-            <div ref={host} data-testid="report-editor">
+            <div ref={host} data-testid="report-editor" className={mode === 'source' ? 'flex min-h-0 flex-1 flex-col' : undefined}>
                 {mode === 'blocks' ? (
-                    <div className="space-y-4">
-                        <BlockEditor
-                            ref={blockEditor}
-                            content={current}
-                            onChange={(body, visuals) => update(visuals ?? current.visuals, body)}
-                            onInsert={insert}
-                            onEdit={visual => open(visual, false)}
-                            onSource={onSource}
-                        />
-                        <ReportEvidenceEditor content={current} documentId={documentId} onChange={onChange} />
-                    </div>
+                    <BlockEditor
+                        ref={blockEditor}
+                        content={current}
+                        displayEvidence={displayEvidence}
+                        documentId={documentId}
+                        onChange={(body, visuals) => update(visuals ?? current.visuals, body)}
+                        onEvidenceChange={onChange}
+                        onInsert={insert}
+                        onEdit={visual => open(visual, false)}
+                        onSource={onSource}
+                    />
                 ) : (
-                    <div className="report-editor-columns grid min-w-0 gap-6">
-                        <div className="min-w-0 space-y-4">
-                            <SourceEditor value={current.body!} onChange={body => update(current.visuals, body)} />
-                            <ReportEvidenceEditor content={current} documentId={documentId} onChange={onChange} />
-                        </div>
-                        <div className="min-w-0 overflow-auto">
+                    <div className="report-editor-columns min-h-0 min-w-0 flex-1 gap-6">
+                        <SourceEditor fill value={current.body!} onChange={body => update(current.visuals, body)} />
+                        <div className="min-h-0 min-w-0 shrink-0 overflow-auto">
                             {diagnostics.length ? (
                                 <ul role="alert" className="text-sm text-destructive">
                                     {diagnostics.map((item, i) => (
@@ -152,7 +152,7 @@ export default function ReportEditor({
                                 </div>
                             ) : (
                                 <ReportBody
-                                    content={current}
+                                    content={displayContent}
                                     title={title}
                                     onEvidenceGroup={onEvidenceGroup}
                                     onEditComponent={id => {
@@ -170,9 +170,13 @@ export default function ReportEditor({
                     restrictSources={restrictSources}
                     ref={dialog}
                     initial={session.visual}
+                    documentId={documentId}
                     content={current}
                     onClose={close}
-                    onApply={visual => {
+                    onApply={(visual, evidence) => {
+                        if (!current.evidence.some(item => item.artifactId === evidence.artifactId)) {
+                            setPreviews(previous => [{ ...evidence, snapshotId: '' }, ...previous.filter(item => item.artifactId !== evidence.artifactId)]);
+                        }
                         const visuals = session.insert ? [...current.visuals, visual] : current.visuals.map(item => (item.id === visual.id ? visual : item));
                         if (mode === 'blocks' && session.insert) blockEditor.current?.insertVisual(visual, visuals);
                         else update(visuals, session.insert ? `${current.body}\n\n${reportTagSource(visual)}\n` : current.body);

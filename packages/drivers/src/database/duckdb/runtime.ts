@@ -6,7 +6,7 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { enforceSelectLimit } from '@dory/drivers/core';
-import type { BaseConfig, DriverRowCursor, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverQueryContext, DriverRowCursor, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
 import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 
@@ -168,45 +168,85 @@ export async function pingDuckDb(handle: DuckDbConnectionHandle): Promise<Health
     };
 }
 
-export async function executeDuckDbQuery<Row = any>(handle: DuckDbConnectionHandle, sql: string, params?: DriverQueryParams): Promise<QueryResult<Row>> {
-    const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
-    const limitedSql = isReadStatement(compiledSql) ? enforceSelectLimit(compiledSql, DEFAULT_MAX_RESULT_ROWS) : compiledSql;
-    const started = Date.now();
-    const reader = await handle.connection.runAndReadAll(limitedSql, compiledParams as any);
-    const rows = toRows<Row>(reader);
-    const rowCount = rows.length || reader.rowsChanged || 0;
+async function duckDbQueryConnection(handle: DuckDbConnectionHandle, context?: DriverQueryContext) {
+    const configuredDatabase = context?.database?.trim();
+    const database = (handle.mode === 'motherduck' ? configuredDatabase?.replace(/^md:/i, '') : configuredDatabase) || undefined;
+    const schema = context?.schema?.trim();
+    if (!database && !schema) return { connection: handle.connection, close: () => {} };
 
+    const current = (await handle.connection.runAndReadAll('SELECT current_database() AS catalog, current_schema() AS schema')).getRowObjects()[0];
+    const currentCatalog = String(current.catalog);
+    const sameCatalog = !database || database.toLowerCase() === currentCatalog.toLowerCase();
+    if (sameCatalog && (!schema || schema.toLowerCase() === String(current.schema).toLowerCase())) return { connection: handle.connection, close: () => {} };
+
+    // A different namespace must not change the pooled connection used by other queries.
+    const connection = await handle.instance.connect();
+    try {
+        await connection.run(`USE ${quoteIdentifier(database ?? currentCatalog)}.${quoteIdentifier(schema || 'main')}`);
+    } catch (error) {
+        connection.closeSync();
+        throw error;
+    }
+    let closed = false;
     return {
-        rows,
-        rowCount,
-        columns: toColumns(reader),
-        limited: isReadStatement(compiledSql) && rows.length >= DEFAULT_MAX_RESULT_ROWS,
-        limit: isReadStatement(compiledSql) ? DEFAULT_MAX_RESULT_ROWS : undefined,
-        tookMs: Date.now() - started,
+        connection,
+        close: () => {
+            if (closed) return;
+            closed = true;
+            connection.closeSync();
+        },
     };
 }
 
-export async function executeDuckDbQueryRowStream<Row = any>(handle: DuckDbConnectionHandle, sql: string, params?: DriverQueryParams): Promise<DriverRowCursor<Row>> {
+export async function executeDuckDbQuery<Row = any>(
+    handle: DuckDbConnectionHandle,
+    sql: string,
+    params?: DriverQueryParams,
+    context?: DriverQueryContext,
+): Promise<QueryResult<Row>> {
+    const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
+    const limitedSql = isReadStatement(compiledSql) ? enforceSelectLimit(compiledSql, DEFAULT_MAX_RESULT_ROWS) : compiledSql;
+    const started = Date.now();
+    const { connection, close } = await duckDbQueryConnection(handle, context);
+    try {
+        const reader = await connection.runAndReadAll(limitedSql, compiledParams as any);
+        const rows = toRows<Row>(reader);
+        return {
+            rows,
+            rowCount: rows.length || reader.rowsChanged || 0,
+            columns: toColumns(reader),
+            limited: isReadStatement(compiledSql) && rows.length >= DEFAULT_MAX_RESULT_ROWS,
+            limit: isReadStatement(compiledSql) ? DEFAULT_MAX_RESULT_ROWS : undefined,
+            tookMs: Date.now() - started,
+        };
+    } finally {
+        close();
+    }
+}
+
+export async function executeDuckDbQueryRowStream<Row = any>(
+    handle: DuckDbConnectionHandle,
+    sql: string,
+    params?: DriverQueryParams,
+    context?: DriverQueryContext,
+): Promise<DriverRowCursor<Row>> {
     const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
     const started = Date.now();
-    const result = await handle.connection.stream(compiledSql, compiledParams as any);
-
-    const rows = (async function* () {
-        for await (const chunk of result.yieldRowsJson()) {
-            for (const row of chunk) {
-                yield row as Row;
+    const { connection, close } = await duckDbQueryConnection(handle, context);
+    try {
+        const result = await connection.stream(compiledSql, compiledParams as any);
+        const rows = (async function* () {
+            try {
+                for await (const chunk of result.yieldRowsJson()) for (const row of chunk) yield row as Row;
+            } finally {
+                close();
             }
-        }
-    })();
-
-    return {
-        rows,
-        rowCount: null,
-        columns: toResultColumns(result),
-        limited: false,
-        tookMs: Date.now() - started,
-        close: () => undefined,
-    };
+        })();
+        return { rows, rowCount: null, columns: toResultColumns(result), limited: false, tookMs: Date.now() - started, close };
+    } catch (error) {
+        close();
+        throw error;
+    }
 }
 
 export async function getDuckDbDatabases(handle: DuckDbConnectionHandle) {

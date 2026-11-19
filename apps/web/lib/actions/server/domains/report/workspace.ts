@@ -14,6 +14,7 @@ import { readWorkspace, writeWorkspace } from '../../policies';
 import type { WebActionServices } from '../../types';
 import { executeSqlActionStream } from '../query/execute-operation';
 import { reportEvidenceActions } from './evidence-viewer';
+import { reportUpdateActions } from './updates';
 import { reportWorkingDraftActions } from './working-draft';
 
 export const reportEvidenceReferenceSchema = z.object({
@@ -300,4 +301,4 @@ const importResultAction = defineWebAction({
         return ctx.services.db.workDocuments.workingDraft(target);
     },
 });
-export const reportWorkspaceActions = [contextAction, sourceAction, detailsAction, executeAction, importResultAction, ...reportWorkingDraftActions, ...reportEvidenceActions];
+export const reportWorkspaceActions = [contextAction, sourceAction, detailsAction, executeAction, importResultAction, ...reportWorkingDraftActions, ...reportUpdateActions, ...reportEvidenceActions];

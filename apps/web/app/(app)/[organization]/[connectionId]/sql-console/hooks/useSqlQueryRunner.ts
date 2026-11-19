@@ -1,5 +1,6 @@
 'use client';
 
+import { useReportUpdates } from '@/components/work-documents/report-update-context';
 import { useCallback, useMemo, useRef } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { executeActionClient } from '@/lib/actions/client';
@@ -43,15 +44,18 @@ function notifyQueryHistoryUpdated(connectionId?: string | null) {
 
 export function useSqlQueryRunner({
     activeDatabase,
+    activeSchema,
     userId,
     prepareTab,
     workspaceScope,
 }: {
     activeDatabase: string | null | undefined;
+    activeSchema?: string | null;
     userId: string | undefined;
     prepareTab: (tabId: string, content: string) => Promise<unknown>;
     workspaceScope?: SqlWorkspaceScope;
 }) {
+    const report = useReportUpdates();
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
     const currentConnection = useAtomValue(currentConnectionAtom);
@@ -87,8 +91,9 @@ export function useSqlQueryRunner({
 
             const stopOnError = false;
             const source = tab.tabType === 'table' ? 'data-preview' : 'sql-console';
-            const queryConnectionId = tab.connectionId ?? currentConnection?.connection?.id ?? null;
+            const queryConnectionId = tab.connectionId ?? normalizedWorkspaceScope.connectionId ?? currentConnection?.connection?.id ?? null;
 
+            if (tab.tabType === 'sql') report?.onRunStart(tabId);
             setRunningTabs(p => ({ ...p, [tabId]: 'running' }));
             const controller = new AbortController();
             abortControllersRef.current[tabId] = controller;
@@ -122,7 +127,9 @@ export function useSqlQueryRunner({
                     await runSqlQueryStream({
                         input: {
                             sql: sqlText,
+                            ...(report ? { reportWorkId: report.workId } : {}),
                             database,
+                            schema: database === activeDatabase ? activeSchema : undefined,
                             limit: options?.limit,
                             stopOnError,
                             sessionId,
@@ -173,6 +180,14 @@ export function useSqlQueryRunner({
                     ...p,
                     [tabId]: finalStatus,
                 }));
+                if (
+                    report &&
+                    finalPayload.session.status === 'success' &&
+                    !controller.signal.aborted &&
+                    abortControllersRef.current[tabId] === controller &&
+                    sqlText === sql.trim()
+                )
+                    report.onExecution(finalPayload, sql);
                 notifyQueryHistoryUpdated(queryConnectionId);
             } catch (e: unknown) {
                 console.error('[SQLConsoleClient.runQuery] error:', e);
@@ -191,8 +206,10 @@ export function useSqlQueryRunner({
             }
         },
         [
+            report,
             userReady,
             activeDatabase,
+            activeSchema,
             setRunningTabs,
             setSessionIdMap,
             setSchemaMetadataRefresh,
@@ -220,7 +237,10 @@ export function useSqlQueryRunner({
                 try {
                     sessionId =
                         (localStorage.getItem(
-                            getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null }),
+                            getSessionStorageKey(tabId, {
+                                ...normalizedWorkspaceScope,
+                                connectionId: tab.connectionId ?? normalizedWorkspaceScope.connectionId ?? currentConnection?.connection?.id ?? null,
+                            }),
                         ) as string) ?? undefined;
                 } catch {
                     // ignore

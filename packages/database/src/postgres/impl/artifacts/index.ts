@@ -20,8 +20,10 @@ import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import { canReadAttachmentSource, type ChatAttachmentSource } from '@dory/shared/types/chat-attachment';
+import type { AnalysisScope } from '@dory/shared/types/work-document';
+import { getAnalysisDatabases } from '@dory/shared/utils/analysis-scope';
 import type { NamingMetadata } from '@dory/shared/utils/sql-name';
-import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 
 import { isReportArtifactReferenced, isReportResultSetReferenced, lockResultSet, reportArtifactReference } from '../work-documents/evidence-retention';
 
@@ -96,6 +98,13 @@ export type ArtifactDetail = ArtifactSummary & {
 };
 
 type ArtifactWorkspaceResultSet = Pick<typeof resultSets.$inferSelect, 'connectionId' | 'tabId' | 'sessionId' | 'setIndex' | 'sql' | 'workId'>;
+
+function artifactSearch(query?: string | null) {
+    const term = query?.trim();
+    if (!term) return undefined;
+    const match = `%${term.replace(/[%_]/g, value => `\\${value}`)}%`;
+    return or(ilike(artifacts.title, match), ilike(connections.name, match), ilike(works.title, match), ilike(comparisons.name, match));
+}
 
 export function resolveArtifactWorkspaceTarget(input: {
     type: ArtifactType;
@@ -190,7 +199,6 @@ export class PostgresArtifactsRepository {
 
     async list(input: { organizationId: string; userId?: string; query?: string | null; types?: ArtifactType[]; pinnedOnly?: boolean; offset?: number; limit?: number }) {
         this.assertInited();
-        const query = input.query?.trim();
         const conditions = [
             eq(artifacts.organizationId, input.organizationId),
             or(eq(artifacts.visibility, 'catalog'), isNotNull(resultSets.pinnedAt), reportArtifactReference(input.organizationId, artifacts.id))!,
@@ -200,11 +208,7 @@ export class PostgresArtifactsRepository {
         if (input.userId) conditions.push(or(isNull(artifacts.workId), eq(works.userId, input.userId))!);
         if (input.types?.length) conditions.push(inArray(artifacts.type, input.types));
         if (input.pinnedOnly) conditions.push(isNotNull(resultSets.pinnedAt));
-        if (query) {
-            const match = `%${query.replace(/[%_]/g, value => `\\${value}`)}%`;
-            conditions.push(or(ilike(artifacts.title, match), ilike(connections.name, match), ilike(works.title, match), ilike(comparisons.name, match))!);
-        }
-        const where = and(...conditions);
+        const where = and(...conditions, artifactSearch(input.query));
         const findingUsage = this.db
             .select({ artifactId: findingArtifacts.artifactId, usedByCount: count(findingArtifacts.findingId).as('used_by_count') })
             .from(findingArtifacts)
@@ -248,6 +252,52 @@ export class PostgresArtifactsRepository {
                 .where(where),
         ]);
         return { rows: rows.map(row => this.toSummary(row)), total: Number(totals[0]?.total ?? 0) };
+    }
+
+    async listReportSources(input: { organizationId: string; userId: string; scope: AnalysisScope; chatId: string | null; query?: string; artifactId?: string }) {
+        this.assertInited();
+        const database = sql<string>`coalesce(${resultSets.sourceDatabaseName}, ${workQuerySessions.database})`;
+        const connection = or(
+            ...input.scope.connectionIds.map(id => {
+                const databases = getAnalysisDatabases(input.scope, id);
+                return and(eq(artifacts.connectionId, id), databases === undefined ? undefined : inArray(database, databases));
+            }),
+        );
+        const attachment = input.chatId
+            ? sql`${resultSets.attachmentSource}->>'chatId' = ${input.chatId} and ${resultSets.attachmentSource}->>'userId' = ${input.userId}`
+            : undefined;
+        const inScope = or(connection && and(isNull(resultSets.attachmentSource), connection), attachment);
+        if (!inScope) return [];
+        const results = await this.db
+            .select({ artifact: artifacts, resultSetSql: resultSets.sql })
+            .from(artifacts)
+            .innerJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
+            .leftJoin(workQuerySessions, and(eq(workQuerySessions.workId, resultSets.workId), eq(workQuerySessions.sessionId, resultSets.sessionId)))
+            .leftJoin(connections, and(eq(connections.organizationId, artifacts.organizationId), eq(connections.id, artifacts.connectionId)))
+            .leftJoin(works, eq(works.workId, artifacts.workId))
+            .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
+            .where(
+                and(
+                    eq(artifacts.organizationId, input.organizationId),
+                    eq(artifacts.type, 'result_set'),
+                    eq(artifacts.status, 'ready'),
+                    ne(resultSets.dataAvailability, 'none'),
+                    or(isNull(artifacts.workId), and(eq(works.userId, input.userId), eq(works.organizationId, input.organizationId))),
+                    or(eq(artifacts.visibility, 'catalog'), isNotNull(resultSets.pinnedAt), reportArtifactReference(input.organizationId, artifacts.id)),
+                    or(
+                        isNull(artifacts.expiresAt),
+                        gt(artifacts.expiresAt, new Date()),
+                        isNotNull(resultSets.pinnedAt),
+                        reportArtifactReference(input.organizationId, artifacts.id),
+                    ),
+                    inScope,
+                    artifactSearch(input.query),
+                    input.artifactId ? eq(artifacts.id, input.artifactId) : undefined,
+                ),
+            )
+            .orderBy(desc(artifacts.createdAt), desc(artifacts.id))
+            .limit(100);
+        return results.map(row => ({ id: row.artifact.id, title: displayTitle(row) }));
     }
 
     async listByWork(input: { userId?: string; organizationId: string; workId: string }) {

@@ -4,6 +4,7 @@ import { useCallback, useContext, useEffect, useImperativeHandle, useRef, useSta
 import { createPortal } from 'react-dom';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
+import { cn } from '@/registry/new-york-v4/lib/utils';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/registry/new-york-v4/ui/alert-dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import type { WorkDocumentView } from '@dory/shared/types/work-document';
@@ -17,12 +18,14 @@ import { reportListParsers, serializeReportList } from '@/lib/work-documents/lis
 import { renderWorkHtml } from '@/lib/work-documents/render';
 import { editableReport, parseReport, reportEmbeds } from '@/lib/work-documents/report-core';
 import type { ReportMode } from '@/lib/work-documents/report-blocks';
-import { buildReportWorkspacePath } from '@/lib/work-documents/workspace-url';
+import { reportRunWorkspacePath } from '@/lib/work-documents/workspace-url';
+import type { AgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 
 import { AddDefinitionDialog } from './add-definition-dialog';
 import { ReportBody } from './report-body';
 import type { ReportEditorHandle } from './report-editor';
 import type { ReportEvidenceSelection } from './report-evidence-panel';
+import { ReportSelectionPopover } from './report-selection-popover';
 import { ReportToolbar } from './report-toolbar';
 import { ReportHeaderActions } from './report-header-actions';
 
@@ -31,6 +34,7 @@ const ReportEvidencePanel = dynamic(() => import('./report-evidence-panel').then
 const continueUrl = createSerializer({ document: parseAsString, revision: parseAsInteger, chat: parseAsString });
 
 type Detail = {
+    workspace: (AgentWorkspaceTarget & { workId: string }) | null;
     publications?: Array<{ id: string; number: number; revision: number; publishedAt: string }>;
     document: WorkDocumentView;
     versions: Array<{ revision: number; version?: number; source: string; createdAt: string }>;
@@ -110,6 +114,7 @@ export function WorkReport({
     };
     const [saveError, setSaveError] = useState(false);
     const [definition, setDefinition] = useState<{ title: string; text: string } | null>(null);
+    const reportBodyRef = useRef<HTMLDivElement>(null);
     const [evidenceSelection, setEvidenceSelection] = useState<ReportEvidenceSelection | null>(null);
     const editingActive = Boolean(editing);
     useEffect(() => {
@@ -271,10 +276,22 @@ export function WorkReport({
         onError: error => toast.error(error.message),
     });
     const isEditing = !historical && !changingDocument && Boolean(editing);
+    const sourceMode = isEditing && editMode === 'source';
     const viewPending = historical && historyQuery.isPending;
     const viewError = historical ? historyQuery.error : null;
     const viewUnavailable = viewPending || Boolean(viewError);
     const document = (!historical && !changingDocument ? editing : null) ?? (historical ? historyQuery.data?.document : undefined) ?? query.data?.document;
+    useEffect(() => {
+        if (!document || !window.location.hash) return;
+        const focus = decodeURIComponent(window.location.hash.slice(1));
+        const value = focus.slice(focus.indexOf(':') + 1);
+        const selector = focus.startsWith('visual:')
+            ? '[data-visual="' + CSS.escape(value) + '"]'
+            : focus.startsWith('group:')
+              ? '[data-evidence-group="' + CSS.escape(value) + '"]'
+              : null;
+        if (selector) reportBodyRef.current?.querySelector(selector)?.scrollIntoView({ block: 'center' });
+    }, [document]);
     const latestRevision = query.data?.document.revision;
     const versions = query.data?.versions ?? [];
     const displayedVersion = historical
@@ -351,17 +368,27 @@ export function WorkReport({
             toast.error(error instanceof Error ? error.message : reportT('Invalid'));
         }
     };
-    const openWorkspace = () =>
-        void leaveReport(() =>
-            router.push(
-                buildReportWorkspacePath(organization, {
-                    documentId: document.id,
-                    artifactId: '',
-                    revision: document.revision,
-                    publicationId: document.publication?.id,
-                }),
-            ),
-        );
+    const workspace = (historical ? historyQuery.data : query.data)?.workspace;
+    const openAt = (origin: { artifactId?: string; componentId?: string; section?: string } = {}) => {
+        if (workspace)
+            void leaveReport(() =>
+                router.push(
+                    reportRunWorkspacePath(
+                        organization,
+                        {
+                            documentId: document.id,
+                            revision: document.revision,
+                            artifactId: origin.artifactId ?? '',
+                            componentId: origin.componentId,
+                            publicationId: document.publication?.id,
+                        },
+                        { ...workspace, historical, section: origin.section },
+                    ),
+                    { scroll: false },
+                ),
+            );
+    };
+    const openWorkspace = () => openAt();
     return (
         <article className="report-surface h-full min-w-0 overflow-auto bg-background text-foreground" data-testid="work-report">
             {headerActions &&
@@ -370,7 +397,7 @@ export function WorkReport({
                         size="sm"
                         variant="ghost"
                         className="shrink-0"
-                        disabled={viewUnavailable || busy || restore.isPending || Boolean(document.archivedAt)}
+                        disabled={!workspace || viewUnavailable || busy || restore.isPending || Boolean(document.archivedAt)}
                         onClick={openWorkspace}
                     >
                         {t('ConnectedWorkspace.OpenWorkspace')}
@@ -382,6 +409,7 @@ export function WorkReport({
                     key={`${document.id}:${document.revision}:${'groupId' in evidenceSelection ? evidenceSelection.groupId : evidenceSelection.artifactId}`}
                     document={document}
                     selection={evidenceSelection}
+                    run={workspace ? { ...workspace, historical } : undefined}
                     returnFocusRef={evidenceOpener}
                     organization={organization}
                     onClose={() => setEvidenceSelection(null)}
@@ -393,7 +421,7 @@ export function WorkReport({
                     }}
                 />
             ) : null}
-            <div className="min-w-0">
+            <div className={cn('min-w-0', sourceMode && 'flex h-full min-h-0 flex-col')}>
                 <AlertDialog
                     open={Boolean(leaveDecision)}
                     onOpenChange={open => {
@@ -434,6 +462,7 @@ export function WorkReport({
                 </AlertDialog>
                 <ReportToolbar
                     onOpenWorkspace={headerActions ? undefined : openWorkspace}
+                    workspaceAvailable={Boolean(workspace)}
                     document={document}
                     standalone={presentation === 'standalone'}
                     historical={historical}
@@ -486,7 +515,7 @@ export function WorkReport({
                     onExport={format => void exportReport(format)}
                     onInsert={type => editorRef.current?.insert(type)}
                 />
-                <div className="mx-auto w-full max-w-[960px] px-4 pb-8 sm:px-6" data-testid="report-content">
+                <div className={cn('mx-auto w-full max-w-[960px] px-4 sm:px-6', sourceMode ? 'flex min-h-0 flex-1 flex-col pb-4' : 'pb-8')} data-testid="report-content">
                     <AlertDialog
                         open={restoreOpen}
                         onOpenChange={open => {
@@ -554,7 +583,8 @@ export function WorkReport({
                                 </p>
                             ) : null}
                             <div
-                                className="work-prose"
+                                ref={reportBodyRef}
+                                className={cn('work-prose', sourceMode && 'flex min-h-0 flex-1 flex-col')}
                                 onClick={event => {
                                     const group = event.target instanceof Element ? event.target.closest('[data-evidence-group]')?.getAttribute('data-evidence-group') : null;
                                     if (group) {
@@ -582,23 +612,21 @@ export function WorkReport({
                                         onEvidenceGroup={openEvidenceGroup}
                                     />
                                 ) : (
-                                    <ReportBody key={document.revision} content={document.content} title={document.title} onEvidenceGroup={openEvidenceGroup} />
+                                    <ReportBody
+                                        key={document.revision}
+                                        content={document.content}
+                                        title={document.title}
+                                        onEvidenceGroup={openEvidenceGroup}
+                                        onOpenSql={workspace ? openAt : undefined}
+                                    />
                                 )}
                             </div>
-                            {!isEditing ? (
-                                <div className="mt-5 flex gap-2">
-                                    <Button
-                                        variant="ghost"
-                                        onMouseDown={event => event.preventDefault()}
-                                        onClick={() => {
-                                            const text = window.getSelection()?.toString().trim();
-                                            if (text) setDefinition({ title: document.title, text });
-                                            else toast.info(t('SelectDefinition'));
-                                        }}
-                                    >
-                                        {t('AddDefinition')}
-                                    </Button>
-                                </div>
+                            {!isEditing && !definition ? (
+                                <ReportSelectionPopover
+                                    key={`${document.id}:${document.revision}`}
+                                    bodyRef={reportBodyRef}
+                                    onAdd={text => setDefinition({ title: document.title, text })}
+                                />
                             ) : null}
                         </>
                     )}

@@ -14,22 +14,23 @@ export default function ReportChart({ visual, evidence }: { visual: WorkVisual; 
     if (visual.chartSpec) return <WorkspaceReportChart visual={visual} evidence={evidence} />;
     const chart = visual.chart!;
     const series = chart.yKeys ?? [{ key: chart.yKey!, label: chart.yKey! }];
-    const data = evidence.rows;
+    const separate = series.length > 1 && chart.seriesLayout !== 'combined';
+    const panels = separate ? series.map(item => [item]) : [series];
     return (
         <div className="space-y-3">
-            {series.map(item => (
+            {panels.map(items => (
                 <ChartResultCard
-                    key={item.key}
+                    key={separate ? `series:${items[0].key}` : 'combined'}
                     variant="bare"
                     result={{
                         type: 'chart',
                         chartType: chart.type,
-                        title: series.length > 1 ? (item.label ?? item.key) : visual.title,
-                        data,
+                        title: separate ? (items[0].label ?? items[0].key) : visual.title,
+                        data: evidence.rows,
                         xKey: chart.xKey,
                         categoryKey: chart.xKey,
-                        valueKey: item.key,
-                        yKeys: [item],
+                        valueKey: items[0].key,
+                        yKeys: items,
                         options: chart.options,
                         source: {
                             artifactId: evidence.artifactId,

@@ -65,6 +65,20 @@ export async function POST(req: NextRequest) {
             confirmationToken: body.confirmationToken,
         });
 
+        let workId: string | undefined;
+        const requested = body.input && typeof body.input === 'object' && 'reportWorkId' in body.input ? body.input.reportWorkId : undefined;
+        if (typeof requested === 'string') {
+            const { tabId, connectionId } = parsedInput.data;
+            if (
+                !tabId ||
+                !connectionId ||
+                !(await ctx.services.db.works.getById({ organizationId: ctx.organizationId, userId: ctx.userId, workId: requested })) ||
+                !(await ctx.services.db.tabState.loadTabState(tabId, ctx.userId, connectionId, requested))
+            ) {
+                throw new ActionError('ACTION_INPUT_INVALID', 'The query tab does not belong to this workspace.', { status: 403 });
+            }
+            workId = requested;
+        }
         const encoder = new TextEncoder();
         const stream = new ReadableStream<Uint8Array>({
             start(controller) {
@@ -97,7 +111,7 @@ export async function POST(req: NextRequest) {
                                 actionRunId,
                                 auditSource: queryExecuteAction.audit.sourceByActor?.[ctx.actor.type] ?? ctx.auditSource ?? null,
                             },
-                            parsedInput.data,
+                            { ...parsedInput.data, workId },
                             {
                                 signal: req.signal,
                                 onEvent: emit,

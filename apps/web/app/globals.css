@@ -687,7 +687,10 @@ body {
 .work-prose .report-wide th, .work-prose .report-wide td { white-space: nowrap; }
 
 /* BlockNote shares application theme tokens, including portalled menus. */
-.bn-root[data-color-scheme] {
+.bn-root.bn-shadcn[data-color-scheme] {
+    /* BlockNote also adds .dark to its root. Keep the workspace accent on that nested root. */
+    --primary: inherit;
+    --primary-foreground: inherit;
     --bn-colors-editor-text: var(--foreground);
     --bn-colors-editor-background: var(--background);
     --bn-colors-menu-text: var(--popover-foreground);
@@ -707,6 +710,21 @@ body {
 }
 .report-blocknote .bn-editor { padding: 0 36px; min-height: 15rem; }
 .report-blocknote .bn-block-content { min-width: 0; }
+.report-blocknote .bn-block-content[data-content-type='codeBlock'] {
+    color: var(--code-foreground);
+    background-color: var(--code);
+
+    > pre, > pre > code { background: transparent; }
+    > pre > code { padding: 0; }
+}
+/* BlockNote draws its own block highlight over a transparent native selection. */
+.report-blocknote .ProseMirror-hideselection *::selection { color: currentColor; }
+.report-blocknote :is(.bn-block-content.ProseMirror-selectednode > *, .ProseMirror-selectednode > .bn-block-content > *, .bn-block-content .ProseMirror-selectednode)::after {
+    background-color: color-mix(in oklab, var(--primary) 6%, transparent);
+    box-shadow: inset 0 0 0 2px var(--primary);
+}
+/* Embedded snapshots size columns by content inside their horizontal scroll area. */
+.report-blocknote .work-table-scroll > table { table-layout: auto; width: max-content; min-width: 100%; }
 .report-blocknote .bn-shadcn .bn-editor a { color: var(--primary); text-decoration: underline; }
 .report-blocknote .bn-editor [data-content-type='table'] .tableWrapper { overflow-x: auto; }
 .report-blocknote .bn-editor [data-content-type='table'] th,
@@ -716,7 +734,7 @@ body {
 
 /* Report controls respond to the report pane, including embedded Work panels. */
 .report-surface { container: report / inline-size; }
-.report-editor-columns { grid-template-columns: minmax(0, 1fr); }
+.report-editor-columns { display: flex; flex-direction: column; overflow-y: auto; }
 .report-toolbar .report-save-error { max-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-component-dialog { container: report-dialog / inline-size; }
 .report-dialog-columns { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); }
@@ -724,7 +742,7 @@ body {
 .report-dialog-config { border-inline-end: 1px solid var(--border); }
 .report-component-dialog .report-wide { margin-top: 0; }
 @container report (min-width: 960px) {
-    .report-editor-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .report-editor-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
 }
 @container report (max-width: 719px) {
     .report-toolbar-secondary { display: none; }

@@ -151,15 +151,19 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
-    await page.getByTestId('work-markdown').evaluate(element => {
-        const range = document.createRange();
-        range.selectNodeContents(element.querySelector('p')!);
-        const selection = window.getSelection()!;
-        selection.removeAllRanges();
-        selection.addRange(range);
-    });
-    await page.getByRole('button', { name: 'Add definition to Knowledge', exact: true }).click();
-    await page.getByRole('dialog').getByRole('textbox', { name: 'Definition text' }).fill('Revenue is paid orders less refunds.');
+    const addDefinition = page.getByRole('button', { name: 'Add definition to Knowledge', exact: true });
+    const term = page.getByTestId('work-markdown').locator('strong').filter({ hasText: /^Revenue$/ });
+    await expect(addDefinition).toBeHidden();
+    await term.dblclick();
+    await expect(addDefinition).toBeVisible();
+    await expect(addDefinition.locator('..')).toHaveAttribute('data-side', 'top');
+    await term.click();
+    await expect(addDefinition).toBeHidden();
+    await term.dblclick();
+    await addDefinition.click();
+    const definitionText = page.getByRole('dialog').getByRole('textbox', { name: 'Definition text' });
+    await expect(definitionText).toHaveValue('Revenue');
+    await definitionText.fill('Revenue is paid orders less refunds.');
     await page.getByRole('button', { name: 'Confirm and publish definition' }).click();
     await expect
         .poll(() => publishedDefinition)

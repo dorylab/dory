@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -1061,6 +1062,7 @@ export class PostgresResultSetsRepository {
             },
             sql: {
                 text: resultSet.sqlText || input.sessionSqlText,
+                ...(input.workId ? { sessionSqlHash: createHash('sha256').update(input.sessionSqlText.trim()).digest('hex') } : {}),
                 dialect: input.database ?? null,
                 operation: getString(resultSet.sqlOp) ?? 'unknown',
             },
@@ -1283,6 +1285,7 @@ export class PostgresResultSetsRepository {
             },
             sql: {
                 text: resultSet.sqlText || input.sessionSqlText,
+                ...(input.workId ? { sessionSqlHash: createHash('sha256').update(input.sessionSqlText.trim()).digest('hex') } : {}),
                 dialect: input.database ?? null,
                 operation: getString(resultSet.sqlOp) ?? 'unknown',
             },
@@ -2030,6 +2033,13 @@ export class PostgresResultSetsRepository {
             })
             .where(and(eq(resultSetsTable.organizationId, params.organizationId), eq(resultSetsTable.sessionId, params.sessionId), eq(resultSetsTable.setIndex, params.setIndex)))
             .execute();
+    }
+
+    async matchesExecutedBatch(input: { organizationId: string; userId: string; resultSetId: string; sql: string }) {
+        const record = await this.getRecord(input.organizationId, input.resultSetId);
+        if (!canReadAttachmentSource(record.attachmentSource, input.userId)) throw new DatabaseError('Private attachment result unavailable.', 403);
+        const manifest = await this.artifacts.resultSets.readManifest(record.artifactRefJson as ResultSetArtifactRef);
+        return manifest.sql?.sessionSqlHash === createHash('sha256').update(input.sql.trim()).digest('hex');
     }
 
     async readRows(

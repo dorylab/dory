@@ -216,6 +216,36 @@ test('static line and area charts retain gaps instead of joining missing values'
     }
 });
 
+test('report exports respect the saved chart series layout and keep older charts separate', () => {
+    const source = { ...evidence, snapshotId: 'snapshot', columns: ['year', 'value', 'base'], rows: [{ year: '2025', value: 125, base: 25 }] };
+    const chart: WorkVisual = {
+        id: 'trend',
+        type: 'chart',
+        title: 'Finance',
+        evidenceId: source.artifactId,
+        chart: {
+            type: 'bar',
+            xKey: 'year',
+            yKeys: [
+                { key: 'value', label: 'Revenue' },
+                { key: 'base', label: 'Profit' },
+            ],
+        },
+    };
+    const split = workChartSvg(chart, source);
+    assert.equal((split.match(/<svg /g) ?? []).length, 3);
+    const combined: WorkVisual = { ...chart, chart: { ...chart.chart!, seriesLayout: 'combined' } };
+    const svg = workChartSvg(combined, source);
+    assert.equal((svg.match(/<svg /g) ?? []).length, 1);
+    assert.match(svg, /2025 \/ Revenue: 125/);
+    assert.match(svg, /2025 \/ Profit: 25/);
+    assert.match(svg, /--chart-2/);
+    assert.equal(
+        resolvedReport({ ...content('<Chart source="trend" />'), evidence: [source], embeds: reportEmbeds([combined], [source]) }).visuals[0].chart?.seriesLayout,
+        'combined',
+    );
+});
+
 test('MDX export strips source links without changing code examples', () => {
     const draft = content('See [source](dory://evidence/artifact).\n\n```md\n[source](dory://evidence/artifact)\n```');
     const files = unzipSync(

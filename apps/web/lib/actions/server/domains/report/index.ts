@@ -1,5 +1,5 @@
 import { reportWorkspaceActions } from './workspace';
-import { reportEvidenceCandidatesAction } from './evidence';
+import { reportComponentSourcesAction, reportEvidenceCandidatesAction } from './evidence';
 import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -201,4 +201,4 @@ const reportPublish = defineWebAction({
         return { document: bounded(await publishWorkReport(ctx.services.db, { ...owner(ctx), ...input })) };
     },
 });
-export const reportActions = [reportCreate, reportGet, reportUpdate, reportPublish, reportEvidenceCandidatesAction, ...reportWorkspaceActions];
+export const reportActions = [reportCreate, reportGet, reportUpdate, reportPublish, reportComponentSourcesAction, reportEvidenceCandidatesAction, ...reportWorkspaceActions];

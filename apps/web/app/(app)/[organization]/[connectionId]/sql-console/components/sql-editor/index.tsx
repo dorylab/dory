@@ -1,5 +1,6 @@
 'use client';
 
+import { useReportUpdates } from '@/components/work-documents/report-update-context';
 import type { ConnectionType } from '@dory/shared/types/connections';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { useAtomValue } from 'jotai';
@@ -37,7 +38,7 @@ declare global {
 }
 
 interface SQLEditorProps {
-    sourceContext?: { connectionId?: string; dialect: ConnectionType };
+    sourceContext?: { connectionId?: string; dialect?: ConnectionType; database?: string };
     tabs: UITabPayload[];
     activeTab: UITabPayload | undefined;
     workspaceActive: boolean;
@@ -84,6 +85,7 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         },
         ref,
     ) => {
+        const report = useReportUpdates();
         const { resolvedTheme } = useTheme();
         const currentConnection = useAtomValue(currentConnectionAtom);
         const editorSettings = useAtomValue(sqlEditorSettingsAtom);
@@ -94,9 +96,10 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         const previousTabIdRef = useRef<string | undefined>(activeTab?.tabId);
         const handleContentChange = useCallback(
             (tabId: string, content: string) => {
+                report?.onEdit(tabId, content);
                 saveContent(tabId, content);
             },
-            [saveContent],
+            [saveContent, report],
         );
         const formatHandlerRef = useRef<(() => void) | null>(null);
 
@@ -107,8 +110,9 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
             editorTheme,
             editorSettings,
             disableOccurrenceHighlight: Boolean(sourceContext),
+            scopedDatabase: sourceContext?.database,
             currentConnectionId: sourceContext ? sourceContext.connectionId : currentConnection?.connection?.id,
-            currentConnectionType: sourceContext?.dialect ?? currentConnection?.connection?.type,
+            currentConnectionType: sourceContext ? sourceContext.dialect : currentConnection?.connection?.type,
             containerRef,
             onContentChange: handleContentChange,
             onRunQuery,
@@ -120,7 +124,7 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         useMonacoTheme(monacoRef, editorTheme);
         const { hasSelection, handleCopy, handlePaste, handleCut, handleFormat, handleToggleCase, handleExecuteSelection, handleExecuteSql } = useSqlEditorActions({
             editorRef,
-            currentConnectionType: sourceContext?.dialect ?? currentConnection?.connection?.type,
+            currentConnectionType: sourceContext ? sourceContext.dialect : currentConnection?.connection?.type,
             onRunQuery,
             formatHandlerRef,
         });

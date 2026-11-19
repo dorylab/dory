@@ -8,11 +8,13 @@ import { z } from 'zod';
 
 import { canWriteWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
 import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-groups';
+import { REPORT_SNAPSHOT_ROW_LIMIT } from '@/lib/work-documents/evidence-preview';
 import { reportNumber } from '@/lib/work-documents/format';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
 import { legacyToMdx, parseReport, reportEmbeds, reportTagSource, resolvedReport } from '@/lib/work-documents/report-core';
 import { applyReportTextPatch } from '@/lib/work-documents/report-patch';
 import { analysisScopeSchema, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
+import { canonicalValue } from '@/lib/work-documents/workspace-presentation';
 
 import { reportChatChartAxes, resolveReportChatCharts } from './report-chat-charts';
 
@@ -40,6 +42,12 @@ export async function validateAnalysisScope(db: DBService, owner: Owner, raw: un
 
 export async function assertDocumentWrite(owner: Owner) {
     if (!canWriteWorkspace(await resolveOrganizationAccess(owner.organizationId, owner.userId))) throw new DatabaseError('Workspace write access required.', 403);
+}
+
+export async function reportComponentSources(db: DBService, input: Owner & { documentId: string; query?: string; artifactId?: string }) {
+    const [document, access] = await Promise.all([db.workDocuments.get(input), resolveOrganizationAccess(input.organizationId, input.userId)]);
+    const scope = access?.permissions.connection.read ? document.scope : { ...document.scope, connectionIds: [] };
+    return { rows: await db.artifacts.listReportSources({ ...input, scope, chatId: document.chatId }) };
 }
 
 /** The chooser is deliberately bounded to the report and the Work which produced it. */
@@ -243,7 +251,12 @@ export async function saveWorkDraft(
             if (!artifact.resultSet) throw new DatabaseError('Evidence has no query result.', 400);
             if (!attachment && artifact.connectionId && !isAnalysisDatabaseAllowed(scope, artifact.connectionId, artifact.resultSet.sourceDatabaseName))
                 throw new DatabaseError('Evidence is outside the selected database.', 403);
-            const result = await db.resultSets.readRows({ organizationId: input.organizationId, userId: input.userId, resultSetId: artifact.resultSet.id, limit: 500 });
+            const result = await db.resultSets.readRows({
+                organizationId: input.organizationId,
+                userId: input.userId,
+                resultSetId: artifact.resultSet.id,
+                limit: REPORT_SNAPSHOT_ROW_LIMIT,
+            });
             if (result.dataAvailability === 'none' || ((result.rowCount ?? 0) > 0 && !result.rows.length))
                 throw new DatabaseError('Evidence data is no longer available. Re-run the query.', 409);
             const rows = result.rows;
@@ -272,7 +285,7 @@ export async function saveWorkDraft(
                 prior.id === visual.id &&
                 prior.evidenceId === visual.evidenceId &&
                 prior.type === visual.type &&
-                JSON.stringify(prior.chart) === JSON.stringify(visual.chart) &&
+                canonicalValue(prior.chart && { ...prior.chart, seriesLayout: undefined }) === canonicalValue(visual.chart && { ...visual.chart, seriesLayout: undefined }) &&
                 JSON.stringify(prior.metric) === JSON.stringify(visual.metric),
         );
         if (draft.format && snapshot?.truncated && !visual.allowSubset && !retainedSnapshot)

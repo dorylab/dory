@@ -16,7 +16,7 @@ import { OverviewItem, ResultRow } from './types';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { OverviewTable } from './OverviewTable';
 import { currentSessionMetaAtom } from './stores/result-table.atoms';
-import { chartStatesByKeyAtom, viewModesByTabAtom } from './components/charts/stores/chart-state.atoms';
+import { chartStateRevisionAtom, chartStatesByKeyAtom, viewModesByTabAtom } from './components/charts/stores/chart-state.atoms';
 import { makeSetUserPickedAtom, makeActiveSetAtom, makeAutoSetActiveSetAtom, makeSetActiveSetAtom, makeUserPickedAtom } from './stores/active-set.atoms';
 import { useAutoJumpToLastResult } from './hooks/useAutoJumpToLastResult';
 import { SQLErrorAlert } from './components/SQLErrorAlert';
@@ -82,6 +82,8 @@ type ResultTablePaneSnapshot = {
 };
 type ResultTableProps = {
     tabId?: string;
+    onActiveResultChange?: (tabId: string, result: Partial<ResultSetMeta> | null) => void;
+    onOpenCopilot?: () => void;
 };
 type InspectorPayload =
     | {
@@ -156,7 +158,7 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 
 /* =================================== component =================================== */
 
-export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
+export function ResultTable({ tabId: tabIdProp, onActiveResultChange, onOpenCopilot }: ResultTableProps = {}) {
     const t = useTranslations('SqlConsole');
     const organizationId = useOrganizationId();
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
@@ -261,7 +263,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const [hydratedViewStateKey, setHydratedViewStateKey] = useState<string | null>(null);
     const persistedViewStateRef = useRef<string | null>(null);
     const [chartStatesByKey, setChartStatesByKey] = useAtom(chartStatesByKeyAtom);
-    const [chartStateVersionByTab, setChartStateVersionByTab] = useState<Record<string, number>>({});
+    const [chartStateVersionByTab, setChartStateVersionByTab] = useAtom(chartStateRevisionAtom);
     const [chartSnapshotsBySet, setChartSnapshotsBySet] = useState<Record<number, { rows: Array<{ rowData: Record<string, unknown> }>; columnsRaw?: unknown }>>({});
     const [tablePaneSnapshotsBySet, setTablePaneSnapshotsBySet] = useState<Record<number, ResultTablePaneSnapshot>>({});
     const [remoteEffectiveRowCountBySet, setRemoteEffectiveRowCountBySet] = useState<Record<number, number | null>>({});
@@ -903,6 +905,28 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         return map;
     }, [activeSet, indices, setsMeta, runningTabs, tabId, meta.truncated, meta.source]);
 
+    useEffect(() => {
+        if (!onActiveResultChange || !tabId) return;
+        const selected = setsMeta.find(set => set.sessionId === sessionId && set.setIndex === activeSet);
+        const detail = sessionMetas.sessionId === sessionId && sessionMetas.setIndex === activeSet ? sessionMetas : null;
+        onActiveResultChange(
+            tabId,
+            selected
+                ? {
+                      ...detail,
+                      sessionId: selected.sessionId,
+                      setIndex: selected.setIndex,
+                      sqlText: selected.sqlText,
+                      title: selected.title ?? null,
+                      status: selected.status === 'error' ? 'error' : selected.status === 'running' ? 'running' : 'success',
+                      errorMessage: selected.errorMessage,
+                      startedAt: selected.startedAt,
+                      finishedAt: selected.finishedAt,
+                  }
+                : detail,
+        );
+    }, [activeSet, onActiveResultChange, sessionId, sessionMetas, setsMeta, tabId]);
+
     /* ---------- actions ---------- */
 
     const handleDownloadCsv = useCallback(async () => {
@@ -986,7 +1010,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             );
         }
         if (execMetaBySet?.[activeSet]?.errorMessage) {
-            return <SQLErrorAlert message={execMetaBySet?.[activeSet]?.errorMessage} sql={execMetaBySet?.[activeSet]?.sqlText} />;
+            return <SQLErrorAlert message={execMetaBySet?.[activeSet]?.errorMessage} tabId={tabId} onOpenCopilot={onOpenCopilot} />;
         }
         if (shouldShowWholeResultEmpty) {
             return <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>;

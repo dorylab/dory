@@ -1,152 +1,50 @@
-import { useAtom, useAtomValue } from 'jotai';
+import { useQuery } from '@tanstack/react-query';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useRef } from 'react';
+
+import type { SidebarTableEntry } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom, schemaMetadataRefreshAtom, tablesAtom } from '@/shared/stores/app.store';
 
-const inflightTableRequests = new Map<string, Promise<void>>();
+const emptyTables: SidebarTableEntry[] = [];
 
-export function useTables(databases: string) {
-    const [tablesState, setTablesState] = useAtom(tablesAtom);
-    const currentConnection = useAtomValue(currentConnectionAtom);
+export function useTables(database: string, scopedConnectionId?: string) {
+    const setTablesState = useSetAtom(tablesAtom);
+    const connection = useAtomValue(currentConnectionAtom);
+    const organizationId = useOrganizationId();
     const metadataRefresh = useAtomValue(schemaMetadataRefreshAtom);
-    const lastHandledRefreshVersionRef = useRef(metadataRefresh.version);
-    const connectionId = currentConnection?.connection?.id ?? null;
-    const requestKey = connectionId && databases ? `${connectionId}::${databases}` : null;
-
-    useEffect(() => {
-        if (!connectionId || !databases) {
-            setTablesState({
-                connectionId,
-                database: databases || null,
-                items: [],
-                loading: false,
-            });
-            return;
-        }
-
-        if (tablesState.connectionId === connectionId && tablesState.database === databases && !tablesState.loading) {
-            return;
-        }
-
-        if (tablesState.connectionId !== connectionId || tablesState.database !== databases) {
-            setTablesState({
-                connectionId,
-                database: databases,
-                items: [],
-                loading: true,
-            });
-        }
-
-        void refresh(connectionId, databases);
-    }, [connectionId, databases, tablesState.connectionId, tablesState.database, tablesState.items.length, tablesState.loading, setTablesState]);
-
-    useEffect(() => {
-        if (!connectionId || !databases || metadataRefresh.version === 0 || metadataRefresh.connectionId !== connectionId) {
-            return;
-        }
-
-        if (lastHandledRefreshVersionRef.current === metadataRefresh.version) {
-            return;
-        }
-
-        lastHandledRefreshVersionRef.current = metadataRefresh.version;
-
-        if (metadataRefresh.database && metadataRefresh.database !== databases) {
-            return;
-        }
-
-        void refresh(connectionId, databases);
-    }, [connectionId, databases, metadataRefresh.connectionId, metadataRefresh.database, metadataRefresh.version]);
-
-    const refresh = async (requestedConnectionId = connectionId ?? undefined, requestedDatabase = databases) => {
-        if (!requestedConnectionId || !requestedDatabase) {
-            return;
-        }
-
-        const scopedRequestKey = `${requestedConnectionId}::${requestedDatabase}`;
-        const existingRequest = inflightTableRequests.get(scopedRequestKey);
-        if (existingRequest) {
-            await existingRequest;
-            return;
-        }
-
-        const request = (async () => {
-            setTablesState(prev => {
-                if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
-                    return prev;
-                }
-
-                return prev.items.length ? prev : { ...prev, loading: true };
-            });
-
-            try {
-                const [tablesResult, viewsResult] = await Promise.all([
-                    executeActionClient<{ tables: any[] }>(
-                        'schema.listTables',
-                        { connectionId: requestedConnectionId, database: requestedDatabase },
-                        { currentConnectionId: requestedConnectionId },
-                    ),
-                    executeActionClient<{ views: any[] }>(
-                        'schema.listViews',
-                        { connectionId: requestedConnectionId, database: requestedDatabase },
-                        { currentConnectionId: requestedConnectionId },
-                    ).catch(() => null),
-                ]);
-
-                if (tablesResult) {
-                    const merged = new Map<string, any>();
-                    for (const item of tablesResult.tables ?? []) {
-                        const key = String(item?.value ?? item?.name ?? item?.label ?? '');
-                        if (key) merged.set(key, item);
-                    }
-                    if (viewsResult) {
-                        for (const item of viewsResult.views ?? []) {
-                            const key = String(item?.value ?? item?.name ?? item?.label ?? '');
-                            if (key && !merged.has(key)) {
-                                merged.set(key, item);
-                            }
-                        }
-                    }
-
-                    setTablesState(prev => {
-                        if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
-                            return prev;
-                        }
-
-                        return {
-                            connectionId: requestedConnectionId,
-                            database: requestedDatabase,
-                            items: [...merged.values()],
-                            loading: false,
-                        };
-                    });
-                    return;
-                }
-            } finally {
-                setTablesState(prev => {
-                    if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
-                        return prev;
-                    }
-
-                    return {
-                        ...prev,
-                        loading: false,
-                    };
-                });
+    const lastRefresh = useRef(metadataRefresh.version);
+    const connectionId = scopedConnectionId ?? connection?.connection?.id ?? null;
+    const query = useQuery({
+        queryKey: ['schema', 'tables', organizationId, connectionId, database],
+        enabled: Boolean(connectionId && database),
+        queryFn: async ({ signal }) => {
+            const input = { connectionId, database };
+            const options = { organizationId, currentConnectionId: connectionId, signal };
+            const [tables, views] = await Promise.all([
+                executeActionClient<{ tables: SidebarTableEntry[] }>('schema.listTables', input, options),
+                executeActionClient<{ views: SidebarTableEntry[] }>('schema.listViews', input, options).catch(() => null),
+            ]);
+            const entries = new Map<string, SidebarTableEntry & { label: string }>();
+            for (const item of [...(tables.tables ?? []), ...(views?.views ?? [])]) {
+                const key = item.value ?? item.name ?? item.label;
+                if (key && !entries.has(key)) entries.set(key, { ...item, label: item.label ?? key });
             }
-        })();
+            return [...entries.values()];
+        },
+    });
+    const loading = Boolean(connectionId && database && query.isPending);
 
-        inflightTableRequests.set(scopedRequestKey, request);
-        try {
-            await request;
-        } finally {
-            inflightTableRequests.delete(scopedRequestKey);
-        }
-    };
+    useEffect(() => {
+        if (!scopedConnectionId) setTablesState({ connectionId, database: database || null, items: query.data ?? [], loading });
+    }, [connectionId, database, loading, query.data, scopedConnectionId, setTablesState]);
 
-    return {
-        tables: requestKey && tablesState.connectionId === connectionId && tablesState.database === databases ? tablesState.items : [],
-        loading: requestKey && tablesState.connectionId === connectionId && tablesState.database === databases ? tablesState.loading : false,
-        refresh,
-    };
+    useEffect(() => {
+        if (!connectionId || !database || metadataRefresh.connectionId !== connectionId || lastRefresh.current === metadataRefresh.version) return;
+        lastRefresh.current = metadataRefresh.version;
+        if (!metadataRefresh.database || metadataRefresh.database === database) void query.refetch();
+    }, [connectionId, database, metadataRefresh, query.refetch]);
+
+    return { tables: query.data ?? emptyTables, loading, refresh: query.refetch };
 }

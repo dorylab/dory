@@ -77,6 +77,7 @@ export type ResultSetManifest = {
     };
     sql?: {
         text?: string | null;
+        sessionSqlHash?: string;
         dialect?: string | null;
         operation?: ResultSetOperation | null;
     };

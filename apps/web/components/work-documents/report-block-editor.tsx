@@ -23,15 +23,17 @@ import {
     useExtensionState,
 } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
-import type { WorkDocumentContent, WorkVisual } from '@dory/shared/types/work-document';
+import type { ReportEvidenceGroup, WorkDocumentContent, WorkVisual } from '@dory/shared/types/work-document';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 
+import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-groups';
 import { reportBlocksFromMdx, reportBlocksToMdx, type ReportBlockSchema, type ReportStyleSchema } from '@/lib/work-documents/report-blocks';
 import { reportSourceBlockConfig, reportStyleSpecs, reportTextBlockSpecs, reportVisualBlockConfig } from '@/lib/work-documents/report-block-schema';
 import { ReportVisual } from './report-body';
+import { ReportEvidenceDialog } from './report-evidence-editor';
 import '@blocknote/shadcn/style.css';
 
 export type ReportBlockEditorHandle = {
@@ -40,7 +42,21 @@ export type ReportBlockEditorHandle = {
     insertVisual: (visual: WorkVisual, visuals: WorkVisual[]) => void;
 };
 type ReportEditor = BlockNoteEditor<ReportBlockSchema, DefaultInlineContentSchema, ReportStyleSchema>;
-type Context = { content: WorkDocumentContent; edit: (visual: WorkVisual) => void; source: () => void };
+type Block = ReportEditor['document'][number];
+const groupLinkPrefix = 'dory://evidence-group/';
+function evidenceTarget(block?: Block) {
+    if (!block || !(block.type === 'paragraph' || block.type === 'quote' || block.type === 'bulletListItem' || block.type === 'numberedListItem')) return;
+    const prose = block.content.filter(item => item.type !== 'link' || !item.href.startsWith(groupLinkPrefix));
+    const text = prose
+        .map(item => (item.type === 'text' ? item.text : item.content.map(span => span.text).join('')))
+        .join('')
+        .trim();
+    if (!text) return;
+    const marker = block.content.find(item => item.type === 'link' && item.href.startsWith(groupLinkPrefix));
+    return { blockId: block.id, text, groupId: marker?.type === 'link' ? marker.href.slice(groupLinkPrefix.length) : undefined, prose };
+}
+type EvidenceTarget = NonNullable<ReturnType<typeof evidenceTarget>>;
+type Context = { content: WorkDocumentContent; edit: (visual: WorkVisual) => void; source: () => void; manageEvidence: (target: EvidenceTarget) => void };
 const ReportContext = createContext<Context | null>(null);
 const VisualBlock = createReactBlockSpec(reportVisualBlockConfig, {
     render: function ReportVisualBlock({ block }) {
@@ -94,8 +110,12 @@ function BlockActions() {
     const components = useComponentsContext()!;
     const t = useTranslations('WorkDocuments.BlockEditor');
     const block = useExtensionState(SideMenuExtension, { editor, selector: state => state?.block });
+    const { manageEvidence } = useContext(ReportContext)!;
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
+    const target = block && evidenceTarget(editor.getBlock(block.id));
     return (
         <DragHandleMenu>
+            {target && <components.Generic.Menu.Item onClick={() => manageEvidence(target)}>{evidenceT('Manage')}</components.Generic.Menu.Item>}
             <components.Generic.Menu.Item
                 onClick={() => {
                     if (block) editor.moveBlocksUp(block.id);
@@ -131,6 +151,9 @@ function ReportFormattingToolbar() {
 type ReportBlockEditorProps = {
     ref?: Ref<ReportBlockEditorHandle>;
     content: WorkDocumentContent;
+    documentId?: string;
+    displayEvidence: WorkDocumentContent['evidence'];
+    onEvidenceChange: (content: WorkDocumentContent) => void;
     onChange: (body: string, visuals?: WorkVisual[]) => void;
     onInsert: (type: WorkVisual['type']) => void;
     onEdit: (visual: WorkVisual) => void;
@@ -165,8 +188,9 @@ export default function ReportBlockEditor(props: ReportBlockEditorProps) {
     );
 }
 
-function ReportBlockEditorSurface({ ref, content, onChange, onInsert, onEdit, onSource }: ReportBlockEditorProps) {
+function ReportBlockEditorSurface({ ref, content, documentId, displayEvidence, onChange, onEvidenceChange, onInsert, onEdit, onSource }: ReportBlockEditorProps) {
     const t = useTranslations('WorkDocuments.BlockEditor');
+    const evidenceT = useTranslations('WorkDocuments.Evidence');
     const locale = useLocale();
     const { resolvedTheme } = useTheme();
     const latest = useRef({ content, onChange });
@@ -176,6 +200,13 @@ function ReportBlockEditorSurface({ ref, content, onChange, onInsert, onEdit, on
     const projection = useRef(initial);
     const anchor = useRef<string | null>(null);
     const [error, setError] = useState('');
+    const [menuTarget, setMenuTarget] = useState<EvidenceTarget>();
+    const [editingEvidence, setEditingEvidence] = useState<EvidenceTarget>();
+    const [evidenceError, setEvidenceError] = useState('');
+    const manageEvidence = (target: EvidenceTarget) => {
+        setEvidenceError('');
+        setEditingEvidence(target);
+    };
     const editor: ReportEditor = useCreateBlockNote({
         schema,
         trailingBlock: false,
@@ -218,6 +249,37 @@ function ReportBlockEditorSurface({ ref, content, onChange, onInsert, onEdit, on
         }),
         [editor, error],
     );
+    const applyEvidence = (references: ReportEvidenceGroup['references'], reviewed: boolean) => {
+        if (!editingEvidence) return;
+        const target = evidenceTarget(editor.getBlock(editingEvidence.blockId));
+        if (!target || target.groupId !== editingEvidence.groupId) {
+            setEvidenceError(evidenceT('FixBodyFirst'));
+            return;
+        }
+        try {
+            const next = editor.transact(() => {
+                const id = target.groupId ?? `evidence_${crypto.randomUUID().replaceAll('-', '')}`;
+                if (references.length && !target.groupId) {
+                    editor.updateBlock(target.blockId, { content: [...target.prose, ' ', { type: 'link', href: groupLinkPrefix + id, content: 'Evidence' }] });
+                } else if (!references.length && target.groupId) {
+                    editor.updateBlock(target.blockId, { content: target.prose });
+                }
+                const body = reportBlocksToMdx(editor.document, projection.current, content.visuals);
+                const groups = (content.evidenceGroups ?? []).filter(group => group.id !== id);
+                if (references.length) groups.push({ id, references });
+                const reviewedIds = (content.reviewedEvidenceGroupIds ?? []).filter(groupId => groupId !== id);
+                if (reviewed && references.length) reviewedIds.push(id);
+                const evidenceGroups = reconcileReportEvidenceGroups(content, body, groups, reviewedIds);
+                // The block change event must not emit a second draft without the new references.
+                lastBody.current = body;
+                return { ...content, body, evidenceGroups, reviewedEvidenceGroupIds: reviewedIds };
+            });
+            onEvidenceChange(next);
+            setEditingEvidence(undefined);
+        } catch (err) {
+            setEvidenceError(err instanceof Error ? err.message : String(err));
+        }
+    };
     const items = () => [
         ...getDefaultReactSlashMenuItems(editor),
         ...(['metric', 'chart', 'table'] as const).map(type => ({
@@ -230,7 +292,7 @@ function ReportBlockEditorSurface({ ref, content, onChange, onInsert, onEdit, on
         })),
     ];
     return (
-        <ReportContext.Provider value={{ content, edit: onEdit, source: onSource }}>
+        <ReportContext.Provider value={{ content: { ...content, evidence: displayEvidence }, edit: onEdit, source: onSource, manageEvidence }}>
             <div data-testid="report-block-editor" className="report-blocknote min-w-0 space-y-3">
                 <div role="toolbar" aria-label={t('Formatting')} className="flex flex-wrap gap-1 border-b pb-2">
                     <Button
@@ -269,13 +331,14 @@ function ReportBlockEditorSurface({ ref, content, onChange, onInsert, onEdit, on
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <DropdownMenu>
+                    <DropdownMenu onOpenChange={open => open && setMenuTarget(evidenceTarget(editor.getTextCursorPosition().block))}>
                         <DropdownMenuTrigger asChild>
                             <Button type="button" size="sm" variant="ghost">
                                 {t('BlockActions')}
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
+                            {menuTarget && <DropdownMenuItem onSelect={() => manageEvidence(menuTarget)}>{evidenceT('Manage')}</DropdownMenuItem>}
                             <DropdownMenuItem onSelect={() => editor.moveBlocksUp()}>{t('MoveUp')}</DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => editor.moveBlocksDown()}>{t('MoveDown')}</DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => editor.removeBlocks([editor.getTextCursorPosition().block])}>{t('Delete')}</DropdownMenuItem>
@@ -294,6 +357,17 @@ function ReportBlockEditorSurface({ ref, content, onChange, onInsert, onEdit, on
                     <SuggestionMenuController triggerCharacter="/" getItems={async query => filterSuggestionItems(items(), query)} />
                 </BlockNoteView>
             </div>
+            {editingEvidence && (
+                <ReportEvidenceDialog
+                    content={content}
+                    text={editingEvidence.text}
+                    groupId={editingEvidence.groupId}
+                    error={evidenceError}
+                    documentId={documentId}
+                    onClose={() => setEditingEvidence(undefined)}
+                    onApply={applyEvidence}
+                />
+            )}
         </ReportContext.Provider>
     );
 }

@@ -40,6 +40,7 @@ interface UseSqlMonacoEditorProps {
     editorTheme: string;
     editorSettings: SqlEditorSettings;
     currentConnectionId?: string;
+    scopedDatabase?: string;
     disableOccurrenceHighlight?: boolean;
     currentConnectionType?: ConnectionType;
     containerRef: RefObject<HTMLDivElement | null>;
@@ -446,6 +447,7 @@ export function useSqlMonacoEditor({
     editorTheme,
     editorSettings,
     currentConnectionId,
+    scopedDatabase,
     disableOccurrenceHighlight = false,
     currentConnectionType,
     containerRef,
@@ -476,12 +478,14 @@ export function useSqlMonacoEditor({
     const editorThemeRef = useRef(editorTheme);
     const editorSettingsRef = useRef(editorSettings);
 
-    const activeDatabase = useAtomValue(activeDatabaseAtom);
+    const globalDatabase = useAtomValue(activeDatabaseAtom);
+    const activeDatabase = scopedDatabase ?? globalDatabase;
+    const metadataConnectionId = scopedDatabase === undefined ? undefined : currentConnectionId;
     const setSelectionByTab = useSetAtom(editorSelectionByTabAtom);
-    const { databases } = useDatabases();
-    const { tables } = useTables(activeDatabase);
-    const { schemas } = useSchemas(activeDatabase, isPostgresFamilyConnectionType(currentConnectionType));
-    const { refresh: refreshColumns } = useColumns();
+    const { databases } = useDatabases(metadataConnectionId);
+    const { tables } = useTables(activeDatabase, metadataConnectionId);
+    const { schemas } = useSchemas(activeDatabase, isPostgresFamilyConnectionType(currentConnectionType), metadataConnectionId);
+    const { refresh: refreshColumns } = useColumns(metadataConnectionId);
     const refreshColumnsRef = useRef(refreshColumns);
     const t = useTranslations('SqlConsole');
 

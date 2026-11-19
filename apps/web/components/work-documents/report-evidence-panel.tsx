@@ -12,7 +12,7 @@ import { executeActionClient } from '@/lib/actions/client';
 import { reportEvidenceGroupText } from '@/lib/work-documents/evidence-groups';
 import { hasCompleteReportSnapshot, hasQueryLimit } from '@/lib/work-documents/evidence-preview';
 import { formatWorkValue } from '@/lib/work-documents/render';
-import { buildReportWorkspacePath } from '@/lib/work-documents/workspace-url';
+import { buildReportWorkspacePath, reportRunWorkspacePath, type ReportRunOrigin } from '@/lib/work-documents/workspace-url';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -31,11 +31,13 @@ function EvidenceData({
     inspection,
     reference,
     organization,
+    run,
     onBeforeNavigate,
 }: {
     inspection: ReportEvidenceInspection;
     reference: ReportEvidenceReference;
     organization: string;
+    run?: ReportRunOrigin;
     onBeforeNavigate: (href: string) => void;
 }) {
     const t = useTranslations('WorkDocuments.Evidence');
@@ -76,6 +78,7 @@ function EvidenceData({
         measure();
         return () => observer.disconnect();
     }, []);
+    const workspaceHref = run ? reportRunWorkspacePath(organization, reference, run) : buildReportWorkspacePath(organization, reference);
     const artifactHref = artifactUrl(`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(evidence.artifactId)}`, {
         report: reference.documentId,
         revision: reference.revision,
@@ -270,10 +273,10 @@ function EvidenceData({
                         <Button size="sm" asChild>
                             <Link
                                 data-report-evidence-navigation
-                                href={buildReportWorkspacePath(organization, reference)}
+                                href={workspaceHref}
                                 onClick={event => {
                                     event.preventDefault();
-                                    onBeforeNavigate(buildReportWorkspacePath(organization, reference));
+                                    onBeforeNavigate(workspaceHref);
                                 }}
                             >
                                 {t('EditSql')}
@@ -291,6 +294,7 @@ export function ReportEvidencePanel({
     selection,
     organization,
     onClose,
+    run,
     onBeforeNavigate,
     returnFocusRef,
 }: {
@@ -298,6 +302,7 @@ export function ReportEvidencePanel({
     selection: ReportEvidenceSelection;
     organization: string;
     onClose: () => void;
+    run?: ReportRunOrigin;
     onBeforeNavigate: (href: string) => void;
     returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
@@ -422,6 +427,7 @@ export function ReportEvidencePanel({
                         <EvidenceData
                             key={`${entries[index].item.artifactId}:${entries[index].reference.snapshotId}`}
                             inspection={selected.data}
+                            run={run}
                             reference={entries[index].reference}
                             organization={organization}
                             onBeforeNavigate={onBeforeNavigate}

@@ -50,20 +50,20 @@ export class DuckDbDatasource extends BaseConnection {
         return pingDuckDb(this.getHandle());
     }
 
-    async query<Row = any>(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<QueryResult<Row>> {
-        return executeDuckDbQuery<Row>(this.getHandle(), sql, params);
+    async query<Row = any>(sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<QueryResult<Row>> {
+        return executeDuckDbQuery<Row>(this.getHandle(), sql, params, context);
     }
 
     async queryWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<QueryResult<Row>> {
-        return executeDuckDbQuery<Row>(this.getHandle(), sql, context?.params);
+        return executeDuckDbQuery<Row>(this.getHandle(), sql, context?.params, context);
     }
 
     async openRowCursorWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
-        return executeDuckDbQueryRowStream<Row>(this.getHandle(), sql, context?.params);
+        return executeDuckDbQueryRowStream<Row>(this.getHandle(), sql, context?.params, context);
     }
 
-    async command(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<void> {
-        await executeDuckDbQuery(this.getHandle(), sql, params);
+    async command(sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<void> {
+        await executeDuckDbQuery(this.getHandle(), sql, params, context);
     }
 
     private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {

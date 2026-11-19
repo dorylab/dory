@@ -41,6 +41,7 @@ type Props = {
     versions: Array<{ revision: number; source: string; createdAt: string }>;
     latestRevision?: number;
     onOpenWorkspace?: () => void;
+    workspaceAvailable: boolean;
     onBack: () => void;
     onContinue: () => void;
     onEdit: () => void;
@@ -85,9 +86,15 @@ export function ReportToolbar(p: Props) {
         </>
     );
     return (
-        <header ref={host} className="report-toolbar sticky top-0 z-20 mb-4 flex h-11 items-center gap-1.5 border-b bg-background px-3" data-testid="report-toolbar">
+        <header ref={host} className="report-toolbar sticky top-0 z-20 mb-4 flex h-11 shrink-0 items-center gap-1.5 border-b bg-background px-3" data-testid="report-toolbar">
             {p.onOpenWorkspace && (
-                <Button className="report-toolbar-secondary shrink-0" size="sm" variant="ghost" disabled={p.disabled || p.unavailable} onClick={p.onOpenWorkspace}>
+                <Button
+                    className="report-toolbar-secondary shrink-0"
+                    size="sm"
+                    variant="ghost"
+                    disabled={p.disabled || p.unavailable || !p.workspaceAvailable}
+                    onClick={p.onOpenWorkspace}
+                >
                     {t('ConnectedWorkspace.OpenWorkspace')}
                 </Button>
             )}
@@ -265,7 +272,7 @@ export function ReportToolbar(p: Props) {
                     <DropdownMenuContent align="end">
                         <div className="report-toolbar-overflow" style={{ display: compact ? undefined : 'none' }}>
                             {p.onOpenWorkspace && (
-                                <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onOpenWorkspace}>
+                                <DropdownMenuItem disabled={p.disabled || p.unavailable || !p.workspaceAvailable} onSelect={p.onOpenWorkspace}>
                                     {t('ConnectedWorkspace.OpenWorkspace')}
                                 </DropdownMenuItem>
                             )}

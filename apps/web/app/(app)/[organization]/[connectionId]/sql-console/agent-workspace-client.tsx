@@ -1,5 +1,9 @@
 'use client';
 
+import { useReportUpdates } from '@/components/work-documents/report-update-context';
+import { buildAgentRunHandoffPrompt } from '@/lib/agent-runs/handoff-prompt';
+import { chartStateRevisionAtom, chartStatesByKeyAtom, viewModesByTabAtom } from './components/result-table/components/charts/stores/chart-state.atoms';
+import { upsertActiveSetAtom } from './components/result-table/stores/active-set.atoms';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { SqlWorkspacePanelToggle } from '@/components/sql-workspace/sql-workspace-panel';
@@ -35,8 +39,9 @@ import SQLTabEmpty from './components/tabs/tab-empty';
 import { SqlConsoleOverlayHost } from './components/sql-console-overlay';
 import { SqlMode } from './components/copilot-modes/sql-mode';
 import { TableMode } from './components/copilot-modes/table-mode';
-import { useSqlConsoleClient } from './hooks/useSqlConsoleClient';
+import { useSqlConsoleClient, type ReportQuerySources } from './hooks/useSqlConsoleClient';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
+import { useConnectionDetail } from '../../connections/hooks/use-connections';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
@@ -221,13 +226,21 @@ export default function AgentWorkspaceClient({
     workId,
     connectionId,
     initialResultTarget,
+    reportSources,
 }: {
     defaultLayout: number[] | undefined;
     organization: string;
     workId: string;
     connectionId: string;
     initialResultTarget?: SqlWorkspaceInitialResultTarget | null;
+    reportSources?: ReportQuerySources;
 }) {
+    const report = useReportUpdates();
+    const reportT = useTranslations('ReportUpdates');
+    const setChartRevision = useSetAtom(chartStateRevisionAtom);
+    const setResult = useSetAtom(upsertActiveSetAtom);
+    const setViews = useSetAtom(viewModesByTabAtom);
+    const setCharts = useSetAtom(chartStatesByKeyAtom);
     const workspaceScope = useMemo<SqlWorkspaceScope>(
         () => ({
             workspaceMode: 'agent',
@@ -257,7 +270,10 @@ export default function AgentWorkspaceClient({
         handleCloseTab,
         handleCloseOthers,
         saveWorkspaceNow,
-    } = useSqlConsoleClient(defaultLayout, workspaceScope, initialResultTarget);
+        activeDatabase,
+        activeSchema,
+        setActiveDatabase,
+    } = useSqlConsoleClient(defaultLayout, workspaceScope, initialResultTarget, reportSources);
     const t = useTranslations('SqlConsole');
     const tAgentRuns = useTranslations('AgentRuns');
     const router = useRouter();
@@ -267,11 +283,18 @@ export default function AgentWorkspaceClient({
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);
     const [showChatbot, setShowChatbot] = useAtom(copilotPanelOpenAtom);
     const [chatWidth, setChatWidth] = useAtom(copilotPanelWidthAtom);
-    const currentConnection = useAtomValue(currentConnectionAtom);
+    const globalConnection = useAtomValue(currentConnectionAtom);
+    const scopedConnection = useConnectionDetail(reportSources ? connectionId : undefined);
+    const currentConnection = reportSources ? scopedConnection.data : globalConnection;
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const setInlineAskByTab = useSetAtom(inlineSqlAskByTabAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
     const [agentRunPanelOpen, setAgentRunPanelOpen] = useState(true);
+    const onReportTabs = report?.onTabs;
+    useEffect(() => {
+        if (areTabsHydrated && !isLoading)
+            onReportTabs?.(tabs.flatMap(tab => (tab.tabType === 'sql' ? [{ tabId: tab.tabId, title: tab.tabName || t('Tabs.UntitledQuery'), sql: tab.content ?? '' }] : [])));
+    }, [areTabsHydrated, isLoading, tabs, onReportTabs, t]);
     const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot && !agentRunPanelOpen : false;
     const normalizedChatWidth = useMemo(
         () => clamp(chatWidth ?? INITIAL_LAYOUT.copilot.defaultWidth, INITIAL_LAYOUT.copilot.minWidth, INITIAL_LAYOUT.copilot.maxWidth),
@@ -331,6 +354,7 @@ export default function AgentWorkspaceClient({
             });
             const tabName = t('Tabs.QueryTableTabName', { table: payload.tabLabel ?? payload.tableName });
             const tabId = await addTab({ tabName, content: sqlText, activate: true });
+            if (reportSources && payload.database) setActiveDatabase(payload.database, tabId);
             const tab: SQLTab = {
                 tabId,
                 tabType: 'sql',
@@ -348,7 +372,7 @@ export default function AgentWorkspaceClient({
                 databaseOverride: payload.database ?? null,
             });
         },
-        [addTab, connectionId, currentConnection?.connection?.id, currentConnection?.connection?.type, runQueryWithRef, t, workId],
+        [addTab, connectionId, currentConnection?.connection?.id, currentConnection?.connection?.type, reportSources, runQueryWithRef, setActiveDatabase, t, workId],
     );
 
     const handleRenameTable = useCallback(
@@ -513,6 +537,16 @@ export default function AgentWorkspaceClient({
 
     const hasUnsavedChanges = savedWorkspaceFingerprint !== null && getCurrentWorkspaceFingerprint() !== savedWorkspaceFingerprint;
 
+    const reportSave = report?.saveTabs;
+    useEffect(() => {
+        if (!reportSave) return;
+        reportSave.current = async () => {
+            if (hasUnsavedChanges) await saveAgentWorkspace();
+        };
+        return () => {
+            reportSave.current = null;
+        };
+    }, [reportSave, hasUnsavedChanges, saveAgentWorkspace]);
     const closeWorkspace = useCallback(
         (targetHref?: string | null) => {
             if (targetHref) {
@@ -710,6 +744,17 @@ export default function AgentWorkspaceClient({
                 sidebar={{
                     tables: (
                         <SQLConsoleSidebar
+                            source={
+                                reportSources
+                                    ? {
+                                          connectionId,
+                                          connection: currentConnection ?? undefined,
+                                          database: activeDatabase,
+                                          preferredSchema: activeSchema,
+                                          setDatabase: setActiveDatabase,
+                                      }
+                                    : undefined
+                            }
                             onOpenTableTab={handleOpenTableTab}
                             onOpenQueryConsole={handleOpenQueryConsole}
                             onQueryTable={handleQueryTable}
@@ -742,7 +787,7 @@ export default function AgentWorkspaceClient({
                         )}
                         <SqlWorkspacePanelToggle
                             active={agentRunPanelOpen}
-                            label={agentRunPanelOpen ? tAgentRuns('WorkspacePanel.Rail.Close') : tAgentRuns('WorkspacePanel.Rail.Open')}
+                            label={report ? reportT('Title') : agentRunPanelOpen ? tAgentRuns('WorkspacePanel.Rail.Close') : tAgentRuns('WorkspacePanel.Rail.Open')}
                             onClick={toggleAgentRunPanel}
                         >
                             <Bot className={cn('h-5 w-5 transition-colors', agentRunPanelOpen ? 'text-background' : 'text-muted-foreground group-hover:text-primary')} />
@@ -750,7 +795,36 @@ export default function AgentWorkspaceClient({
                     </>
                 }
                 rightPanel={
-                    agentRunPanelOpen ? (
+                    agentRunPanelOpen && report ? (
+                        report.renderPanel({
+                            navigate: async ({ tabId, result, chart, title, sql }) => {
+                                if (!tabs.some(tab => tab.tabId === tabId)) {
+                                    const originalTab = tabId;
+                                    tabId = await addTab({ content: sql, tabName: title, activate: true });
+                                    report.onRestoreTab(originalTab, tabId);
+                                }
+                                setActiveTabId(tabId);
+                                if (!result) return;
+                                setSessionIdMap(previous => ({ ...previous, [tabId]: result.sessionId }));
+                                setResult({ tabId, sessionId: result.sessionId, activeSet: result.setIndex, userPicked: true });
+                                markQueryHistoryRestoredSession(tabId, result.sessionId);
+                                notifySqlConsoleResultDataUpdated();
+                                const key = `tab:${tabId}:set:${result.setIndex}`;
+                                if (chart) {
+                                    setCharts(previous => ({ ...previous, [key]: chart }));
+                                    setChartRevision(previous => ({ ...previous, [key]: (previous[key] ?? 0) + 1 }));
+                                }
+                                setViews(previous => ({ ...previous, [key]: chart ? 'charts' : 'table' }));
+                            },
+                            copy: async () => {
+                                await saveAgentWorkspace();
+                                await navigator.clipboard.writeText(
+                                    buildAgentRunHandoffPrompt({ workId, connectionId, workspaceUrl: window.location.href, tabCount: tabs.length }),
+                                );
+                                toast.success(tAgentRuns('WorkspacePanel.Toasts.TaskCopied'));
+                            },
+                        })
+                    ) : agentRunPanelOpen ? (
                         <AgentRunWorkspacePanel
                             workId={workId}
                             connectionId={connectionId}
@@ -795,6 +869,11 @@ export default function AgentWorkspaceClient({
                                 setChatWidth={setClampedChatWidth}
                                 onCloseChatbot={closeChatbotPanel}
                                 reserveRightRail={false}
+                                onOpenCopilot={() => {
+                                    setAgentRunPanelOpen(false);
+                                    setShowChatbot(true);
+                                }}
+                                source={reportSources ? { connectionId, connection: currentConnection ?? undefined, database: activeDatabase, schema: activeSchema } : undefined}
                                 workspaceActive={activeTab?.tabType === 'sql'}
                             />
                         </div>

@@ -9,6 +9,7 @@ import type { CopilotEnvelopeV1 } from '../../../chatbot/copilot/types/copilot-e
 import { createCopilotFixInputFromExecution, createCopilotSQLContextEnvelope } from '../../../chatbot/copilot/copilot-envelope';
 import type { CopilotResultSetContext } from '../../../chatbot/copilot/types/copilot-context-sql';
 import type { CopilotFixInput } from '../../../chatbot/copilot/types/copilot-fix-input';
+import { normalizeSqlDialect } from '@/lib/sql/sql-dialect';
 import type { ActionIntent, ActionResult } from '@/lib/copilot/action/types';
 import { useSqlCopilotExecutor } from '../../hooks/useSqlCopilotExecutor';
 import type { UITabPayload } from '@dory/shared/types/tabs';
@@ -16,7 +17,8 @@ import { useTranslations } from 'next-intl';
 
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/shared/stores/app.store';
-import { currentSessionMetaAtom } from '../result-table/stores/result-table.atoms';
+import type { ResultSetMeta } from '@/lib/client/type';
+import type { SqlModeProps } from '../copilot-modes/types';
 import { copilotPromptRequestAtom } from '../result-table/stores/copilot-prompt.atoms';
 import { copilotActionRequestAtom, copilotAnalysisRequestAtom, copilotPanelTabAtom, editorSelectionByTabAtom } from '../../sql-console.store';
 import type { SQLEditorHandle } from '../sql-editor';
@@ -29,6 +31,8 @@ import { ActionTab } from './action/ui';
 
 type CopilotPanelProps = {
     tabs: UITabPayload[];
+    source?: SqlModeProps['source'];
+    result?: Partial<ResultSetMeta> | null;
     activeTabId?: string;
     activeTab?: UITabPayload;
     updateTab: (tabId: string, patch: Partial<UITabPayload>, options?: { immediate?: boolean }) => void;
@@ -40,12 +44,14 @@ type CopilotPanelProps = {
 
 type SubTabKey = 'ask' | 'action' | 'context';
 
-export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, addTab, setActiveTabId, onClose, editorRef }: CopilotPanelProps) {
+export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, addTab, setActiveTabId, onClose, editorRef, source, result: sessionMeta }: CopilotPanelProps) {
     const t = useTranslations('SqlConsole');
-    const activeDatabase = useAtomValue(activeDatabaseAtom);
-    const activeSchema = useAtomValue(activeSchemaAtom);
-    const currentConnection = useAtomValue(currentConnectionAtom);
-    const sessionMeta = useAtomValue(currentSessionMetaAtom);
+    const globalDatabase = useAtomValue(activeDatabaseAtom);
+    const globalSchema = useAtomValue(activeSchemaAtom);
+    const globalConnection = useAtomValue(currentConnectionAtom);
+    const activeDatabase = sessionMeta?.sourceDatabaseName ?? source?.database ?? globalDatabase;
+    const activeSchema = source ? source.schema : globalSchema;
+    const currentConnection = source ? source.connection : globalConnection;
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const [actionRequest, setActionRequest] = useAtom(copilotActionRequestAtom);
     const [analysisRequest, setAnalysisRequest] = useAtom(copilotAnalysisRequestAtom);
@@ -74,30 +80,30 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         setActiveTabId,
     });
 
-    const sqlTextFromResult = typeof (sessionMeta as any)?.sqlText === 'string' ? (sessionMeta as any).sqlText : '';
-    const sessionErrorMessage = (sessionMeta as any)?.errorMessage ?? null;
-    const sessionErrorCode = (sessionMeta as any)?.errorCode ?? null;
-    const sessionFinishedAt = (sessionMeta as any)?.finishedAt ?? null;
-    const sessionStartedAt = (sessionMeta as any)?.startedAt ?? null;
+    const sqlTextFromResult = sessionMeta?.sqlText ?? '';
+    const sessionErrorMessage = sessionMeta?.errorMessage ?? null;
+    const sessionErrorCode = sessionMeta?.errorCode ?? null;
+    const sessionFinishedAt = sessionMeta?.finishedAt ?? null;
+    const sessionStartedAt = sessionMeta?.startedAt ?? null;
     const resultSetContext = useMemo<CopilotResultSetContext | null>(() => {
-        if (!sessionMeta || !(sessionMeta as any)?.sessionId) return null;
+        if (!sessionMeta || !sessionMeta?.sessionId) return null;
 
         return {
-            sessionId: (sessionMeta as any).sessionId ?? null,
-            setIndex: (sessionMeta as any).setIndex ?? null,
-            title: (sessionMeta as any).title ?? null,
-            sqlText: typeof (sessionMeta as any).sqlText === 'string' ? (sessionMeta as any).sqlText : null,
-            status: (sessionMeta as any).status ?? null,
-            errorMessage: typeof (sessionMeta as any).errorMessage === 'string' ? (sessionMeta as any).errorMessage : null,
-            errorCode: (sessionMeta as any).errorCode ?? null,
-            errorSqlState: (sessionMeta as any).errorSqlState ?? null,
-            rowCount: (sessionMeta as any).rowCount ?? null,
-            limited: (sessionMeta as any).limited ?? null,
-            limit: (sessionMeta as any).limit ?? null,
-            durationMs: (sessionMeta as any).durationMs ?? null,
-            columns: (sessionMeta as any).columns ?? null,
-            stats: (sessionMeta as any).stats ?? null,
-            aiProfileVersion: (sessionMeta as any).aiProfileVersion ?? null,
+            sessionId: sessionMeta.sessionId ?? null,
+            setIndex: sessionMeta.setIndex ?? null,
+            title: sessionMeta.title ?? null,
+            sqlText: typeof sessionMeta.sqlText === 'string' ? sessionMeta.sqlText : null,
+            status: sessionMeta.status ?? null,
+            errorMessage: typeof sessionMeta.errorMessage === 'string' ? sessionMeta.errorMessage : null,
+            errorCode: sessionMeta.errorCode ?? null,
+            errorSqlState: sessionMeta.errorSqlState ?? null,
+            rowCount: sessionMeta.rowCount ?? null,
+            limited: sessionMeta.limited ?? null,
+            limit: sessionMeta.limit ?? null,
+            durationMs: sessionMeta.durationMs ?? null,
+            columns: sessionMeta.columns ?? null,
+            stats: sessionMeta.stats ?? null,
+            aiProfileVersion: sessionMeta.aiProfileVersion ?? null,
         };
     }, [sessionMeta]);
 
@@ -127,7 +133,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
                 editorText: editorSqlText || '',
                 selection: editorSelection,
                 baselineDatabase: activeDatabase || null,
-                dialect: (currentConnection as any)?.connection?.type ?? 'unknown',
+                dialect: normalizeSqlDialect(currentConnection?.connection?.type),
                 resultSet: resultSetContext,
                 updatedAt: lastUpdatedAt ?? undefined,
                 meta: {
@@ -151,7 +157,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         tabConnectionId,
         activeDatabase,
         currentConnection?.connection?.id,
-        (currentConnection as any)?.connection?.type,
+        currentConnection?.connection?.type,
         sessionFinishedAt,
         sessionStartedAt,
         resultSetContext,
@@ -187,7 +193,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
                     : null,
             database: activeDatabase || null,
             activeSchema: activeSchema || null,
-            dialect: (currentConnection as any)?.connection?.type ?? undefined,
+            dialect: currentConnection?.connection?.type ?? undefined,
             occurredAt: sqlTextFromResult.trim() ? (sessionFinishedAt ?? sessionStartedAt ?? undefined) : undefined,
             meta: {
                 tabId,
@@ -202,6 +208,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         activeDatabase,
         activeSchema,
         currentConnection?.connection?.id,
+        currentConnection?.connection?.type,
         sessionFinishedAt,
         sessionStartedAt,
         tabId,
@@ -212,14 +219,14 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
     ]);
 
     const autoRunRequest = useMemo(() => {
-        if (!actionRequest || !actionInput) return null;
+        if (!actionRequest || !actionInput || (actionRequest.tabId && actionRequest.tabId !== tabId)) return null;
 
         if (actionRequest.intent === 'fix-sql-error') {
             return actionInput.lastExecution.error?.message ? actionRequest : null;
         }
 
         return actionInput.lastExecution.sql.trim() ? actionRequest : null;
-    }, [actionInput, actionRequest]);
+    }, [actionInput, actionRequest, tabId]);
 
     type ApplySqlMeta = { intent?: ActionIntent; risk?: ActionResult['risk']; originalSql?: string; operation?: 'apply' | 'undo' };
 

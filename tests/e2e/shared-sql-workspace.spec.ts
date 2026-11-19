@@ -24,6 +24,7 @@ test('Agent Run shares the query UI while retaining tabs, charts, cancellation a
     let canceled = 0;
     let executions = 0;
     let saves = 0;
+    let savedSql = '';
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.addInitScript(() => localStorage.setItem('agent-runs.workspace-tour.dismissed.v1', '1'));
     await page.route(`**/api/works/${workId}/snapshot`, route =>
@@ -70,6 +71,17 @@ test('Agent Run shares the query UI while retaining tabs, charts, cancellation a
                 return fulfill({ resultSets: sessions.get(input.sessionId)?.queryResultSets ?? [] });
             case 'query.session.get':
                 return fulfill(sessions.get(input.sessionId)?.session ?? null);
+            case 'knowledge.list':
+                return fulfill({ models: [] });
+            case 'ai.savedQueryMetadata':
+                return fulfill({ description: '', useWhen: '' });
+            case 'savedQuery.listFolders':
+                return fulfill([]);
+            case 'savedQuery.create':
+                savedSql = input.sqlText;
+                return fulfill({ id: 'saved-metrics', title: input.title });
+            case 'savedQuery.list':
+                return fulfill({ savedQueries: [] });
             case 'query.cancel':
                 canceled++;
                 return fulfill({});
@@ -137,6 +149,14 @@ test('Agent Run shares the query UI while retaining tabs, charts, cancellation a
     await expect(page.getByTestId('run-query')).toBeEnabled();
     await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(initialTab.content);
     expect(executions).toBe(0);
+    await expect(page.getByTestId('report-updates')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Save Query', exact: true }).click();
+    const saveDialog = page.getByRole('dialog', { name: 'Save Query', exact: true });
+    await saveDialog.getByPlaceholder('Leave blank to name automatically').fill('Category totals', { timeout: 15000 });
+    await saveDialog.getByRole('checkbox', { name: 'Add to knowledge' }).uncheck();
+    await saveDialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => savedSql).toBe(initialTab.content);
+    await expect(saveDialog).toBeHidden();
     await expect(page.getByTestId('sql-source-sidebar').getByRole('textbox', { name: 'Filter tables' })).toBeVisible();
     await expect(page.getByTestId('sql-workspace-panel').getByRole('button', { name: 'Workspace actions' })).toBeVisible();
     const editorPanel = page.locator('[data-panel][id="editor-panel"]');

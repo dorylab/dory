@@ -27,6 +27,8 @@ export function reportArtifactReference(organizationId: string, artifactId: SQLW
             or exists (select 1 from report_working_drafts retention_draft
                 where retention_draft.document_id = retention_document.id and (
                     retention_draft.state->'content'->'evidence' @> ${reference}
+                    or exists (select 1 from jsonb_array_elements(retention_draft.state->'updates') pending
+                        where 'artifact_' || (pending->'result'->>'resultSetId') = ${artifactId}::text)
                     or retention_draft.state->'baseline'->'content'->'evidence' @> ${reference}
                     or retention_draft.state->'canvas'->'undo'->'content'->'evidence' @> ${reference}
                     or (retention_draft.state->>'bindingVersion' is distinct from '2' and exists (select 1 from jsonb_each(retention_draft.results) retention_result
@@ -89,7 +91,7 @@ export async function discardUnreferencedResultData(db: PostgresDBClient, store:
 }
 
 /** Validate and lock references before committing JSON; never enlarges the embedded report preview. */
-export async function retainReportEvidence(db: ReadDb, organizationId: string, evidence: WorkEvidence[], documentId?: string) {
+export async function retainReportEvidence(db: ReadDb, organizationId: string, evidence: Pick<WorkEvidence, 'artifactId'>[], documentId?: string) {
     const ids = [...new Set(evidence.map(item => item.artifactId))];
     if (!ids.length) return;
     const sources = await db

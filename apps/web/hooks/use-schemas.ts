@@ -1,90 +1,34 @@
-import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
-import { useParams } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
+import { useRouteConnectionId } from '@/app/(app)/[organization]/[connectionId]/sql-console/hooks/useRouteConnectionId';
 import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom, schemaMetadataRefreshAtom } from '@/shared/stores/app.store';
 
-type SchemaOption = {
-    value: string;
-    label: string;
-};
+type SchemaOption = { value: string; label: string };
+const emptySchemas: SchemaOption[] = [];
 
-const inflightSchemaRequests = new Map<string, Promise<void>>();
-
-function resolveConnectionParam(value?: string | string[]) {
-    return Array.isArray(value) ? value[0] : value;
-}
-
-export function useSchemas(database?: string, enabled = true) {
-    const [schemas, setSchemas] = useState<SchemaOption[]>([]);
+export function useSchemas(database?: string, enabled = true, scopedConnectionId?: string) {
     const currentConnection = useAtomValue(currentConnectionAtom);
+    const routeConnectionId = useRouteConnectionId();
+    const organizationId = useOrganizationId();
     const metadataRefresh = useAtomValue(schemaMetadataRefreshAtom);
-    const lastHandledRefreshVersionRef = useRef(metadataRefresh.version);
-    const params = useParams<{ connectionId?: string | string[]; connection?: string | string[] }>();
-    const routeConnectionId = resolveConnectionParam(params?.connectionId ?? params?.connection);
+    const lastRefresh = useRef(metadataRefresh.version);
+    const connectionId = scopedConnectionId ?? routeConnectionId ?? currentConnection?.connection?.id;
+    const query = useQuery({
+        queryKey: ['schema', 'schemas', organizationId, connectionId, database],
+        enabled: Boolean(enabled && database && connectionId),
+        queryFn: ({ signal }) =>
+            executeActionClient<SchemaOption[]>('schema.listSchemas', { connectionId, database }, { organizationId, currentConnectionId: connectionId, signal }),
+    });
 
     useEffect(() => {
-        if (!enabled || !database || !routeConnectionId) {
-            setSchemas([]);
-            return;
-        }
+        if (!enabled || !connectionId || !database || metadataRefresh.connectionId !== connectionId || lastRefresh.current === metadataRefresh.version) return;
+        lastRefresh.current = metadataRefresh.version;
+        if (!metadataRefresh.database || metadataRefresh.database === database) void query.refetch();
+    }, [connectionId, database, enabled, metadataRefresh, query.refetch]);
 
-        void refresh();
-    }, [database, enabled, routeConnectionId]);
-
-    useEffect(() => {
-        const connectionId = routeConnectionId ?? currentConnection?.connection?.id;
-        if (!enabled || !database || !connectionId || metadataRefresh.version === 0 || metadataRefresh.connectionId !== connectionId) {
-            return;
-        }
-
-        if (lastHandledRefreshVersionRef.current === metadataRefresh.version) {
-            return;
-        }
-
-        lastHandledRefreshVersionRef.current = metadataRefresh.version;
-
-        if (metadataRefresh.database && metadataRefresh.database !== database) {
-            return;
-        }
-
-        void refresh();
-    }, [currentConnection?.connection?.id, database, enabled, metadataRefresh.connectionId, metadataRefresh.database, metadataRefresh.version, routeConnectionId]);
-
-    const refresh = async () => {
-        if (!enabled || !database) {
-            setSchemas([]);
-            return;
-        }
-
-        const connectionId = routeConnectionId ?? currentConnection?.connection?.id;
-        if (!connectionId) {
-            setSchemas([]);
-            return;
-        }
-
-        const requestKey = `${connectionId}::${database}`;
-        const existingRequest = inflightSchemaRequests.get(requestKey);
-        if (existingRequest) {
-            await existingRequest;
-            return;
-        }
-
-        const request = (async () => {
-            const payload = await executeActionClient<SchemaOption[]>('schema.listSchemas', { connectionId, database }, { currentConnectionId: connectionId });
-            setSchemas(payload ?? []);
-        })();
-
-        inflightSchemaRequests.set(requestKey, request);
-        try {
-            await request;
-        } finally {
-            inflightSchemaRequests.delete(requestKey);
-        }
-    };
-
-    return {
-        schemas,
-        refresh,
-    };
+    return { schemas: enabled ? (query.data ?? emptySchemas) : emptySchemas, refresh: query.refetch };
 }

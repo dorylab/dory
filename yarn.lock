@@ -24864,6 +24864,7 @@ __metadata:
     date-fns: "npm:^4.1.0"
     dayjs: "npm:^1.11.20"
     debounce: "npm:^3.0.0"
+    diff: "npm:^8.0.2"
     dotenv: "npm:^17.4.1"
     drizzle-kit: "npm:^0.31.10"
     drizzle-orm: "npm:^0.45.2"
