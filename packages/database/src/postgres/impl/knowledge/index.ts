@@ -32,6 +32,7 @@ import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, lte, n
 import { parseDocument } from 'yaml';
 
 import { enqueueSourceExtraction, invalidateSourceEvidence, KnowledgeExtractionStore, knowledgeHash } from './extraction';
+import { assertDestination, KnowledgeDirectory, localDocument, lockDirectory } from './directory';
 import { LinearKnowledgeStore } from './linear';
 import { migrateLegacyOssieModels } from './migrate-ossie';
 import {
@@ -57,7 +58,7 @@ export const LINEAR_SYNC_INTERVAL_MS = 3600_000;
 // and SHAs as opaque content fingerprints for every provider.
 export type KnowledgeConnectorSnapshot = {
     commitSha?: string;
-    files: Array<{ path: string; sha: string; contentText: string; format?: KnowledgeSourceFormat; title?: string; sourceUrl?: string }>;
+    files: Array<{ path: string; sha: string; contentText: string; format?: KnowledgeSourceFormat; title?: string; sourceUrl?: string; projectId?: string; projectName?: string }>;
 };
 export type KnowledgeModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
 export type KnowledgeModelDetail = {
@@ -224,6 +225,10 @@ export function parseKnowledgeSourceYaml(source: string, fallbackSourceConnectio
 
 export class PostgresKnowledgeRepository {
     private db!: PostgresDBClient;
+
+    get directory() {
+        return new KnowledgeDirectory(this.db);
+    }
 
     get linear() {
         return new LinearKnowledgeStore(this.db);
@@ -654,6 +659,9 @@ export class PostgresKnowledgeRepository {
                 organizationId: knowledgeSources.organizationId,
                 knowledgeModelId: knowledgeSources.knowledgeModelId,
                 connectionId: knowledgeSources.connectionId,
+                folderId: knowledgeSources.folderId,
+                projectId: knowledgeConnectorItems.projectId,
+                projectName: knowledgeConnectorItems.projectName,
                 fileName: knowledgeSources.fileName,
                 format: knowledgeSources.format,
                 byteSize: knowledgeSources.byteSize,
@@ -716,6 +724,9 @@ export class PostgresKnowledgeRepository {
                 organizationId: knowledgeSources.organizationId,
                 knowledgeModelId: knowledgeSources.knowledgeModelId,
                 connectionId: knowledgeSources.connectionId,
+                folderId: knowledgeSources.folderId,
+                projectId: knowledgeConnectorItems.projectId,
+                projectName: knowledgeConnectorItems.projectName,
                 fileName: knowledgeSources.fileName,
                 format: knowledgeSources.format,
                 contentText: knowledgeSources.contentText,
@@ -726,6 +737,7 @@ export class PostgresKnowledgeRepository {
                 connectorId: knowledgeConnectorItems.connectorId,
                 connectorProvider: knowledgeConnectors.provider,
                 remotePath: knowledgeConnectorItems.remotePath,
+                remoteRevision: knowledgeConnectorItems.remoteSha,
                 sourceUrl: knowledgeConnectorItems.sourceUrl,
             })
             .from(knowledgeSources)
@@ -749,51 +761,68 @@ export class PostgresKnowledgeRepository {
         fileName: string;
         contentText: string;
         connectionId?: string | null;
+        folderId?: string | null;
         createdBy?: string | null;
     }) {
         const model = await this.getModel(input);
         await this.assertKnowledgeSourceConnection(model, input.connectionId);
         const value = validateKnowledgeSource(input.fileName, input.contentText);
-        const [existing] = await this.db
-            .select({ id: knowledgeSources.id })
-            .from(knowledgeSources)
-            .where(and(eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId), eq(knowledgeSources.fileName, value.fileName)))
-            .limit(1);
-        if (existing) throw new Error(`A knowledge source named "${value.fileName}" already exists.`);
-        const [source] = await this.db
-            .insert(knowledgeSources)
-            .values({
-                organizationId: input.organizationId,
-                knowledgeModelId: input.knowledgeModelId,
-                connectionId: input.connectionId || null,
-                createdBy: input.createdBy || null,
-                ...value,
-            })
-            .returning();
-        await this.touchModel(input.knowledgeModelId);
-        return this.getKnowledgeSource({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: source!.id });
+        const id = await this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            const folderId = input.folderId ?? null;
+            if (folderId && value.format !== 'markdown') throw new Error('Choose a Markdown document for this folder.');
+            await assertDestination(tx, model.id, folderId, value.fileName);
+            const [source] = await tx
+                .insert(knowledgeSources)
+                .values({
+                    organizationId: input.organizationId,
+                    knowledgeModelId: model.id,
+                    folderId,
+                    connectionId: input.connectionId || null,
+                    createdBy: input.createdBy || null,
+                    ...value,
+                })
+                .returning({ id: knowledgeSources.id });
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, model.id));
+            return source.id;
+        });
+        return this.getKnowledgeSource({ ...input, id });
     }
 
-    async updateKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string; contentText: string; connectionId?: string | null }) {
+    async updateKnowledgeSource(input: {
+        organizationId: string;
+        knowledgeModelId: string;
+        id: string;
+        contentText: string;
+        connectionId?: string | null;
+        folderId?: string | null;
+    }) {
         const model = await this.getModel(input);
-        const existing = await this.getKnowledgeSource(input);
-        if (existing.connectorId) throw new Error('Connector-managed knowledge sources are read-only. Edit the original content and sync again.');
         await this.assertKnowledgeSourceConnection(model, input.connectionId);
-        const value = validateKnowledgeSource(existing.fileName, input.contentText);
-        const [source] = await this.db
-            .update(knowledgeSources)
-            .set({ contentText: value.contentText, byteSize: value.byteSize, format: value.format, connectionId: input.connectionId || null })
-            .where(eq(knowledgeSources.id, existing.id))
-            .returning();
-        await this.touchModel(input.knowledgeModelId);
-        return this.getKnowledgeSource({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: source!.id });
+        await this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            const existing = await localDocument(tx, model.id, input.id);
+            const value = validateKnowledgeSource(existing.fileName, input.contentText);
+            if (input.folderId !== undefined) {
+                if (input.folderId && value.format !== 'markdown') throw new Error('Choose a Markdown document for this folder.');
+                await assertDestination(tx, model.id, input.folderId, existing.fileName, existing.id);
+            }
+            await tx
+                .update(knowledgeSources)
+                .set({ contentText: value.contentText, byteSize: value.byteSize, format: value.format, connectionId: input.connectionId || null, folderId: input.folderId })
+                .where(eq(knowledgeSources.id, existing.id));
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, model.id));
+        });
+        return this.getKnowledgeSource(input);
     }
 
     async deleteKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string }) {
-        const source = await this.getKnowledgeSource(input);
-        if (source.connectorId) throw new Error('Connector-managed knowledge sources can only be removed by disconnecting their connector.');
-        await this.db.delete(knowledgeSources).where(eq(knowledgeSources.id, source.id));
-        await this.touchModel(input.knowledgeModelId);
+        await this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            const source = await localDocument(tx, input.knowledgeModelId, input.id);
+            await tx.delete(knowledgeSources).where(eq(knowledgeSources.id, source.id));
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
+        });
     }
 
     async listConnectors(input: { organizationId: string; knowledgeModelId: string }) {
@@ -1150,10 +1179,21 @@ export class PostgresKnowledgeRepository {
                             .returning();
                         if (updatedSource) await enqueueSourceExtraction(tx, connector, updatedSource);
                     }
-                    if (item.remoteSha !== file.sha || item.sourceUrl !== (file.sourceUrl ?? null))
+                    if (
+                        item.remoteSha !== file.sha ||
+                        item.sourceUrl !== (file.sourceUrl ?? null) ||
+                        item.projectId !== (file.projectId ?? null) ||
+                        item.projectName !== (file.projectName ?? null)
+                    )
                         await tx
                             .update(knowledgeConnectorItems)
-                            .set({ remoteSha: file.sha, sourceUrl: file.sourceUrl ?? null, updatedAt: new Date() })
+                            .set({
+                                projectId: file.projectId ?? null,
+                                projectName: file.projectName ?? null,
+                                remoteSha: file.sha,
+                                sourceUrl: file.sourceUrl ?? null,
+                                updatedAt: new Date(),
+                            })
                             .where(and(eq(knowledgeConnectorItems.connectorId, connector.id), eq(knowledgeConnectorItems.remotePath, file.path)));
                     byPath.delete(file.path);
                     continue;
@@ -1170,9 +1210,15 @@ export class PostgresKnowledgeRepository {
                         createdBy: connector.createdBy,
                     })
                     .returning();
-                await tx
-                    .insert(knowledgeConnectorItems)
-                    .values({ connectorId: connector.id, knowledgeSourceId: source.id, remotePath: file.path, remoteSha: file.sha, sourceUrl: file.sourceUrl ?? null });
+                await tx.insert(knowledgeConnectorItems).values({
+                    connectorId: connector.id,
+                    knowledgeSourceId: source.id,
+                    remotePath: file.path,
+                    projectId: file.projectId ?? null,
+                    projectName: file.projectName ?? null,
+                    remoteSha: file.sha,
+                    sourceUrl: file.sourceUrl ?? null,
+                });
                 await enqueueSourceExtraction(tx, connector, source);
             }
             const removed = [...byPath.values()].map(item => item.knowledgeSourceId);

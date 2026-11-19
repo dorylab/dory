@@ -700,5 +700,18 @@
     "bps": true,
     "folderMillis": 1793577600000,
     "hash": "3fdb5689ccadcc8dc499b2eea2b971552b4414418c068de80f55d8dc62d0d030"
+  },
+  {
+    "sql": [
+      "CREATE TABLE knowledge_folders (\n    id text PRIMARY KEY,\n    knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n    parent_id text REFERENCES knowledge_folders(id),\n    name text NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX uidx_knowledge_folders_sibling ON knowledge_folders (knowledge_model_id, coalesce(parent_id, ''), name);\n",
+      "\nALTER TABLE knowledge_sources ADD COLUMN folder_id text REFERENCES knowledge_folders(id);\n",
+      "\nDROP INDEX uidx_knowledge_sources_model_file;\n",
+      "\nCREATE UNIQUE INDEX uidx_knowledge_sources_folder_file ON knowledge_sources (knowledge_model_id, coalesce(folder_id, ''), file_name);\n",
+      "\nALTER TABLE knowledge_connector_items ADD COLUMN project_id text, ADD COLUMN project_name text;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1795132800000,
+    "hash": "14aaf8baf4983d8c9859ca1225d15e5adde8c21a8d479773f5a9447819485f2e"
   }
 ]

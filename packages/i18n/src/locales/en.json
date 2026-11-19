@@ -3920,6 +3920,39 @@
         }
     },
     "Knowledge": {
+        "Documents": {
+            "SearchPlaceholder": "Search…",
+            "NonEmpty": "Move the contents out of “{name}” before deleting it.",
+            "MissingFolder": "This folder is unavailable. Open the knowledge base root to continue.",
+            "Directory": "Directory",
+            "Breadcrumb": "Folder path",
+            "Folders": "Folders",
+            "Files": "Files",
+            "FileCount": "{count, plural, one {# document} other {# documents}}",
+            "New": "New",
+            "NewFolder": "New folder",
+            "Upload": "Upload Markdown",
+            "UploadLimits": "Up to 20 Markdown files, 10 MB each",
+            "Rename": "Rename",
+            "Move": "Move to…",
+            "Delete": "Delete folder",
+            "Search": "Search folders and documents",
+            "NoMatches": "No matching folders or documents.",
+            "Empty": "This folder has no documents.",
+            "Name": "Name",
+            "Destination": "Move “{name}” to",
+            "ChooseFolder": "Choose a folder",
+            "ConfirmDelete": "Delete the empty folder “{name}”?",
+            "Actions": "Actions for {name}",
+            "Expand": "Expand {name}",
+            "Collapse": "Collapse {name}",
+            "Loading": "Loading documents…",
+            "Tab": "Documents",
+            "Create": "New document",
+            "Guide": "User guide",
+            "Title": "Document title",
+            "Body": "Markdown content"
+        },
         "Title": "Knowledge",
         "Subtitle": "Give agents consistent business meaning across your data.",
         "NewModel": "New knowledge model",
@@ -4060,6 +4093,12 @@
             "NoMatches": "No matching documents"
         },
         "VerifiedQueryDetails": {
+            "Search": "Search by question or title",
+            "DataSource": "Data source · {name}",
+            "Origin": "Added from · {origin, select, workspace {Workspace} agent_run {Agent run} artifact {Artifact} knowledge_source {Knowledge source} manual {Manual entry} other {{origin}}}",
+            "Open": "Open in workspace",
+            "Unavailable": "This data source is unavailable to your account.",
+            "NoMatches": "No matching queries.",
             "Columns": {
                 "Query": "Query",
                 "Question": "Question",
@@ -4161,6 +4200,7 @@
             "UpdateReferences": "Could not update knowledge references."
         },
         "KnowledgeSources": {
+            "SyncedRevision": "Synced version · {revision}",
             "Tab": "Knowledge sources",
             "Title": "Knowledge source",
             "Description": "Upload business documentation and knowledge YAML so agents can use consistent reference knowledge.",

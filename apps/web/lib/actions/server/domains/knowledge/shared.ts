@@ -34,6 +34,9 @@ export const knowledgeSourceSummarySchema = z.object({
     organizationId: z.string(),
     knowledgeModelId: z.string(),
     connectionId: z.string().nullable(),
+    folderId: z.string().nullable(),
+    projectId: z.string().nullable(),
+    projectName: z.string().nullable(),
     fileName: z.string(),
     format: z.enum(['markdown', 'yaml', 'text']),
     byteSize: z.number().int().nonnegative(),
@@ -45,7 +48,7 @@ export const knowledgeSourceSummarySchema = z.object({
     sourceUrl: z.string().nullable(),
     remotePath: z.string().nullable(),
 });
-export const knowledgeSourceSchema = knowledgeSourceSummarySchema.extend({ contentText: z.string() });
+export const knowledgeSourceSchema = knowledgeSourceSummarySchema.extend({ contentText: z.string(), remoteRevision: z.string().nullable() });
 export const knowledgeModelOutputSchema = z.object({
     id: z.string(),
     organizationId: z.string(),

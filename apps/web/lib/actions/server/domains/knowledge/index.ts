@@ -252,6 +252,65 @@ export const knowledgeReplaceDataSourcesAction = defineWebAction({
     handler: (ctx, input) => ctx.services.db.knowledge.replaceDataSources({ organizationId: ctx.organizationId, ...input }),
 });
 
+const folderId = z.string().min(1).nullable();
+const entryId = z.string().min(1);
+const entryName = z.string().trim().min(1).max(240);
+const entryKind = z.enum(['folder', 'document']);
+
+const knowledgeListDirectoryAction = defineWebAction({
+    id: 'knowledge.listDirectory',
+    domain: 'knowledge',
+    kind: 'query',
+    risk: 'read',
+    inputSchema: modelIdInput,
+    outputSchema: z.object({
+        canWrite: z.boolean(),
+        folders: z.array(z.object({ id: entryId, name: z.string(), parentId: folderId })),
+        connectors: z.array(
+            z.object({
+                id: entryId,
+                provider: z.enum(['github', 'linear']),
+                repositoryFullName: z.string().nullable(),
+                rootPath: z.string(),
+                linearWorkspaceName: z.string().nullable(),
+            }),
+        ),
+    }),
+    permissions: readWorkspace,
+    scopes: ['knowledge:read'],
+    actors: [...workspaceUiReadActors],
+    handler: async (ctx, input) => ({
+        ...(await ctx.services.db.knowledge.directory.list({ organizationId: ctx.organizationId, ...input })),
+        canWrite: Boolean(ctx.access.permissions.workspace.write),
+    }),
+});
+
+const knowledgeChangeDirectoryAction = defineWebAction({
+    id: 'knowledge.changeDirectory',
+    domain: 'knowledge',
+    kind: 'command',
+    risk: 'write',
+    requiresConfirmation: false,
+    inputSchema: modelIdInput.extend({
+        change: z.discriminatedUnion('operation', [
+            z.object({ operation: z.literal('create'), parentId: folderId, name: entryName }),
+            z.object({ operation: z.literal('rename'), id: entryId, kind: entryKind, name: entryName }),
+            z.object({ operation: z.literal('move'), id: entryId, kind: entryKind, parentId: folderId }),
+            z.object({ operation: z.literal('delete'), id: entryId, kind: z.literal('folder') }),
+        ]),
+    }),
+    outputSchema: z.object({ id: entryId }),
+    permissions: writeWorkspace,
+    scopes: ['knowledge:write'],
+    actors: ['user'],
+    handler: (ctx, input) =>
+        ctx.services.db.knowledge.directory.change(
+            { organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId },
+            input.change,
+            Boolean(ctx.access.permissions.workspace.write),
+        ),
+});
+
 export const knowledgeListKnowledgeSourcesAction = defineWebAction({
     id: 'knowledge.listKnowledgeSources',
     domain: 'knowledge',
@@ -289,7 +348,12 @@ export const knowledgeCreateKnowledgeSourceAction = defineWebAction({
     kind: 'command',
     risk: 'write',
     requiresConfirmation: false,
-    inputSchema: modelIdInput.extend({ fileName: z.string().min(1).max(240), contentText: z.string().max(10_000_000), connectionId: z.string().nullable().optional() }),
+    inputSchema: modelIdInput.extend({
+        fileName: z.string().min(1).max(240),
+        contentText: z.string().max(10_000_000),
+        folderId: folderId.optional(),
+        connectionId: z.string().nullable().optional(),
+    }),
     outputSchema: knowledgeSourceSchema,
     permissions: writeWorkspace,
     scopes: ['knowledge:write'],
@@ -303,7 +367,12 @@ export const knowledgeUpdateKnowledgeSourceAction = defineWebAction({
     kind: 'command',
     risk: 'write',
     requiresConfirmation: false,
-    inputSchema: modelIdInput.extend({ id: z.string().min(1), contentText: z.string().max(10_000_000), connectionId: z.string().nullable().optional() }),
+    inputSchema: modelIdInput.extend({
+        id: z.string().min(1),
+        contentText: z.string().max(10_000_000),
+        folderId: folderId.optional(),
+        connectionId: z.string().nullable().optional(),
+    }),
     outputSchema: knowledgeSourceSchema,
     permissions: writeWorkspace,
     scopes: ['knowledge:write'],
@@ -881,6 +950,8 @@ export const knowledgeActions = [
     knowledgeAddDataSourceAction,
     knowledgeRemoveDataSourceAction,
     knowledgeReplaceDataSourcesAction,
+    knowledgeListDirectoryAction,
+    knowledgeChangeDirectoryAction,
     knowledgeListKnowledgeSourcesAction,
     knowledgeGetKnowledgeSourceAction,
     knowledgeCreateKnowledgeSourceAction,

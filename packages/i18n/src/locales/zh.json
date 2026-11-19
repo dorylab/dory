@@ -3924,6 +3924,39 @@
         }
     },
     "Knowledge": {
+        "Documents": {
+            "SearchPlaceholder": "搜索…",
+            "NonEmpty": "请先移走「{name}」中的文档和子文件夹，再删除此文件夹。",
+            "MissingFolder": "此目录已不可用，点击知识库名称可返回根目录。",
+            "Directory": "目录",
+            "Breadcrumb": "目录路径",
+            "Folders": "文件夹",
+            "Files": "文档",
+            "FileCount": "{count} 篇文档",
+            "New": "新建",
+            "NewFolder": "新建文件夹",
+            "Upload": "上传 Markdown",
+            "UploadLimits": "最多 20 个 Markdown 文件，每个不超过 10 MB",
+            "Rename": "重命名",
+            "Move": "移动到…",
+            "Delete": "删除文件夹",
+            "Search": "搜索文件夹和文档",
+            "NoMatches": "没有找到匹配的文件夹或文档。",
+            "Empty": "此目录下暂无文档。",
+            "Name": "名称",
+            "Destination": "将「{name}」移动到",
+            "ChooseFolder": "选择目录",
+            "ConfirmDelete": "删除空文件夹「{name}」？",
+            "Actions": "{name} 的操作",
+            "Expand": "展开 {name}",
+            "Collapse": "折叠 {name}",
+            "Loading": "正在加载文档…",
+            "Tab": "文档",
+            "Create": "新建文档",
+            "Guide": "使用指南",
+            "Title": "文档标题",
+            "Body": "Markdown 正文"
+        },
         "Title": "知识",
         "Subtitle": "让 Agent 在所有数据中使用一致的业务含义。",
         "NewModel": "新建知识模型",
@@ -4064,6 +4097,12 @@
             "NoMatches": "未找到匹配的文档"
         },
         "VerifiedQueryDetails": {
+            "Search": "按业务问题或标题搜索",
+            "DataSource": "适用数据源 · {name}",
+            "Origin": "收录来源 · {origin, select, workspace {工作区} agent_run {Agent 运行} artifact {产物} knowledge_source {知识来源} manual {手动收录} other {{origin}}}",
+            "Open": "在工作区打开",
+            "Unavailable": "当前账号无法访问此数据源。",
+            "NoMatches": "没有匹配的查询。",
             "Columns": {
                 "Query": "查询",
                 "Question": "问题",
@@ -4165,6 +4204,7 @@
             "UpdateReferences": "无法更新 Knowledge 引用关系。"
         },
         "KnowledgeSources": {
+            "SyncedRevision": "同步版本 · {revision}",
             "Tab": "知识来源",
             "Title": "知识来源",
             "Description": "上传业务文档和知识 YAML，让 Agent 使用一致的参考知识。",

@@ -114,9 +114,12 @@ test('complete snapshots preserve source identity, update renamed titles, retain
         await repository.applyConnectorSnapshot({ connectorId: connector.id, files: [file] });
         const unchanged = await repository.getKnowledgeSource({ organizationId: 'org', knowledgeModelId: 'model', id: first.id });
         assert.equal(unchanged.updatedAt.getTime(), first.updatedAt.getTime());
+        assert.equal(unchanged.remoteRevision, file.sha);
         await repository.applyConnectorSnapshot({ connectorId: connector.id, files: [{ ...file, title: 'Renamed', sha: 'v2', contentText: '# Renamed revenue' }] });
         const renamed = await repository.getKnowledgeSource({ organizationId: 'org', knowledgeModelId: 'model', id: first.id });
         assert.equal(renamed.fileName, 'Renamed');
+        assert.equal(renamed.remoteRevision, 'v2');
+        assert.equal((await repository.getKnowledgeSource({ organizationId: 'org', knowledgeModelId: 'model', id: 'manual' })).remoteRevision, null);
         assert.equal(renamed.contentText, '# Renamed revenue');
         assert.equal((await repository.searchKnowledgeSources({ organizationId: 'org', knowledgeModelId: 'model', query: 'revenue' }))[0].sourceUrl, file.sourceUrl);
         await assert.rejects(repository.applyConnectorSnapshot({ connectorId: connector.id, files: [{ ...file, contentText: 'x'.repeat(10_000_001) }] }), /10 MB|large|exceed/i);
@@ -410,6 +413,52 @@ test('GitHub create, leased sync and disconnect remain independent of Linear cre
         assert.equal(remaining.length, 1);
         assert.equal(remaining[0].connectorId, connector.id);
         assert.equal((await repository.linear.getCredential('org', credential.id)).status, 'active');
+    } finally {
+        await client.close();
+    }
+});
+
+test('directory writes preserve source identities, enforce ownership and serialize sibling conflicts', async () => {
+    const { client, repository, connector, db } = await fixture();
+    const scope = { organizationId: 'org', knowledgeModelId: 'model' };
+    const directory = repository.directory;
+    const create = (name: string, parentId: string | null = null) => directory.change(scope, { operation: 'create', name, parentId }, true);
+    try {
+        const { id: ops } = await create('Operations');
+        const { id: orders } = await create('Orders', ops);
+        const { id: refunds } = await create('Refunds', orders);
+        const source = await repository.createKnowledgeSource({ ...scope, fileName: 'rules.md', contentText: '# Original' });
+        assert.equal(source.folderId, null);
+        const same = await repository.createKnowledgeSource({ ...scope, folderId: refunds, fileName: 'rules.md', contentText: 'Nested' });
+        await assert.rejects(directory.change(scope, { operation: 'move', kind: 'document', id: source.id, parentId: refunds }, true), /already exists/);
+        await assert.rejects(create('rules.md', refunds), /already exists/);
+        await assert.rejects(directory.change(scope, { operation: 'delete', kind: 'folder', id: refunds }, true), /contents/);
+        await assert.rejects(directory.change(scope, { operation: 'move', kind: 'folder', id: ops, parentId: refunds }, true), /descendants/);
+        await assert.rejects(directory.change(scope, { operation: 'rename', kind: 'folder', id: ops, name: 'Changed' }, false), /permission/);
+        await assert.rejects(directory.list({ ...scope, organizationId: 'outside' }), /not found/);
+        await db.insert(knowledgeModels).values({ id: 'other', name: 'Other', organizationId: 'org', modelJson: createOssieDocument('Other', null, 'connection') });
+        const other = await directory.change({ ...scope, knowledgeModelId: 'other' }, { operation: 'create', parentId: null, name: 'Other' }, true);
+        await assert.rejects(directory.change(scope, { operation: 'move', kind: 'folder', id: ops, parentId: other.id }, true), /local folder/);
+        await assert.rejects(repository.updateKnowledgeSource({ ...scope, id: source.id, folderId: other.id, contentText: 'Wrong' }), /local folder/);
+        const collision = await Promise.allSettled([
+            create('collision.md', orders),
+            repository.createKnowledgeSource({ ...scope, folderId: orders, fileName: 'collision.md', contentText: 'race' }),
+        ]);
+        assert.equal(collision.filter(result => result.status === 'fulfilled').length, 1);
+        await directory.change(scope, { operation: 'rename', kind: 'document', id: same.id, name: 'new.md' }, true);
+        await directory.change(scope, { operation: 'move', kind: 'document', id: source.id, parentId: refunds }, true);
+        await directory.change(scope, { operation: 'move', kind: 'folder', id: orders, parentId: null }, true);
+        await directory.change(scope, { operation: 'delete', kind: 'folder', id: ops }, true);
+        await repository.updateKnowledgeSource({ ...scope, id: source.id, contentText: '# Edited' });
+        assert.equal((await repository.getKnowledgeSource({ ...scope, id: source.id })).folderId, refunds);
+        assert.equal((await repository.getKnowledgeSource({ ...scope, id: same.id })).fileName, 'new.md');
+        await repository.applyConnectorSnapshot({ connectorId: connector.id, files: [file] });
+        const synced = (await repository.listKnowledgeSources(scope)).find(item => item.connectorId)!;
+        assert.equal(synced.projectId, null);
+        await repository.applyConnectorSnapshot({ connectorId: connector.id, files: [{ ...file, projectId: 'p1', projectName: 'Operations' }] });
+        assert.deepEqual((await repository.getKnowledgeSource({ ...scope, id: synced.id })).projectId, 'p1');
+        await assert.rejects(directory.change(scope, { operation: 'move', kind: 'document', id: synced.id, parentId: refunds }, true), /read-only/);
+        await assert.rejects(directory.change(scope, { operation: 'rename', kind: 'folder', id: connector.id, name: 'Managed' }, true), /not found/);
     } finally {
         await client.close();
     }

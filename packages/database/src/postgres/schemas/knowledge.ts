@@ -1,7 +1,8 @@
 import { newEntityId } from '@dory/shared/id';
 import type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
 import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { type AnyPgColumn, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { connections } from './connections';
 
@@ -215,6 +216,21 @@ export const knowledgeConnectors = pgTable(
     ],
 );
 
+export const knowledgeFolders = pgTable(
+    'knowledge_folders',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `kf_${newEntityId()}`),
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        parentId: text('parent_id').references((): AnyPgColumn => knowledgeFolders.id),
+        name: text('name').notNull(),
+    },
+    table => [uniqueIndex('uidx_knowledge_folders_sibling').on(table.knowledgeModelId, sql`coalesce(${table.parentId}, '')`, table.name)],
+);
+
 export const knowledgeSources = pgTable(
     'knowledge_sources',
     {
@@ -226,6 +242,7 @@ export const knowledgeSources = pgTable(
             .notNull()
             .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
         connectionId: text('connection_id').references(() => connections.id, { onDelete: 'set null' }),
+        folderId: text('folder_id').references(() => knowledgeFolders.id),
         fileName: text('file_name').notNull(),
         format: text('format').$type<KnowledgeSourceFormat>().notNull(),
         contentText: text('content_text').notNull(),
@@ -238,7 +255,7 @@ export const knowledgeSources = pgTable(
             .$onUpdateFn(() => new Date()),
     },
     table => [
-        uniqueIndex('uidx_knowledge_sources_model_file').on(table.knowledgeModelId, table.fileName),
+        uniqueIndex('uidx_knowledge_sources_folder_file').on(table.knowledgeModelId, sql`coalesce(${table.folderId}, '')`, table.fileName),
         index('idx_knowledge_sources_org_model').on(table.organizationId, table.knowledgeModelId),
         index('idx_knowledge_sources_connection').on(table.connectionId),
     ],
@@ -254,6 +271,8 @@ export const knowledgeConnectorItems = pgTable(
             .notNull()
             .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
         remotePath: text('remote_path').notNull(),
+        projectId: text('project_id'),
+        projectName: text('project_name'),
         remoteSha: text('remote_sha').notNull(),
         sourceUrl: text('source_url'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

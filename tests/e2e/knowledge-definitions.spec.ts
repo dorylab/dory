@@ -60,10 +60,11 @@ async function currentOrganization(page: import('@playwright/test').Page) {
     return new URL(page.url()).pathname.split('/')[1]!;
 }
 
-test('knowledge overview separates readiness from verified query coverage', async ({ page }) => {
+test('knowledge opens on documents and keeps model metadata in source details', async ({ page }) => {
     await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
     await page.route('**/api/actions/execute', async route => {
         const body = route.request().postDataJSON() as { actionId: string };
+        if (body.actionId === 'knowledge.listDirectory') return actionResponse(route, { canWrite: true, folders: [], connectors: [] });
         if (body.actionId === 'knowledge.get') {
             await actionResponse(route, model);
             return;
@@ -91,23 +92,18 @@ test('knowledge overview separates readiness from verified query coverage', asyn
 
     const pageHeader = page.locator('main > header').first();
     await expect(pageHeader.getByRole('link', { name: 'Knowledge', exact: true })).toHaveAttribute('href', /\/knowledge$/);
-    await expect(page.getByText('Ready for Agent', { exact: true })).toBeVisible();
-    await expect(page.getByText('1 connected data source', { exact: true })).toBeVisible();
-    await expect(page.getByText('1 verified business definition', { exact: true })).toBeVisible();
-    await expect(page.getByText('0 verified queries', { exact: true })).toBeVisible();
-    await expect(page.getByText('Suggested', { exact: true })).toBeVisible();
-    await expect(page.getByText('No verified queries yet', { exact: true })).toBeVisible();
-    await expect(page.getByText('Connected Data Sources', { exact: true })).toBeVisible();
-    await expect(page.getByText('Knowledge Sources', { exact: true })).toBeVisible();
-    await expect(page.getByText('Agent Context', { exact: true })).toBeVisible();
-    await expect(page.getByText('Business context and rules', { exact: true })).toBeVisible();
-    await expect(page.getByText('Business semantics', { exact: true })).toBeVisible();
-    await expect(page.getByText('Trusted query patterns', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab')).toHaveText(['Documents', 'Verified Queries', 'Knowledge sources']);
+    await expect(page.getByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    await expect(pageHeader.getByText('Taxi data', { exact: true })).toBeVisible();
+    await expect(pageHeader).not.toContainText('Apache Ossie');
+    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+    await page.getByRole('button', { name: 'Semantic model', exact: true }).click();
     await expect(page.getByText('Apache Ossie 0.2.0.dev0 · rev 01234567', { exact: true })).toBeVisible();
-
+    await page.getByRole('tab', { name: 'Documents' }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
-    await expect(page.getByText('Agent Context', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -149,7 +145,8 @@ test('knowledge definitions open an editor and save an update', async ({ page })
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Semantic model' }).click();
+    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+    await page.getByRole('button', { name: 'Semantic model', exact: true }).click();
     const detailsToggle = page.getByRole('button', { name: 'Show details for Trip Distance' });
     await detailsToggle.click();
 
@@ -251,7 +248,8 @@ test('definition details show query links and edit knowledge source relationship
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Semantic model' }).click();
+    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+    await page.getByRole('button', { name: 'Semantic model', exact: true }).click();
     await page.getByRole('button', { name: 'Show details for Trip Distance' }).click();
 
     const queryLink = page.getByRole('link', { name: query.title });
@@ -367,8 +365,10 @@ test('verified query details identify the updater and organize relationships', a
 
     await expect(page.getByText('Updated by Avery Chen', { exact: false })).toBeVisible();
     await expect(page.getByText('workspace', { exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Average trip distance', exact: true }).click();
+    await page.getByRole('button', { name: 'What is the average trip distance?', exact: true }).click();
 
+    await expect(page.getByRole('button', { name: 'Open in workspace' })).toBeDisabled();
+    await expect(page.getByText('This data source is unavailable to your account.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Referenced Definitions' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Linked Knowledge Sources' })).toBeVisible();
     const definitionsCard = page.getByRole('heading', { name: 'Referenced Definitions', exact: true }).locator('xpath=ancestor::section[1]');
@@ -483,10 +483,17 @@ test('knowledge sources present upload and GitHub connection entry points', asyn
 
 test('GitHub-managed knowledge sources are read-only and connectors can be synchronized', async ({ page }) => {
     const actionIds: string[] = [];
+    let revision = 'abc';
     await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
     await page.route('**/api/actions/execute', async route => {
         const body = route.request().postDataJSON() as { actionId: string };
         actionIds.push(body.actionId);
+        if (body.actionId === 'knowledge.listDirectory')
+            return actionResponse(route, {
+                canWrite: true,
+                folders: [],
+                connectors: [{ id: 'connector-1', provider: 'github', repositoryFullName: 'dorylab/docs', rootPath: 'docs', linearWorkspaceName: null }],
+            });
         if (body.actionId === 'knowledge.get') return actionResponse(route, model);
         if (body.actionId === 'knowledge.listConnectors') {
             return actionResponse(route, {
@@ -520,7 +527,7 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
                         organizationId: organization,
                         knowledgeModelId: modelId,
                         connectionId: null,
-                        fileName: 'dorylab/docs · docs › readme.md · ector-1',
+                        fileName: 'dorylab/docs · docs › policies › orders › readme.md · nector-1',
                         format: 'markdown',
                         byteSize: 7,
                         createdBy: 'user-1',
@@ -528,7 +535,8 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
                         updatedAt: now,
                         connectorId: 'connector-1',
                         connectorProvider: 'github',
-                        remotePath: 'docs/readme.md',
+                        remotePath: 'docs/policies/orders/readme.md',
+                        sourceUrl: 'https://github.com/dorylab/docs/blob/main/docs/policies/orders/readme.md',
                     },
                 ],
             });
@@ -539,7 +547,7 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
                 organizationId: organization,
                 knowledgeModelId: modelId,
                 connectionId: null,
-                fileName: 'dorylab/docs · docs › readme.md · ector-1',
+                fileName: 'dorylab/docs · docs › policies › orders › readme.md · nector-1',
                 format: 'markdown',
                 byteSize: 7,
                 createdBy: 'user-1',
@@ -547,15 +555,31 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
                 updatedAt: now,
                 connectorId: 'connector-1',
                 connectorProvider: 'github',
-                remotePath: 'docs/readme.md',
-                contentText: '# GitHub source snapshot',
+                remotePath: 'docs/policies/orders/readme.md',
+                sourceUrl: 'https://github.com/dorylab/docs/blob/main/docs/policies/orders/readme.md',
+                remoteRevision: revision,
+                contentText: revision === 'abc' ? '# GitHub source snapshot' : '# Updated GitHub source snapshot',
             });
         }
-        if (body.actionId === 'knowledge.syncConnector') return actionResponse(route, { queued: true });
+        if (body.actionId === 'knowledge.syncConnector') {
+            revision = 'def';
+            return actionResponse(route, { queued: true });
+        }
         await route.fallback();
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+    const documentName = 'readme.md';
+    for (const folder of ['dorylab/docs / docs', 'policies', 'orders']) {
+        await page.getByRole('button', { name: folder + ' 1 document', exact: true }).click();
+    }
+    await expect(page.getByRole('button', { name: 'New', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: documentName, exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'GitHub source snapshot' })).toBeVisible();
+    await expect(page.getByRole('dialog').getByText('Synced version · abc')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', /github.com\/dorylab/);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Edit ' + documentName })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     await expect(page.getByText('dorylab/docs', { exact: true })).toBeVisible();
     await expect(page.getByText('GitHub · Read-only')).toBeVisible();
@@ -563,9 +587,9 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
     await expect.poll(() => actionIds).toContain('knowledge.syncConnector');
     await page.getByRole('button', { name: /Actions for/ }).click();
     await page.getByRole('menuitem', { name: 'View', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'dorylab/docs · docs › readme.md' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'GitHub source snapshot' })).toBeVisible();
-    await page.getByRole('dialog', { name: 'dorylab/docs · docs › readme.md' }).getByRole('button', { name: 'Close', exact: true }).first().click();
+    await expect(page.getByRole('dialog', { name: 'dorylab/docs · docs › policies › orders › readme.md' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Updated GitHub source snapshot' })).toBeVisible();
+    await page.getByRole('dialog', { name: 'dorylab/docs · docs › policies › orders › readme.md' }).getByRole('button', { name: 'Close', exact: true }).first().click();
     await expect(page).not.toHaveURL(/\bsource=/);
     await page.getByRole('button', { name: /Actions for/ }).click();
     await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0);
@@ -592,6 +616,8 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
         connectorProvider: 'linear',
         sourceUrl: 'https://linear.app/example/document/guide',
         remotePath: 'document/guide',
+        projectId: 'p-1',
+        projectName: 'Revenue',
     };
     const localSource = {
         ...sourceBase,
@@ -609,7 +635,22 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
     await page.route('**/api/actions/execute', async route => {
         const body = route.request().postDataJSON() as { actionId: string; input?: { id?: string } };
         if (body.actionId === 'knowledge.get') return actionResponse(route, model);
-        if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [linearSource, localSource, yamlSource, emptySource] });
+        if (body.actionId === 'knowledge.listDirectory')
+            return actionResponse(route, {
+                canWrite: true,
+                folders: [],
+                connectors: [{ id: 'linear-connector', provider: 'linear', linearWorkspaceName: 'Analytics', repositoryFullName: null, rootPath: '' }],
+            });
+        if (body.actionId === 'knowledge.listKnowledgeSources')
+            return actionResponse(route, {
+                sources: [
+                    linearSource,
+                    { ...linearSource, id: 'history', fileName: 'Historical guide.md', projectId: null, projectName: null },
+                    localSource,
+                    yamlSource,
+                    emptySource,
+                ],
+            });
         if (body.actionId === 'knowledge.listConnectors') return actionResponse(route, { connectors: [] });
         if (body.actionId === 'knowledge.getLinearConnectorSetup') return actionResponse(route, { canManage: false, configured: true });
         if (body.actionId === 'knowledge.getKnowledgeSource') {
@@ -626,6 +667,11 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+    await page.getByRole('button', { name: 'Analytics 2 documents', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Historical guide.md', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Revenue 1 document', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Linear guide.md', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Actions for Linear guide.md' })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     const linearRow = page.getByRole('row').filter({ hasText: 'Linear guide.md' });
     await linearRow.getByRole('button', { name: /Actions for/ }).click();

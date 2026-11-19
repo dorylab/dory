@@ -88,9 +88,11 @@ export async function readLinearWorkspace(token: string, options?: LinearClientO
     return result.organization;
 }
 
-function sourceItem(kind: 'project' | 'document', id: string, title: string, contentText: string, sourceUrl: string) {
+function sourceItem(project: { id: string; name: string }, kind: 'project' | 'document', id: string, title: string, contentText: string, sourceUrl: string) {
     if (Buffer.byteLength(contentText, 'utf8') > KNOWLEDGE_SOURCE_MAX_BYTES) throw new LinearApiError(`Linear ${kind} exceeds the 10 MB knowledge-source limit.`);
     return {
+        projectId: project.id,
+        projectName: project.name,
         path: `${kind}/${id}.md`,
         format: 'markdown' as const,
         title,
@@ -112,7 +114,14 @@ export async function readLinearConnectorSnapshot(token: string, projectIds: str
         );
         if (!project) throw new LinearApiError('A selected Linear project is unavailable. Check access or change the project selection.');
         files.push(
-            sourceItem('project', project.id, project.name, `# ${project.name}\n\nSource: ${project.url}\n\n${project.description}\n\n${project.content ?? ''}`, project.url),
+            sourceItem(
+                project,
+                'project',
+                project.id,
+                project.name,
+                `# ${project.name}\n\nSource: ${project.url}\n\n${project.description}\n\n${project.content ?? ''}`,
+                project.url,
+            ),
         );
         let after: string | undefined;
         const cursors = new Set<string>();
@@ -131,6 +140,7 @@ export async function readLinearConnectorSnapshot(token: string, projectIds: str
                 if (document.trashed) continue;
                 files.push(
                     sourceItem(
+                        project,
                         'document',
                         document.id,
                         document.title,

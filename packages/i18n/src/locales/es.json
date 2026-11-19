@@ -3913,6 +3913,39 @@
         }
     },
     "Knowledge": {
+        "Documents": {
+            "SearchPlaceholder": "Buscar…",
+            "NonEmpty": "Mueve el contenido de «{name}» antes de eliminar la carpeta.",
+            "MissingFolder": "Esta carpeta no está disponible. Abre la raíz de la base de conocimiento para continuar.",
+            "Directory": "Directorio",
+            "Breadcrumb": "Ruta de la carpeta",
+            "Folders": "Carpetas",
+            "Files": "Archivos",
+            "FileCount": "{count, plural, one {# documento} other {# documentos}}",
+            "New": "Nuevo",
+            "NewFolder": "Nueva carpeta",
+            "Upload": "Subir Markdown",
+            "UploadLimits": "Hasta 20 archivos Markdown de 10 MB cada uno",
+            "Rename": "Cambiar nombre",
+            "Move": "Mover a…",
+            "Delete": "Eliminar carpeta",
+            "Search": "Buscar carpetas y documentos",
+            "NoMatches": "No hay carpetas ni documentos coincidentes.",
+            "Empty": "Esta carpeta no contiene documentos.",
+            "Name": "Nombre",
+            "Destination": "Mover «{name}» a",
+            "ChooseFolder": "Seleccionar carpeta",
+            "ConfirmDelete": "¿Eliminar la carpeta vacía «{name}»?",
+            "Actions": "Acciones de {name}",
+            "Expand": "Expandir {name}",
+            "Collapse": "Contraer {name}",
+            "Loading": "Cargando documentos…",
+            "Tab": "Documentos",
+            "Create": "Nuevo documento",
+            "Guide": "Guía de uso",
+            "Title": "Título del documento",
+            "Body": "Contenido Markdown"
+        },
         "Title": "Conocimiento",
         "Subtitle": "Proporciona a los agentes un significado empresarial coherente en todos tus datos.",
         "NewModel": "Nuevo modelo de conocimiento",
@@ -4053,6 +4086,12 @@
             "NoMatches": "No hay documentos coincidentes"
         },
         "VerifiedQueryDetails": {
+            "Search": "Buscar por pregunta o título",
+            "DataSource": "Fuente de datos · {name}",
+            "Origin": "Origen · {origin, select, workspace {Espacio de trabajo} agent_run {Ejecución del agente} artifact {Artefacto} knowledge_source {Fuente de conocimiento} manual {Registro manual} other {{origin}}}",
+            "Open": "Abrir en el espacio de trabajo",
+            "Unavailable": "Tu cuenta no tiene acceso a esta fuente de datos.",
+            "NoMatches": "No hay consultas que coincidan.",
             "Columns": {
                 "Query": "Consulta",
                 "Question": "Pregunta",
@@ -4154,6 +4193,7 @@
             "UpdateReferences": "No se pudieron actualizar las referencias de conocimiento."
         },
         "KnowledgeSources": {
+            "SyncedRevision": "Versión sincronizada · {revision}",
             "Tab": "Fuentes de conocimiento",
             "Title": "Fuente de conocimiento",
             "Description": "Sube documentación empresarial y YAML de conocimiento para que los agentes usen conocimiento de referencia coherente.",

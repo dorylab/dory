@@ -12,6 +12,7 @@ import type { TableContextTarget } from '@/components/table-context-menu/types';
 import { executeActionClient } from '@/lib/actions/client';
 import { consumeSqlConsoleTableHandoff } from '@/lib/client/sql-console-handoff';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { parseAsString, useQueryState } from 'nuqs';
 import { useTranslations } from 'next-intl';
 import {
     AlertDialog,
@@ -114,6 +115,14 @@ export default function SQLConsoleClient({
         handleCloseTab,
         handleCloseOthers,
     } = useSqlConsoleClient(defaultLayout, resolvedWorkspaceScope, initialResultTarget);
+    const [requestedTabId, setRequestedTabId] = useQueryState('tabId', parseAsString);
+    useEffect(() => {
+        if (resolvedWorkspaceScope.workspaceMode !== 'human' || !requestedTabId || isLoading || !areTabsHydrated) return;
+        if (tabs.some(tab => tab.tabId === requestedTabId)) {
+            setActiveTabId(requestedTabId);
+            void setRequestedTabId(null);
+        }
+    }, [resolvedWorkspaceScope.workspaceMode, requestedTabId, isLoading, areTabsHydrated, tabs, setActiveTabId, setRequestedTabId]);
     const t = useTranslations('SqlConsole');
     const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
 

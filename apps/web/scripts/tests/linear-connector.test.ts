@@ -32,6 +32,7 @@ test('Linear reads the full description and every document page including empty 
     const mock = mockClient();
     const snapshot = await readLinearConnectorSnapshot('token', [p1, p1], mock.options);
     assert.equal(snapshot.files.length, 3);
+    assert.ok(snapshot.files.every(file => file.projectId === p1 && file.projectName === project.name));
     assert.match(snapshot.files[0].contentText, /Short summary/);
     assert.match(snapshot.files[0].contentText, /Full specification/);
     assert.match(snapshot.files[1].contentText, /Exclude refunds/);

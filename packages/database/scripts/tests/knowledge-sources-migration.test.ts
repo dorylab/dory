@@ -73,7 +73,8 @@ test('fresh PGlite applies the complete history including Ossie 0.2 defaults', a
     const db = drizzle({ client });
     await migrate(db, { migrationsFolder: new URL('../../src/pglite/migrations', import.meta.url).pathname });
     const applied = await client.query<{ count: number }>('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations');
-    assert.equal(applied.rows[0]?.count, 33);
+    const journal = JSON.parse(await readFile(new URL('../../src/pglite/migrations/meta/_journal.json', import.meta.url), 'utf8'));
+    assert.equal(applied.rows[0]?.count, journal.entries.length);
     const finalTables = await client.query<{ table_name: string }>(
         `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('knowledge_models', 'work_agent_assets', 'semantic_models', 'work_knowledge_assets') ORDER BY table_name`,
     );
@@ -82,4 +83,30 @@ test('fresh PGlite applies the complete history including Ossie 0.2 defaults', a
         ['knowledge_models', 'work_agent_assets'],
     );
     await client.close();
+});
+
+test('0044 keeps historical Markdown at the root and allows its name in a child folder', async () => {
+    const pg = new URL('../../src/postgres/migrations/0044_knowledge_folders.sql', import.meta.url);
+    const lite = new URL('../../src/pglite/migrations/0044_knowledge_folders.sql', import.meta.url);
+    assert.equal(await readFile(pg, 'utf8'), await readFile(lite, 'utf8'));
+    const db = new PGlite();
+    try {
+        await db.exec(`
+            CREATE TABLE knowledge_models (id text PRIMARY KEY);
+            CREATE TABLE knowledge_sources (id text PRIMARY KEY, knowledge_model_id text, file_name text, content_text text);
+            CREATE UNIQUE INDEX uidx_knowledge_sources_model_file ON knowledge_sources(knowledge_model_id,file_name);
+            CREATE TABLE knowledge_connector_items (remote_path text);
+            INSERT INTO knowledge_models VALUES ('model');
+            INSERT INTO knowledge_sources VALUES ('original','model','指南.md','# 历史说明');
+        `);
+        await applyMigration(db, lite);
+        assert.deepEqual((await db.query('SELECT id, folder_id, content_text FROM knowledge_sources')).rows, [{ id: 'original', folder_id: null, content_text: '# 历史说明' }]);
+        await db.exec(`
+            INSERT INTO knowledge_folders (id, knowledge_model_id, name) VALUES ('child','model','子目录');
+            INSERT INTO knowledge_sources VALUES ('nested','model','指南.md','# 其他说明','child');
+        `);
+        await assert.rejects(db.exec("INSERT INTO knowledge_sources VALUES ('duplicate','model','指南.md','','child')"), /duplicate key/);
+    } finally {
+        await db.close();
+    }
 });

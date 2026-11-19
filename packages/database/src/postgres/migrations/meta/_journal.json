@@ -302,6 +302,13 @@
             "when": 1793577600000,
             "tag": "0043_report_connected_workspace",
             "breakpoints": true
+        },
+        {
+            "idx": 43,
+            "version": "7",
+            "when": 1795132800000,
+            "tag": "0044_knowledge_folders",
+            "breakpoints": true
         }
     ]
 }

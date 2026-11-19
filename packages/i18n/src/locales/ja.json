@@ -3917,6 +3917,39 @@
         }
     },
     "Knowledge": {
+        "Documents": {
+            "SearchPlaceholder": "検索…",
+            "NonEmpty": "「{name}」を削除する前に、中のドキュメントとフォルダーを移動してください。",
+            "MissingFolder": "このフォルダーは利用できません。ナレッジベース名を選択してルートに戻ってください。",
+            "Directory": "ディレクトリ",
+            "Breadcrumb": "フォルダーのパス",
+            "Folders": "フォルダー",
+            "Files": "ドキュメント",
+            "FileCount": "{count} 件のドキュメント",
+            "New": "新規",
+            "NewFolder": "新規フォルダー",
+            "Upload": "Markdown をアップロード",
+            "UploadLimits": "Markdown ファイルは最大 20 件、各 10 MB まで",
+            "Rename": "名前を変更",
+            "Move": "移動先…",
+            "Delete": "フォルダーを削除",
+            "Search": "フォルダーとドキュメントを検索",
+            "NoMatches": "一致する項目はありません。",
+            "Empty": "このフォルダーにはドキュメントがありません。",
+            "Name": "名前",
+            "Destination": "「{name}」の移動先",
+            "ChooseFolder": "フォルダーを選択",
+            "ConfirmDelete": "空のフォルダー「{name}」を削除しますか？",
+            "Actions": "「{name}」の操作",
+            "Expand": "「{name}」を展開",
+            "Collapse": "「{name}」を折りたたむ",
+            "Loading": "ドキュメントを読み込み中…",
+            "Tab": "ドキュメント",
+            "Create": "ドキュメントを作成",
+            "Guide": "利用ガイド",
+            "Title": "ドキュメント名",
+            "Body": "Markdown 本文"
+        },
         "Title": "ナレッジ",
         "Subtitle": "データ全体で一貫したビジネス上の意味をエージェントに提供します。",
         "NewModel": "新しいナレッジモデル",
@@ -4057,6 +4090,12 @@
             "NoMatches": "一致するドキュメントはありません"
         },
         "VerifiedQueryDetails": {
+            "Search": "質問またはタイトルで検索",
+            "DataSource": "データソース · {name}",
+            "Origin": "登録元 · {origin, select, workspace {ワークスペース} agent_run {エージェント実行} artifact {成果物} knowledge_source {ナレッジソース} manual {手動登録} other {{origin}}}",
+            "Open": "ワークスペースで開く",
+            "Unavailable": "このアカウントではデータソースを利用できません。",
+            "NoMatches": "一致するクエリはありません。",
             "Columns": {
                 "Query": "クエリ",
                 "Question": "質問",
@@ -4158,6 +4197,7 @@
             "UpdateReferences": "ナレッジ参照を更新できませんでした。"
         },
         "KnowledgeSources": {
+            "SyncedRevision": "同期バージョン · {revision}",
             "Tab": "ナレッジソース",
             "Title": "ナレッジソース",
             "Description": "ビジネス文書やナレッジ YAML をアップロードし、エージェントが一貫した参照知識を利用できるようにします。",

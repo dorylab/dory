@@ -88,7 +88,8 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         await page.getByRole('button', { name: 'Next page' }).click();
         await expect(page).toHaveURL(/queriesPage=2/);
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
-        await page.getByRole('tab', { name: 'Semantic model' }).click();
+        await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+        await page.getByRole('button', { name: 'Semantic model', exact: true }).click();
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
 
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
@@ -96,12 +97,12 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         await page.getByRole('button', { name: 'Next page' }).click();
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
 
-        await page.getByRole('tab', { name: 'Business rules' }).click();
+        await page.getByRole('button', { name: 'Business rules', exact: true }).click();
         await expect(page.locator('section[id^="rule-"]')).toHaveCount(10);
         await page.getByRole('button', { name: 'Next page' }).click();
         await expect(page.locator('section[id^="rule-"]')).toHaveCount(2);
 
-        await page.getByRole('tab', { name: /Pending review/ }).click();
+        await page.getByRole('button', { name: /Pending review \d+/ }).click();
         const list = page.getByRole('list', { name: 'Pending review' });
         await expect(list.getByRole('listitem')).toHaveCount(10);
         await page.getByRole('button', { name: 'Next page' }).click();
@@ -113,12 +114,13 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         await page.getByRole('option', { name: '20', exact: true }).click();
         await expect(list.getByRole('listitem')).toHaveCount(12);
         await expect(page).toHaveURL(/knowledgePageSize=20/);
-        await page.getByRole('tab', { name: 'Semantic model' }).click();
+        await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+        await page.getByRole('button', { name: 'Semantic model', exact: true }).click();
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(12);
 
         for (const [tab, parameter, id, locator] of [
             ['definitions', 'definition', 'metric-11', 'button[aria-label="Hide details for Metric 11"]'],
-            ['queries', 'query', 'query-11', 'button[aria-label="Query 11"]'],
+            ['queries', 'query', 'query-11', 'button[aria-label="Question 11"]'],
             ['sources', 'source', 'source-11', 'tr:has-text("Source 11.md")'],
             ['rules', 'rule', 'rule-11', '#rule-rule-11'],
         ]) {
