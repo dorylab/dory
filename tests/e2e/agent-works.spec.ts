@@ -733,24 +733,34 @@ test('Embedded report offers view, block editing and Source without saving on mo
             };
         }
         return route.fulfill({
-            json: { document: { ...saved, content: { ...saved.content, embeds: reportEmbeds(saved.content.visuals, saved.content.evidence) } }, versions: [] },
+            json: {
+                document: { ...saved, content: { ...saved.content, embeds: reportEmbeds(saved.content.visuals, saved.content.evidence) } },
+                versions: [],
+                workspace: { workId: 'work-1', connectionId: 'private-connection' },
+            },
         });
     });
     await page.goto(`${new URL(page.url()).pathname}?chat=work-1&panel=report&document=report-1`);
     await expect(page.getByTestId('work-report')).toBeVisible();
-    const headerActions = page.getByTestId('resource-preview-actions');
     await expect(page.getByTestId('work-report').locator('[data-visual="trend"]')).toBeVisible();
     const toolbar = page.getByTestId('report-toolbar');
-    await expect(headerActions.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toBeVisible();
-    await expect(toolbar.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toHaveCount(0);
+    const workspace = toolbar.getByRole('button', { name: 'Open SQL Workspace', exact: true });
+    const versionsButton = toolbar.getByRole('button', { name: 'Report versions', exact: true });
+    await expect(versionsButton).toHaveText('Draft');
+    await expect(workspace).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toHaveCount(1);
     const title = await toolbar.getByRole('heading').boundingBox();
-    const versions = await toolbar.getByRole('button', { name: 'Report versions', exact: true }).boundingBox();
-    const resume = await toolbar.getByRole('button', { name: 'Continue analysis', exact: true }).boundingBox();
+    const versions = await versionsButton.boundingBox();
+    const open = await workspace.boundingBox();
     expect(title!.x + title!.width).toBeLessThanOrEqual(versions!.x);
-    expect(versions!.x + versions!.width).toBeLessThanOrEqual(resume!.x);
+    expect(versions!.x + versions!.width).toBeLessThanOrEqual(open!.x);
     await page.screenshot({ path: testInfo.outputPath('report-preview-controls.png') });
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(headerActions.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toBeVisible();
+    await expect(workspace).toBeVisible();
+    const compactVersions = await versionsButton.boundingBox();
+    const compactOpen = await workspace.boundingBox();
+    expect(compactVersions!.x + compactVersions!.width).toBeLessThanOrEqual(compactOpen!.x);
+    expect(await toolbar.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     expect(await page.getByTestId('agent-resources').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('report-preview-controls-narrow.png') });
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -769,7 +779,7 @@ test('Embedded report offers view, block editing and Source without saving on mo
     await paragraph.click();
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
     await page.keyboard.insertText(' Updated in chat.');
-    await headerActions.getByRole('button', { name: 'Open SQL Workspace', exact: true }).click();
+    await workspace.click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
     await chooseReportMode(page, 'Source');

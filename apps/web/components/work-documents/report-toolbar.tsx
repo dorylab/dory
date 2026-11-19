@@ -87,17 +87,6 @@ export function ReportToolbar(p: Props) {
     );
     return (
         <header ref={host} className="report-toolbar sticky top-0 z-20 mb-4 flex h-11 shrink-0 items-center gap-1.5 border-b bg-background px-3" data-testid="report-toolbar">
-            {p.onOpenWorkspace && (
-                <Button
-                    className="report-toolbar-secondary shrink-0"
-                    size="sm"
-                    variant="ghost"
-                    disabled={p.disabled || p.unavailable || !p.workspaceAvailable}
-                    onClick={p.onOpenWorkspace}
-                >
-                    {t('ConnectedWorkspace.OpenWorkspace')}
-                </Button>
-            )}
             {p.standalone && (
                 <IconHint label={t('BackToReports')}>
                     <Button size="icon" variant="ghost" className="size-7 shrink-0" aria-label={t('BackToReports')} onClick={p.onBack}>
@@ -172,6 +161,19 @@ export function ReportToolbar(p: Props) {
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>
+            {p.onOpenWorkspace && (
+                <Button
+                    className="h-7 min-w-0 shrink px-2 text-xs"
+                    size="sm"
+                    variant="ghost"
+                    disabled={p.disabled || p.unavailable || !p.workspaceAvailable}
+                    onClick={p.onOpenWorkspace}
+                    aria-label={t('ConnectedWorkspace.OpenWorkspace')}
+                    title={t('ConnectedWorkspace.OpenWorkspace')}
+                >
+                    <span className="truncate">{t('ConnectedWorkspace.OpenWorkspace')}</span>
+                </Button>
+            )}
             {p.editing && (
                 <span
                     role="status"
@@ -271,11 +273,6 @@ export function ReportToolbar(p: Props) {
                     </IconHint>
                     <DropdownMenuContent align="end">
                         <div className="report-toolbar-overflow" style={{ display: compact ? undefined : 'none' }}>
-                            {p.onOpenWorkspace && (
-                                <DropdownMenuItem disabled={p.disabled || p.unavailable || !p.workspaceAvailable} onSelect={p.onOpenWorkspace}>
-                                    {t('ConnectedWorkspace.OpenWorkspace')}
-                                </DropdownMenuItem>
-                            )}
                             <DropdownMenuItem disabled={p.disabled} onSelect={p.onContinue}>
                                 {t('Continue')}
                             </DropdownMenuItem>

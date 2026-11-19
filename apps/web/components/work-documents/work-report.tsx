@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useContext, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { cn } from '@/registry/new-york-v4/lib/utils';
@@ -27,7 +26,6 @@ import type { ReportEditorHandle } from './report-editor';
 import type { ReportEvidenceSelection } from './report-evidence-panel';
 import { ReportSelectionPopover } from './report-selection-popover';
 import { ReportToolbar } from './report-toolbar';
-import { ReportHeaderActions } from './report-header-actions';
 
 const ReportEditor = dynamic(() => import('./report-editor'), { ssr: false });
 const ReportEvidencePanel = dynamic(() => import('./report-evidence-panel').then(module => module.ReportEvidencePanel), { ssr: false });
@@ -61,7 +59,6 @@ export function WorkReport({
     const evidenceT = useTranslations('WorkDocuments.Evidence');
     const analysisT = useTranslations('WorkDocuments.Analysis');
     const router = useRouter();
-    const headerActions = useContext(ReportHeaderActions);
     const [listState] = useQueryStates(reportListParsers);
     const client = useQueryClient();
     const key = ['work-document', organization, documentId];
@@ -391,19 +388,6 @@ export function WorkReport({
     const openWorkspace = () => openAt();
     return (
         <article className="report-surface h-full min-w-0 overflow-auto bg-background text-foreground" data-testid="work-report">
-            {headerActions &&
-                createPortal(
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="shrink-0"
-                        disabled={!workspace || viewUnavailable || busy || restore.isPending || Boolean(document.archivedAt)}
-                        onClick={openWorkspace}
-                    >
-                        {t('ConnectedWorkspace.OpenWorkspace')}
-                    </Button>,
-                    headerActions,
-                )}
             {evidenceSelection ? (
                 <ReportEvidencePanel
                     key={`${document.id}:${document.revision}:${'groupId' in evidenceSelection ? evidenceSelection.groupId : evidenceSelection.artifactId}`}
@@ -461,7 +445,7 @@ export function WorkReport({
                     </AlertDialogContent>
                 </AlertDialog>
                 <ReportToolbar
-                    onOpenWorkspace={headerActions ? undefined : openWorkspace}
+                    onOpenWorkspace={openWorkspace}
                     workspaceAvailable={Boolean(workspace)}
                     document={document}
                     standalone={presentation === 'standalone'}
