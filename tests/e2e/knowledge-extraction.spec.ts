@@ -100,7 +100,7 @@ test('connector extraction remains available without a pending-review queue', as
         await expect(page.getByText(/2 drafts/)).toHaveCount(0);
 
         await page.goto(new URL('?tab=review', page.url()).href);
-        await expect(page.getByRole('tab', { name: 'Documents', selected: true })).toBeVisible();
+        await expect(page.getByRole('navigation', { name: 'Directory' })).toBeVisible();
         await expect(page.getByRole('list', { name: 'Pending review' })).toHaveCount(0);
         expect(draftRequests).toBe(0);
     } finally {

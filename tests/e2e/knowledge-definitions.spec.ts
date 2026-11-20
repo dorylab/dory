@@ -98,10 +98,9 @@ test('knowledge opens on documents and keeps model metadata in source details', 
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
 
-    const pageHeader = page.locator('main > header').first();
-    await expect(pageHeader.getByRole('link', { name: 'Knowledge base', exact: true })).toHaveAttribute('href', /\/knowledge$/);
-    await expect(page.getByRole('tab')).toHaveText(['Documents', 'Verified Queries', 'Knowledge sources']);
-    await expect(page.getByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    const pageHeader = page.locator('main header').last();
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: model.name, exact: true })).toBeVisible();
     await expect(pageHeader.getByText('Connected Data Sources', { exact: true })).toHaveCount(0);
     const names = 'Taxi data · operations · 报表 · Archive';
     const group = pageHeader.getByRole('button', { name: names, exact: true });
@@ -123,9 +122,9 @@ test('knowledge opens on documents and keeps model metadata in source details', 
     }
     await card.hover();
     await expect(card).toBeVisible();
-    await pageHeader.getByRole('heading', { level: 1 }).hover();
+    await pageHeader.getByRole('button', { name: 'Root directory' }).hover();
     await expect(page.getByRole('dialog')).toBeHidden();
-    await pageHeader.getByRole('link', { name: 'Knowledge base' }).focus();
+    await pageHeader.getByRole('button', { name: 'Root directory' }).focus();
     await page.keyboard.press('Tab');
     await expect(group).toBeFocused();
     await expect(card).toBeVisible();
@@ -133,12 +132,12 @@ test('knowledge opens on documents and keeps model metadata in source details', 
     await expect(card).toBeHidden();
     await expect(pageHeader).not.toContainText('Apache Ossie');
     await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
-    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     await page.goto(new URL('?tab=definitions', page.url()).href);
     await expect(page.getByText('Apache Ossie 0.2.0.dev0 · rev 01234567', { exact: true })).toBeVisible();
-    await page.getByRole('tab', { name: 'Documents' }).click();
+    await page.getByRole('button', { name: 'Root directory', exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await page.getByRole('button', { name: 'Directory', exact: true }).click();
     await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -181,7 +180,6 @@ test('knowledge definitions open an editor and save an update', async ({ page })
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     await page.goto(new URL('?tab=definitions', page.url()).href);
     const detailsToggle = page.getByRole('button', { name: 'Show details for Trip Distance' });
     await detailsToggle.click();
@@ -284,7 +282,6 @@ test('definition details show query links and edit knowledge source relationship
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     await page.goto(new URL('?tab=definitions', page.url()).href);
     await page.getByRole('button', { name: 'Show details for Trip Distance' }).click();
 
@@ -397,7 +394,7 @@ test('verified query details identify the updater and organize relationships', a
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Verified queries' }).click();
+    await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Verified Queries', exact: true }).click();
 
     await expect(page.getByText('Updated by Avery Chen', { exact: false })).toBeVisible();
     await expect(page.getByText('workspace', { exact: true })).toHaveCount(0);
@@ -498,11 +495,11 @@ test('knowledge sources show four connection types and open provider setup', asy
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+    await page.goto(new URL('?tab=sources', page.url()).href);
 
-    const panel = page.getByRole('tabpanel', { name: 'Knowledge sources' });
+    const panel = page.locator('main').last();
     for (const name of ['Local folder', 'GitHub', 'Linear', 'Google Drive'])
-        await expect(panel.getByRole('button', { name: name + (name === 'Local folder' ? ' 1 source' : ' 0 sources') })).toBeVisible();
+        await expect(panel.getByRole('button', { name: name + ' 0 sources' })).toBeVisible();
     await expect(panel.getByRole('table')).toHaveCount(0);
     await expect(panel.getByRole('button', { name: /Upload|Add source|Semantic model|Business rules/ })).toHaveCount(0);
     await panel.getByRole('button', { name: /GitHub/ }).click();
@@ -617,13 +614,13 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
     for (const folder of ['policies', 'orders']) {
         await page.getByRole('button', { name: folder + ' 1 document', exact: true }).click();
     }
-    await expect(page.getByRole('button', { name: 'New', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
     await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: documentName, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'GitHub source snapshot' })).toBeVisible();
     await expect(page.getByRole('region').getByText('Synced version · abc')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', /github.com\/dorylab/);
     await expect(page.getByRole('region').getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
-    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
+    await page.goto(new URL('?tab=sources', page.url()).href);
     await expect(page.getByText('dorylab/docs', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Sync now' }).click();
     await expect.poll(() => actionIds).toContain('knowledge.syncConnector');
@@ -717,7 +714,6 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
     await expect(inline.getByRole('cell', { name: 'GMV' })).toBeVisible();
     await expect(inline.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', linearSource.sourceUrl);
     await expect(inline.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
-    await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     await page.goto(new URL('?tab=sources&source=local-source', page.url()).href);
     const localViewer = page.getByRole('dialog', { name: 'Local notes.txt' });
     await expect(localViewer.locator('pre')).toHaveText('Line one\nLine two');

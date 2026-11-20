@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useDeferredValue, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -22,29 +22,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
+import { navigationKey, type NavigationIndex } from './knowledge-navigation';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { OSSIE_DIALECTS, OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-    ArrowLeft,
-    BrainCircuit,
-    CheckCircle2,
-    ChevronRight,
-    ExternalLink,
-    FileCode2,
-    FileText,
-    MoreHorizontal,
-    Pencil,
-    Plus,
-    Search,
-    Sparkles,
-    Trash2,
-    Upload,
-    UserRound,
-    X,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronRight, ExternalLink, FileCode2, FileText, MoreHorizontal, Pencil, Plus, Sparkles, Trash2, Upload, UserRound, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
@@ -137,6 +120,7 @@ function AssetSourceEditor({
     organization,
     knowledgeModelId,
     assetType,
+    canWrite = true,
     assetId,
     sources,
     graph,
@@ -144,6 +128,7 @@ function AssetSourceEditor({
     organization: string;
     knowledgeModelId: string;
     assetType: 'definition' | 'verified_query';
+    canWrite?: boolean;
     assetId: string;
     sources: KnowledgeSourceSummary[];
     graph: KnowledgeGraph;
@@ -193,7 +178,7 @@ function AssetSourceEditor({
                         </p>
                     </div>
                 </div>
-                <Button size="sm" variant="outline" aria-label={t('DefinitionSources.EditAction')} onClick={openEditor}>
+                <Button disabled={!canWrite} size="sm" variant="outline" aria-label={t('DefinitionSources.EditAction')} onClick={openEditor}>
                     {t('EditDefinitionAction')}
                 </Button>
             </div>
@@ -291,6 +276,7 @@ function AssetSourceEditor({
 }
 
 function DefinitionReferenceEditor({
+    canWrite,
     organization,
     knowledgeModelId,
     query,
@@ -300,6 +286,7 @@ function DefinitionReferenceEditor({
     organization: string;
     knowledgeModelId: string;
     query: VerifiedQuery;
+    canWrite: boolean;
     definitions: Definition[];
     graph: KnowledgeGraph;
 }) {
@@ -347,6 +334,7 @@ function DefinitionReferenceEditor({
                 <Button
                     size="sm"
                     variant="outline"
+                    disabled={!canWrite}
                     aria-label={t('VerifiedQueryDetails.EditDefinitions')}
                     onClick={() => {
                         setSelectedIds(query.definitionIds);
@@ -448,15 +436,21 @@ export function CreateKnowledgeModelDialog({
     connections,
     trigger,
     initialConnectionId,
+    controlledOpen,
+    onOpenChange,
     onCreated,
 }: {
     connections: ConnectionListItem[];
     trigger?: React.ReactNode;
     initialConnectionId?: string;
+    controlledOpen?: boolean;
+    onOpenChange?: (value: boolean) => void;
     onCreated?: (model: KnowledgeModelView) => void;
 }) {
     const t = useTranslations('Knowledge');
-    const [open, setOpen] = useState(false);
+    const [ownOpen, setOwnOpen] = useState(false);
+    const open = controlledOpen ?? ownOpen;
+    const setOpen = onOpenChange ?? setOwnOpen;
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [selected, setSelected] = useState<string[]>(initialConnectionId ? [initialConnectionId] : []);
@@ -473,14 +467,16 @@ export function CreateKnowledgeModelDialog({
     });
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                {trigger ?? (
-                    <Button>
-                        <Plus />
-                        {t('NewModel')}
-                    </Button>
-                )}
-            </DialogTrigger>
+            {controlledOpen === undefined && (
+                <DialogTrigger asChild>
+                    {trigger ?? (
+                        <Button>
+                            <Plus />
+                            {t('NewModel')}
+                        </Button>
+                    )}
+                </DialogTrigger>
+            )}
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{t('NewModel')}</DialogTitle>
@@ -657,158 +653,47 @@ function DeleteKnowledgeModelDialog({
     );
 }
 
-function KnowledgeModelList({ organizationSlug }: { organizationSlug: string }) {
-    const organization = useOrganizationId();
+function KnowledgeLanding({ organizationSlug, navigation }: { organizationSlug: string; navigation: NavigationIndex }) {
     const t = useTranslations('Knowledge');
+    const organization = useOrganizationId();
     const router = useRouter();
-    const queryClient = useQueryClient();
-    const [search, setSearch] = useQueryState('q', parseAsString.withDefault(''));
-    const [editingModel, setEditingModel] = useState<KnowledgeModelView | null>(null);
-    const [deletingModel, setDeletingModel] = useState<KnowledgeModelView | null>(null);
-    const deferredSearch = useDeferredValue(search);
+    const client = useQueryClient();
+    const models = navigation.models;
+    useEffect(() => {
+        if (!models.length) return;
+        const last = localStorage.getItem('knowledge.last.' + organization + '.' + navigation.userId);
+        const selected = models.find(model => model.id === last) ?? models[0]!;
+        router.replace('/' + organizationSlug + '/knowledge/' + selected.id);
+    }, [models, organization, organizationSlug, router, navigation.userId]);
     const connections = useQuery({
         queryKey: ['connections', organization],
+        enabled: !models.length && navigation.canWrite,
         queryFn: () => executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {}, { organizationId: organization }),
     });
-    const models = useQuery({
-        queryKey: ['knowledge-models', organization, deferredSearch],
-        queryFn: () => executeActionClient<{ models: KnowledgeModelView[] }>('knowledge.list', { query: deferredSearch || undefined }, { organizationId: organization }),
-    });
-    const onCreated = (model: KnowledgeModelView) => {
-        void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
-        router.push(`/${organizationSlug}/knowledge/${model.id}`);
-    };
-    const connectionItems = connections.data?.connections ?? [];
-    const deleteModel = useMutation({
-        mutationFn: () => {
-            if (!deletingModel) throw new Error(t('Errors.SelectModel'));
-            return executeActionClient('knowledge.delete', { knowledgeModelId: deletingModel.id }, { organizationId: organization, confirmationToken: 'knowledge.delete' });
-        },
-        onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
-            setDeletingModel(null);
-            toast.success(t('ModelDeleted'));
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.DeleteModel')),
-    });
-    const updateModel = (_model: KnowledgeModelView) => {
-        void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
-        setEditingModel(null);
-    };
+    if (models.length) return <p className="p-6 text-sm text-muted-foreground">{t('LoadingModel')}</p>;
     return (
-        <div className="bg-n8 h-screen overflow-auto">
-            <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
-                <header className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold">{t('Title')}</h1>
-                        <p className="mt-1 text-muted-foreground">{t('Subtitle')}</p>
-                    </div>
-                    <CreateKnowledgeModelDialog connections={connectionItems} onCreated={onCreated} />
-                </header>
-                {models.data?.models.length || search ? (
-                    <div className="relative max-w-xl">
-                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input className="pl-9" value={search} onChange={event => void setSearch(event.target.value || null)} placeholder={t('SearchModels')} />
-                    </div>
-                ) : null}
-                {models.isLoading ? <p className="text-sm text-muted-foreground">{t('LoadingModels')}</p> : null}
-                {models.data?.models.length ? (
-                    <div className="overflow-hidden rounded-lg border bg-card">
-                        <table className="w-full text-sm">
-                            <thead className="bg-muted/50 text-left text-muted-foreground">
-                                <tr>
-                                    <th className="px-4 py-3 font-medium">{t('Model')}</th>
-                                    <th className="px-4 py-3 font-medium">{t('Definitions')}</th>
-                                    <th className="px-4 py-3 font-medium">{t('DataSources')}</th>
-                                    <th className="px-4 py-3 font-medium">{t('Updated')}</th>
-                                    <th className="w-24 px-4 py-3" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {models.data.models.map(model => (
-                                    <tr
-                                        key={model.id}
-                                        className="cursor-pointer border-t transition-colors hover:bg-muted/30"
-                                        onClick={() => router.push(`/${organizationSlug}/knowledge/${model.id}`)}
-                                    >
-                                        <td className="px-4 py-4">
-                                            <div className="font-medium">{model.name}</div>
-                                            {model.description ? <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{model.description}</p> : null}
-                                        </td>
-                                        <td className="px-4 py-4 text-muted-foreground">
-                                            {t('DefinitionQueryCount', {
-                                                definitions: model.model.definitions.length,
-                                                queries: model.verifiedQueryCount,
-                                            })}
-                                        </td>
-                                        <td className="px-4 py-4 text-muted-foreground">
-                                            <div>{t('DataSourceCount', { count: model.dataSources.length })}</div>
-                                            <div className="mt-1 text-xs">{model.dataSources.map(source => source.name).join(' · ')}</div>
-                                        </td>
-                                        <td className="px-4 py-4 text-muted-foreground">{relativeTime(model.updatedAt)}</td>
-                                        <td className="px-4 py-4 text-right">
-                                            <div className="flex justify-end gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon-sm"
-                                                    aria-label={t('EditNamedModel', { name: model.name })}
-                                                    onClick={event => {
-                                                        event.stopPropagation();
-                                                        setEditingModel(model);
-                                                    }}
-                                                >
-                                                    <Pencil />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon-sm"
-                                                    aria-label={t('DeleteNamedModel', { name: model.name })}
-                                                    onClick={event => {
-                                                        event.stopPropagation();
-                                                        setDeletingModel(model);
-                                                    }}
-                                                >
-                                                    <Trash2 className="text-destructive" />
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : models.data && !search ? (
-                    <Card className="border-dashed">
-                        <CardContent className="flex min-h-80 flex-col items-center justify-center text-center">
-                            <div className="mb-4 rounded-full bg-primary/10 p-4 text-primary">
-                                <BrainCircuit className="h-8 w-8" />
-                            </div>
-                            <h2 className="text-lg font-semibold">{t('EmptyTitle')}</h2>
-                            <p className="mt-2 max-w-md text-sm text-muted-foreground">{t('EmptyDescription')}</p>
-                            <div className="mt-5 flex gap-2">
-                                <CreateKnowledgeModelDialog connections={connectionItems} onCreated={onCreated} trigger={<Button>{t('CreateKnowledgeModel')}</Button>} />
-                                <Button variant="outline" disabled>
-                                    {t('GenerateFromDataSources')}
+        <main className="flex h-full min-h-72 flex-col md:flex-row">
+            <aside className="border-b p-3 md:w-72 md:border-e">
+                <div className="flex items-center justify-between">
+                    <h1 className="font-semibold">{t('Title')}</h1>
+                    {navigation.canWrite && (
+                        <CreateKnowledgeModelDialog
+                            connections={connections.data?.connections ?? []}
+                            trigger={
+                                <Button size="icon-sm" variant="ghost" aria-label={t('NewModel')}>
+                                    <Plus />
                                 </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ) : null}
-                <EditKnowledgeModelDialog
-                    model={editingModel}
-                    organization={organization}
-                    connections={connectionItems}
-                    onOpenChange={open => !open && setEditingModel(null)}
-                    onUpdated={updateModel}
-                />
-                <DeleteKnowledgeModelDialog
-                    modelName={deletingModel?.name ?? null}
-                    isPending={deleteModel.isPending}
-                    onCancel={() => setDeletingModel(null)}
-                    onConfirm={() => deleteModel.mutate()}
-                />
-            </main>
-        </div>
+                            }
+                            onCreated={model => {
+                                void client.invalidateQueries({ queryKey: ['knowledge-models', organization] });
+                                router.push('/' + organizationSlug + '/knowledge/' + model.id);
+                            }}
+                        />
+                    )}
+                </div>
+            </aside>
+            <section className="flex flex-1 items-center justify-center text-muted-foreground">{t('EmptyTitle')}</section>
+        </main>
     );
 }
 
@@ -1835,7 +1720,7 @@ function YamlEditorDialog({
     );
 }
 
-function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organizationSlug: string; knowledgeModelId: string }) {
+function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }: { organizationSlug: string; knowledgeModelId: string; navigation: NavigationIndex }) {
     const organization = useOrganizationId();
     const t = useTranslations('Knowledge');
     const common = useTranslations('Common');
@@ -1844,6 +1729,10 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     const modelActionsRef = useRef<HTMLButtonElement>(null);
     const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
     const [askAiOpen, setAskAiOpen] = useState(false);
+    const [creating, setCreating] = useState(false);
+    useEffect(() => {
+        if (navigation.models.some(m => m.id === knowledgeModelId)) localStorage.setItem('knowledge.last.' + organization + '.' + navigation.userId, knowledgeModelId);
+    }, [navigation.models, organization, knowledgeModelId, navigation.userId]);
     const [importOpen, setImportOpen] = useState(false);
     const [editingModel, setEditingModel] = useState<KnowledgeModelView | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1852,7 +1741,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     let section = 'documents';
     if (sourceDetail || activeTab === 'sources') section = 'sources';
     if (activeTab === 'queries') section = 'queries';
-    const [selectedQueryId, setSelectedQueryId] = useQueryState('query', parseAsString);
+    const [selectedQueryId, setSelectedQueryId] = useQueryState('query', parseAsString.withOptions({ history: 'push' }));
     const modelQuery = useQuery({
         queryKey: modelKey(knowledgeModelId),
         queryFn: () => executeActionClient<KnowledgeModelView>('knowledge.get', { knowledgeModelId }, { organizationId: organization }),
@@ -1876,7 +1765,6 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
         queryFn: () => executeActionClient<KnowledgeGraph>('knowledge.getGraph', { knowledgeModelId }, { organizationId: organization }),
     });
     const sources = useQuery({
-        enabled: activeTab !== 'sources',
         queryKey: [...modelKey(knowledgeModelId), 'knowledge-sources'],
         refetchInterval: section === 'documents' ? 15_000 : false,
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
@@ -1931,6 +1819,10 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     const deleteModel = useMutation({
         mutationFn: () => executeActionClient('knowledge.delete', { knowledgeModelId }, { organizationId: organization, confirmationToken: 'knowledge.delete' }),
         onSuccess: () => {
+            queryClient.setQueryData<NavigationIndex>(
+                navigationKey(organization),
+                previous => previous && { ...previous, models: previous.models.filter(entry => entry.id !== knowledgeModelId) },
+            );
             void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
             setDeleteDialogOpen(false);
             router.replace(`/${organizationSlug}/knowledge`);
@@ -1940,12 +1832,12 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     });
     const deleteQuery = useMutation({
         mutationFn: (id: string) => executeActionClient('knowledge.deleteVerifiedQuery', { knowledgeModelId, id }, { organizationId: organization }),
-        onSuccess: () =>
-            void Promise.all([
-                queryClient.invalidateQueries({ queryKey: modelKey(knowledgeModelId) }),
-                queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'verified-queries'] }),
-                queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'graph'] }),
-            ]),
+        onSuccess: (_, id) => {
+            if (selectedQueryId === id) void setSelectedQueryId(null);
+            void queryClient.invalidateQueries({ queryKey: modelKey(knowledgeModelId) });
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-directory-search', organization] });
+        },
+        onError: error => toast.error(error.message),
     });
     const openQuery = useMutation({
         mutationFn: async (query: VerifiedQuery) => {
@@ -1963,161 +1855,198 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">{t('LoadingModel')}</div>;
     if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">{t('ModelNotFound')}</div>;
     const model = modelQuery.data;
+    const selectedQuery = queries.data?.queries.find(item => item.id === selectedQueryId);
+    function renderQueryDetail(item: VerifiedQuery) {
+        const connection = connections.data?.connections.find(row => row.connection.id === item.sourceConnectionId);
+        const accessible = connection?.identities.some(identity => identity.enabled !== false && identity.status !== 'disabled');
+        const sourceName = model.dataSources.find(source => source.connectionId === item.sourceConnectionId)?.name ?? connection?.connection.name;
+        const panelId = `verified-query-details-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+        return (
+            <div id={panelId} className="p-5">
+                <h3 className="mb-2 font-semibold">{item.question}</h3>
+                <div className="mb-3 space-y-1 text-sm text-muted-foreground">
+                    <p>
+                        {t('VerifiedQueryDetails.DataSource', {
+                            name: sourceName ?? t('KnowledgeSources.UnavailableDataSource'),
+                        })}
+                    </p>
+                    <p>{t('VerifiedQueryDetails.Origin', { origin: item.sourceType || '—' })}</p>
+                    <p>
+                        {t('VerifiedQueryDetails.UpdatedByTime', {
+                            user: item.updatedByName ?? t('VerifiedQueryDetails.UnknownUser'),
+                            time: new Date(item.updatedAt).toLocaleString(),
+                        })}
+                    </p>
+                </div>
+                <pre className="max-h-48 w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
+                    {item.sql}
+                </pre>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button disabled={!accessible || openQuery.isPending} onClick={() => openQuery.mutate(item)}>
+                        {t('VerifiedQueryDetails.Open')}
+                    </Button>
+                    {!connections.isPending && !accessible ? <span className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.Unavailable')}</span> : null}
+                    {openQuery.isError && openQuery.variables.id === item.id ? (
+                        <span role="alert" className="text-sm text-destructive">
+                            {openQuery.error.message}
+                        </span>
+                    ) : null}
+                </div>
+                <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
+                    <DefinitionReferenceEditor
+                        canWrite={navigation.canWrite}
+                        organization={organization}
+                        knowledgeModelId={knowledgeModelId}
+                        query={item}
+                        definitions={model.model.definitions}
+                        graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                    />
+                    <AssetSourceEditor
+                        organization={organization}
+                        knowledgeModelId={knowledgeModelId}
+                        assetType="verified_query"
+                        canWrite={navigation.canWrite}
+                        assetId={item.id}
+                        sources={sources.data?.sources ?? []}
+                        graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                    />
+                </div>
+            </div>
+        );
+    }
     return (
         <div className="bg-n8 h-screen overflow-auto">
-            <main className="container mx-auto flex flex-col gap-6 px-4 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
-                <header className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="min-w-0 max-w-full">
-                        <Button asChild variant="ghost" size="sm" className="-ml-2">
-                            <Link href={`/${organizationSlug}/knowledge`}>
-                                <ArrowLeft className="h-4 w-4" />
-                                {t('Title')}
-                            </Link>
-                        </Button>
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <h1 className="min-w-0 wrap-anywhere text-2xl font-bold">{model.name}</h1>
-                            <KnowledgeDataSourceAvatars sources={model.dataSources} />
-                        </div>
-                        {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => setAskAiOpen(true)}>
-                            {t('AskAi')}
-                        </Button>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button ref={modelActionsRef} variant="outline" size="icon" aria-label={t('ModelActions')}>
-                                    <MoreHorizontal />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => setEditingModel(model)}>{common('edit')}</DropdownMenuItem>
-                                <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialogOpen(true)}>
-                                    {common('delete')}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </header>
-                <Tabs value={section} onValueChange={setActiveTab}>
-                    <TabsList variant="line" className="max-w-full">
-                        <TabsTrigger value="documents">{t('Documents.Tab')}</TabsTrigger>
-                        <TabsTrigger value="queries">{t('VerifiedQueries')}</TabsTrigger>
-                        <TabsTrigger
-                            value="sources"
-                            onClick={() => {
-                                if (sourceDetail) void setActiveTab('sources');
-                            }}
-                        >
-                            {t('KnowledgeSources.Tab')}
-                        </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="documents" className="pt-4">
-                        <KnowledgeDocumentsPanel
-                            model={model}
-                            organization={organization}
-                            sources={sources.data?.sources ?? []}
-                            sourcesPending={sources.isPending}
-                            sourcesError={sources.error?.message}
-                        />
-                    </TabsContent>
-                    <TabsContent value="sources" className="space-y-4 pt-4">
-                        {sourceDetail ? (
-                            <Button variant="ghost" onClick={() => void setActiveTab('sources')}>
-                                <ArrowLeft />
-                                {t('KnowledgeSources.Tab')}
-                            </Button>
-                        ) : null}
-                        {activeTab === 'definitions' ? (
-                            <>
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <div className="mr-auto">
-                                        <h2 className="font-semibold">{t('Definitions')}</h2>
-                                        <p className="text-sm text-muted-foreground" title={model.modelRevision}>
-                                            Apache Ossie {model.ossieVersion} · rev {model.modelRevision.slice(0, 8)}
-                                        </p>
-                                    </div>
-                                    <Button variant="outline" onClick={() => setYamlEditorOpen(true)}>
-                                        {t('ViewYaml')}
+            <main className="min-h-full">
+                <KnowledgeDocumentsPanel
+                    model={model}
+                    organization={organization}
+                    sources={sources.data?.sources ?? []}
+                    sourcesPending={sources.isPending}
+                    sourcesError={sources.error?.message}
+                    workspace={{
+                        navigation,
+                        organizationSlug,
+                        section: section === 'documents' ? 'documents' : activeTab,
+                        createModel: () => setCreating(true),
+                        header: (
+                            <div className="flex shrink-0 items-center gap-2">
+                                <KnowledgeDataSourceAvatars sources={model.dataSources} />
+                                <div className="flex gap-2">
+                                    <Button variant="outline" onClick={() => setAskAiOpen(true)}>
+                                        {t('AskAi')}
                                     </Button>
+                                    {navigation.canWrite && (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button ref={modelActionsRef} variant="outline" size="icon" aria-label={t('ModelActions')}>
+                                                    <MoreHorizontal />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem onSelect={() => setEditingModel(model)}>{common('edit')}</DropdownMenuItem>
+                                                <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialogOpen(true)}>
+                                                    {common('delete')}
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    )}
                                 </div>
-                                <DefinitionPanel
-                                    organization={organization}
-                                    model={model}
-                                    queries={queries.data?.queries ?? []}
-                                    graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                    sources={sources.data?.sources ?? []}
-                                    onSave={definitions => saveDefinitions.mutate(definitions)}
-                                    onUpdate={async (definitionId, definition) => {
-                                        await updateDefinition.mutateAsync({ definitionId, definition });
+                            </div>
+                        ),
+                    }}
+                >
+                    {section === 'sources' && (
+                        <>
+                            {sourceDetail ? (
+                                <Button variant="ghost" onClick={() => void setActiveTab('sources')}>
+                                    <ArrowLeft />
+                                    {t('KnowledgeSources.Tab')}
+                                </Button>
+                            ) : null}
+                            {activeTab === 'definitions' ? (
+                                <>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <div className="mr-auto">
+                                            <h2 className="font-semibold">{t('Definitions')}</h2>
+                                            <p className="text-sm text-muted-foreground" title={model.modelRevision}>
+                                                Apache Ossie {model.ossieVersion} · rev {model.modelRevision.slice(0, 8)}
+                                            </p>
+                                        </div>
+                                        <Button variant="outline" onClick={() => setYamlEditorOpen(true)}>
+                                            {t('ViewYaml')}
+                                        </Button>
+                                    </div>
+                                    <DefinitionPanel
+                                        organization={organization}
+                                        model={model}
+                                        queries={queries.data?.queries ?? []}
+                                        graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
+                                        sources={sources.data?.sources ?? []}
+                                        onSave={definitions => saveDefinitions.mutate(definitions)}
+                                        onUpdate={async (definitionId, definition) => {
+                                            await updateDefinition.mutateAsync({ definitionId, definition });
+                                        }}
+                                        onImport={() => setImportOpen(true)}
+                                        onAskAi={() => setAskAiOpen(true)}
+                                    />
+                                </>
+                            ) : activeTab === 'rules' ? (
+                                <>
+                                    <h2 className="font-semibold">{t('Extraction.BusinessRules')}</h2>
+                                    <BusinessRulesPanel organization={organization} knowledgeModelId={knowledgeModelId} dataSources={model.dataSources} />
+                                </>
+                            ) : (
+                                <KnowledgeSourcesPanel organization={organization} knowledgeModelId={knowledgeModelId} />
+                            )}
+                        </>
+                    )}
+                    {section === 'queries' && (
+                        <div className="space-y-3">
+                            {!selectedQueryId && (
+                                <Input
+                                    type="search"
+                                    aria-label={t('VerifiedQueryDetails.Search')}
+                                    placeholder={t('VerifiedQueryDetails.Search')}
+                                    value={search}
+                                    onChange={event => {
+                                        void setSearch(event.target.value);
+                                        void setSelectedQueryId(null);
+                                        queryPagination.onPageChange(0);
                                     }}
-                                    onImport={() => setImportOpen(true)}
-                                    onAskAi={() => setAskAiOpen(true)}
                                 />
-                            </>
-                        ) : activeTab === 'rules' ? (
-                            <>
-                                <h2 className="font-semibold">{t('Extraction.BusinessRules')}</h2>
-                                <BusinessRulesPanel organization={organization} knowledgeModelId={knowledgeModelId} dataSources={model.dataSources} />
-                            </>
-                        ) : (
-                            <KnowledgeSourcesPanel organization={organization} knowledgeModelId={knowledgeModelId} />
-                        )}
-                    </TabsContent>
-                    <TabsContent value="queries" className="space-y-3 pt-4">
-                        <Input
-                            type="search"
-                            aria-label={t('VerifiedQueryDetails.Search')}
-                            placeholder={t('VerifiedQueryDetails.Search')}
-                            value={search}
-                            onChange={event => {
-                                void setSearch(event.target.value);
-                                void setSelectedQueryId(null);
-                                queryPagination.onPageChange(0);
-                            }}
-                        />
-                        {queries.isError ? (
-                            <p role="alert">{queries.error.message}</p>
-                        ) : queries.isPending ? (
-                            <p>{t('LoadingModel')}</p>
-                        ) : filteredQueries?.length ? (
-                            <div className="w-full rounded-md border">
-                                <table className="w-full table-fixed text-sm">
-                                    <thead className="bg-muted/50 text-left text-muted-foreground">
-                                        <tr>
-                                            <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Question')}</th>
-                                            <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Query')}</th>
-                                            <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Updated')}</th>
-                                            <th className="w-12" />
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredQueries
-                                            .slice(queryPagination.pageIndex * queryPagination.pageSize, (queryPagination.pageIndex + 1) * queryPagination.pageSize)
-                                            .map(item => {
-                                                const expanded = selectedQueryId === item.id;
-                                                const connection = connections.data?.connections.find(row => row.connection.id === item.sourceConnectionId);
-                                                const accessible = connection?.identities.some(identity => identity.enabled !== false && identity.status !== 'disabled');
-                                                const sourceName =
-                                                    model.dataSources.find(source => source.connectionId === item.sourceConnectionId)?.name ?? connection?.connection.name;
-                                                const panelId = `verified-query-details-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-
-                                                return (
-                                                    <Fragment key={item.id}>
-                                                        <tr className={expanded ? 'border-t bg-muted/20' : 'border-t hover:bg-muted/30'}>
+                            )}
+                            {queries.isError ? (
+                                <p role="alert">{queries.error.message}</p>
+                            ) : queries.isPending ? (
+                                <p>{t('LoadingModel')}</p>
+                            ) : selectedQueryId && selectedQuery ? (
+                                renderQueryDetail(selectedQuery)
+                            ) : filteredQueries?.length ? (
+                                <div className="w-full rounded-md border">
+                                    <table className="w-full table-fixed text-sm">
+                                        <thead className="bg-muted/50 text-left text-muted-foreground">
+                                            <tr>
+                                                <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Question')}</th>
+                                                <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Query')}</th>
+                                                <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Updated')}</th>
+                                                <th className="w-12" />
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredQueries
+                                                .slice(queryPagination.pageIndex * queryPagination.pageSize, (queryPagination.pageIndex + 1) * queryPagination.pageSize)
+                                                .map(item => {
+                                                    return (
+                                                        <tr key={item.id} className="border-t hover:bg-muted/30">
                                                             <td className="p-0 font-medium">
                                                                 <button
                                                                     type="button"
                                                                     className="flex w-full items-center gap-2 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                                                                    aria-expanded={expanded}
-                                                                    aria-controls={panelId}
                                                                     aria-label={item.question || item.title}
-                                                                    onClick={() => void setSelectedQueryId(expanded ? null : item.id)}
+                                                                    onClick={() => void setSelectedQueryId(item.id)}
                                                                 >
-                                                                    <ChevronRight
-                                                                        className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`}
-                                                                        aria-hidden="true"
-                                                                    />
+                                                                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                                                                     <span className="truncate">{item.question || item.title}</span>
                                                                 </button>
                                                             </td>
@@ -2137,6 +2066,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon-sm"
+                                                                    disabled={!navigation.canWrite}
                                                                     aria-label={t('DeleteNamedQuery', { name: item.title })}
                                                                     onClick={() => deleteQuery.mutate(item.id)}
                                                                 >
@@ -2144,89 +2074,42 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                                                                 </Button>
                                                             </td>
                                                         </tr>
-                                                        {expanded ? (
-                                                            <tr className="border-t bg-muted/10">
-                                                                <td colSpan={4} className="p-0">
-                                                                    <div id={panelId} className="p-5">
-                                                                        <h3 className="mb-2 font-semibold">{item.question}</h3>
-                                                                        <div className="mb-3 space-y-1 text-sm text-muted-foreground">
-                                                                            <p>
-                                                                                {t('VerifiedQueryDetails.DataSource', {
-                                                                                    name: sourceName ?? t('KnowledgeSources.UnavailableDataSource'),
-                                                                                })}
-                                                                            </p>
-                                                                            <p>{t('VerifiedQueryDetails.Origin', { origin: item.sourceType || '—' })}</p>
-                                                                            <p>
-                                                                                {t('VerifiedQueryDetails.UpdatedByTime', {
-                                                                                    user: item.updatedByName ?? t('VerifiedQueryDetails.UnknownUser'),
-                                                                                    time: new Date(item.updatedAt).toLocaleString(),
-                                                                                })}
-                                                                            </p>
-                                                                        </div>
-                                                                        <pre className="max-h-48 w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
-                                                                            {item.sql}
-                                                                        </pre>
-                                                                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                                                                            <Button disabled={!accessible || openQuery.isPending} onClick={() => openQuery.mutate(item)}>
-                                                                                {t('VerifiedQueryDetails.Open')}
-                                                                            </Button>
-                                                                            {!connections.isPending && !accessible ? (
-                                                                                <span className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.Unavailable')}</span>
-                                                                            ) : null}
-                                                                            {openQuery.isError && openQuery.variables.id === item.id ? (
-                                                                                <span role="alert" className="text-sm text-destructive">
-                                                                                    {openQuery.error.message}
-                                                                                </span>
-                                                                            ) : null}
-                                                                        </div>
-                                                                        <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
-                                                                            <DefinitionReferenceEditor
-                                                                                organization={organization}
-                                                                                knowledgeModelId={knowledgeModelId}
-                                                                                query={item}
-                                                                                definitions={model.model.definitions}
-                                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                                            />
-                                                                            <AssetSourceEditor
-                                                                                organization={organization}
-                                                                                knowledgeModelId={knowledgeModelId}
-                                                                                assetType="verified_query"
-                                                                                assetId={item.id}
-                                                                                sources={sources.data?.sources ?? []}
-                                                                                graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ) : null}
-                                                    </Fragment>
-                                                );
-                                            })}
-                                    </tbody>
-                                </table>
-                                <DataTablePagination
-                                    total={filteredQueries.length}
-                                    {...queryPagination}
-                                    onPageChange={index => {
-                                        void setSelectedQueryId(null);
-                                        queryPagination.onPageChange(index);
-                                    }}
-                                    onPageSizeChange={size => {
-                                        void setSelectedQueryId(null);
-                                        queryPagination.onPageSizeChange(size);
-                                    }}
-                                />
-                            </div>
-                        ) : (
-                            <Card className="border-dashed">
-                                <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                                    {search.trim() ? t('VerifiedQueryDetails.NoMatches') : t('VerifiedQueriesEmpty')}
-                                </CardContent>
-                            </Card>
-                        )}
-                    </TabsContent>
-                </Tabs>
+                                                    );
+                                                })}
+                                        </tbody>
+                                    </table>
+                                    <DataTablePagination
+                                        total={filteredQueries.length}
+                                        {...queryPagination}
+                                        onPageChange={index => {
+                                            void setSelectedQueryId(null);
+                                            queryPagination.onPageChange(index);
+                                        }}
+                                        onPageSizeChange={size => {
+                                            void setSelectedQueryId(null);
+                                            queryPagination.onPageSizeChange(size);
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <Card className="border-dashed">
+                                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
+                                        {search.trim() ? t('VerifiedQueryDetails.NoMatches') : t('VerifiedQueriesEmpty')}
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </div>
+                    )}
+                </KnowledgeDocumentsPanel>
+                <CreateKnowledgeModelDialog
+                    controlledOpen={creating}
+                    onOpenChange={setCreating}
+                    connections={connections.data?.connections ?? []}
+                    onCreated={created => {
+                        void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
+                        router.push('/' + organizationSlug + '/knowledge/' + created.id);
+                    }}
+                />
                 <AskAiDialog
                     open={askAiOpen}
                     onOpenChange={setAskAiOpen}
@@ -2265,9 +2148,22 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
 
 export function KnowledgePage() {
     const params = useParams<{ organization: string; knowledgeModelId?: string }>();
+    const organization = useOrganizationId();
+    const t = useTranslations('Knowledge');
+    const navigation = useQuery({
+        queryKey: navigationKey(organization),
+        queryFn: () => executeActionClient<NavigationIndex>('knowledge.navigation', {}, { organizationId: organization }),
+    });
+    if (navigation.isError)
+        return (
+            <p role="alert" className="p-6">
+                {navigation.error.message}
+            </p>
+        );
+    if (!navigation.data) return <p className="p-6 text-sm">{t('LoadingModel')}</p>;
     return params.knowledgeModelId ? (
-        <KnowledgeModelDetail organizationSlug={params.organization} knowledgeModelId={params.knowledgeModelId} />
+        <KnowledgeModelDetail key={params.knowledgeModelId} organizationSlug={params.organization} knowledgeModelId={params.knowledgeModelId} navigation={navigation.data} />
     ) : (
-        <KnowledgeModelList organizationSlug={params.organization} />
+        <KnowledgeLanding organizationSlug={params.organization} navigation={navigation.data} />
     );
 }

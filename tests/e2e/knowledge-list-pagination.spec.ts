@@ -74,13 +74,14 @@ test('knowledge asset lists paginate independently and preserve asset deep links
         await expect(page).toHaveURL(/definitionsPage=2/);
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
 
-        await page.getByRole('tab', { name: 'Verified queries' }).click();
+        await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Verified Queries', exact: true }).click();
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(10);
         await page.getByRole('button', { name: 'Next page' }).click();
         await expect(page).toHaveURL(/queriesPage=2/);
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
-        await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.goto(page.url().replace('tab=sources', 'tab=definitions'));
+        const definitionsUrl = new URL(page.url());
+        definitionsUrl.searchParams.set('tab', 'definitions');
+        await page.goto(definitionsUrl.href);
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
 
         await page.goto(new URL('?tab=rules', page.url()).href);
@@ -95,13 +96,12 @@ test('knowledge asset lists paginate independently and preserve asset deep links
         await page.getByRole('option', { name: '20', exact: true }).click();
         await expect(page.locator('section[id^="rule-"]')).toHaveCount(12);
         await expect(page).toHaveURL(/knowledgePageSize=20/);
-        await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.goto(page.url().replace('tab=sources', 'tab=definitions'));
+        await page.goto(page.url().replace('tab=rules', 'tab=definitions'));
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(12);
 
         for (const [tab, parameter, id, locator] of [
             ['definitions', 'definition', 'metric-11', 'button[aria-label="Hide details for Metric 11"]'],
-            ['queries', 'query', 'query-11', 'button[aria-label="Question 11"]'],
+            ['queries', 'query', 'query-11', '#verified-query-details-query-11'],
             ['rules', 'rule', 'rule-11', '#rule-rule-11'],
         ]) {
             await page.goto(`/${organization}/knowledge/${model.id}?tab=${tab}&${parameter}=${id}`);

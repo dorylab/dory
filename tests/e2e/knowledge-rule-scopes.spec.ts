@@ -54,7 +54,7 @@ test('published business rules show their scope and link to related metrics', as
     });
     try {
         await page.goto(`/${organization}/knowledge/${model.id}?tab=rules`);
-        await expect(page.getByRole('tab', { name: 'Knowledge sources', selected: true })).toBeVisible();
+        await expect(page.getByRole('navigation', { name: 'Directory' })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Exclude failed orders' })).toBeVisible();
         await expect(page.getByText(/Selected metrics · 1 linked metrics/)).toBeVisible();
         await expect(page.getByRole('link', { name: 'Net revenue', exact: true })).toHaveAttribute('href', /tab=definitions&definition=metric%3Anet/);

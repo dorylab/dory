@@ -23,7 +23,7 @@ test('internal placeholder datasets stay hidden while metrics-only models can be
     try {
         expect(created.model.definitions).toEqual([]);
         await page.goto(`/${organization}/knowledge/${created.id}?tab=definitions`);
-        await expect(page.getByRole('tab', { name: /Knowledge sources|知识来源/i })).toHaveAttribute('data-state', 'active');
+        await expect(page.getByRole('navigation', { name: 'Directory' })).toBeVisible();
         await expect(page.getByText('item_dataset', { exact: true })).toHaveCount(0);
         await expect(page.getByText('__unconfigured__', { exact: true })).toHaveCount(0);
         const definition = {
@@ -146,7 +146,6 @@ test('Knowledge imports and displays the new Ossie format and rejects legacy fil
         expect(unchanged.modelYaml).toBe(imported.modelYaml);
 
         await page.goto(`/${organization}/knowledge/${created.id}`);
-        await page.getByRole('tab', { name: /Knowledge sources|知识来源/i }).click();
         await page.goto(new URL('?tab=definitions',page.url()).href);
         await expect(page.getByText(`Apache Ossie ${OSSIE_VERSION} · rev ${imported.modelRevision.slice(0, 8)}`, { exact: true })).toBeVisible();
     } finally {

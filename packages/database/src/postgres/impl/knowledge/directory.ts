@@ -1,7 +1,10 @@
 import type { PostgresDBClient } from '@dory/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, isNotNull, or, sql } from 'drizzle-orm';
 
-import { knowledgeConnectorItems, knowledgeConnectors, knowledgeFolders, knowledgeModels, knowledgeSources } from '../../schemas/knowledge';
+import { knowledgeConnectorItems, knowledgeConnectors, knowledgeFolders, knowledgeModels, knowledgeSources, knowledgeVerifiedQueries } from '../../schemas/knowledge';
+
+import { buildDocumentDirectory, QUERY_FOLDER, ROOT, type NavigationHit } from '@dory/shared/utils/knowledge-directory';
+import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
 
 type Scope = { organizationId: string; knowledgeModelId: string };
 type Tx = Pick<PostgresDBClient, 'select' | 'insert' | 'update' | 'delete'>;
@@ -71,6 +74,135 @@ export async function localDocument(tx: Tx, modelId: string, id: string) {
 
 export class KnowledgeDirectory {
     constructor(private db: PostgresDBClient) {}
+
+    models(organizationId: string) {
+        return this.db
+            .select({ id: knowledgeModels.id, name: knowledgeModels.name, hasGuide: sql<boolean>`length(trim(${knowledgeModels.businessContextMd})) > 0` })
+            .from(knowledgeModels)
+            .where(eq(knowledgeModels.organizationId, organizationId))
+            .orderBy(asc(knowledgeModels.name), asc(knowledgeModels.id));
+    }
+
+    queryEntries(scope: Scope) {
+        return this.db
+            .select({ id: knowledgeVerifiedQueries.id, title: knowledgeVerifiedQueries.title, question: knowledgeVerifiedQueries.question })
+            .from(knowledgeVerifiedQueries)
+            .innerJoin(knowledgeModels, eq(knowledgeModels.id, knowledgeVerifiedQueries.knowledgeModelId))
+            .where(scopedModel(scope))
+            .orderBy(asc(knowledgeVerifiedQueries.title), asc(knowledgeVerifiedQueries.id));
+    }
+
+    async search(organizationId: string, input: { query: string; offset: number; limit: number; includeRules: boolean; queryFolderName: string; guideName: string }) {
+        const owned = eq(knowledgeModels.organizationId, organizationId);
+        const term = input.query.trim().toLocaleLowerCase();
+        const [models, folders, connectors, files, queries] = await Promise.all([
+            this.db
+                .select({ id: knowledgeModels.id, name: knowledgeModels.name, hasGuide: sql<boolean>`length(trim(${knowledgeModels.businessContextMd})) > 0` })
+                .from(knowledgeModels)
+                .where(owned),
+            this.db
+                .select({ knowledgeModelId: knowledgeFolders.knowledgeModelId, id: knowledgeFolders.id, name: knowledgeFolders.name, parentId: knowledgeFolders.parentId })
+                .from(knowledgeFolders)
+                .innerJoin(knowledgeModels, eq(knowledgeFolders.knowledgeModelId, knowledgeModels.id))
+                .where(owned),
+            this.db
+                .select({
+                    knowledgeModelId: knowledgeConnectors.knowledgeModelId,
+                    id: knowledgeConnectors.id,
+                    provider: knowledgeConnectors.provider,
+                    displayName: knowledgeConnectors.displayName,
+                    syncedFolders: knowledgeConnectors.syncedFolders,
+                    repositoryFullName: knowledgeConnectors.repositoryFullName,
+                    linearWorkspaceName: knowledgeConnectors.linearWorkspaceName,
+                    rootPath: knowledgeConnectors.rootPath,
+                })
+                .from(knowledgeConnectors)
+                .innerJoin(knowledgeModels, eq(knowledgeConnectors.knowledgeModelId, knowledgeModels.id))
+                .where(owned),
+            this.db
+                .select({
+                    knowledgeModelId: knowledgeSources.knowledgeModelId,
+                    id: knowledgeSources.id,
+                    format: knowledgeSources.format,
+                    folderId: knowledgeSources.folderId,
+                    fileName: knowledgeSources.fileName,
+                    systemRole: knowledgeSources.systemRole,
+                    connectorId: knowledgeConnectorItems.connectorId,
+                    remoteTitle: knowledgeConnectorItems.remoteTitle,
+                    remotePath: knowledgeConnectorItems.remotePath,
+                    folderTrail: knowledgeConnectorItems.folderTrail,
+                    projectId: knowledgeConnectorItems.projectId,
+                    projectName: knowledgeConnectorItems.projectName,
+                })
+                .from(knowledgeSources)
+                .leftJoin(knowledgeConnectorItems, eq(knowledgeConnectorItems.knowledgeSourceId, knowledgeSources.id))
+                .where(
+                    and(
+                        eq(knowledgeSources.organizationId, organizationId),
+                        eq(knowledgeSources.format, 'markdown'),
+                        or(
+                            isNotNull(knowledgeConnectorItems.connectorId),
+                            sql`strpos(lower(${knowledgeSources.fileName}), ${term}) > 0`,
+                            input.includeRules ? eq(knowledgeSources.systemRole, 'analysis_rules') : undefined,
+                        ),
+                    ),
+                ),
+            this.db
+                .select({
+                    knowledgeModelId: knowledgeVerifiedQueries.knowledgeModelId,
+                    id: knowledgeVerifiedQueries.id,
+                    title: knowledgeVerifiedQueries.title,
+                    question: knowledgeVerifiedQueries.question,
+                })
+                .from(knowledgeVerifiedQueries)
+                .innerJoin(knowledgeModels, eq(knowledgeVerifiedQueries.knowledgeModelId, knowledgeModels.id))
+                .where(and(owned, or(sql`strpos(lower(${knowledgeVerifiedQueries.title}), ${term}) > 0`, sql`strpos(lower(${knowledgeVerifiedQueries.question}), ${term}) > 0`))),
+        ]);
+        const hits: NavigationHit[] = [];
+        const matches = (name: string) => name.toLocaleLowerCase().includes(term);
+        function group<T extends { knowledgeModelId: string }>(rows: T[]) {
+            const map = new Map<string, T[]>();
+            for (const row of rows) {
+                const group = map.get(row.knowledgeModelId);
+                if (group) group.push(row);
+                else map.set(row.knowledgeModelId, [row]);
+            }
+            return map;
+        }
+        const byFolder = group(folders),
+            byConnector = group(connectors),
+            byFile = group(files),
+            byQuery = group(queries);
+        for (const { id: modelId, name, hasGuide } of models) {
+            if (matches(name)) hits.push({ modelId, kind: 'model', id: modelId, name, path: [name] });
+            if (matches(input.queryFolderName)) hits.push({ modelId, kind: 'folder', id: QUERY_FOLDER, name: input.queryFolderName, path: [name, input.queryFolderName] });
+            const directory = buildDocumentDirectory(
+                hasGuide ? input.guideName : null,
+                { folders: byFolder.get(modelId) ?? [], connectors: byConnector.get(modelId) ?? [] },
+                (byFile.get(modelId) ?? []).map(file => ({ ...file, fileName: knowledgeSourceDisplayName(file) })),
+                name,
+            );
+            const path = (id: string) => [
+                name,
+                ...directory
+                    .trail(id)
+                    .filter(folder => folder.id !== ROOT)
+                    .map(folder => folder.name),
+            ];
+            for (const folder of directory.folders.values()) {
+                if (folder.id !== ROOT && matches(folder.name)) hits.push({ modelId, kind: 'folder', id: folder.id, name: folder.name, path: path(folder.id) });
+            }
+            for (const file of directory.documents) {
+                if (matches(file.name) || (input.includeRules && file.source?.systemRole === 'analysis_rules'))
+                    hits.push({ modelId, kind: 'document', id: file.id, name: file.name, path: [...path(file.parentId), file.name] });
+            }
+            for (const query of byQuery.get(modelId) ?? []) {
+                hits.push({ modelId, kind: 'query', id: query.id, name: query.title, path: [name, input.queryFolderName, query.title] });
+            }
+        }
+        hits.sort((a, b) => a.path.join('/').localeCompare(b.path.join('/')) || a.id.localeCompare(b.id));
+        return { items: hits.slice(input.offset, input.offset + input.limit), total: hits.length };
+    }
 
     async list(scope: Scope) {
         const [model] = await this.db.select({ id: knowledgeModels.id }).from(knowledgeModels).where(scopedModel(scope));

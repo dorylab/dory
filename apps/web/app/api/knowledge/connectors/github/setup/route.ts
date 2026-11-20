@@ -13,6 +13,7 @@ export function GET(req: Request) {
         const session = verifyGitHubConnectorState(state);
         if (!session.returnPath.startsWith('/') || session.returnPath.startsWith('//')) throw new Error('Invalid return path.');
         const destination = new URL(session.returnPath, url.origin);
+        destination.searchParams.set('tab', 'sources');
         destination.searchParams.set('githubInstallationId', installationId);
         destination.searchParams.set(
             'githubConnectionState',

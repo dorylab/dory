@@ -935,3 +935,26 @@ test('analysis rules belong to the knowledge base across data sources and preser
         await f.close();
     }
 });
+
+test('directory search scopes paths to the organization and returns paged navigation metadata', async () => {
+    const f = await fixture();
+    try {
+        const search = (query: string, organizationId = 'org', includeRules = false) =>
+            f.repo.directory.search(organizationId, { query, includeRules, offset: 0, limit: 10, queryFolderName: '已验证查询', guideName: '使用说明' });
+        const folder = await f.repo.directory.change(f.scope, { operation: 'create', parentId: null, name: 'Reports' }, true);
+        await f.repo.createKnowledgeSource({ ...f.scope, folderId: folder.id, fileName: 'Revenue.md', contentText: 'Document text is private' });
+        assert.deepEqual(
+            (await search('Revenue')).items.map(hit => hit.path),
+            [['Model', 'Reports', 'Revenue.md']],
+        );
+        assert.equal((await search('Document text')).total, 0);
+        assert.equal((await search('Revenue', 'another-org')).total, 0);
+        assert.equal((await search('已验证')).items[0]?.kind, 'folder');
+        assert.equal((await search('分析规则', 'org', true)).items[0]?.name, 'RULES.md');
+        const result = await f.repo.directory.search('org', { query: 'e', includeRules: false, offset: 1, limit: 1, queryFolderName: '已验证查询', guideName: '使用说明' });
+        assert.ok(result.total > 1);
+        assert.equal(result.items.length, 1);
+    } finally {
+        await f.close();
+    }
+});

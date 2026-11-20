@@ -114,9 +114,9 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await dialog.getByLabel('Markdown content').fill('# Root policy');
         await submit();
         await page.getByRole('searchbox').fill('Policy');
-        await expect(tree.getByRole('button', { name: /Policy.md/ })).toHaveCount(2);
+        await expect(tree.getByRole('button').filter({ hasText: name }).filter({ hasText: 'Policy.md' })).toHaveCount(2);
         await expect(tree).toContainText('Operations / Refunds / Policy.md');
-        await tree.getByRole('button', { name: /Refunds \/ Policy.md/ }).click();
+        await tree.getByRole('button', { name: /Refunds \/ Policy.md/ }).filter({ hasText: name }).click();
         await expect(page.getByRole('region', { name: 'Policy.md' }).getByRole('heading', { name: 'Refund window' })).toBeVisible();
         await crumb.getByRole('button', { name: 'Refunds', exact: true }).click();
         await menu('Policy.md', 'Rename');
@@ -130,7 +130,8 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await expect(dialog).toBeHidden();
         await expect(crumb.getByRole('button', { name: 'Operations' })).toHaveAttribute('aria-current', 'page');
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        await page.getByRole('tab', { name: 'Verified queries' }).click();
+        await page.getByRole('button', { name: 'Directory', exact: true }).click();
+        await dialog.getByRole('button', { name: 'Verified Queries', exact: true }).click();
         await page.getByRole('button', { name: 'Which orders were refunded?' }).click();
         const sourceLink = page.getByRole('link', { name: 'Updated policy.md', exact: true });
         await expect(sourceLink).toHaveAttribute('href', '?tab=documents&file=' + source!.id);
@@ -281,9 +282,10 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await page.goForward();
         await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Retry.md');
         await crumbs.getByRole('button', { name: 'Root directory', exact: true }).click();
-        await page.getByRole('button', { name: 'New', exact: true }).click();
+        await page.getByRole('button', { name: 'Directory', exact: true }).click();
+        await dialog.getByRole('button', { name: 'New', exact: true }).click();
         await choose('New document');
-        await expect(dialog.getByText('Target folder: Root directory', { exact: true })).toBeVisible();
+        await expect(dialog.getByText(/Target folder: Folder actions/)).toBeVisible();
         await dialog.getByLabel('Document title').fill('Overview');
         await dialog.getByLabel('Markdown content').fill('# Root');
         await save();

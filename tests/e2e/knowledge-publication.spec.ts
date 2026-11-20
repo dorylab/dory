@@ -52,7 +52,7 @@ test('deleting a knowledge base from its actions menu requires confirmation', as
         await actions.click();
         await deleteItem.click();
         await confirm.getByRole('button', { name: 'Delete knowledge base', exact: true }).click();
-        await expect(page).toHaveURL(new URL(listPath, page.url()).href);
+        await expect(page).not.toHaveURL(new RegExp(model.id));
         deleted = true;
         expect(deleteRequests).toBe(1);
         const { models } = await action(request, 'knowledge.list', { query: model.name });

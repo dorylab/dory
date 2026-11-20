@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { executeActionClient } from '@/lib/actions/client';
-import { DocumentBrowser } from './document-browser';
+import { DocumentBrowser, type BrowserWorkspace } from './document-browser';
 import type { DirectoryData } from './document-directory';
 import type { KnowledgeModelView } from './knowledge-page.client';
 import type { KnowledgeSourceSummary } from './knowledge-sources-panel';
@@ -13,12 +13,16 @@ export function KnowledgeDocumentsPanel({
     sources,
     sourcesPending,
     sourcesError,
+    workspace,
+    children,
 }: {
     model: KnowledgeModelView;
     organization: string;
     sources: KnowledgeSourceSummary[];
     sourcesPending: boolean;
     sourcesError?: string;
+    workspace: BrowserWorkspace;
+    children: React.ReactNode;
 }) {
     const directory = useQuery({
         queryKey: ['knowledge-model', model.id, 'directory'],
@@ -28,6 +32,8 @@ export function KnowledgeDocumentsPanel({
     return (
         <DocumentBrowser
             key={model.id}
+            workspace={workspace}
+            alternate={children}
             model={model}
             organization={organization}
             sources={sources}

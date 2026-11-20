@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Folder } from 'lucide-react';
 import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { buildSqlFallbackName, isDefaultSqlName } from '@dory/shared/utils/sql-name';
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -34,6 +34,7 @@ type SaveSqlDialogProps = {
 export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, onSaved }: SaveSqlDialogProps) {
     const t = useTranslations('SqlConsole');
     const locale = useLocale();
+    const queryClient = useQueryClient();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const currentConnection = useAtomValue(currentConnectionAtom);
@@ -227,6 +228,8 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                 if (!targetModelId) {
                     const model = await executeActionClient<{ id: string }>('knowledge.create', { name: newModelName.trim(), connectionIds: [connectionId] });
                     targetModelId = model.id;
+                    void queryClient.invalidateQueries({ queryKey: ['knowledge-models'] });
+                    void queryClient.invalidateQueries({ queryKey: ['knowledge-model-options', connectionId] });
                 }
                 await executeActionClient(
                     'knowledge.createVerifiedQuery',
@@ -241,6 +244,8 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                     },
                     { currentConnectionId: connectionId },
                 );
+                void queryClient.invalidateQueries({ queryKey: ['knowledge-model', targetModelId] });
+                void queryClient.invalidateQueries({ queryKey: ['knowledge-directory-search'] });
             }
 
             toast.success(addToBusinessKnowledge ? t('SaveSql.SuccessWithKnowledge') : t('SaveSql.Success'));

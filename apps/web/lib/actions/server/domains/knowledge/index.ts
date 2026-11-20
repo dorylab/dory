@@ -258,6 +258,56 @@ const entryId = z.string().min(1);
 const entryName = z.string().trim().min(1).max(240);
 const entryKind = z.enum(['folder', 'document']);
 
+const directoryRead = {
+    domain: 'knowledge' as const,
+    kind: 'query' as const,
+    risk: 'read' as const,
+    permissions: readWorkspace,
+    scopes: ['knowledge:read'],
+    actors: [...workspaceUiReadActors],
+};
+const knowledgeNavigation = defineWebAction({
+    ...directoryRead,
+    id: 'knowledge.navigation',
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+        models: z.array(z.object({ id: entryId, name: z.string(), hasGuide: z.boolean() })),
+        canWrite: z.boolean(),
+        canManageLinear: z.boolean(),
+        userId: z.string(),
+    }),
+    handler: async ctx => ({
+        models: await ctx.services.db.knowledge.directory.models(ctx.organizationId),
+        canWrite: Boolean(ctx.access.permissions.workspace.write),
+        canManageLinear: ctx.access.role === 'owner' || ctx.access.role === 'admin',
+        userId: ctx.userId,
+    }),
+});
+const knowledgeQueryEntries = defineWebAction({
+    ...directoryRead,
+    id: 'knowledge.queryEntries',
+    inputSchema: modelIdInput,
+    outputSchema: z.object({ entries: z.array(z.object({ id: entryId, title: z.string(), question: z.string() })) }),
+    handler: async (ctx, input) => ({ entries: await ctx.services.db.knowledge.directory.queryEntries({ organizationId: ctx.organizationId, ...input }) }),
+});
+const knowledgeSearchDirectory = defineWebAction({
+    ...directoryRead,
+    id: 'knowledge.searchDirectory',
+    inputSchema: z.object({
+        query: z.string().trim().min(1).max(240),
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(100).default(30),
+        includeRules: z.boolean().default(false),
+        queryFolderName: z.string().trim().min(1).max(120).default('Verified Queries'),
+        guideName: z.string().trim().min(1).max(120).default('User guide'),
+    }),
+    outputSchema: z.object({
+        items: z.array(z.object({ modelId: entryId, id: z.string(), kind: z.enum(['model', 'folder', 'document', 'query']), name: z.string(), path: z.array(z.string()) })),
+        total: z.number(),
+    }),
+    handler: (ctx, input) => ctx.services.db.knowledge.directory.search(ctx.organizationId, input),
+});
+
 const knowledgeListDirectoryAction = defineWebAction({
     id: 'knowledge.listDirectory',
     domain: 'knowledge',
@@ -960,6 +1010,9 @@ export const knowledgeActions = [
     knowledgeRemoveDataSourceAction,
     knowledgeReplaceDataSourcesAction,
     knowledgeListDirectoryAction,
+    knowledgeNavigation,
+    knowledgeQueryEntries,
+    knowledgeSearchDirectory,
     knowledgeChangeDirectoryAction,
     knowledgeListKnowledgeSourcesAction,
     knowledgeGetKnowledgeSourceAction,
