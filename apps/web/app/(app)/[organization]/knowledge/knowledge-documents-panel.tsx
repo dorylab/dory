@@ -13,14 +13,12 @@ export function KnowledgeDocumentsPanel({
     sources,
     sourcesPending,
     sourcesError,
-    onEditModel,
 }: {
     model: KnowledgeModelView;
     organization: string;
     sources: KnowledgeSourceSummary[];
     sourcesPending: boolean;
     sourcesError?: string;
-    onEditModel: () => void;
 }) {
     const directory = useQuery({
         queryKey: ['knowledge-model', model.id, 'directory'],
@@ -38,7 +36,6 @@ export function KnowledgeDocumentsPanel({
             directory={directory.data}
             directoryPending={directory.isPending}
             directoryError={directory.error?.message}
-            onEditModel={onEditModel}
         />
     );
 }

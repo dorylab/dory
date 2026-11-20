@@ -42,7 +42,7 @@ datasets:
 | `support_tickets` | 每工单一行       |        1,800 | 优先级、解决时长、积压事故    |
 | `events`          | 每行为事件一行   |       36,000 | 获客和漏斗探索                |
 
-配套 Knowledge Model 是原生 Apache Ossie 0.2.0.dev0 文档，包含：
+配套知识采用原生 Apache Ossie 0.2.0.dev0 文档格式，包含：
 
 - 7 个 datasets 和完整字段定义；
 - 8 个 metrics；
@@ -150,7 +150,7 @@ yarn workspace web commerce:evaluation:mcp
 完成 MCP 重放或 UI Chat 后，打开对应 Agent Run：
 
 1. Context 卡片显示 `Commerce Operations Knowledge · Ossie 0.2.0.dev0 · rev <8 位哈希>`。
-2. 卡片深链回同一个 Knowledge Model。
+2. 点击卡片可返回对应的知识库详情页。
 3. 快照包含命中的 metrics 和 relationships。
 4. 修改模型后新 Run 记录新 revision；旧 Run 仍显示原 revision 和快照。
 5. 如果同一 Run 实际使用两个模型 revision，两条 asset reference 都必须独立保留。

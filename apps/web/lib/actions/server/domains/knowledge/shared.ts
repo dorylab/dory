@@ -44,9 +44,11 @@ export const knowledgeSourceSummarySchema = z.object({
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
     connectorId: z.string().nullable(),
-    connectorProvider: z.enum(['github', 'linear']).nullable(),
+    connectorProvider: z.enum(['github', 'linear', 'local', 'drive']).nullable(),
     sourceUrl: z.string().nullable(),
     remotePath: z.string().nullable(),
+    remoteTitle: z.string().nullish(),
+    folderTrail: z.array(z.object({ id: z.string(), name: z.string() })).nullish(),
 });
 export const knowledgeSourceSchema = knowledgeSourceSummarySchema.extend({ contentText: z.string(), remoteRevision: z.string().nullable() });
 export const knowledgeModelOutputSchema = z.object({
@@ -120,6 +122,8 @@ const knowledgeConnectorCommonSchema = z.object({
 });
 
 export const knowledgeConnectorSchema = z.discriminatedUnion('provider', [
+    knowledgeConnectorCommonSchema.extend({ provider: z.literal('drive'), displayName: z.string(), driveFolderId: z.string() }),
+    knowledgeConnectorCommonSchema.extend({ provider: z.literal('local'), displayName: z.string(), configRevision: z.number() }),
     knowledgeConnectorCommonSchema.extend({
         provider: z.literal('github'),
         installationId: z.string(),
@@ -134,5 +138,6 @@ export const knowledgeConnectorSchema = z.discriminatedUnion('provider', [
         linearWorkspaceId: z.string(),
         linearWorkspaceName: z.string(),
         projectIds: z.array(z.string()),
+        projectNames: z.array(z.string()).optional(),
     }),
 ]);

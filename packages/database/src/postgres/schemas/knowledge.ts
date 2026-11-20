@@ -153,7 +153,7 @@ export const knowledgeModelSources = pgTable(
 );
 
 export type KnowledgeSourceFormat = 'markdown' | 'yaml' | 'text';
-export type KnowledgeConnectorProvider = 'github' | 'linear';
+export type KnowledgeConnectorProvider = 'github' | 'linear' | 'local' | 'drive';
 export type KnowledgeConnectorStatus = 'pending' | 'syncing' | 'ready' | 'error' | 'disabled';
 export type KnowledgeConnectorSyncJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
@@ -185,6 +185,10 @@ export const knowledgeConnectors = pgTable(
             .notNull()
             .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
         provider: text('provider').$type<KnowledgeConnectorProvider>().notNull(),
+        displayName: text('display_name'),
+        syncedFolders: jsonb('synced_folders').$type<{ id: string; parent: string; name: string }[]>(),
+        driveFolderId: text('drive_folder_id'),
+        driveRefreshTokenEncrypted: text('drive_refresh_token_encrypted'),
         installationId: text('installation_id'),
         repositoryId: text('repository_id'),
         repositoryFullName: text('repository_full_name'),
@@ -215,6 +219,19 @@ export const knowledgeConnectors = pgTable(
         index('idx_knowledge_connectors_installation_repo').on(table.installationId, table.repositoryId),
     ],
 );
+
+export const knowledgeDriveAuthorizations = pgTable('knowledge_drive_authorizations', {
+    id: text('id').primaryKey(),
+    state: text('state').unique(),
+    organizationId: text('organization_id').notNull(),
+    knowledgeModelId: text('knowledge_model_id')
+        .notNull()
+        .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
+    verifier: text('verifier').notNull(),
+    refreshTokenEncrypted: text('refresh_token_encrypted'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
 
 export const knowledgeFolders = pgTable(
     'knowledge_folders',
@@ -271,6 +288,8 @@ export const knowledgeConnectorItems = pgTable(
             .notNull()
             .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
         remotePath: text('remote_path').notNull(),
+        remoteTitle: text('remote_title'),
+        folderTrail: jsonb('folder_trail').$type<{ id: string; name: string }[]>(),
         projectId: text('project_id'),
         projectName: text('project_name'),
         remoteSha: text('remote_sha').notNull(),

@@ -100,7 +100,7 @@ async function main() {
     const models = await db.knowledge.listModels({ organizationId });
     const existingModel = models.find(model => model.name === OLIST_KNOWLEDGE_NAME);
     if (existingModel && (existingModel.dataSources.length !== 1 || existingModel.dataSources[0].connectionId !== connectionId)) {
-        throw new Error('A Knowledge model with this name belongs to another connection; refusing to overwrite it.');
+        throw new Error('A knowledge base with this name belongs to another connection; refusing to overwrite it.');
     }
     const model = existingModel
         ? await db.knowledge.replaceDataSources({ organizationId, knowledgeModelId: existingModel.id, connectionIds: [connectionId] })

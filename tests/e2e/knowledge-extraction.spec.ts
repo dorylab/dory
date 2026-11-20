@@ -23,7 +23,7 @@ test('connector extraction produces reviewable drafts, requires metric mapping a
             case 'knowledge.listCandidates': data = { candidates: candidates(), targets: [] }; break;
             case 'knowledge.reviewCandidate': if (body.input.candidateId === 'metric-draft') { expect(body.input.payload.sourceConnectionId).toBe(connectionId); approvedMetric = true; } else approvedRule = true; data = { id: body.input.candidateId }; writes.push(body.actionId); break;
             case 'knowledge.listBusinessRules': data = { rules: approvedRule ? [{ id: 'rule', payload: payload('business_rule'), sourceState: 'current', revision: 1, status: 'active', evidence }] : [] }; break;
-            case 'knowledge.listConnectors': data = { connectors: [{ id: 'connector', provider: 'linear', credentialId: 'credential', linearWorkspaceId: 'workspace', linearWorkspaceName: 'Test', projectIds: ['project'], status: 'ready', lastSyncedAt: new Date().toISOString(), lastError: null }] }; break;
+            case 'knowledge.listConnectors': data = { canWrite:true,canManageLinear:true, connectors: [{ id: 'connector', provider: 'linear', credentialId: 'credential', linearWorkspaceId: 'workspace', linearWorkspaceName: 'Test', projectIds: ['project'], status: 'ready', lastSyncedAt: new Date().toISOString(), lastError: null }] }; break;
             case 'knowledge.listKnowledgeSources': data = { sources: [{ id: 'source', fileName: 'Revenue.md', format: 'markdown', connectionId: null, byteSize: 50, updatedAt: new Date().toISOString(), connectorId: 'connector', connectorProvider: 'linear', remotePath: 'document/source.md', sourceUrl: 'https://linear.app/dory/document/revenue' }] }; break;
             default: return route.continue();
         }
@@ -48,7 +48,7 @@ test('connector extraction produces reviewable drafts, requires metric mapping a
         await dialog.getByRole('button', { name: 'Approve and publish', exact: true }).click();
         await expect(page.getByRole('button', { name: /Pending review \d+/ })).toHaveCount(0);
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.getByRole('button', { name: 'Business rules', exact: true }).click();
+        await page.goto(new URL('?tab=rules',page.url()).href);
         await expect(page.getByRole('heading', { name: 'Reporting timezone', exact: true })).toBeVisible();
         await expect(page.getByText('Reports use UTC.', { exact: true })).toBeVisible();
         expect(writes).toEqual(['knowledge.setAutoExtraction', 'knowledge.reviewCandidate', 'knowledge.reviewCandidate']);

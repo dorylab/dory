@@ -76,7 +76,7 @@ export class KnowledgeOrganizationStore {
             .select()
             .from(knowledgeModels)
             .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
-        if (!model) throw new Error('Knowledge model not found.');
+        if (!model) throw new Error('Knowledge base not found.');
         await enqueueOrganization(this.db, input);
     }
     async claim() {
@@ -131,7 +131,7 @@ export class KnowledgeOrganizationStore {
             .select()
             .from(knowledgeModels)
             .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
-        if (!model) throw new Error('Knowledge model not found.');
+        if (!model) throw new Error('Knowledge base not found.');
         const pending = await db
             .select()
             .from(candidates)

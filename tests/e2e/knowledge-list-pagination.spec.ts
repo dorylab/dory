@@ -9,7 +9,7 @@ async function action(request: APIRequestContext, actionId: string, input: Recor
     return body.data;
 }
 
-test('all five knowledge lists paginate independently and preserve asset deep links', async ({ page, request }) => {
+test('knowledge asset and review lists paginate independently and preserve asset deep links', async ({ page, request }) => {
     await page.goto('/');
     await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1];
@@ -89,15 +89,10 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         await expect(page).toHaveURL(/queriesPage=2/);
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.getByRole('button', { name: 'Semantic model', exact: true }).click();
+        await page.goto(page.url().replace('tab=sources','tab=definitions'));
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
 
-        await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(10);
-        await page.getByRole('button', { name: 'Next page' }).click();
-        await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
-
-        await page.getByRole('button', { name: 'Business rules', exact: true }).click();
+        await page.goto(new URL('?tab=rules',page.url()).href);
         await expect(page.locator('section[id^="rule-"]')).toHaveCount(10);
         await page.getByRole('button', { name: 'Next page' }).click();
         await expect(page.locator('section[id^="rule-"]')).toHaveCount(2);
@@ -115,13 +110,12 @@ test('all five knowledge lists paginate independently and preserve asset deep li
         await expect(list.getByRole('listitem')).toHaveCount(12);
         await expect(page).toHaveURL(/knowledgePageSize=20/);
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.getByRole('button', { name: 'Semantic model', exact: true }).click();
+        await page.goto(page.url().replace('tab=sources','tab=definitions'));
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(12);
 
         for (const [tab, parameter, id, locator] of [
             ['definitions', 'definition', 'metric-11', 'button[aria-label="Hide details for Metric 11"]'],
             ['queries', 'query', 'query-11', 'button[aria-label="Question 11"]'],
-            ['sources', 'source', 'source-11', 'tr:has-text("Source 11.md")'],
             ['rules', 'rule', 'rule-11', '#rule-rule-11'],
         ]) {
             await page.goto(`/${organization}/knowledge/${model.id}?tab=${tab}&${parameter}=${id}`);

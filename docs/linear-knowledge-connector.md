@@ -32,16 +32,16 @@ GitHub connections keep their existing behavior. Deploy all replicas together.
 
 Create a personal API Key in Linear's **Settings → Security & access**, with read access
 to the intended projects. A Dory organization owner/admin opens **Knowledge → Sources →
-Add source → Connect knowledge base → Linear**, enters and verifies the Key, checks the
+Linear**, enters and verifies the Key, checks the
 returned workspace, selects up to 100 projects, and confirms the sharing notice.
 Only projects accessible to the Key can be selected.
 
-Imported content is visible to readers of the Dory knowledge model, including readers
+Imported content is visible to readers of the Dory knowledge base, including readers
 without access to the original in Linear. Confirm that the selected material is suitable
 for that audience. The Key is submitted to the server, encrypted at rest, and never
 returned by the setup/save APIs. The input clears after saving or closing the dialog.
 
-Each knowledge model has at most one connector per Linear workspace. Credentials are
+Each knowledge base has at most one connector per Linear workspace. Credentials are
 shared only within the same Dory organization and Linear workspace. **Update API Key**
 validates a replacement before saving; a failed validation leaves the original intact.
 The replacement must match the connector's workspace. Updating a shared Key immediately

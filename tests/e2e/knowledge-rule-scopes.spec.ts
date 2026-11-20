@@ -94,7 +94,7 @@ test('semantic model and rule scope labels are distinct and a metric reviews dep
         await expect(dialog).toBeHidden();
         expect(bundleCount).toBe(1);
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.getByRole('button', { name: 'Business rules', exact: true }).click();
+        await page.goto(new URL('?tab=rules',page.url()).href);
         await expect(page.getByRole('heading', { name: 'Exclude failed orders' })).toBeVisible();
         await expect(page.getByText(/Selected metrics · 1 linked metrics/)).toBeVisible();
         await expect(page.getByRole('link', { name: 'Net revenue', exact: true })).toHaveAttribute('href', /tab=definitions&definition=metric%3Anet/);

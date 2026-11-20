@@ -151,7 +151,7 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
-    const addDefinition = page.getByRole('button', { name: 'Add definition to Knowledge', exact: true });
+    const addDefinition = page.getByRole('button', { name: 'Add definition to knowledge base', exact: true });
     const term = page.getByTestId('work-markdown').locator('strong').filter({ hasText: /^Revenue$/ });
     await expect(addDefinition).toBeHidden();
     await term.dblclick();
@@ -197,8 +197,8 @@ test('Work has explicit multi-source scope without creating an unsolicited repor
     await page.goto(`/${organization}/work`);
     await expect(page.getByRole('heading', { name: /Ask anything about your data/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
-    await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
-    await page.getByPlaceholder('Search Knowledge…').fill('Commerce');
+    await page.getByRole('button', { name: 'Knowledge base', exact: true }).click();
+    await page.getByPlaceholder('Search knowledge bases…').fill('Commerce');
     await page.getByRole('option', { name: 'Commerce', exact: true }).click();
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Orders: Automatic databases', exact: true })).toHaveAttribute('aria-checked', 'true');
@@ -1278,7 +1278,7 @@ test('automatic sources and knowledge allow attachment-only messages, preserve f
     await page.goto(`/${organization}/work`);
     const composer = page.getByTestId('agent-composer');
     const sources = page.getByRole('button', { name: 'Data sources', exact: true });
-    const knowledge = page.getByRole('button', { name: 'Knowledge', exact: true });
+    const knowledge = page.getByRole('button', { name: 'Knowledge base', exact: true });
     await expect(sources).toHaveText('Auto');
     await expect(knowledge).toHaveText('Auto');
     await expect(page.getByText('Select at least one data source')).toHaveCount(0);
@@ -1358,7 +1358,7 @@ test('automatic table references keep source identity and Knowledge replaces sou
         ),
     ).toBe(false);
     await toggleSource(page, 'Orders');
-    await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+    await page.getByRole('button', { name: 'Knowledge base', exact: true }).click();
     await page.getByRole('option', { name: 'Commerce', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Data sources', exact: true })).toHaveText('1 source · automatic databases');
     await expectAppHealthy(appErrors);
@@ -1398,7 +1398,7 @@ test('Knowledge linkage resets databases, preserves manual additions, and limits
     const sources = page.getByRole('button', { name: 'Data sources', exact: true });
     const databases = page.getByRole('button', { name: 'Data sources', exact: true });
     const chooseKnowledge = async (name: string) => {
-        await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+        await page.getByRole('button', { name: 'Knowledge base', exact: true }).click();
         await page.getByRole('option', { name, exact: true }).click();
     };
     await toggleSource(page, 'Orders');
@@ -1434,7 +1434,7 @@ test('Knowledge linkage resets databases, preserves manual additions, and limits
     await expect(sources).toHaveText('1 source · automatic databases');
     await chooseKnowledge('Auto');
     await expect(sources).toHaveText('1 source · automatic databases');
-    await chooseKnowledge('No Knowledge');
+    await chooseKnowledge('No knowledge base');
     await expect(sources).toHaveText('1 source · automatic databases');
     await chooseKnowledge('General definitions');
     await expect(sources).toHaveText('Auto');
@@ -1922,7 +1922,7 @@ test('unified Data Sources supports database multi-select, full-group selection,
     await page.goto(`/${organization}/work`);
     const picker = page.getByTestId('agent-scope-picker');
     await expect(picker.getByRole('button')).toHaveCount(2);
-    await expect(picker.getByRole('button').nth(0)).toHaveAttribute('aria-label', 'Knowledge');
+    await expect(picker.getByRole('button').nth(0)).toHaveAttribute('aria-label', 'Knowledge base');
     await expect(picker.getByRole('button').nth(1)).toHaveAttribute('aria-label', 'Data sources');
     expect(databaseLoads).toBe(0);
     const sources = page.getByRole('button', { name: 'Data sources', exact: true });

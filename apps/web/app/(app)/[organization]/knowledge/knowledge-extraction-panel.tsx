@@ -26,7 +26,7 @@ import { KnowledgePublicationControls } from './knowledge-publication-controls';
 
 type Metric = { id: string; name: string; sourceConnectionId: string; revision?: string };
 type DataSource = { connectionId: string; name: string };
-type Evidence = { id: string; quote: string; sourceUrl: string | null; sourceTitle: string; state: string };
+type Evidence = { id: string; sourceId?: string | null; quote: string; sourceUrl: string | null; sourceTitle: string; state: string };
 type Candidate = {
     publicationReason?: string | null;
     classificationReason?: string | null;
@@ -200,7 +200,13 @@ function EvidenceList({ evidence }: { evidence: Evidence[] }) {
             {evidence.map(e => (
                 <div key={e.id} className="rounded-md border bg-muted/30 p-3 text-sm">
                     <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl })}</span>
+                        {e.sourceId ? (
+                            <a className="underline" href={`?tab=sources&source=${encodeURIComponent(e.sourceId)}`}>
+                                {knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl })}
+                            </a>
+                        ) : (
+                            <span>{knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl })}</span>
+                        )}
                         {e.state !== 'current' ? <Badge variant="outline">{t('SourceChanged')}</Badge> : null}
                         {e.sourceUrl ? (
                             <Tooltip>

@@ -256,11 +256,11 @@ test('delayed retry survives repository restart and periodic reconciliation queu
             .update(knowledgeConnectors)
             .set({ status: 'ready', nextSyncAt: new Date(0) })
             .where(eq(knowledgeConnectors.id, connector.id));
-        await restarted.queueDueLinearConnectors();
+        await restarted.queueDueConnectors('linear');
         assert.equal((await db.select().from(knowledgeConnectorSyncJobs)).length, 2);
         const after = (await restarted.getConnectorById(connector.id)).nextSyncAt;
         assert.ok(after.getTime() > Date.now() + 3590_000 && after.getTime() <= Date.now() + 3600_000);
-        await restarted.queueDueLinearConnectors();
+        await restarted.queueDueConnectors('linear');
         assert.equal((await restarted.getConnectorById(connector.id)).nextSyncAt.getTime(), after.getTime());
     } finally {
         await client.close();
@@ -459,6 +459,45 @@ test('directory writes preserve source identities, enforce ownership and seriali
         assert.deepEqual((await repository.getKnowledgeSource({ ...scope, id: synced.id })).projectId, 'p1');
         await assert.rejects(directory.change(scope, { operation: 'move', kind: 'document', id: synced.id, parentId: refunds }, true), /read-only/);
         await assert.rejects(directory.change(scope, { operation: 'rename', kind: 'folder', id: connector.id, name: 'Managed' }, true), /not found/);
+    } finally {
+        await client.close();
+    }
+});
+
+test('folder snapshots isolate same-named files, reject stale writes and preserve Drive source IDs after moves', async () => {
+    const { client, repository } = await fixture();
+    const owner = { organizationId: 'org', knowledgeModelId: 'model', userId: 'admin' };
+    try {
+        const files = ['one/notes.md', 'two/notes.md'].map(path => ({ path, title: 'notes.md', sha: '1', contentText: path, format: 'markdown' as const }));
+        await repository.applyConnectorSnapshot({
+            connectorId: 'local',
+            newLocal: { organizationId: 'org', knowledgeModelId: 'model', createdBy: 'admin', displayName: 'Local' },
+            files,
+        });
+        const local = await repository.getConnectorById('local');
+        assert.equal(local.configRevision, 1);
+        await assert.rejects(repository.applyConnectorSnapshot({ connectorId: 'local', configRevision: 0, files: [] }), /changed/);
+        await assert.rejects(repository.applyConnectorSnapshot({ connectorId: 'local', configRevision: 1, files: [files[0], files[0]] }), /Duplicate/);
+        assert.equal((await repository.listKnowledgeSources(owner)).length, 2);
+        await repository.beginDriveAuthorization({ ...owner, id: 'session', state: 'state', verifier: 'verifier', expiresAt: new Date(Date.now() + 60000) });
+        await assert.rejects(repository.getDriveAuthorization({ ...owner, id: 'session', userId: 'other' }));
+        await repository.claimDriveCallback('state');
+        await assert.rejects(repository.claimDriveCallback('state'));
+        await repository.finishDriveCallback('session', 'encrypted');
+        const drive = await repository.connectDriveFolder({ ...owner, id: 'session', folderId: 'drive-root', name: 'Docs' });
+        await assert.rejects(repository.connectDriveFolder({ ...owner, id: 'session', folderId: 'drive-root', name: 'Docs' }));
+        const file = { ...files[0], path: 'google-id', title: 'Original', folderTrail: [{ id: 'A', name: 'Before' }] };
+        await repository.applyConnectorSnapshot({ connectorId: drive.id, files: [file] });
+        const original = (await repository.listKnowledgeSources(owner)).find(s => s.connectorId === drive.id)!;
+        await repository.applyConnectorSnapshot({ connectorId: drive.id, files: [{ ...file, title: 'Renamed', folderTrail: [{ id: 'B', name: 'After' }] }] });
+        const moved = await repository.getKnowledgeSource({ ...owner, id: original.id });
+        assert.equal(moved.fileName, 'Renamed');
+        assert.deepEqual(moved.folderTrail, [{ id: 'B', name: 'After' }]);
+        await repository.deleteConnector({ organizationId: 'org', connectorId: 'local' });
+        assert.deepEqual(
+            (await repository.listKnowledgeSources(owner)).map(s => s.id),
+            [original.id],
+        );
     } finally {
         await client.close();
     }

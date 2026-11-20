@@ -153,7 +153,7 @@ test('Agent Run shares the query UI while retaining tabs, charts, cancellation a
     await page.getByRole('button', { name: 'Save Query', exact: true }).click();
     const saveDialog = page.getByRole('dialog', { name: 'Save Query', exact: true });
     await saveDialog.getByPlaceholder('Leave blank to name automatically').fill('Category totals', { timeout: 15000 });
-    await saveDialog.getByRole('checkbox', { name: 'Add to knowledge' }).uncheck();
+    await saveDialog.getByRole('checkbox', { name: 'Add to knowledge base' }).uncheck();
     await saveDialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => savedSql).toBe(initialTab.content);
     await expect(saveDialog).toBeHidden();

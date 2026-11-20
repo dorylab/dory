@@ -16,7 +16,9 @@ export function startKnowledgeConnectorWorker() {
         try {
             const db = await getDBService();
             await db.knowledge.recoverConnectorSyncJobs();
-            if (linearConfigured()) await db.knowledge.queueDueLinearConnectors();
+            await db.knowledge.clearExpiredDriveAuthorizations();
+            if (linearConfigured()) await db.knowledge.queueDueConnectors('linear');
+            await db.knowledge.queueDueConnectors('drive');
             getKnowledgeConnectorSyncRunner(db).wake();
             getKnowledgeExtractionRunner(db).wake();
         } catch {

@@ -26,7 +26,7 @@ test.describe('instant workbench navigation', () => {
             .waitForURL(new RegExp(`/${organization}/${connectionId}/sql-console$`), { timeout: 5_000 })
             .catch(() => page.goto(`/${organization}/${connectionId}/sql-console`));
 
-        for (const title of ['Data Sources', 'Knowledge', 'Agent Runs']) {
+        for (const title of ['Data Sources', 'Knowledge base', 'Agent Runs']) {
             await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0);
         }
         await expect(page.getByRole('button', { name: 'More...', exact: true })).toHaveCount(0);

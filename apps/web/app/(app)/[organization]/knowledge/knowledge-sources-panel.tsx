@@ -1,60 +1,25 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import NextLink from 'next/link';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/registry/new-york-v4/ui/alert-dialog';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { IconBrandGithub } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Eye, FileCode2, FileText, Link as LinkIcon, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2, Unplug, Upload } from 'lucide-react';
+import { ExternalLink, FileText, Pencil, Trash2, Upload } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { parseAsString, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
-import { getOrganizationAccess } from '@/lib/organization/api';
-import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 
-import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
-import { useKnowledgeListPagination } from './knowledge-list-pagination';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
-import { fetchLinearSetup, LinearConnectorDialog, linearSetupKey, type KnowledgeConnectorView } from './linear-connector-dialog';
-import { LinearLogo } from './linear-logo';
+import type { KnowledgeConnectorView } from './linear-connector-dialog';
 
 type DataSource = { connectionId: string; name: string; type: string; engine: string };
-type Definition = {
-    id: string;
-    name: string;
-    kind: 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
-    status: 'verified' | 'unverified' | 'auto_published';
-    sourceConnectionId: string;
-    description?: string;
-    aliases?: string[];
-    source?: string;
-    expression?: string;
-    filters?: string[];
-    timeDimension?: string;
-    dimensions?: string[];
-    from?: string;
-    to?: string;
-};
 export type KnowledgeSourceSummary = {
     id: string;
     organizationId: string;
@@ -70,35 +35,15 @@ export type KnowledgeSourceSummary = {
     createdAt: string;
     updatedAt: string;
     connectorId: string | null;
-    connectorProvider: 'github' | 'linear' | null;
+    connectorProvider: 'github' | 'linear' | 'local' | 'drive' | null;
     sourceUrl: string | null;
     remotePath: string | null;
+    folderTrail?: { id: string; name: string }[] | null;
 };
 type KnowledgeSource = KnowledgeSourceSummary & { contentText: string; remoteRevision: string | null };
 type PendingFile = { file: File; connectionId: string | null };
-type ImportSuggestion = Omit<Definition, 'sourceConnectionId'> & { sourceConnectionId?: string };
-type ImportVerifiedQuery = {
-    id?: string;
-    sourceConnectionId?: string;
-    title: string;
-    question: string;
-    sql: string;
-    description?: string;
-    definitionIds: string[];
-};
 type KnowledgeConnector = KnowledgeConnectorView;
 type GitHubRepository = { id: string; fullName: string; defaultBranch: string; private: boolean };
-type VerifiedQuery = { id: string; title: string };
-type KnowledgeGraph = {
-    queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
-    sourceAssetEdges: Array<{
-        sourceId: string;
-        assetType: 'definition' | 'verified_query' | 'business_rule';
-        assetId: string;
-        relationType: 'provided' | 'generated';
-    }>;
-};
-
 const MAX_FILE_BYTES = 10_000_000;
 const MAX_FILES_PER_UPLOAD = 20;
 const SUPPORTED_FILE_NAME = /\.(md|markdown|ya?ml|txt)$/i;
@@ -109,7 +54,6 @@ const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-edit
 export const MarkdownViewer = dynamic(() => import('@/components/ai-elements/message').then(module => module.MessageResponse), { ssr: false });
 
 const knowledgeSourcesKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-sources'] as const;
-const knowledgeConnectorsKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-connectors'] as const;
 
 function formatBytes(bytes: number) {
     if (bytes < 1_000) return `${bytes} B`;
@@ -355,7 +299,15 @@ export function SourceViewer({
         <>
             <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline">{source.format}</Badge>
-                <span>{source.connectorProvider === 'github' ? 'GitHub' : source.connectorProvider === 'linear' ? 'Linear' : t('ViewerLocalSource')}</span>
+                <span>
+                    {source.connectorProvider === 'github'
+                        ? 'GitHub'
+                        : source.connectorProvider === 'linear'
+                          ? 'Linear'
+                          : source.connectorProvider === 'drive'
+                            ? 'Google Drive'
+                            : t('ViewerLocalSource')}
+                </span>
                 <span aria-hidden="true">·</span>
                 <time dateTime={source.updatedAt}>{new Date(source.updatedAt).toLocaleString()}</time>
                 {detail.data?.remoteRevision ? <span className="break-all">{t('SyncedRevision', { revision: detail.data.remoteRevision })}</span> : null}
@@ -464,9 +416,15 @@ export function SourceEditor({
                     : { knowledgeModelId, folderId, fileName: /\.(md|markdown)$/i.test(title.trim()) ? title.trim() : title.trim() + '.md', contentText, connectionId },
                 { organizationId: organization },
             ),
-        onSuccess: async updated => {
-            queryClient.setQueryData([...knowledgeSourcesKey(knowledgeModelId), updated.id], updated);
-            await queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] });
+        onSuccess: updated => {
+            const key = knowledgeSourcesKey(knowledgeModelId);
+            queryClient.setQueryData([...key, updated.id], updated);
+            queryClient.setQueryData([...key, updated.id, updated.updatedAt, 'viewer'], updated);
+            const { contentText: _body, remoteRevision: _revision, ...summary } = updated;
+            queryClient.setQueryData<{ sources: KnowledgeSourceSummary[] }>(key, previous =>
+                previous && { sources: [summary, ...previous.sources.filter(item => item.id !== updated.id)] },
+            );
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] });
             toast.success(t('Saved'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('SaveFailed')),
@@ -557,138 +515,7 @@ export function SourceEditor({
     );
 }
 
-function ImportReviewDialog({
-    source,
-    suggestions,
-    verifiedQueries,
-    existingDefinitions,
-    dataSources,
-    onOpenChange,
-    onImport,
-}: {
-    source: KnowledgeSourceSummary | null;
-    suggestions: ImportSuggestion[];
-    existingDefinitions: Definition[];
-    dataSources: DataSource[];
-    onOpenChange: (open: boolean) => void;
-    verifiedQueries: ImportVerifiedQuery[];
-    onImport: (definitions: Definition[], importedIds: string[], sourceId: string, queries: ImportVerifiedQuery[]) => void;
-}) {
-    const t = useTranslations('Knowledge.KnowledgeSources');
-    const existingIds = new Set(existingDefinitions.map(item => item.id));
-    const [drafts, setDrafts] = useState<ImportSuggestion[]>([]);
-    const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [selectedQueryIndexes, setSelectedQueryIndexes] = useState<number[]>([]);
-    useEffect(() => {
-        setDrafts(suggestions);
-        setSelectedIds(suggestions.filter(item => !existingIds.has(item.id)).map(item => item.id));
-        setSelectedQueryIndexes(verifiedQueries.map((_, index) => index));
-        // The existing definition set is fixed while the review dialog is open.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [suggestions, verifiedQueries]);
-    const selected = drafts.filter(item => selectedIds.includes(item.id));
-    const selectedQueries = verifiedQueries.filter((_, index) => selectedQueryIndexes.includes(index));
-    const canImport =
-        (selected.length > 0 || selectedQueries.length > 0) &&
-        selected.every(item => Boolean(item.sourceConnectionId)) &&
-        selectedQueries.every(item => Boolean(item.sourceConnectionId));
-    const accept = () => {
-        if (!canImport) return;
-        const selectedIdSet = new Set(selected.map(item => item.id));
-        onImport(
-            [
-                ...existingDefinitions.filter(item => !selectedIdSet.has(item.id)),
-                ...selected.map(item => ({ ...item, sourceConnectionId: item.sourceConnectionId!, status: 'unverified' as const })),
-            ],
-            selected.map(item => item.id),
-            source!.id,
-            selectedQueries,
-        );
-        onOpenChange(false);
-    };
-    return (
-        <Dialog open={Boolean(source && suggestions.length)} onOpenChange={onOpenChange}>
-            <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
-                <DialogHeader>
-                    <DialogTitle>{t('ReviewTitle', { name: source ? knowledgeSourceDisplayName(source) : '' })}</DialogTitle>
-                    <DialogDescription>{t('ReviewDescription')}</DialogDescription>
-                </DialogHeader>
-                <div className="min-h-0 flex-1 divide-y overflow-y-auto rounded-md border">
-                    {drafts.map(item => {
-                        const conflict = existingIds.has(item.id);
-                        const checked = selectedIds.includes(item.id);
-                        return (
-                            <div key={item.id} className="grid gap-3 p-3 sm:grid-cols-[1fr_14rem]">
-                                <label className="flex min-w-0 items-start gap-3">
-                                    <input
-                                        type="checkbox"
-                                        className="mt-1 cursor-pointer"
-                                        checked={checked}
-                                        onChange={() => setSelectedIds(current => (checked ? current.filter(id => id !== item.id) : [...current, item.id]))}
-                                    />
-                                    <span className="min-w-0">
-                                        <span className="flex items-center gap-2 font-medium">
-                                            {item.name}
-                                            <Badge variant="outline">{item.kind}</Badge>
-                                            {conflict ? <Badge variant="secondary">{t('ExistingReplace')}</Badge> : null}
-                                        </span>
-                                        {item.description ? <span className="mt-1 block text-xs text-muted-foreground">{item.description}</span> : null}
-                                    </span>
-                                </label>
-                                <Select
-                                    value={item.sourceConnectionId ?? '__unassigned__'}
-                                    onValueChange={value =>
-                                        setDrafts(current =>
-                                            current.map(draft => (draft.id === item.id ? { ...draft, sourceConnectionId: value === '__unassigned__' ? undefined : value } : draft)),
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder={t('SelectDataSource')} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="__unassigned__">{t('SelectDataSource')}</SelectItem>
-                                        {dataSources.map(dataSource => (
-                                            <SelectItem key={dataSource.connectionId} value={dataSource.connectionId}>
-                                                {dataSource.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        );
-                    })}
-                    {verifiedQueries.map((query, index) => (
-                        <label key={`${query.id ?? query.title}:${index}`} className="flex items-start gap-3 p-3">
-                            <input
-                                type="checkbox"
-                                className="mt-1 cursor-pointer"
-                                checked={selectedQueryIndexes.includes(index)}
-                                onChange={() => setSelectedQueryIndexes(current => (current.includes(index) ? current.filter(value => value !== index) : [...current, index]))}
-                            />
-                            <span className="min-w-0">
-                                <span className="flex items-center gap-2 font-medium">
-                                    {query.title} <Badge variant="outline">{t('VerifiedQuery')}</Badge>
-                                </span>
-                                <span className="mt-1 block text-xs text-muted-foreground">{query.question}</span>
-                            </span>
-                        </label>
-                    ))}
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        {t('Cancel')}
-                    </Button>
-                    <Button onClick={accept} disabled={!canImport}>
-                        {t('ImportCount', { count: selected.length + selectedQueries.length })}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function GitHubConnectorDialog({
+export function GitHubConnectorDialog({
     open,
     onOpenChange,
     organization,
@@ -833,569 +660,5 @@ function GitHubConnectorDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    );
-}
-
-export function KnowledgeSourcesPanel({
-    organization,
-    knowledgeModelId,
-    dataSources,
-    definitions,
-    queries,
-    graph,
-    onImportDefinitions,
-}: {
-    organization: string;
-    knowledgeModelId: string;
-    dataSources: DataSource[];
-    definitions: Definition[];
-    queries: VerifiedQuery[];
-    graph: KnowledgeGraph;
-    onImportDefinitions: (definitions: Definition[], importedIds: string[], sourceId: string) => Promise<void>;
-}) {
-    const t = useTranslations('Knowledge.KnowledgeSources');
-    const queryClient = useQueryClient();
-    const [githubEntry, setGitHubEntry] = useQueryStates(
-        { githubInstallationId: parseAsString.withDefault(''), githubConnectionState: parseAsString.withDefault('') },
-        { history: 'replace' },
-    );
-    const [selectedSourceId, setSelectedSourceId] = useQueryStates({ source: parseAsString.withDefault('') }, { history: 'replace' });
-    const [providerOpen, setProviderOpen] = useState(false);
-    const [linearOpen, setLinearOpen] = useState(false);
-    const [linearEditing, setLinearEditing] = useState<Extract<KnowledgeConnector, { provider: 'linear' }> | undefined>();
-    const linearSetup = useQuery({
-        queryKey: linearSetupKey(organization, knowledgeModelId),
-        queryFn: () => fetchLinearSetup(organization, knowledgeModelId),
-    });
-    const [uploadOpen, setUploadOpen] = useState(false);
-    const [connectorOpen, setConnectorOpen] = useState(Boolean(githubEntry.githubInstallationId && githubEntry.githubConnectionState));
-    const [editing, setEditing] = useState<KnowledgeSourceSummary | null>(null);
-    const [viewId, setViewId] = useState<string | null>(null);
-    const access = useQuery({
-        queryKey: ['organization-access', organization],
-        queryFn: () => getOrganizationAccess(organization),
-        enabled: Boolean(organization),
-        staleTime: 60_000,
-    });
-    const canWrite = access.data?.permissions.workspace.write;
-    const [deleting, setDeleting] = useState<KnowledgeSourceSummary | null>(null);
-    const [reviewing, setReviewing] = useState<KnowledgeSourceSummary | null>(null);
-    const [suggestions, setSuggestions] = useState<ImportSuggestion[]>([]);
-    const [querySuggestions, setQuerySuggestions] = useState<ImportVerifiedQuery[]>([]);
-    const [disconnecting, setDisconnecting] = useState<KnowledgeConnector | null>(null);
-    const businessRules = useQuery({
-        queryKey: ['knowledge-model', knowledgeModelId, 'business-rules', organization, 'source-labels'],
-        queryFn: () =>
-            executeActionClient<{ rules: Array<{ id: string; payload: { name: string } }> }>('knowledge.listBusinessRules', { knowledgeModelId }, { organizationId: organization }),
-    });
-    const sourceAssets = useMemo(() => {
-        const bySource = new Map<string, KnowledgeGraph['sourceAssetEdges']>();
-        for (const edge of graph.sourceAssetEdges) bySource.set(edge.sourceId, [...(bySource.get(edge.sourceId) ?? []), edge]);
-        return bySource;
-    }, [graph.sourceAssetEdges]);
-    const sources = useQuery({
-        queryKey: knowledgeSourcesKey(knowledgeModelId),
-        queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
-    });
-    const viewing = sources.data?.sources.find(source => source.id === viewId);
-    const pagination = useKnowledgeListPagination('sources', sources.data?.sources.length, {
-        id: selectedSourceId.source,
-        index: sources.data?.sources.findIndex(source => source.id === selectedSourceId.source) ?? -1,
-    });
-    const connectors = useQuery({
-        queryKey: knowledgeConnectorsKey(knowledgeModelId),
-        queryFn: () => executeActionClient<{ connectors: KnowledgeConnector[] }>('knowledge.listConnectors', { knowledgeModelId }, { organizationId: organization }),
-        refetchInterval: query => (query.state.data?.connectors.some(connector => connector.status === 'pending' || connector.status === 'syncing') ? 2_000 : 15_000),
-    });
-    useEffect(() => {
-        if (githubEntry.githubInstallationId && githubEntry.githubConnectionState) setConnectorOpen(true);
-    }, [githubEntry.githubConnectionState, githubEntry.githubInstallationId]);
-    useEffect(() => {
-        if (connectors.data) void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) });
-    }, [connectors.data, knowledgeModelId, queryClient]);
-    const previewImport = useMutation({
-        mutationFn: (source: KnowledgeSourceSummary) =>
-            executeActionClient<{ suggestions: ImportSuggestion[]; verifiedQueries: ImportVerifiedQuery[] }>(
-                'knowledge.previewKnowledgeSourceImport',
-                { knowledgeModelId, id: source.id },
-                { organizationId: organization },
-            ),
-        onSuccess: (result, source) => {
-            if (!result.suggestions.length && !result.verifiedQueries.length) {
-                toast.error(t('NoImportable'));
-                return;
-            }
-            setReviewing(source);
-            setSuggestions(result.suggestions);
-            setQuerySuggestions(result.verifiedQueries);
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : t('ParseFailed')),
-    });
-    const remove = useMutation({
-        mutationFn: (source: KnowledgeSourceSummary) =>
-            executeActionClient(
-                'knowledge.deleteKnowledgeSource',
-                { knowledgeModelId, id: source.id },
-                { organizationId: organization, confirmationToken: 'knowledge.deleteKnowledgeSource' },
-            ),
-        onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) });
-            setDeleting(null);
-            toast.success(t('Deleted'));
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : t('DeleteFailed')),
-    });
-    const sync = useMutation({
-        mutationFn: (connector: KnowledgeConnector) => executeActionClient('knowledge.syncConnector', { connectorId: connector.id }, { organizationId: organization }),
-        onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: knowledgeConnectorsKey(knowledgeModelId) });
-            toast.success(t('ConnectorSyncQueued'));
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : t('GitHubSyncFailed')),
-    });
-    const disconnect = useMutation({
-        mutationFn: (connector: KnowledgeConnector) =>
-            executeActionClient('knowledge.deleteConnector', { connectorId: connector.id }, { organizationId: organization, confirmationToken: 'knowledge.deleteConnector' }),
-        onSuccess: () => {
-            void Promise.all([
-                queryClient.invalidateQueries({ queryKey: knowledgeConnectorsKey(knowledgeModelId) }),
-                queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) }),
-            ]);
-            setDisconnecting(null);
-            toast.success(t('ConnectorDisconnected'));
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : t('GitHubDisconnectFailed')),
-    });
-    const scopeName = (source: KnowledgeSourceSummary) =>
-        source.connectionId ? (dataSources.find(item => item.connectionId === source.connectionId)?.name ?? t('UnavailableDataSource')) : t('Shared');
-    const connectKnowledgeBase = () => setProviderOpen(true);
-
-    return (
-        <div className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-                <p className="max-w-2xl text-sm text-muted-foreground">{t('Description')}</p>
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button>
-                            <Plus />
-                            {t('AddSource')}
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => setUploadOpen(true)}>
-                            <Upload />
-                            {t('UploadFile')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={connectKnowledgeBase}>
-                            <LinkIcon />
-                            {t('ConnectKnowledgeBase')}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-            {connectors.data?.connectors.length ? (
-                <div className="grid gap-3 lg:grid-cols-2">
-                    {connectors.data.connectors.map(connector => (
-                        <div key={connector.id} className="rounded-md border bg-card p-4">
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 font-medium">
-                                        {connector.provider === 'github' ? <IconBrandGithub className="size-4" /> : <LinearLogo />}
-                                        <span className="truncate">
-                                            {connector.provider === 'github' ? connector.repositoryFullName : `Linear · ${connector.linearWorkspaceName}`}
-                                        </span>
-                                    </div>
-                                    <div className="mt-1 truncate text-xs text-muted-foreground">
-                                        {connector.provider === 'github'
-                                            ? `${connector.defaultBranch} · ${connector.rootPath || t('GitHubRepositoryRoot')}`
-                                            : `${t('LinearProjectCount', { count: connector.projectIds.length })} · ${t('LinearHourlySync')}`}
-                                    </div>
-                                </div>
-                                <Badge variant={connector.status === 'error' || connector.status === 'disabled' ? 'destructive' : 'outline'}>
-                                    {connector.provider === 'linear' && connector.status === 'disabled' ? t('LinearNeedsApiKey') : t(`GitHubStatus.${connector.status}`)}
-                                </Badge>
-                            </div>
-                            {connector.lastError ? <p className="mt-3 line-clamp-2 text-xs text-destructive">{connector.lastError}</p> : null}
-                            <ExtractionConnectorStatus organization={organization} knowledgeModelId={knowledgeModelId} connectorId={connector.id} />
-                            <div className="mt-3 flex items-center justify-between gap-3">
-                                <span className="text-xs text-muted-foreground">
-                                    {connector.lastSyncedAt ? t('GitHubLastSynced', { date: new Date(connector.lastSyncedAt).toLocaleString() }) : t('GitHubNotSynced')}
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                    {connector.provider === 'linear' && linearSetup.data?.canManage ? (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                                setLinearEditing(connector);
-                                                setLinearOpen(true);
-                                            }}
-                                        >
-                                            {t(connector.status === 'disabled' ? 'LinearUpdateApiKey' : 'LinearEditProjects')}
-                                        </Button>
-                                    ) : null}
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => sync.mutate(connector)}
-                                        disabled={sync.isPending || connector.status === 'disabled' || (connector.provider === 'linear' && !linearSetup.data?.canManage)}
-                                    >
-                                        <RefreshCw className={connector.status === 'syncing' ? 'animate-spin' : ''} /> {t('GitHubSyncNow')}
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label={t('GitHubDisconnect')}
-                                        disabled={connector.provider === 'linear' && !linearSetup.data?.canManage}
-                                        onClick={() => setDisconnecting(connector)}
-                                    >
-                                        <Unplug />
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : null}
-            {sources.isLoading ? <p className="text-sm text-muted-foreground">{t('Loading')}</p> : null}
-            {sources.data?.sources.length ? (
-                <div className="overflow-hidden rounded-md border bg-card">
-                    <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-left text-muted-foreground">
-                            <tr>
-                                <th className="px-4 py-3 font-medium">{t('Name')}</th>
-                                <th className="px-4 py-3 font-medium">{t('Type')}</th>
-                                <th className="px-4 py-3 font-medium">{t('Scope')}</th>
-                                <th className="px-4 py-3 font-medium">{t('Size')}</th>
-                                <th className="px-4 py-3 font-medium">{t('Updated')}</th>
-                                <th className="px-4 py-3 font-medium">{t('Assets')}</th>
-                                <th className="w-14" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sources.data.sources.slice(pagination.pageIndex * pagination.pageSize, (pagination.pageIndex + 1) * pagination.pageSize).flatMap(source => {
-                                const assets = sourceAssets.get(source.id) ?? [];
-                                const definitionCount = assets.filter(asset => asset.assetType === 'definition').length;
-                                const queryCount = assets.filter(asset => asset.assetType === 'verified_query').length;
-                                const ruleCount = assets.filter(asset => asset.assetType === 'business_rule').length;
-                                const selected = selectedSourceId.source === source.id;
-                                return [
-                                    <tr
-                                        key={source.id}
-                                        className="cursor-pointer border-t hover:bg-muted/30"
-                                        onClick={() => void setSelectedSourceId({ source: selected ? '' : source.id })}
-                                    >
-                                        <td className="px-4 py-3">
-                                            <span className="flex flex-wrap items-center gap-2 font-medium">
-                                                {source.format === 'yaml' ? (
-                                                    <FileCode2 className="size-4 shrink-0 text-muted-foreground" />
-                                                ) : (
-                                                    <FileText className="size-4 shrink-0 text-muted-foreground" />
-                                                )}
-                                                <span className="min-w-0 break-words">{knowledgeSourceDisplayName(source)}</span>
-                                                <SourceExtractionStatus organization={organization} knowledgeModelId={knowledgeModelId} sourceId={source.id} />
-                                                {source.connectorProvider ? (
-                                                    <Badge variant="outline">
-                                                        {source.connectorProvider === 'linear' ? <LinearLogo className="size-3" /> : null}
-                                                        {source.connectorProvider === 'github' ? 'GitHub' : 'Linear'} · {t('ReadOnly')}
-                                                    </Badge>
-                                                ) : null}
-                                                {source.sourceUrl ? (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <a
-                                                                className="inline-flex shrink-0 rounded-sm p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                                aria-label={t('OpenOriginal')}
-                                                                href={source.sourceUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                onClick={event => event.stopPropagation()}
-                                                            >
-                                                                <ExternalLink className="size-3.5" aria-hidden="true" />
-                                                            </a>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>{t('OpenOriginal')}</TooltipContent>
-                                                    </Tooltip>
-                                                ) : null}
-                                            </span>
-                                        </td>
-                                        <td className="whitespace-nowrap px-4 py-3 capitalize text-muted-foreground">{source.format}</td>
-                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{scopeName(source)}</td>
-                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{formatBytes(source.byteSize)}</td>
-                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{new Date(source.updatedAt).toLocaleDateString()}</td>
-                                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                                            {t('AssetCounts', { definitions: definitionCount, queries: queryCount })}
-                                            {ruleCount ? ` · ${t('RuleCount', { count: ruleCount })}` : ''}
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon-sm"
-                                                        aria-label={t('ActionsFor', { name: knowledgeSourceDisplayName(source) })}
-                                                        onClick={event => event.stopPropagation()}
-                                                    >
-                                                        <MoreHorizontal />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" onClick={event => event.stopPropagation()}>
-                                                    <DropdownMenuItem onSelect={() => setViewId(source.id)}>
-                                                        <Eye /> {t('View')}
-                                                    </DropdownMenuItem>
-                                                    {canWrite && !source.connectorId ? (
-                                                        <DropdownMenuItem onSelect={() => setEditing(source)}>
-                                                            <Pencil /> {t('Edit')}
-                                                        </DropdownMenuItem>
-                                                    ) : null}
-                                                    {source.format === 'yaml' ? (
-                                                        <DropdownMenuItem onSelect={() => previewImport.mutate(source)}>
-                                                            <FileCode2 /> {t('ReviewImport')}
-                                                        </DropdownMenuItem>
-                                                    ) : null}
-                                                    {canWrite && !source.connectorId ? (
-                                                        <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(source)}>
-                                                            <Trash2 /> {t('Delete')}
-                                                        </DropdownMenuItem>
-                                                    ) : null}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </td>
-                                    </tr>,
-                                    ...(selected
-                                        ? [
-                                              <tr key={`${source.id}:assets`} className="border-t bg-muted/10">
-                                                  <td colSpan={7} className="p-5">
-                                                      <div className="grid gap-5 md:grid-cols-2">
-                                                          {(['provided', 'generated'] as const).map(relationType => (
-                                                              <section key={relationType}>
-                                                                  <h4 className="text-xs font-medium uppercase text-muted-foreground">{t(`RelationTypes.${relationType}`)}</h4>
-                                                                  <div className="mt-2 flex flex-wrap gap-2">
-                                                                      {assets
-                                                                          .filter(asset => asset.relationType === relationType)
-                                                                          .map(asset => {
-                                                                              const label =
-                                                                                  asset.assetType === 'definition'
-                                                                                      ? definitions.find(item => item.id === asset.assetId)?.name
-                                                                                      : asset.assetType === 'business_rule'
-                                                                                        ? businessRules.data?.rules.find(item => item.id === asset.assetId)?.payload.name
-                                                                                        : queries.find(item => item.id === asset.assetId)?.title;
-                                                                              return (
-                                                                                  <Button key={`${asset.assetType}:${asset.assetId}`} variant="outline" size="sm" asChild>
-                                                                                      <NextLink
-                                                                                          href={`?tab=${asset.assetType === 'definition' ? 'definitions' : asset.assetType === 'business_rule' ? 'rules' : 'queries'}&${asset.assetType === 'definition' ? 'definition' : asset.assetType === 'business_rule' ? 'rule' : 'query'}=${encodeURIComponent(asset.assetId)}`}
-                                                                                      >
-                                                                                          {label ?? asset.assetId}
-                                                                                      </NextLink>
-                                                                                  </Button>
-                                                                              );
-                                                                          })}
-                                                                      {!assets.some(asset => asset.relationType === relationType) ? (
-                                                                          <span className="text-sm text-muted-foreground">{t('NoLinkedAssets')}</span>
-                                                                      ) : null}
-                                                                  </div>
-                                                              </section>
-                                                          ))}
-                                                      </div>
-                                                  </td>
-                                              </tr>,
-                                          ]
-                                        : []),
-                                ];
-                            })}
-                        </tbody>
-                    </table>
-                    <DataTablePagination
-                        total={sources.data.sources.length}
-                        {...pagination}
-                        onPageChange={index => {
-                            void setSelectedSourceId({ source: '' });
-                            pagination.onPageChange(index);
-                        }}
-                        onPageSizeChange={size => {
-                            void setSelectedSourceId({ source: '' });
-                            pagination.onPageSizeChange(size);
-                        }}
-                    />
-                </div>
-            ) : sources.data ? (
-                <div className="flex min-h-64 flex-col items-center justify-center rounded-md border border-dashed px-6 text-center">
-                    <FileText className="size-8 text-muted-foreground" />
-                    <h3 className="mt-4 font-medium">{t('EmptyTitle')}</h3>
-                    <p className="mt-1 max-w-md text-sm text-muted-foreground">{t('EmptyDescription')}</p>
-                    <div className="mt-4 flex flex-wrap justify-center gap-2">
-                        <Button onClick={() => setUploadOpen(true)}>
-                            <Upload />
-                            {t('UploadFile')}
-                        </Button>
-                        <Button variant="outline" onClick={connectKnowledgeBase}>
-                            <LinkIcon />
-                            {t('ConnectKnowledgeBase')}
-                        </Button>
-                    </div>
-                </div>
-            ) : null}
-            {uploadOpen && <UploadSourcesDialog open onOpenChange={setUploadOpen} organization={organization} knowledgeModelId={knowledgeModelId} dataSources={dataSources} />}
-            <Dialog open={providerOpen} onOpenChange={setProviderOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>{t('ConnectKnowledgeBase')}</DialogTitle>
-                        <DialogDescription>{t('ConnectorChooseProvider')}</DialogDescription>
-                    </DialogHeader>
-                    <Button
-                        variant="outline"
-                        onClick={() => {
-                            setProviderOpen(false);
-                            setConnectorOpen(true);
-                        }}
-                    >
-                        <IconBrandGithub /> GitHub
-                    </Button>
-                    {linearSetup.data?.available && linearSetup.data.canManage ? (
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setProviderOpen(false);
-                                setLinearEditing(undefined);
-                                setLinearOpen(true);
-                            }}
-                        >
-                            <LinearLogo /> Linear
-                        </Button>
-                    ) : null}
-                </DialogContent>
-            </Dialog>
-            {linearOpen ? (
-                <LinearConnectorDialog
-                    key={linearEditing?.id ?? 'new'}
-                    organization={organization}
-                    knowledgeModelId={knowledgeModelId}
-                    connector={linearEditing}
-                    onClose={() => {
-                        setLinearOpen(false);
-                        setLinearEditing(undefined);
-                    }}
-                />
-            ) : null}
-            <GitHubConnectorDialog
-                open={connectorOpen}
-                onOpenChange={setConnectorOpen}
-                organization={organization}
-                knowledgeModelId={knowledgeModelId}
-                installationId={githubEntry.githubInstallationId}
-                connectionState={githubEntry.githubConnectionState}
-                onConnected={() => {
-                    void setGitHubEntry({ githubInstallationId: null, githubConnectionState: null });
-                    void Promise.all([
-                        queryClient.invalidateQueries({ queryKey: knowledgeConnectorsKey(knowledgeModelId) }),
-                        queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) }),
-                    ]);
-                }}
-            />
-            {viewing && !editing && (
-                <SourceViewer
-                    source={viewing}
-                    organization={organization}
-                    knowledgeModelId={knowledgeModelId}
-                    onEdit={canWrite ? () => setEditing(viewing) : undefined}
-                    onClose={() => setViewId(null)}
-                />
-            )}
-            {editing && canWrite && (
-                <SourceEditor
-                    key={editing.id}
-                    source={editing}
-                    open
-                    onOpenChange={open => !open && setEditing(null)}
-                    organization={organization}
-                    knowledgeModelId={knowledgeModelId}
-                    dataSources={dataSources}
-                />
-            )}
-            <ImportReviewDialog
-                source={reviewing}
-                suggestions={suggestions}
-                verifiedQueries={querySuggestions}
-                existingDefinitions={definitions}
-                dataSources={dataSources}
-                onOpenChange={open => {
-                    if (!open) {
-                        setReviewing(null);
-                        setSuggestions([]);
-                        setQuerySuggestions([]);
-                    }
-                }}
-                onImport={(definitions, importedIds, sourceId, importedQueries) => {
-                    void (async () => {
-                        await onImportDefinitions(definitions, importedIds, sourceId);
-                        await Promise.all(
-                            importedQueries.map(query =>
-                                executeActionClient(
-                                    'knowledge.createVerifiedQuery',
-                                    {
-                                        knowledgeModelId,
-                                        sourceConnectionId: query.sourceConnectionId,
-                                        title: query.title,
-                                        question: query.question,
-                                        sql: query.sql,
-                                        description: query.description,
-                                        definitionIds: query.definitionIds,
-                                        knowledgeSourceIds: [sourceId],
-                                        sourceType: 'knowledge_source',
-                                        sourceId,
-                                    },
-                                    { organizationId: organization },
-                                ),
-                            ),
-                        );
-                        await Promise.all([
-                            queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId, 'verified-queries'] }),
-                            queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId, 'graph'] }),
-                            queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] }),
-                        ]);
-                    })().catch(error => toast.error(error instanceof Error ? error.message : t('ParseFailed')));
-                }}
-            />
-            <AlertDialog open={Boolean(deleting)} onOpenChange={open => !open && !remove.isPending && setDeleting(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>{t('DeleteTitle')}</AlertDialogTitle>
-                        <AlertDialogDescription>{t('DeleteDescription', { name: deleting ? knowledgeSourceDisplayName(deleting) : '' })}</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={remove.isPending}>{t('Cancel')}</AlertDialogCancel>
-                        <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            disabled={remove.isPending}
-                            onClick={() => deleting && remove.mutate(deleting)}
-                        >
-                            {remove.isPending ? t('Deleting') : t('Delete')}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <AlertDialog open={Boolean(disconnecting)} onOpenChange={open => !open && !disconnect.isPending && setDisconnecting(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>{t('ConnectorDisconnectTitle')}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            {t('ConnectorDisconnectDescription', {
-                                name: disconnecting?.provider === 'github' ? disconnecting.repositoryFullName : (disconnecting?.linearWorkspaceName ?? ''),
-                            })}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={disconnect.isPending}>{t('Cancel')}</AlertDialogCancel>
-                        <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            disabled={disconnect.isPending}
-                            onClick={() => disconnecting && disconnect.mutate(disconnecting)}
-                        >
-                            {disconnect.isPending ? t('Deleting') : t('GitHubDisconnect')}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </div>
     );
 }

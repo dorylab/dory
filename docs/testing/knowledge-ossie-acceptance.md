@@ -42,7 +42,7 @@ The repository provides deterministic, synthetic, Northwind-style commerce opera
 | `support_tickets` | one row per ticket          |           1,800 | priority, resolution time, backlog incident   |
 | `events`          | one row per event           |          36,000 | acquisition and funnel exploration            |
 
-The companion Knowledge Model is a native Apache Ossie 0.2.0.dev0 document with:
+The companion knowledge base is a native Apache Ossie 0.2.0.dev0 document with:
 
 - 7 datasets with complete field definitions;
 - 8 metrics;
@@ -148,7 +148,7 @@ The replay creates one Agent Run for each of the five scenarios and checks autom
 After MCP replay or UI Chat completes, open the corresponding Agent Run:
 
 1. A Context card shows `Commerce Operations Knowledge · Ossie 0.2.0.dev0 · rev <8-char hash>`.
-2. The card deep-links to the same Knowledge Model.
+2. The card deep-links to the same knowledge base.
 3. The snapshot includes matched metrics and relationships.
 4. After a model change, a new run records a new revision; the old run still displays the old revision and snapshot.
 5. If one run actually uses two model revisions, both asset references remain independently recorded.

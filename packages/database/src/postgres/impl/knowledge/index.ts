@@ -6,6 +6,7 @@ import {
     knowledgeConnectorItems,
     knowledgeConnectors,
     knowledgeConnectorSyncJobs,
+    knowledgeDriveAuthorizations,
     knowledgeEvidence,
     knowledgeLinearCredentials,
     knowledgeMetricRules,
@@ -58,7 +59,19 @@ export const LINEAR_SYNC_INTERVAL_MS = 3600_000;
 // and SHAs as opaque content fingerprints for every provider.
 export type KnowledgeConnectorSnapshot = {
     commitSha?: string;
-    files: Array<{ path: string; sha: string; contentText: string; format?: KnowledgeSourceFormat; title?: string; sourceUrl?: string; projectId?: string; projectName?: string }>;
+    folders?: { id: string; parent: string; name: string }[];
+    rootName?: string;
+    files: Array<{
+        path: string;
+        sha: string;
+        contentText: string;
+        format?: KnowledgeSourceFormat;
+        title?: string;
+        sourceUrl?: string;
+        projectId?: string;
+        projectName?: string;
+        folderTrail?: { id: string; name: string }[];
+    }>;
 };
 export type KnowledgeModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
 export type KnowledgeModelDetail = {
@@ -176,7 +189,7 @@ export function validateKnowledgeModelDocument(value: unknown, sourceIds?: Reado
     const ids = new Set<string>();
     for (const definition of definitions) {
         if (ids.has(definition.id)) throw new Error(`Duplicate knowledge definition: ${definition.id}`);
-        if (sourceIds && !sourceIds.has(definition.sourceConnectionId)) throw new Error(`Data source for "${definition.name}" is not linked to this knowledge model.`);
+        if (sourceIds && !sourceIds.has(definition.sourceConnectionId)) throw new Error(`Data source for "${definition.name}" is not linked to this knowledge base.`);
         if (definition.filters?.some(filter => /;|--|\/\*/.test(filter))) throw new Error(`Filter for "${definition.name}" must be a single expression without comments.`);
         ids.add(definition.id);
     }
@@ -338,7 +351,7 @@ export class PostgresKnowledgeRepository {
     async getModel(input: { organizationId: string; knowledgeModelId: string }) {
         const models = await this.listModels({ organizationId: input.organizationId });
         const found = models.find(item => item.id === input.knowledgeModelId);
-        if (!found) throw new Error('Knowledge model not found.');
+        if (!found) throw new Error('Knowledge base not found.');
         return found;
     }
 
@@ -585,7 +598,7 @@ export class PostgresKnowledgeRepository {
 
     async removeDataSource(input: { organizationId: string; knowledgeModelId: string; connectionId: string }) {
         const model = await this.getModel(input);
-        if (model.dataSources.length <= 1) throw new Error('A knowledge model must have at least one data source.');
+        if (model.dataSources.length <= 1) throw new Error('A knowledge base must have at least one data source.');
         if (model.model.definitions.some(item => item.sourceConnectionId === input.connectionId))
             throw new Error('Remove or reassign definitions that use this data source first.');
         if ((await this.extraction.listRules(input)).some(rule => rule.payload.sourceConnectionId === input.connectionId))
@@ -671,6 +684,8 @@ export class PostgresKnowledgeRepository {
                 connectorId: knowledgeConnectorItems.connectorId,
                 connectorProvider: knowledgeConnectors.provider,
                 remotePath: knowledgeConnectorItems.remotePath,
+                remoteTitle: knowledgeConnectorItems.remoteTitle,
+                folderTrail: knowledgeConnectorItems.folderTrail,
                 sourceUrl: knowledgeConnectorItems.sourceUrl,
             })
             .from(knowledgeSources)
@@ -684,7 +699,7 @@ export class PostgresKnowledgeRepository {
     async searchKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId?: string; query: string }) {
         const model = await this.getModel(input);
         if (input.connectionId && !model.dataSources.some(source => source.connectionId === input.connectionId))
-            throw new Error('Knowledge model is not linked to this data source.');
+            throw new Error('This data source is not linked to the selected knowledge base.');
         const conditions = [eq(knowledgeSources.organizationId, input.organizationId), eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId)];
         if (input.connectionId) conditions.push(or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId))!);
         const rows = await this.db
@@ -694,6 +709,8 @@ export class PostgresKnowledgeRepository {
                 connectorId: knowledgeConnectorItems.connectorId,
                 connectorProvider: knowledgeConnectors.provider,
                 remotePath: knowledgeConnectorItems.remotePath,
+                remoteTitle: knowledgeConnectorItems.remoteTitle,
+                folderTrail: knowledgeConnectorItems.folderTrail,
             })
             .from(knowledgeSources)
             .leftJoin(knowledgeConnectorItems, eq(knowledgeSources.id, knowledgeConnectorItems.knowledgeSourceId))
@@ -737,6 +754,8 @@ export class PostgresKnowledgeRepository {
                 connectorId: knowledgeConnectorItems.connectorId,
                 connectorProvider: knowledgeConnectors.provider,
                 remotePath: knowledgeConnectorItems.remotePath,
+                remoteTitle: knowledgeConnectorItems.remoteTitle,
+                folderTrail: knowledgeConnectorItems.folderTrail,
                 remoteRevision: knowledgeConnectorItems.remoteSha,
                 sourceUrl: knowledgeConnectorItems.sourceUrl,
             })
@@ -751,7 +770,7 @@ export class PostgresKnowledgeRepository {
 
     private async assertKnowledgeSourceConnection(model: KnowledgeModelDetail, connectionId?: string | null) {
         if (connectionId && !model.dataSources.some(source => source.connectionId === connectionId)) {
-            throw new Error('The selected data source is not linked to this knowledge model.');
+            throw new Error('The selected data source is not linked to this knowledge base.');
         }
     }
 
@@ -825,13 +844,128 @@ export class PostgresKnowledgeRepository {
         });
     }
 
+    async beginDriveAuthorization(input: typeof knowledgeDriveAuthorizations.$inferInsert) {
+        await this.getModel(input);
+        await this.db.transaction(async tx => {
+            await tx.delete(knowledgeDriveAuthorizations).where(lte(knowledgeDriveAuthorizations.expiresAt, new Date()));
+            await tx.insert(knowledgeDriveAuthorizations).values(input);
+        });
+    }
+
+    async clearExpiredDriveAuthorizations() {
+        await this.db.delete(knowledgeDriveAuthorizations).where(lte(knowledgeDriveAuthorizations.expiresAt, new Date()));
+    }
+
+    async claimDriveCallback(state: string) {
+        const [session] = await this.db
+            .update(knowledgeDriveAuthorizations)
+            .set({ state: null })
+            .where(and(eq(knowledgeDriveAuthorizations.state, state), sql`${knowledgeDriveAuthorizations.expiresAt} > now()`))
+            .returning();
+        if (!session) throw new Error('Google authorization expired. Start again.');
+        return session;
+    }
+
+    async finishDriveCallback(id: string, refreshTokenEncrypted: string | null) {
+        await this.db.update(knowledgeDriveAuthorizations).set({ refreshTokenEncrypted, verifier: '' }).where(eq(knowledgeDriveAuthorizations.id, id));
+    }
+
+    async getDriveAuthorization(input: { id: string; organizationId: string; knowledgeModelId: string; userId: string }) {
+        const table = knowledgeDriveAuthorizations;
+        const [session] = await this.db
+            .select()
+            .from(table)
+            .where(
+                and(
+                    eq(table.id, input.id),
+                    eq(table.organizationId, input.organizationId),
+                    eq(table.knowledgeModelId, input.knowledgeModelId),
+                    eq(table.userId, input.userId),
+                    sql`${table.expiresAt} > now()`,
+                ),
+            );
+        if (!session) throw new Error('Google authorization expired. Start again.');
+        return session;
+    }
+
+    async connectDriveFolder(input: { id: string; organizationId: string; knowledgeModelId: string; userId: string; folderId: string; name: string; connectorId?: string }) {
+        const table = knowledgeDriveAuthorizations;
+        return this.db.transaction(async tx => {
+            const [session] = await tx
+                .delete(table)
+                .where(
+                    and(
+                        eq(table.id, input.id),
+                        eq(table.organizationId, input.organizationId),
+                        eq(table.knowledgeModelId, input.knowledgeModelId),
+                        eq(table.userId, input.userId),
+                        sql`${table.expiresAt} > now()`,
+                    ),
+                )
+                .returning();
+            if (!session?.refreshTokenEncrypted) throw new Error('Google authorization expired. Start again.');
+            if (input.connectorId) {
+                const [connector] = await tx
+                    .update(knowledgeConnectors)
+                    .set({
+                        driveRefreshTokenEncrypted: session.refreshTokenEncrypted,
+                        displayName: input.name,
+                        configRevision: sql`${knowledgeConnectors.configRevision} + 1`,
+                        status: 'pending',
+                        lastError: null,
+                    })
+                    .where(
+                        and(
+                            eq(knowledgeConnectors.id, input.connectorId),
+                            eq(knowledgeConnectors.organizationId, input.organizationId),
+                            eq(knowledgeConnectors.knowledgeModelId, input.knowledgeModelId),
+                            eq(knowledgeConnectors.provider, 'drive'),
+                            eq(knowledgeConnectors.driveFolderId, input.folderId),
+                        ),
+                    )
+                    .returning({ id: knowledgeConnectors.id });
+                if (!connector) throw new Error('The original Drive folder must be accessible to reconnect.');
+                await tx
+                    .update(knowledgeConnectorSyncJobs)
+                    .set({ status: 'failed', leaseToken: null, error: 'Google authorization changed.' })
+                    .where(and(eq(knowledgeConnectorSyncJobs.connectorId, connector.id), inArray(knowledgeConnectorSyncJobs.status, ['queued', 'running'])));
+                await tx.insert(knowledgeConnectorSyncJobs).values({ connectorId: connector.id });
+                return connector;
+            }
+            const [connector] = await tx
+                .insert(knowledgeConnectors)
+                .values({
+                    provider: 'drive',
+                    nextSyncAt: new Date(Date.now() + LINEAR_SYNC_INTERVAL_MS),
+                    driveFolderId: input.folderId,
+                    displayName: input.name,
+                    driveRefreshTokenEncrypted: session.refreshTokenEncrypted,
+                    knowledgeModelId: input.knowledgeModelId,
+                    organizationId: input.organizationId,
+                    createdBy: input.userId,
+                })
+                .returning({ id: knowledgeConnectors.id });
+            await tx.insert(knowledgeConnectorSyncJobs).values({ connectorId: connector.id });
+            return connector;
+        });
+    }
+
     async listConnectors(input: { organizationId: string; knowledgeModelId: string }) {
         await this.getModel(input);
-        return this.db
-            .select()
+        const { driveRefreshTokenEncrypted: _token, syncedFolders: _folders, ...columns } = getTableColumns(knowledgeConnectors);
+        const rows = await this.db
+            .select(columns)
             .from(knowledgeConnectors)
             .where(and(eq(knowledgeConnectors.organizationId, input.organizationId), eq(knowledgeConnectors.knowledgeModelId, input.knowledgeModelId)))
             .orderBy(desc(knowledgeConnectors.updatedAt));
+        const linearIds = rows.filter(row => row.provider === 'linear').map(row => row.id);
+        if (!linearIds.length) return rows;
+        const projects = await this.db
+            .selectDistinct({ connectorId: knowledgeConnectorItems.connectorId, id: knowledgeConnectorItems.projectId, name: knowledgeConnectorItems.projectName })
+            .from(knowledgeConnectorItems)
+            .where(inArray(knowledgeConnectorItems.connectorId, linearIds));
+        const labels = new Map(projects.map(project => [project.connectorId + '/' + project.id, project.name]));
+        return rows.map(row => (row.provider === 'linear' ? { ...row, projectNames: row.projectIds.map(id => labels.get(row.id + '/' + id) ?? id) } : row));
     }
 
     async getConnector(input: { organizationId: string; connectorId: string }) {
@@ -998,11 +1132,11 @@ export class PostgresKnowledgeRepository {
             });
     }
 
-    async queueDueLinearConnectors() {
+    async queueDueConnectors(provider: 'linear' | 'drive') {
         const due = await this.db
             .select({ id: knowledgeConnectors.id })
             .from(knowledgeConnectors)
-            .where(and(eq(knowledgeConnectors.provider, 'linear'), ne(knowledgeConnectors.status, 'disabled'), lte(knowledgeConnectors.nextSyncAt, new Date())));
+            .where(and(eq(knowledgeConnectors.provider, provider), ne(knowledgeConnectors.status, 'disabled'), lte(knowledgeConnectors.nextSyncAt, new Date())));
         for (const connector of due)
             await this.db.transaction(async tx => {
                 const [claimed] = await tx
@@ -1086,7 +1220,7 @@ export class PostgresKnowledgeRepository {
         });
     }
 
-    async finishConnectorSyncJob(input: { jobId: string; connectorId: string; leaseToken?: string; error?: string | null; retryAt?: Date }) {
+    async finishConnectorSyncJob(input: { jobId: string; connectorId: string; leaseToken?: string; error?: string | null; retryAt?: Date; authorizationRevoked?: boolean }) {
         await this.db.transaction(async tx => {
             const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, input.connectorId)).for('update');
             if (!connector) return;
@@ -1127,12 +1261,20 @@ export class PostgresKnowledgeRepository {
             if (job && input.error && connector.status !== 'disabled')
                 await tx
                     .update(knowledgeConnectors)
-                    .set({ status: input.retryAt ? 'pending' : 'error', lastError: input.error.slice(0, 2000) })
+                    .set({ status: input.authorizationRevoked ? 'disabled' : input.retryAt ? 'pending' : 'error', lastError: input.error.slice(0, 2000) })
                     .where(eq(knowledgeConnectors.id, connector.id));
         });
     }
 
-    async applyConnectorSnapshot(input: KnowledgeConnectorSnapshot & { connectorId: string; configRevision?: number; jobId?: string; leaseToken?: string }) {
+    async applyConnectorSnapshot(
+        input: KnowledgeConnectorSnapshot & {
+            connectorId: string;
+            configRevision?: number;
+            jobId?: string;
+            leaseToken?: string;
+            newLocal?: { organizationId: string; knowledgeModelId: string; displayName: string; createdBy: string };
+        },
+    ) {
         const validated = input.files.map(file => ({
             ...file,
             value: validateKnowledgeSource(
@@ -1142,6 +1284,7 @@ export class PostgresKnowledgeRepository {
         }));
         if (new Set(input.files.map(file => file.path)).size !== input.files.length) throw new Error('Duplicate remote knowledge item.');
         await this.db.transaction(async tx => {
+            if (input.newLocal) await tx.insert(knowledgeConnectors).values({ ...input.newLocal, id: input.connectorId, provider: 'local' });
             const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, input.connectorId)).for('update');
             if (!connector || connector.status === 'disabled') throw new Error('Knowledge connector is unavailable.');
             // Serialize source invalidation with review/publication before reading evidence.
@@ -1165,9 +1308,12 @@ export class PostgresKnowledgeRepository {
             for (const file of validated) {
                 const baseName = file.title ?? `${connector.repositoryFullName} · ${file.path.replaceAll('/', ' › ')}`;
                 const suffix = ` · ${connector.id.slice(-8)} · ${file.path.split('/').pop()}`;
-                const fileName = file.title
-                    ? `${baseName.slice(0, Math.max(20, 240 - suffix.length))}${suffix}`
-                    : `${baseName.slice(0, 240 - ` · ${connector.id.slice(-8)}`.length)} · ${connector.id.slice(-8)}`;
+                const fileName =
+                    connector.provider === 'drive' || connector.provider === 'local'
+                        ? `managed · ${connector.id} · ${knowledgeHash(file.path)}`
+                        : file.title
+                          ? `${baseName.slice(0, Math.max(20, 240 - suffix.length))}${suffix}`
+                          : `${baseName.slice(0, 240 - ` · ${connector.id.slice(-8)}`.length)} · ${connector.id.slice(-8)}`;
                 const item = byPath.get(file.path);
                 if (item) {
                     if (item.remoteSha !== file.sha) {
@@ -1182,12 +1328,16 @@ export class PostgresKnowledgeRepository {
                     if (
                         item.remoteSha !== file.sha ||
                         item.sourceUrl !== (file.sourceUrl ?? null) ||
+                        item.remoteTitle !== (file.title ?? null) ||
+                        JSON.stringify(item.folderTrail) !== JSON.stringify(file.folderTrail ?? null) ||
                         item.projectId !== (file.projectId ?? null) ||
                         item.projectName !== (file.projectName ?? null)
                     )
                         await tx
                             .update(knowledgeConnectorItems)
                             .set({
+                                remoteTitle: file.title ?? null,
+                                folderTrail: file.folderTrail ?? null,
                                 projectId: file.projectId ?? null,
                                 projectName: file.projectName ?? null,
                                 remoteSha: file.sha,
@@ -1214,6 +1364,8 @@ export class PostgresKnowledgeRepository {
                     connectorId: connector.id,
                     knowledgeSourceId: source.id,
                     remotePath: file.path,
+                    remoteTitle: file.title ?? null,
+                    folderTrail: file.folderTrail ?? null,
                     projectId: file.projectId ?? null,
                     projectName: file.projectName ?? null,
                     remoteSha: file.sha,
@@ -1228,8 +1380,11 @@ export class PostgresKnowledgeRepository {
                 .update(knowledgeConnectors)
                 .set({
                     status: 'ready',
+                    ...(input.folders ? { syncedFolders: input.folders } : {}),
+                    ...(input.rootName ? { displayName: input.rootName } : {}),
                     lastCommitSha: input.commitSha ?? null,
-                    ...(connector.provider === 'linear' ? { nextSyncAt: new Date(Date.now() + LINEAR_SYNC_INTERVAL_MS) } : {}),
+                    ...(connector.provider === 'local' ? { configRevision: connector.configRevision + 1 } : {}),
+                    ...(connector.provider === 'linear' || connector.provider === 'drive' ? { nextSyncAt: new Date(Date.now() + LINEAR_SYNC_INTERVAL_MS) } : {}),
                     lastSyncedAt: new Date(),
                     lastError: null,
                     updatedAt: new Date(),
@@ -1292,7 +1447,7 @@ export class PostgresKnowledgeRepository {
         createdBy?: string | null;
     }) {
         const model = await this.getModel(input);
-        if (!model.dataSources.some(source => source.connectionId === input.sourceConnectionId)) throw new Error('This data source is not linked to the selected knowledge model.');
+        if (!model.dataSources.some(source => source.connectionId === input.sourceConnectionId)) throw new Error('This data source is not linked to the selected knowledge base.');
         const definitionIds = [...new Set(input.definitionIds ?? [])];
         if (definitionIds.some(id => !model.model.definitions.some(definition => definition.id === id))) throw new Error('One or more knowledge definitions are unavailable.');
         const [row] = await this.db

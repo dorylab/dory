@@ -1,6 +1,6 @@
 # 电商 Linear API Key 真实联调
 
-将真实 Linear 项目接到已有“电商”知识模型，关联数据源为 `Commerce Agent Evaluation`。
+将真实 Linear 项目接到已有“电商”知识库，关联数据源为 `Commerce Agent Evaluation`。
 测试不覆盖现有模型定义，不新增生产写入接口，不导入 Issue 或附件。
 
 ## 资料与 Key 准备
@@ -75,7 +75,7 @@ yarn exec playwright test tests/e2e/commerce-linear-live.spec.ts --project=chrom
 
 ### 独立撤销与恢复测试
 
-同一 Dory 组织、同一 Linear workspace 共用凭据，另建知识模型不能隔离 Key 撤销影响。
+同一 Dory 组织、同一 Linear workspace 共用凭据，另建知识库不能隔离 Key 撤销影响。
 必须使用**独立 Dory 测试组织**、独立模型、同一测试数据源的测试连接，以及独立临时 Read Key。
 测试用户需要同时拥有这些组织的管理权限；没有这种隔离环境时，记录“撤销真实联调待完成”，不要撤销演示 Key。
 
@@ -105,7 +105,7 @@ yarn exec playwright test tests/e2e/commerce-linear-live.spec.ts --project=chrom
 聊天验收使用当前活动组织；对显式指定的独立组织，改用该组织已有的 MCP Token。
 
 如本地已有 `DORY_MCP_TOKEN`，用例改为直接调用真实 `dory_search_assets`、`dory_read_asset`，
-Token 需要能读取对应测试数据源和知识模型。测试文件关闭 trace、视频和失败截图，不记录请求头、Token 或聊天原始流。
+Token 需要能读取对应测试数据源和知识库。测试文件关闭 trace、视频和失败截图，不记录请求头、Token 或聊天原始流。
 报告仅保留问题、来源 ref、Linear 原文 URL 和聊天 ID，详细调用可在 Dory Agent Run 中查看。
 
 本轮不等待完整一小时，不将“手动刷新”标记为“真实小时同步已验证”。
@@ -117,7 +117,7 @@ Token 需要能读取对应测试数据源和知识模型。测试文件关闭 t
 
 - Linear workspace：Jeffrey；团队：Jeffrey（JEF）。
 - [测试项目](https://linear.app/jeffreyh/project/dory-电商知识测试-83395ade1844/overview)：`be635b76-4b00-4efc-8129-832bc72d15f8`。
-- 知识模型：`kn_01a15859-05b2-757f-b4a5-16049a1eccad`（电商）。
+- 知识库：`kn_01a15859-05b2-757f-b4a5-16049a1eccad`（电商）。
 - 保留连接器：`kc_01a15896-d957-74f7-bc6e-8a1b573ac374`。
 
 | 验收项目                         | 结果                                                            |

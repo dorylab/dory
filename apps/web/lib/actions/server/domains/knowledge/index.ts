@@ -12,6 +12,7 @@ import { assertLinearAdmin, assertLinearAvailable } from '@/lib/server/linear-cr
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
 import { extractionKnowledgeActions } from './extraction';
+import { folderConnectorActions } from './folder-connectors';
 import { linearKnowledgeActions } from './linear';
 import { generateKnowledgeSuggestions } from './suggestions';
 import {
@@ -269,9 +270,11 @@ const knowledgeListDirectoryAction = defineWebAction({
         connectors: z.array(
             z.object({
                 id: entryId,
-                provider: z.enum(['github', 'linear']),
+                provider: z.enum(['github', 'linear', 'local', 'drive']),
                 repositoryFullName: z.string().nullable(),
                 rootPath: z.string(),
+                displayName: z.string().nullable(),
+                syncedFolders: z.array(z.object({ id: z.string(), parent: z.string(), name: z.string() })).nullable(),
                 linearWorkspaceName: z.string().nullable(),
             }),
         ),
@@ -659,7 +662,7 @@ export const knowledgeGetDefinitionAction = defineWebAction({
     },
     handler: async (ctx, input) => {
         const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
-        if (!model.dataSources.some(source => source.connectionId === input.connectionId)) throw new Error('Knowledge model is not linked to this data source.');
+        if (!model.dataSources.some(source => source.connectionId === input.connectionId)) throw new Error('This data source is not linked to the selected knowledge base.');
         const definition = model.model.definitions.find(item => isPublishedDefinition(item) && item.id === input.definitionId && item.sourceConnectionId === input.connectionId);
         if (!definition) throw new Error('Knowledge definition not found.');
         return definition;
@@ -880,14 +883,18 @@ export const knowledgeListConnectorsAction = defineWebAction({
     kind: 'query',
     risk: 'read',
     inputSchema: modelIdInput,
-    outputSchema: z.object({ connectors: z.array(knowledgeConnectorSchema) }),
+    outputSchema: z.object({ connectors: z.array(knowledgeConnectorSchema), canWrite: z.boolean(), canManageLinear: z.boolean() }),
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
     actors: [...readActors],
     handler: async (ctx, input) => {
         const connectors = await ctx.services.db.knowledge.listConnectors({ organizationId: ctx.organizationId, ...input });
         if (githubAppConfigured()) getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
-        return { connectors: connectors.map(connector => knowledgeConnectorSchema.parse(connector)) };
+        return {
+            connectors: connectors.map(connector => knowledgeConnectorSchema.parse(connector)),
+            canWrite: Boolean(ctx.access.permissions.workspace.write),
+            canManageLinear: ctx.access.role === 'owner' || ctx.access.role === 'admin',
+        };
     },
 });
 
@@ -908,6 +915,7 @@ export const knowledgeSyncConnectorAction = defineWebAction({
             assertLinearAdmin(ctx);
             assertLinearAvailable();
         }
+        if (connector.provider === 'local') throw new Error('Select the local directory on this device to sync.');
         if (connector.status === 'disabled') throw new Error('Reconnect the knowledge connector before syncing.');
         await ctx.services.db.knowledge.queueConnectorSync({ connectorId: connector.id });
         getKnowledgeConnectorSyncRunner(ctx.services.db).wake();
@@ -936,6 +944,7 @@ export const knowledgeDeleteConnectorAction = defineWebAction({
 export const knowledgeActions = [
     ...extractionKnowledgeActions,
     ...linearKnowledgeActions,
+    ...folderConnectorActions,
     knowledgeListAction,
     knowledgeGetAction,
     knowledgeCreateAction,

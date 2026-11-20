@@ -65,7 +65,7 @@ test('Linear project selection confirms sharing, saves scope, displays read-only
                 };
                 break;
             case 'knowledge.listConnectors':
-                data = { connectors: created ? [connector()] : [] };
+                data = { canWrite: true, canManageLinear: true, connectors: created ? [connector()] : [] };
                 break;
             case 'knowledge.createLinearConnector':
                 created = true;
@@ -109,8 +109,7 @@ test('Linear project selection confirms sharing, saves scope, displays read-only
     });
     try {
         await page.goto(`/${organization}/knowledge/${model.id}?tab=sources`);
-        await page.getByRole('button', { name: 'Connect knowledge base', exact: true }).first().click();
-        await page.getByRole('button', { name: 'Linear', exact: true }).click();
+        await page.getByRole('button', { name: 'Linear 0 sources', exact: true }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog.getByLabel('Linear API Key', { exact: true })).toHaveAttribute('type', 'password');
         await dialog.getByLabel('Linear API Key', { exact: true }).fill('invalid');
@@ -125,20 +124,14 @@ test('Linear project selection confirms sharing, saves scope, displays read-only
         await expect(dialog.getByRole('button', { name: 'Connect and sync', exact: true })).toBeDisabled();
         await dialog.getByLabel(/I understand that all selected project content/).check();
         await dialog.getByRole('button', { name: 'Connect and sync', exact: true }).click();
-        await expect(page.getByText('Linear · Dory Product', { exact: true })).toBeVisible();
-        await expect(page.getByText('Linear · Read-only', { exact: true })).toBeVisible();
-        await expect(page.getByText('Revenue definitions.md', { exact: true })).toBeVisible();
-        await expect(page.getByText(storedSourceName, { exact: true })).toHaveCount(0);
-        await expect(page.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', 'https://linear.app/dory/document/revenue');
-        await expect(page.getByRole('link', { name: 'Open original' })).toHaveText('');
-        await page.getByRole('link', { name: 'Open original' }).hover();
-        await expect(page.getByRole('tooltip')).toHaveText('Open original');
+        await expect(page.getByText('Dory Product', { exact: true })).toBeVisible();
+        await expect(page.getByRole('listitem').filter({ hasText: 'Dory Product' }).getByRole('link', { name: 'View in documents' })).toHaveAttribute('href', '?tab=documents&folder=linear-fixture');
         await page.getByRole('button', { name: 'Edit projects', exact: true }).click();
         await expect(dialog.getByLabel('Revenue definitions', { exact: true })).toBeChecked();
         await dialog.getByLabel('Customer glossary', { exact: true }).check();
         await dialog.getByLabel(/I understand that all selected project content/).check();
         await dialog.getByRole('button', { name: 'Save and sync', exact: true }).click();
-        await expect(page.getByText(/2 projects selected · Syncs hourly/)).toBeVisible();
+        await expect(page.getByText(/2 projects selected/)).toBeVisible();
         await page.getByRole('button', { name: 'Edit projects', exact: true }).click();
         await dialog.getByLabel('Linear API Key', { exact: true }).fill('unsaved-secret');
         await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();

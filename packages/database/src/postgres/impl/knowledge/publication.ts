@@ -42,7 +42,7 @@ export class KnowledgePublicationStore {
     async setPolicy(input: ModelScope & { mode: PublicationMode; expectedVersion: number }) {
         return this.db.transaction(async tx => {
             const [model] = await tx.select().from(knowledgeModels).where(modelWhere(input)).for('update');
-            if (!model) throw new Error('Knowledge model not found.');
+            if (!model) throw new Error('Knowledge base not found.');
             if (model.publicationEpoch !== input.expectedVersion) throw new Error('Publication settings changed; reload before saving.');
             if (model.publicationMode === input.mode) return { mode: model.publicationMode, version: model.publicationEpoch };
             await tx
@@ -273,7 +273,7 @@ export class KnowledgePublicationStore {
     async restore(input: ModelScope & { id: string; userId: string }) {
         return this.db.transaction(async tx => {
             const [model] = await tx.select().from(knowledgeModels).where(modelWhere(input)).for('update');
-            if (!model) throw new Error('Knowledge model not found.');
+            if (!model) throw new Error('Knowledge base not found.');
             const [event] = await tx
                 .select()
                 .from(history)
@@ -304,7 +304,7 @@ export class KnowledgePublicationStore {
     async withdraw(input: ModelScope & { id: string; expectedRevision: string; userId: string }) {
         return this.db.transaction(async tx => {
             const [model] = await tx.select().from(knowledgeModels).where(modelWhere(input)).for('update');
-            if (!model) throw new Error('Knowledge model not found.');
+            if (!model) throw new Error('Knowledge base not found.');
             const [event] = await tx
                 .select()
                 .from(history)

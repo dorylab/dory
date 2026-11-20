@@ -25,20 +25,12 @@ type History = {
         payload: { name: string; description: string };
         reason: string | null;
         createdAt: string;
-        evidence: Array<{ quote: string; sourceTitle: string; sourceUrl: string | null }>;
+        evidence: Array<{ quote: string; sourceId?: string; sourceTitle: string; sourceUrl: string | null }>;
     }>;
     tasks: Array<{ id: string; status: string; error: string | null }>;
 };
 
-export function KnowledgePublicationControls({
-    organization,
-    modelId,
-    variant = 'settingsOnly',
-}: {
-    organization: string;
-    modelId: string;
-    variant?: 'settingsOnly' | 'toolbar';
-}) {
+export function KnowledgePublicationControls({ organization, modelId, variant = 'settingsOnly' }: { organization: string; modelId: string; variant?: 'settingsOnly' | 'toolbar' }) {
     const t = useTranslations('Knowledge.Publication');
     const locale = useLocale();
     const client = useQueryClient();
@@ -199,7 +191,11 @@ export function KnowledgePublicationControls({
                                     {event.evidence.map((e, i) => (
                                         <blockquote key={i} className="my-2 whitespace-pre-wrap break-words border-l-2 pl-3">
                                             <p>{e.quote}</p>
-                                            {e.sourceUrl && /^https?:\/\//i.test(e.sourceUrl) ? (
+                                            {e.sourceId ? (
+                                                <a className="underline" href={`?tab=sources&source=${encodeURIComponent(e.sourceId)}`}>
+                                                    {knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl })}
+                                                </a>
+                                            ) : e.sourceUrl && /^https?:\/\//i.test(e.sourceUrl) ? (
                                                 <a href={e.sourceUrl} target="_blank" rel="noreferrer" className="underline">
                                                     {knowledgeSourceDisplayName({ fileName: e.sourceTitle, sourceUrl: e.sourceUrl })}
                                                 </a>

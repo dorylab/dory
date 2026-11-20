@@ -53,12 +53,14 @@ import { executeActionClient } from '@/lib/actions/client';
 import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 
 import { useOrganizationId } from '../components/organization-context';
+import { KnowledgeDataSourceAvatars } from './knowledge-data-source-avatars';
 import { KnowledgeDocumentsPanel } from './knowledge-documents-panel';
 import { BusinessRulesPanel, KnowledgeEvidenceWarning, KnowledgeReviewPanel, MetricRulesPanel, useExtractionStatus } from './knowledge-extraction-panel';
 import { KnowledgePublicationControls } from './knowledge-publication-controls';
 import { useKnowledgeListPagination } from './knowledge-list-pagination';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
-import { KnowledgeSourcesPanel, type KnowledgeSourceSummary } from './knowledge-sources-panel';
+import { KnowledgeSourcesPanel } from './knowledge-connections-panel';
+import type { KnowledgeSourceSummary } from './knowledge-sources-panel';
 
 type Definition = {
     id: string;
@@ -194,13 +196,24 @@ function AssetSourceEditor({
                         const name = knowledgeSourceDisplayName(source);
                         return (
                             <div key={source.id} className="flex min-h-10 items-center gap-3 px-3 py-2">
-                                <Link className="min-w-0 flex-1 truncate text-sm hover:underline" href={`?tab=sources&source=${encodeURIComponent(source.id)}`}>
+                                <Link
+                                    className="min-w-0 flex-1 truncate text-sm hover:underline"
+                                    href={
+                                        source.format === 'markdown'
+                                            ? `?tab=documents&file=${encodeURIComponent(source.id)}`
+                                            : `?tab=sources&source=${encodeURIComponent(source.id)}`
+                                    }
+                                >
                                     {name}
                                 </Link>
                                 <Badge variant="outline">{t(`RelationTypes.${relationBySourceId.get(source.id)}`)}</Badge>
                                 <Button variant="ghost" size="icon-sm" asChild>
                                     <Link
-                                        href={`?tab=sources&source=${encodeURIComponent(source.id)}`}
+                                        href={
+                                            source.format === 'markdown'
+                                                ? `?tab=documents&file=${encodeURIComponent(source.id)}`
+                                                : `?tab=sources&source=${encodeURIComponent(source.id)}`
+                                        }
                                         aria-label={t('DefinitionSources.OpenNamed', { name })}
                                         title={t('DefinitionSources.OpenNamed', { name })}
                                     >
@@ -1806,7 +1819,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
         queryKey: modelKey(knowledgeModelId),
         queryFn: () => executeActionClient<KnowledgeModelView>('knowledge.get', { knowledgeModelId }, { organizationId: organization }),
     });
-    const needsReferenceData = ['queries', 'sources', 'definitions'].includes(activeTab);
+    const needsReferenceData = ['queries', 'definitions'].includes(activeTab);
     const queries = useQuery({
         enabled: needsReferenceData,
         queryKey: [...modelKey(knowledgeModelId), 'verified-queries'],
@@ -1825,6 +1838,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
         queryFn: () => executeActionClient<KnowledgeGraph>('knowledge.getGraph', { knowledgeModelId }, { organizationId: organization }),
     });
     const sources = useQuery({
+        enabled: activeTab !== 'sources',
         queryKey: [...modelKey(knowledgeModelId), 'knowledge-sources'],
         refetchInterval: activeTab === 'documents' || activeTab === 'overview' ? 15_000 : false,
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
@@ -1914,24 +1928,18 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
         <div className="bg-n8 h-screen overflow-auto">
             <main className="container mx-auto flex flex-col gap-6 px-4 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
+                    <div className="min-w-0 max-w-full">
                         <Button asChild variant="ghost" size="sm" className="-ml-2">
                             <Link href={`/${organizationSlug}/knowledge`}>
                                 <ArrowLeft className="h-4 w-4" />
                                 {t('Title')}
                             </Link>
                         </Button>
-                        <h1 className="mt-2 text-2xl font-bold">{model.name}</h1>
-                        {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            {t('ConnectedDataSources')}
-                            {model.dataSources.map(source => (
-                                <Badge key={source.connectionId} variant="secondary">
-                                    {source.name}
-                                </Badge>
-                            ))}
-                            {!model.dataSources.length ? '—' : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <h1 className="min-w-0 wrap-anywhere text-2xl font-bold">{model.name}</h1>
+                            <KnowledgeDataSourceAvatars sources={model.dataSources} />
                         </div>
+                        {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
                     </div>
                     <div className="flex gap-2">
                         {extraction.data?.canManage && extraction.data.pendingCount > 0 ? (
@@ -1972,7 +1980,6 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                     </TabsList>
                     <TabsContent value="documents" className="pt-4">
                         <KnowledgeDocumentsPanel
-                            onEditModel={() => setEditingModel(model)}
                             model={model}
                             organization={organization}
                             sources={sources.data?.sources ?? []}
@@ -2020,27 +2027,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                                 <BusinessRulesPanel organization={organization} knowledgeModelId={knowledgeModelId} dataSources={model.dataSources} />
                             </>
                         ) : (
-                            <>
-                                <div className="flex flex-wrap gap-2">
-                                    <Button variant="outline" onClick={() => void setActiveTab('definitions')}>
-                                        {t('Definitions')}
-                                    </Button>
-                                    <Button variant="outline" onClick={() => void setActiveTab('rules')}>
-                                        {t('Extraction.BusinessRules')}
-                                    </Button>
-                                </div>
-                                <KnowledgeSourcesPanel
-                                    organization={organization}
-                                    knowledgeModelId={knowledgeModelId}
-                                    dataSources={model.dataSources}
-                                    definitions={model.model.definitions}
-                                    queries={queries.data?.queries ?? []}
-                                    graph={graph.data ?? { queryDefinitionEdges: [], sourceAssetEdges: [] }}
-                                    onImportDefinitions={async (definitions, importedIds, sourceId) => {
-                                        await saveDefinitionsWithSources.mutateAsync({ definitions, assetIds: importedIds, sourceIds: [sourceId], relationType: 'provided' });
-                                    }}
-                                />
-                            </>
+                            <KnowledgeSourcesPanel organization={organization} knowledgeModelId={knowledgeModelId} />
                         )}
                     </TabsContent>
                     <TabsContent value="queries" className="space-y-3 pt-4">

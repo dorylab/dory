@@ -713,5 +713,15 @@
     "bps": true,
     "folderMillis": 1795132800000,
     "hash": "14aaf8baf4983d8c9859ca1225d15e5adde8c21a8d479773f5a9447819485f2e"
+  },
+  {
+    "sql": [
+      "ALTER TABLE knowledge_connectors ADD COLUMN display_name text, ADD COLUMN synced_folders jsonb, ADD COLUMN drive_folder_id text, ADD COLUMN drive_refresh_token_encrypted text;\n",
+      "\nALTER TABLE knowledge_connector_items ADD COLUMN remote_title text, ADD COLUMN folder_trail jsonb;\n",
+      "\nCREATE TABLE knowledge_drive_authorizations (\n    id text PRIMARY KEY,\n    state text UNIQUE,\n    organization_id text NOT NULL,\n    knowledge_model_id text NOT NULL REFERENCES knowledge_models(id) ON DELETE CASCADE,\n    user_id text NOT NULL,\n    verifier text NOT NULL,\n    refresh_token_encrypted text,\n    expires_at timestamptz NOT NULL\n);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1795219200000,
+    "hash": "46c43b6dcae584dbea6068c8bd1e47eceddbfd2e947415cec9ec5ee6e8a951fc"
   }
 ]

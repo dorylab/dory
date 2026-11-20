@@ -147,7 +147,7 @@ test('Knowledge imports and displays the new Ossie format and rejects legacy fil
 
         await page.goto(`/${organization}/knowledge/${created.id}`);
         await page.getByRole('tab', { name: /Knowledge sources|知识来源/i }).click();
-        await page.getByRole('button', { name: /Semantic model|语义模型/i }).click();
+        await page.goto(new URL('?tab=definitions',page.url()).href);
         await expect(page.getByText(`Apache Ossie ${OSSIE_VERSION} · rev ${imported.modelRevision.slice(0, 8)}`, { exact: true })).toBeVisible();
     } finally {
         await call('knowledge.delete', { knowledgeModelId: created.id }, 'ossie-e2e-cleanup');

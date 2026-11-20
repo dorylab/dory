@@ -1,6 +1,6 @@
 # GitHub Knowledge Connector
 
-Dory can synchronize Markdown, YAML, and TXT documents from a GitHub.com repository into a knowledge model. Each connector follows one folder on the repository's default branch and treats GitHub as the source of truth.
+Dory can synchronize Markdown, YAML, and TXT documents from a GitHub.com repository into a knowledge base. Each connector follows one folder on the repository's default branch and treats GitHub as the source of truth.
 
 ## GitHub App setup
 

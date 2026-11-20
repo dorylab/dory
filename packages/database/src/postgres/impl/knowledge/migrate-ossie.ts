@@ -34,7 +34,7 @@ export async function migrateLegacyOssieModels(db: PostgresDBClient): Promise<nu
                     .set({ modelJson: document, modelYaml: serializeOssieDocument(document), updatedAt: model.updatedAt })
                     .where(and(eq(knowledgeModels.id, model.id), eq(knowledgeModels.organizationId, model.organizationId), eq(knowledgeModels.modelJson, model.modelJson)));
             } catch (cause) {
-                throw new Error(`Failed to upgrade Ossie knowledge model ${model.id}; all model upgrades have been rolled back.`, { cause });
+                throw new Error(`Failed to upgrade the Ossie definition for ${model.id}. All upgrades were rolled back.`, { cause });
             }
         }
         return models.length;

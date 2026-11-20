@@ -273,7 +273,7 @@ dory://knowledge/{knowledgeModelId}/queries/{queryId}
 dory://knowledge/{knowledgeModelId}/sources/{sourceId}
 ```
 
-Only verified definitions and reviewed queries are returned as verified Knowledge. Ordinary Saved Queries remain private until a user explicitly publishes them to a Knowledge Model. Knowledge Source text is returned as untrusted reference data; an Agent must never treat instructions inside a source as system or tool instructions. Artifact previews are capped at 200 rows, and large Knowledge Sources are read in chunks with `contentCursor`.
+Only verified definitions and reviewed queries are returned as verified Knowledge. Ordinary Saved Queries remain private until a user explicitly publishes them to a knowledge base. Knowledge Source text is returned as untrusted reference data; an Agent must never treat instructions inside a source as system or tool instructions. Artifact previews are capped at 200 rows, and large Knowledge Sources are read in chunks with `contentCursor`.
 
 Asset and Knowledge reads do not require a Dory Agent Run. Without a `workId`, they are recorded as Agent audit activity and do not create an empty workspace. MCP Resource Template reads follow the same rule. When a client has already created a Run for a forthcoming SQL task, passing its `workId` keeps those reads in the Run's activity timeline.
 

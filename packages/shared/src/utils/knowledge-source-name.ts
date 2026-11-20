@@ -1,5 +1,6 @@
 type KnowledgeSourceName = {
     fileName: string;
+    remoteTitle?: string | null;
     connectorProvider?: string | null;
     connectorId?: string | null;
     remotePath?: string | null;
@@ -8,6 +9,7 @@ type KnowledgeSourceName = {
 
 /** The suffix identifies a synced source internally; it is not part of its title. */
 export function knowledgeSourceDisplayName(source: KnowledgeSourceName): string {
+    if (source.remoteTitle) return source.remoteTitle;
     const { fileName, connectorProvider, connectorId, remotePath, sourceUrl } = source;
     if (connectorProvider === 'linear' && connectorId && remotePath) {
         const suffix = ` · ${connectorId.slice(-8)} · ${remotePath.split('/').pop()}`;

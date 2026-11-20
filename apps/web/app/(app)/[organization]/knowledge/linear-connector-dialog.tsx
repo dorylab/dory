@@ -20,6 +20,8 @@ export type KnowledgeConnectorView = {
     lastSyncedAt: string | null;
     lastError: string | null;
 } & (
+    | { provider: 'local'; displayName: string; configRevision: number }
+    | { provider: 'drive'; displayName: string; driveFolderId: string }
     | { provider: 'github'; repositoryFullName: string; defaultBranch: string; rootPath: string }
     | {
           provider: 'linear';
@@ -27,6 +29,7 @@ export type KnowledgeConnectorView = {
           linearWorkspaceId: string;
           linearWorkspaceName: string;
           projectIds: string[];
+          projectNames?: string[];
       }
 );
 

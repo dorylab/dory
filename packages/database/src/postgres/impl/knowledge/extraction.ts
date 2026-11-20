@@ -223,7 +223,7 @@ export class KnowledgeExtractionStore {
             .select()
             .from(knowledgeModels)
             .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
-        if (!model) throw new Error('Knowledge model not found.');
+        if (!model) throw new Error('Knowledge base not found.');
         return model;
     }
     async status(input: ModelScope) {
@@ -437,7 +437,7 @@ export class KnowledgeExtractionStore {
                 .for('update');
             if (!job?.sourceId || !job.leaseExpiresAt) throw new Error('Extraction lease expired.');
             const [source] = await tx
-                .select({ source: knowledgeSources, sourceUrl: knowledgeConnectorItems.sourceUrl })
+                .select({ source: knowledgeSources, remoteTitle: knowledgeConnectorItems.remoteTitle, sourceUrl: knowledgeConnectorItems.sourceUrl })
                 .from(knowledgeSources)
                 .leftJoin(knowledgeConnectorItems, eq(knowledgeConnectorItems.knowledgeSourceId, knowledgeSources.id))
                 .where(eq(knowledgeSources.id, job.sourceId));
@@ -563,7 +563,7 @@ export class KnowledgeExtractionStore {
                             sourceId: source.source.id,
                             originalSourceId: source.source.id,
                             sourceHash: job.sourceHash,
-                            sourceTitle: knowledgeSourceDisplayName({ fileName: source.source.fileName, sourceUrl: source.sourceUrl }),
+                            sourceTitle: knowledgeSourceDisplayName({ fileName: source.source.fileName, remoteTitle: source.remoteTitle, sourceUrl: source.sourceUrl }),
                             sourceUrl: source.sourceUrl,
                             quote,
                         });
@@ -673,7 +673,7 @@ export class KnowledgeExtractionStore {
                 .from(knowledgeModels)
                 .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)))
                 .for('update');
-            if (!model) throw new Error('Knowledge model not found.');
+            if (!model) throw new Error('Knowledge base not found.');
             const [draft] = await tx
                 .select()
                 .from(candidates)
@@ -697,7 +697,7 @@ export class KnowledgeExtractionStore {
                 throw new Error('Invalid knowledge candidate.');
             const dataSources = await tx.select().from(knowledgeModelSources).where(eq(knowledgeModelSources.knowledgeModelId, model.id));
             if (payload.sourceConnectionId && !dataSources.some(s => s.connectionId === payload.sourceConnectionId))
-                throw new Error('Data source is not linked to this knowledge model.');
+                throw new Error('Data source is not linked to this knowledge base.');
             const document = projectOssieDocument(model.modelJson);
             if (input.decision === 'approve' && payload.kind === 'business_rule' && !executor)
                 for (const id of payload.metricIds ?? []) {
@@ -938,7 +938,7 @@ export class KnowledgeExtractionStore {
                 .from(knowledgeModels)
                 .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)))
                 .for('update');
-            if (!model) throw new Error('Knowledge model not found.');
+            if (!model) throw new Error('Knowledge base not found.');
             const inputs = new Map(input.items.map(item => [item.candidateId, item]));
             if (inputs.size !== input.items.length) throw new Error('Duplicate bundle item.');
             const drafts = await tx
@@ -1037,7 +1037,7 @@ export class KnowledgeExtractionStore {
                 .from(knowledgeModels)
                 .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)))
                 .for('update');
-            if (!model) throw new Error('Knowledge model not found.');
+            if (!model) throw new Error('Knowledge base not found.');
             const definitions = projectOssieDocument(model.modelJson).definitions;
             const metric = definitions.find(d => d.id === input.metricId && d.kind === 'metric');
             if (!metric || knowledgeHash(metric) !== input.expectedRevision) throw new Error('Metric changed; reload before editing references.');
@@ -1111,7 +1111,7 @@ export class KnowledgeExtractionStore {
                 .from(knowledgeModels)
                 .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)))
                 .for('update');
-            if (!model) throw new Error('Knowledge model not found.');
+            if (!model) throw new Error('Knowledge base not found.');
             const [current] = await tx
                 .select()
                 .from(rules)
@@ -1121,7 +1121,7 @@ export class KnowledgeExtractionStore {
             const payload = input.payload ?? current.payload;
             if (payload.kind !== 'business_rule') throw new Error('Invalid business rule.');
             const dataSources = await tx.select().from(knowledgeModelSources).where(eq(knowledgeModelSources.knowledgeModelId, model.id));
-            if (payload.sourceConnectionId && !dataSources.some(s => s.connectionId === payload.sourceConnectionId)) throw new Error('Data source is not linked to this model.');
+            if (payload.sourceConnectionId && !dataSources.some(s => s.connectionId === payload.sourceConnectionId)) throw new Error('This data source is not linked to the selected knowledge base.');
             if (input.payload)
                 for (const id of payload.metricIds ?? []) {
                     const metric = projectOssieDocument(model.modelJson).definitions.find(d => d.id === id && d.kind === 'metric');
@@ -1166,7 +1166,7 @@ function inputScope(input: ModelScope) {
 }
 
 function validateRuleScope(payload: ExtractedKnowledge, applicationScope: 'model' | 'data_source' | 'metrics', definitions: KnowledgeDefinition[]) {
-    if (applicationScope === 'model' && payload.sourceConnectionId) throw new Error('A model-wide rule cannot be restricted to one data source.');
+    if (applicationScope === 'model' && payload.sourceConnectionId) throw new Error('A rule for the entire knowledge base cannot be restricted to one data source.');
     if (applicationScope === 'data_source' && !payload.sourceConnectionId) throw new Error('Select a data source for this rule.');
     if (applicationScope === 'metrics' && !payload.metricIds?.length) throw new Error('Select at least one applicable metric.');
     for (const id of payload.metricIds ?? []) {

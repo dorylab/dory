@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DBService } from '@dory/database';
 import { isDesktopRuntime } from '@dory/shared/runtime';
+import { DriveGrantRevoked, readDriveSnapshot } from './google-drive';
 import { readGitHubConnectorSnapshot } from './github-connector';
 import { readLinearConnectorSnapshot, LinearApiError } from './linear-client';
 import { withLinearAccess, linearConfigured } from './linear-credentials';
@@ -37,12 +38,15 @@ export class KnowledgeConnectorSyncRunner {
                         const connector = await this.db.knowledge.getConnectorById(job.connectorId);
                         if (connector.provider === 'linear' && (!linearConfigured() || !connector.credentialId))
                             throw new Error('Linear is not configured or unavailable in this runtime.');
+                        if (connector.provider === 'local') throw new Error('Sync this folder from the device that selected it.');
                         const snapshot =
                             connector.provider === 'linear'
                                 ? await withLinearAccess(this.db, connector.organizationId, connector.credentialId!, token =>
                                       readLinearConnectorSnapshot(token, connector.projectIds),
                                   )
-                                : await readGitHubConnectorSnapshot(connector);
+                                : connector.provider === 'drive'
+                                  ? await readDriveSnapshot(connector.driveRefreshTokenEncrypted!, connector.driveFolderId!)
+                                  : await readGitHubConnectorSnapshot(connector);
                         await this.db.knowledge.applyConnectorSnapshot({
                             connectorId: connector.id,
                             configRevision: job.configRevision,
@@ -58,7 +62,14 @@ export class KnowledgeConnectorSyncRunner {
                             error instanceof LinearApiError && error.retryable && job.attempts < 5
                                 ? new Date(Math.max(Date.now() + Math.min(3600_000, 30_000 * 2 ** (job.attempts - 1)), error.retryAt?.getTime() ?? 0))
                                 : undefined;
-                        await this.db.knowledge.finishConnectorSyncJob({ jobId: job.id, connectorId: job.connectorId, leaseToken: job.leaseToken!, error: message, retryAt });
+                        await this.db.knowledge.finishConnectorSyncJob({
+                            jobId: job.id,
+                            connectorId: job.connectorId,
+                            leaseToken: job.leaseToken!,
+                            error: message,
+                            retryAt,
+                            authorizationRevoked: error instanceof DriveGrantRevoked,
+                        });
                     } finally {
                         clearInterval(heartbeat);
                     }

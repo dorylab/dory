@@ -17,7 +17,7 @@ function scopedModel(scope: Scope) {
 
 export async function lockDirectory(tx: Tx, scope: Scope) {
     const [model] = await tx.select({ id: knowledgeModels.id }).from(knowledgeModels).where(scopedModel(scope)).for('update');
-    if (!model) throw new Error('Knowledge model not found.');
+    if (!model) throw new Error('Knowledge base not found.');
 }
 
 export async function assertDestination(tx: Tx, modelId: string, parentId: string | null, name: string, excludeId?: string) {
@@ -73,7 +73,7 @@ export class KnowledgeDirectory {
 
     async list(scope: Scope) {
         const [model] = await this.db.select({ id: knowledgeModels.id }).from(knowledgeModels).where(scopedModel(scope));
-        if (!model) throw new Error('Knowledge model not found.');
+        if (!model) throw new Error('Knowledge base not found.');
         const [folders, connectors] = await Promise.all([
             this.db
                 .select({ id: knowledgeFolders.id, name: knowledgeFolders.name, parentId: knowledgeFolders.parentId })
@@ -83,6 +83,8 @@ export class KnowledgeDirectory {
                 .select({
                     id: knowledgeConnectors.id,
                     provider: knowledgeConnectors.provider,
+                    displayName: knowledgeConnectors.displayName,
+                    syncedFolders: knowledgeConnectors.syncedFolders,
                     repositoryFullName: knowledgeConnectors.repositoryFullName,
                     rootPath: knowledgeConnectors.rootPath,
                     linearWorkspaceName: knowledgeConnectors.linearWorkspaceName,

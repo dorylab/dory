@@ -41,8 +41,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
-import { buildDocumentDirectory, ROOT, type DirectoryData, type DocumentFolder, type DirectoryDocument } from './document-directory';
+import { buildDocumentDirectory, ROOT, storedFolderId, type DirectoryData, type DocumentFolder, type DirectoryDocument } from './document-directory';
 import type { KnowledgeModelView } from './knowledge-page.client';
+import { SourceLogo } from './source-logo';
 import { KnowledgeGuide } from './knowledge-guide';
 import { SourceEditor, SourceViewer, UploadSourcesDialog, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 
@@ -62,20 +63,19 @@ type Props = {
     directoryError?: string;
     sourcesPending: boolean;
     sourcesError?: string;
-    onEditModel: () => void;
 };
 type Destination = { folder: string | null; file: string | null };
 const locationParsers = { folder: parseAsString, file: parseAsString };
 const emptyDirectory: DirectoryData = { canWrite: false, folders: [], connectors: [] };
 
-export function DocumentBrowser({ model, organization, sources, directory, directoryPending, directoryError, sourcesPending, sourcesError, onEditModel }: Props) {
+export function DocumentBrowser({ model, organization, sources, directory, directoryPending, directoryError, sourcesPending, sourcesError }: Props) {
     const t = useTranslations('Knowledge.Documents');
     const knowledge = useTranslations('Knowledge');
     const client = useQueryClient();
     const data = directory ?? emptyDirectory;
-    const { id: modelId, name: modelName, dataSources } = model;
+    const { id: modelId, dataSources } = model;
     const guide = model.businessContextMd.trim() ? t('Guide') : null;
-    const index = useMemo(() => buildDocumentDirectory(modelName, guide, data, sources), [data, sources, modelName, guide]);
+    const index = useMemo(() => buildDocumentDirectory(guide, data, sources), [data, sources, guide]);
     const [{ folder: location, file }, setLocation] = useQueryStates(locationParsers, { history: 'push' });
     const [editingId, setEditingId] = useState<string | null>(null);
     const [dirty, setDirty] = useState(false);
@@ -84,13 +84,13 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
     const historyChanged = dirty && editingId !== null && file !== editingId;
     const visibleId = historyChanged ? editingId : file;
     const selected = visibleId ? index.documents.find(doc => doc.id === visibleId) : undefined;
-    const current = index.folders.get(selected?.parentId ?? location ?? ROOT) ?? index.root;
+    const current = index.folders.get(selected?.parentId ?? (location || ROOT)) ?? index.root;
     useEffect(() => {
         if (!dirty && editingId !== file) setEditingId(null);
     }, [dirty, editingId, file]);
     useEffect(() => {
         if (selected && !historyChanged && directory && !directoryPending && !sourcesPending && (location ?? ROOT) !== selected.parentId) {
-            void setLocation({ folder: selected.parentId || null }, { history: 'replace' });
+            void setLocation({ folder: selected.parentId }, { history: 'replace' });
         }
     }, [selected, historyChanged, directory, directoryPending, sourcesPending, location, setLocation]);
     useEffect(() => {
@@ -138,7 +138,7 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
         setSearch('');
     }
     function navigate(id: string, doc?: DirectoryDocument, edit = false) {
-        const destination = { folder: id || null, file: doc?.id ?? null };
+        const destination = { folder: id, file: doc?.id ?? null };
         if (dirty && destination.file === editingId) {
             setDrawer(false);
             setSearch('');
@@ -150,7 +150,7 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
         }
     }
     function keepEditing() {
-        if (historyChanged && selected) void setLocation({ folder: selected.parentId || null, file: selected.id });
+        if (historyChanged && selected) void setLocation({ folder: selected.parentId, file: selected.id });
         setPending(null);
     }
     function finishEdit(removed = false) {
@@ -180,7 +180,7 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
             onDrop(event: DragEvent) {
                 event.preventDefault();
                 event.stopPropagation();
-                if (drag && validDestination(drag, folder)) change.mutate({ operation: 'move', id: drag.id, kind: drag.kind, parentId: folder.id || null });
+                if (drag && validDestination(drag, folder)) change.mutate({ operation: 'move', id: drag.id, kind: drag.kind, parentId: storedFolderId(folder.id) });
                 setDrag(null);
                 setOver(null);
             },
@@ -235,20 +235,10 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                     {entry.kind === 'folder' && (
                         <>
                             {creationItems(entry.id)}
-                            <DropdownMenuSeparator />
+                            {entry.id !== ROOT && <DropdownMenuSeparator />}
                         </>
                     )}
-                    {entry.id === ROOT ? (
-                        <DropdownMenuItem
-                            onSelect={() => {
-                                setDrawer(false);
-                                onEditModel();
-                            }}
-                        >
-                            <Pencil />
-                            {knowledge('EditModel')}
-                        </DropdownMenuItem>
-                    ) : (
+                    {entry.id !== ROOT && (
                         <>
                             <DropdownMenuItem onSelect={() => ask({ operation: 'rename', entry })}>
                                 <Pencil />
@@ -323,7 +313,13 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-start"
                         onClick={() => navigate(folder.id)}
                     >
-                        {current.id === folder.id ? <FolderOpen size={16} className="shrink-0" /> : <Folder size={16} className="shrink-0 text-muted-foreground" />}
+                        {folder.provider ? (
+                            <SourceLogo provider={folder.provider} className="size-4 shrink-0" />
+                        ) : current.id === folder.id ? (
+                            <FolderOpen size={16} className="shrink-0" />
+                        ) : (
+                            <Folder size={16} className="shrink-0 text-muted-foreground" />
+                        )}
                         <span className="truncate" title={folder.name}>
                             {folder.name}
                         </span>
@@ -347,14 +343,22 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
             .map(folder => folder.name)
             .join(' / ');
     const needle = search.trim().toLocaleLowerCase();
-    function searchResult(id: string, name: string, fullPath: string, select: () => void, icon: ReactNode) {
+    function searchResult(entry: DocumentFolder | DirectoryDocument) {
+        const doc = 'source' in entry ? entry : undefined;
+        const folderId = doc?.parentId ?? entry.id;
+        const trail = index.trail(folderId);
+        const provider = trail[0]?.provider;
+        const fullPath = [...trail.map(node => node.name), ...(doc ? [doc.name] : [])].join(' / ');
         return (
-            <li key={id}>
-                <button className="flex w-full items-start gap-2 rounded-md p-2 text-start hover:bg-accent" onClick={select}>
-                    {icon}
+            <li key={entry.id}>
+                <button className="flex w-full items-start gap-2 rounded-md p-2 text-start hover:bg-accent" onClick={() => navigate(folderId, doc)}>
+                    {doc ? <FileText size={16} /> : <Folder size={16} />}
                     <span className="min-w-0 text-sm">
-                        <span className="block break-words">{name}</span>
-                        <span className="block break-words text-xs text-muted-foreground">{fullPath}</span>
+                        <span className="block break-words">{entry.name}</span>
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            {provider && <SourceLogo provider={provider} className="size-3 shrink-0" />}
+                            <span className="min-w-0 break-words">{fullPath}</span>
+                        </span>
                     </span>
                 </button>
             </li>
@@ -364,11 +368,9 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
         const matches = needle
             ? [
                   ...Array.from(index.folders.values())
-                      .filter(folder => folder.id !== ROOT && folder.name.toLocaleLowerCase().includes(needle))
-                      .map(folder => searchResult(folder.id, folder.name, path(folder.id), () => navigate(folder.id), <Folder size={16} />)),
-                  ...index.documents
-                      .filter(doc => doc.name.toLocaleLowerCase().includes(needle))
-                      .map(doc => searchResult(doc.id, doc.name, path(doc.parentId) + ' / ' + doc.name, () => navigate(doc.parentId, doc), <FileText size={16} />)),
+                      .filter(folder => folder.name.toLocaleLowerCase().includes(needle))
+                      .map(searchResult),
+                  ...index.documents.filter(doc => doc.name.toLocaleLowerCase().includes(needle)).map(searchResult),
               ]
             : [];
         return (
@@ -386,7 +388,7 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                 </div>
                 <nav aria-label={t('Directory')}>
                     <ul className="space-y-0.5">
-                        {needle ? matches.length ? matches : <li className="px-2 text-sm text-muted-foreground">{t('NoMatches')}</li> : treeNode(index.root)}
+                        {needle ? matches.length ? matches : <li className="px-2 text-sm text-muted-foreground">{t('NoMatches')}</li> : index.roots.map(treeNode)}
                     </ul>
                 </nav>
             </div>
@@ -402,7 +404,13 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                     <span className="truncate">{doc.name}</span>
                 </Button>
                 <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">
-                    {doc.source?.connectorProvider === 'github' ? 'GitHub' : doc.source?.connectorProvider === 'linear' ? 'Linear' : 'Markdown'}
+                    {doc.source?.connectorProvider === 'github'
+                        ? 'GitHub'
+                        : doc.source?.connectorProvider === 'linear'
+                          ? 'Linear'
+                          : doc.source?.connectorProvider === 'drive'
+                            ? 'Google Drive'
+                            : 'Markdown'}
                 </span>
                 {writable && doc.source && (
                     <>
@@ -488,10 +496,11 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                                 <button
                                     {...dropTarget(folder)}
                                     aria-current={!selected && folder.id === current.id ? 'page' : undefined}
-                                    className={`truncate rounded px-1 text-sm hover:bg-muted ${i === trail.length - 1 ? 'font-medium' : 'text-muted-foreground'} ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
+                                    className={`flex min-w-0 items-center gap-1.5 rounded px-1 text-sm hover:bg-muted ${i === trail.length - 1 ? 'font-medium' : 'text-muted-foreground'} ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
                                     onClick={() => navigate(folder.id)}
                                 >
-                                    {folder.name}
+                                    {folder.provider && <SourceLogo provider={folder.provider} className="size-4 shrink-0" />}
+                                    <span className="truncate">{folder.name}</span>
                                 </button>
                             </span>
                         ))}
@@ -611,7 +620,7 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                     <UploadSourcesDialog
                         open
                         markdownOnly
-                        folderId={fileCreation.folderId || null}
+                        folderId={storedFolderId(fileCreation.folderId)}
                         targetPath={path(fileCreation.folderId)}
                         organization={organization}
                         knowledgeModelId={modelId}
@@ -623,7 +632,7 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                     <SourceEditor
                         open
                         source={null}
-                        folderId={fileCreation.folderId || null}
+                        folderId={storedFolderId(fileCreation.folderId)}
                         targetPath={path(fileCreation.folderId)}
                         organization={organization}
                         knowledgeModelId={modelId}
@@ -643,9 +652,10 @@ export function DocumentBrowser({ model, organization, sources, directory, direc
                             className="space-y-4"
                             onSubmit={event => {
                                 event.preventDefault();
-                                if (prompt.operation === 'create') change.mutate({ operation: 'create', name: value, parentId: prompt.folderId || null });
+                                if (prompt.operation === 'create') change.mutate({ operation: 'create', name: value, parentId: storedFolderId(prompt.folderId) });
                                 else if (prompt.operation === 'rename') change.mutate({ operation: 'rename', name: value, id: prompt.entry.id, kind: prompt.entry.kind });
-                                else if (prompt.operation === 'move') change.mutate({ operation: 'move', parentId: value || null, id: prompt.entry.id, kind: prompt.entry.kind });
+                                else if (prompt.operation === 'move')
+                                    change.mutate({ operation: 'move', parentId: storedFolderId(value), id: prompt.entry.id, kind: prompt.entry.kind });
                                 else change.mutate({ operation: 'delete', id: prompt.entry.id, kind: 'folder' });
                             }}
                         >

@@ -177,12 +177,18 @@ test.describe('Commerce Linear real API Key acceptance', () => {
         await page.goto('/');
         await openDataSources(page);
         const organizationSlug = organizationId ?? new URL(page.url()).pathname.split('/')[1];
-        await page.goto(`/${organizationSlug}/knowledge/${model.id}?tab=sources`);
+        const modelPath = `/${organizationSlug}/knowledge/${model.id}`;
+        await page.goto(modelPath + '?tab=sources');
+        const documentsLink = page.getByRole('link', { name: /^(View in documents|在文档中查看)$/ }).and(page.locator(`a[href="?tab=documents&folder=${connectorId}"]`));
+        await documentsLink.click();
+        await expect(page).toHaveURL(new RegExp('folder=' + connectorId));
         for (const source of sources) {
-            const original = page.getByRole('link', { name: /^(Open original|打开原文)$/, exact: true }).and(page.locator(`a[href="${source.sourceUrl}"]`));
-            await expect(original).toBeVisible();
+            await page.goto(`${modelPath}?tab=documents&file=${source.id}`);
+            const preview = page.getByRole('region', { name: source.fileName, exact: true });
+            const original = preview.getByRole('link', { name: /^(Open original|打开原文)$/ });
+            await expect(original).toHaveAttribute('href', source.sourceUrl!);
+            await expect(preview.getByRole('button', { name: /^(Edit|编辑)$/ })).toHaveCount(0);
         }
-        await expect(page.getByText(/^Linear · (Read-only|只读)$/, { exact: true }).first()).toBeVisible();
         await mkdir(outputDirectory, { recursive: true });
         await writeFile(
             path.join(outputDirectory, `${phase}.json`),
@@ -275,7 +281,7 @@ test.describe('Commerce Linear real API Key acceptance', () => {
                                 {
                                     type: 'text',
                                     text: [
-                                        `请执行电商知识来源验收。只检索知识模型“电商”（knowledgeModelId=${model.id}）的 Linear 文档。`,
+                                        `请执行电商知识来源验收。只检索知识库“电商”（knowledgeModelId=${model.id}）的 Linear 文档。`,
                                         `所有 search_assets 调用使用真实数据源 connectionId=${model.dataSources[0].connectionId}。knowledgeModelId 和 connectionId 是不同标识，必须使用上述原值。`,
                                         '依次使用 search_assets 搜索“净收入”“支付成功率”“统计时区”，限制 kinds=["knowledge_source"]，并使用 read_asset 实际读取相关文档完整正文。',
                                         '回答三个问题：净收入如何计算？支付成功率如何计数？统计使用什么时区？',
