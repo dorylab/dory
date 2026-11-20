@@ -50,6 +50,12 @@ export function buildDocumentDirectory(modelName: string, guide: string | null, 
     }
     documents.sort((a, b) => a.name.localeCompare(b.name));
     if (guide) documents.unshift({ id: 'guide', parentId: ROOT, name: guide, source: null });
+    const documentsByFolder = new Map<string, DirectoryDocument[]>();
+    for (const doc of documents) {
+        const siblings = documentsByFolder.get(doc.parentId);
+        if (siblings) siblings.push(doc);
+        else documentsByFolder.set(doc.parentId, [doc]);
+    }
     const children = new Map<string, DocumentFolder[]>();
     for (const folder of folders.values()) {
         if (folder.parentId === null) continue;
@@ -72,5 +78,5 @@ export function buildDocumentDirectory(modelName: string, guide: string | null, 
     for (const folder of ordered.reverse()) {
         if (folder.parentId !== null) counts.set(folder.parentId, (counts.get(folder.parentId) ?? 0) + (counts.get(folder.id) ?? 0));
     }
-    return { root, folders, documents, children, counts, trail };
+    return { root, folders, documents, documentsByFolder, children, counts, trail };
 }

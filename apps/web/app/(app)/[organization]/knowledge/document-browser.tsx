@@ -22,17 +22,29 @@ import {
     Upload,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { parseAsString, useQueryState } from 'nuqs';
+import { parseAsString, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
 import { buildDocumentDirectory, ROOT, type DirectoryData, type DocumentFolder, type DirectoryDocument } from './document-directory';
-import type { KnowledgeSourceSummary } from './knowledge-sources-panel';
+import type { KnowledgeModelView } from './knowledge-page.client';
+import { KnowledgeGuide } from './knowledge-guide';
+import { SourceEditor, SourceViewer, UploadSourcesDialog, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 
 type Entry = { id: string; kind: 'folder' | 'document'; name: string; parentId: string | null };
 type Command =
@@ -40,11 +52,9 @@ type Command =
     | { operation: 'move'; id: string; kind: Entry['kind']; parentId: string | null }
     | { operation: 'rename'; id: string; kind: Entry['kind']; name: string }
     | { operation: 'delete'; id: string; kind: 'folder' };
-type Prompt = { operation: 'create' } | { operation: 'move' | 'rename' | 'delete'; entry: Entry };
+type Prompt = { operation: 'create'; folderId: string } | { operation: 'move' | 'rename' | 'delete'; entry: Entry };
 type Props = {
-    modelId: string;
-    modelName: string;
-    hasGuide: boolean;
+    model: KnowledgeModelView;
     organization: string;
     sources: KnowledgeSourceSummary[];
     directory?: DirectoryData;
@@ -52,48 +62,58 @@ type Props = {
     directoryError?: string;
     sourcesPending: boolean;
     sourcesError?: string;
-    onRead: (source: KnowledgeSourceSummary | null) => void;
-    onEdit: (source: KnowledgeSourceSummary) => void;
-    onNew: (folderId: string | null) => void;
-    onUpload: (folderId: string | null) => void;
+    onEditModel: () => void;
 };
+type Destination = { folder: string | null; file: string | null };
+const locationParsers = { folder: parseAsString, file: parseAsString };
 const emptyDirectory: DirectoryData = { canWrite: false, folders: [], connectors: [] };
 
-export function DocumentBrowser({
-    modelId,
-    modelName,
-    hasGuide,
-    organization,
-    sources,
-    directory,
-    directoryPending,
-    directoryError,
-    sourcesPending,
-    sourcesError,
-    onRead,
-    onNew,
-    onEdit,
-    onUpload,
-}: Props) {
+export function DocumentBrowser({ model, organization, sources, directory, directoryPending, directoryError, sourcesPending, sourcesError, onEditModel }: Props) {
     const t = useTranslations('Knowledge.Documents');
     const knowledge = useTranslations('Knowledge');
     const client = useQueryClient();
     const data = directory ?? emptyDirectory;
-    const guide = hasGuide ? t('Guide') : null;
+    const { id: modelId, name: modelName, dataSources } = model;
+    const guide = model.businessContextMd.trim() ? t('Guide') : null;
     const index = useMemo(() => buildDocumentDirectory(modelName, guide, data, sources), [data, sources, modelName, guide]);
-    const [location, setLocation] = useQueryState('folder', parseAsString.withOptions({ history: 'push' }));
-    const current = index.folders.get(location ?? ROOT) ?? index.root;
+    const [{ folder: location, file }, setLocation] = useQueryStates(locationParsers, { history: 'push' });
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [dirty, setDirty] = useState(false);
+    const [pending, setPending] = useState<Destination | null>(null);
+    // A history traversal can change the URL before a dirty editor is dismissed.
+    const historyChanged = dirty && editingId !== null && file !== editingId;
+    const visibleId = historyChanged ? editingId : file;
+    const selected = visibleId ? index.documents.find(doc => doc.id === visibleId) : undefined;
+    const current = index.folders.get(selected?.parentId ?? location ?? ROOT) ?? index.root;
+    useEffect(() => {
+        if (!dirty && editingId !== file) setEditingId(null);
+    }, [dirty, editingId, file]);
+    useEffect(() => {
+        if (selected && !historyChanged && directory && !directoryPending && !sourcesPending && (location ?? ROOT) !== selected.parentId) {
+            void setLocation({ folder: selected.parentId || null }, { history: 'replace' });
+        }
+    }, [selected, historyChanged, directory, directoryPending, sourcesPending, location, setLocation]);
+    useEffect(() => {
+        if (!dirty) return;
+        const protectDraft = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+        window.addEventListener('beforeunload', protectDraft);
+        return () => window.removeEventListener('beforeunload', protectDraft);
+    }, [dirty]);
     const trail = useMemo(() => index.trail(current.id), [index, current.id]);
     const [expanded, setExpanded] = useState<Set<string>>(() => new Set([ROOT]));
     const [search, setSearch] = useState('');
     const [drawer, setDrawer] = useState(false);
     const [prompt, setPrompt] = useState<Prompt | null>(null);
+    const [fileCreation, setFileCreation] = useState<{ kind: 'document' | 'upload'; folderId: string } | null>(null);
     const [value, setValue] = useState('');
     const [drag, setDrag] = useState<Entry | null>(null);
     const [over, setOver] = useState<string | null>(null);
     useEffect(() => {
         setExpanded(previous => (trail.every(folder => previous.has(folder.id)) ? previous : new Set([...previous, ...trail.map(folder => folder.id)])));
-    }, [trail]);
+    }, [trail, visibleId]);
 
     const change = useMutation({
         mutationFn: (command: Command) =>
@@ -102,18 +122,45 @@ export function DocumentBrowser({
             const affectsSource = 'kind' in command && command.kind === 'document';
             const list = affectsSource ? 'knowledge-sources' : 'directory';
             await client.invalidateQueries({ queryKey: ['knowledge-model', modelId, list] });
+            if (command.operation === 'create') navigate(command.parentId ?? ROOT);
+            if (command.operation === 'delete' && location === command.id && prompt?.operation === 'delete') navigate(prompt.entry.parentId ?? ROOT);
             setPrompt(null);
         },
         onError: error => toast.error(error.message),
     });
-    function navigate(id: string) {
-        void setLocation(id || null);
-        setExpanded(previous => new Set([...previous, ...index.trail(id).map(folder => folder.id)]));
+    function openDestination(destination: Destination, edit = false) {
+        setDirty(false);
+        setPending(null);
+        setEditingId(edit ? destination.file : null);
+        void setLocation(destination);
+        setExpanded(previous => new Set([...previous, ...index.trail(destination.folder ?? ROOT).map(folder => folder.id)]));
         setDrawer(false);
         setSearch('');
     }
+    function navigate(id: string, doc?: DirectoryDocument, edit = false) {
+        const destination = { folder: id || null, file: doc?.id ?? null };
+        if (dirty && destination.file === editingId) {
+            setDrawer(false);
+            setSearch('');
+        } else if (dirty) {
+            setDrawer(false);
+            setPending(destination);
+        } else {
+            openDestination(destination, edit);
+        }
+    }
+    function keepEditing() {
+        if (historyChanged && selected) void setLocation({ folder: selected.parentId || null, file: selected.id });
+        setPending(null);
+    }
+    function finishEdit(removed = false) {
+        setDirty(false);
+        setEditingId(null);
+        if (removed) void setLocation({ folder: null, file: null }, { history: 'replace' });
+    }
     function ask(next: Prompt) {
         setValue(next.operation === 'rename' ? next.entry.name : next.operation === 'move' ? (next.entry.parentId ?? ROOT) : '');
+        setDrawer(false);
         setPrompt(next);
     }
     function validDestination(entry: Entry, folder: DocumentFolder) {
@@ -154,6 +201,28 @@ export function DocumentBrowser({
             },
         };
     }
+    function openFileCreation(kind: 'document' | 'upload', folderId: string) {
+        setDrawer(false);
+        setFileCreation({ kind, folderId });
+    }
+    function creationItems(folderId: string) {
+        return (
+            <>
+                <DropdownMenuItem onSelect={() => ask({ operation: 'create', folderId })}>
+                    <FolderPlus />
+                    {t('NewFolder')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openFileCreation('document', folderId)}>
+                    <FilePlus2 />
+                    {t('Create')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openFileCreation('upload', folderId)}>
+                    <Upload />
+                    {t('Upload')}
+                </DropdownMenuItem>
+            </>
+        );
+    }
     function actions(entry: Entry) {
         return (
             <DropdownMenu>
@@ -163,35 +232,74 @@ export function DocumentBrowser({
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => ask({ operation: 'rename', entry })}>
-                        <Pencil />
-                        {t('Rename')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => ask({ operation: 'move', entry })}>
-                        <FolderInput />
-                        {t('Move')}
-                    </DropdownMenuItem>
                     {entry.kind === 'folder' && (
-                        <DropdownMenuItem onSelect={() => ask({ operation: 'delete', entry })}>
-                            <Trash2 />
-                            {t('Delete')}
+                        <>
+                            {creationItems(entry.id)}
+                            <DropdownMenuSeparator />
+                        </>
+                    )}
+                    {entry.id === ROOT ? (
+                        <DropdownMenuItem
+                            onSelect={() => {
+                                setDrawer(false);
+                                onEditModel();
+                            }}
+                        >
+                            <Pencil />
+                            {knowledge('EditModel')}
                         </DropdownMenuItem>
+                    ) : (
+                        <>
+                            <DropdownMenuItem onSelect={() => ask({ operation: 'rename', entry })}>
+                                <Pencil />
+                                {t('Rename')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => ask({ operation: 'move', entry })}>
+                                <FolderInput />
+                                {t('Move')}
+                            </DropdownMenuItem>
+                            {entry.kind === 'folder' && (
+                                <DropdownMenuItem onSelect={() => ask({ operation: 'delete', entry })}>
+                                    <Trash2 />
+                                    {t('Delete')}
+                                </DropdownMenuItem>
+                            )}
+                        </>
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>
         );
     }
+    function fileNode(doc: DirectoryDocument) {
+        return (
+            <li key={doc.id}>
+                <button
+                    aria-current={selected?.id === doc.id ? 'page' : undefined}
+                    className="flex w-full min-w-0 items-center gap-2 rounded-md py-1.5 ps-7 pe-2 text-start text-sm hover:bg-muted aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground"
+                    onClick={() => navigate(doc.parentId, doc)}
+                >
+                    {doc.source ? <FileText size={15} className="shrink-0 text-muted-foreground" /> : <Pin size={15} className="shrink-0" />}
+                    <span title={doc.name} className="truncate">
+                        {doc.name}
+                    </span>
+                </button>
+            </li>
+        );
+    }
     function treeNode(folder: DocumentFolder): ReactNode {
         const children = index.children.get(folder.id) ?? [];
+        const files = index.documentsByFolder.get(folder.id) ?? [];
+        const hasChildren = children.length > 0 || files.length > 0;
+        const pinned = files[0]?.source === null ? files[0] : null;
         const isOpen = expanded.has(folder.id);
         return (
             <li key={folder.id}>
                 <div
                     {...dropTarget(folder)}
                     {...draggable({ ...folder, kind: 'folder' }, data.canWrite && !folder.managed && folder.id !== ROOT)}
-                    className={`flex min-w-0 items-center rounded-md px-1 text-sm hover:bg-muted ${current.id === folder.id ? 'bg-accent font-medium text-accent-foreground' : ''} ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
+                    className={`flex min-w-0 items-center rounded-md px-1 text-sm hover:bg-muted ${!selected && current.id === folder.id ? 'bg-accent font-medium text-accent-foreground' : ''} ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
                 >
-                    {children.length > 0 ? (
+                    {hasChildren ? (
                         <button
                             className="shrink-0 rounded p-1 hover:bg-background"
                             aria-expanded={isOpen}
@@ -211,7 +319,7 @@ export function DocumentBrowser({
                         <span className="w-[22px] shrink-0" />
                     )}
                     <button
-                        aria-current={current.id === folder.id ? 'location' : undefined}
+                        aria-current={!selected && current.id === folder.id ? 'location' : undefined}
                         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-start"
                         onClick={() => navigate(folder.id)}
                     >
@@ -221,8 +329,15 @@ export function DocumentBrowser({
                         </span>
                         <span className="ms-auto rounded-md border px-1.5 text-xs tabular-nums text-muted-foreground">{index.counts.get(folder.id) ?? 0}</span>
                     </button>
+                    {data.canWrite && !folder.managed && actions({ ...folder, kind: 'folder' })}
                 </div>
-                {isOpen && children.length > 0 && <ul className="ms-3 border-s ps-1">{children.map(treeNode)}</ul>}
+                {isOpen && hasChildren && (
+                    <ul className="ms-3 border-s ps-1">
+                        {pinned && fileNode(pinned)}
+                        {children.map(treeNode)}
+                        {(pinned ? files.slice(1) : files).map(fileNode)}
+                    </ul>
+                )}
             </li>
         );
     }
@@ -253,18 +368,7 @@ export function DocumentBrowser({
                       .map(folder => searchResult(folder.id, folder.name, path(folder.id), () => navigate(folder.id), <Folder size={16} />)),
                   ...index.documents
                       .filter(doc => doc.name.toLocaleLowerCase().includes(needle))
-                      .map(doc =>
-                          searchResult(
-                              doc.id,
-                              doc.name,
-                              path(doc.parentId) + ' / ' + doc.name,
-                              () => {
-                                  navigate(doc.parentId);
-                                  onRead(doc.source);
-                              },
-                              <FileText size={16} />,
-                          ),
-                      ),
+                      .map(doc => searchResult(doc.id, doc.name, path(doc.parentId) + ' / ' + doc.name, () => navigate(doc.parentId, doc), <FileText size={16} />)),
               ]
             : [];
         return (
@@ -293,7 +397,7 @@ export function DocumentBrowser({
         const writable = Boolean(data.canWrite && doc.source && !doc.source.connectorId);
         return (
             <li key={doc.id} {...draggable(entry, writable)} className="flex min-w-0 items-center gap-2 px-2 py-1.5">
-                <Button variant="ghost" className="min-w-0 flex-1 justify-start" onClick={() => onRead(doc.source)}>
+                <Button variant="ghost" className="min-w-0 flex-1 justify-start" onClick={() => navigate(doc.parentId, doc)}>
                     {doc.source ? <FileText className="text-muted-foreground" /> : <Pin />}
                     <span className="truncate">{doc.name}</span>
                 </Button>
@@ -302,8 +406,9 @@ export function DocumentBrowser({
                 </span>
                 {writable && doc.source && (
                     <>
-                        <Button variant="ghost" size="icon-sm" aria-label={knowledge('EditNamedDefinition', { name: doc.name })} onClick={() => onEdit(doc.source!)}>
+                        <Button variant="ghost" size="sm" aria-label={knowledge('EditNamedDefinition', { name: doc.name })} onClick={() => navigate(doc.parentId, doc, true)}>
                             <Pencil />
+                            {knowledge('KnowledgeSources.Edit')}
                         </Button>
                         {actions(entry)}
                     </>
@@ -311,12 +416,51 @@ export function DocumentBrowser({
             </li>
         );
     }
-    const unknownFolder = Boolean(location && !index.folders.has(location));
+    function fileContent(doc: DirectoryDocument) {
+        if (!doc.source)
+            return (
+                <KnowledgeGuide
+                    model={model}
+                    organization={organization}
+                    editing={editingId === doc.id}
+                    canWrite={data.canWrite}
+                    onEdit={() => setEditingId(doc.id)}
+                    onCloseEditor={finishEdit}
+                    onDirtyChange={setDirty}
+                />
+            );
+        const writable = data.canWrite && !doc.source.connectorId;
+        if (editingId === doc.id && writable)
+            return (
+                <SourceEditor
+                    key={doc.id}
+                    inline
+                    open
+                    source={doc.source}
+                    organization={organization}
+                    knowledgeModelId={modelId}
+                    dataSources={dataSources}
+                    onDirtyChange={setDirty}
+                    onOpenChange={open => !open && finishEdit()}
+                />
+            );
+        return (
+            <SourceViewer
+                title={doc.name}
+                key={doc.id}
+                source={doc.source}
+                organization={organization}
+                knowledgeModelId={modelId}
+                onEdit={writable ? () => setEditingId(doc.id) : undefined}
+            />
+        );
+    }
+    const unknownFolder = !selected && Boolean(location && !index.folders.has(location));
     const loading = directoryPending || sourcesPending;
     const loadError = directoryError || sourcesError;
     const local = data.canWrite && !current.managed && !unknownFolder;
     const children = index.children.get(current.id) ?? [];
-    const documents = index.documents.filter(doc => doc.parentId === current.id);
+    const documents = index.documentsByFolder.get(current.id) ?? [];
     const promptTitle = prompt?.operation === 'move' ? t('Move') : prompt?.operation === 'rename' ? t('Rename') : prompt?.operation === 'delete' ? t('Delete') : t('NewFolder');
     const nonEmpty = prompt?.operation === 'delete' && (Boolean(index.children.get(prompt.entry.id)?.length) || Boolean(index.counts.get(prompt.entry.id)));
     const targets =
@@ -343,7 +487,7 @@ export function DocumentBrowser({
                                 {i > 0 && <ChevronRight size={13} className="shrink-0 text-muted-foreground" />}
                                 <button
                                     {...dropTarget(folder)}
-                                    aria-current={folder.id === current.id ? 'page' : undefined}
+                                    aria-current={!selected && folder.id === current.id ? 'page' : undefined}
                                     className={`truncate rounded px-1 text-sm hover:bg-muted ${i === trail.length - 1 ? 'font-medium' : 'text-muted-foreground'} ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
                                     onClick={() => navigate(folder.id)}
                                 >
@@ -351,6 +495,12 @@ export function DocumentBrowser({
                                 </button>
                             </span>
                         ))}
+                        {selected && (
+                            <span aria-current="page" className="flex min-w-0 max-w-full items-center gap-1 text-sm font-medium">
+                                <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
+                                <span className="truncate">{selected.name}</span>
+                            </span>
+                        )}
                     </nav>
                     {local && (
                         <DropdownMenu>
@@ -361,20 +511,7 @@ export function DocumentBrowser({
                                     <ChevronDown />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => ask({ operation: 'create' })}>
-                                    <FolderPlus />
-                                    {t('NewFolder')}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => onNew(current.id || null)}>
-                                    <FilePlus2 />
-                                    {t('Create')}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => onUpload(current.id || null)}>
-                                    <Upload />
-                                    {t('Upload')}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
+                            <DropdownMenuContent align="end">{creationItems(current.id)}</DropdownMenuContent>
                         </DropdownMenu>
                     )}
                 </div>
@@ -384,53 +521,82 @@ export function DocumentBrowser({
                             {loadError}
                         </p>
                     )}
-                    {unknownFolder && !loading && !loadError && (
+                    {selected ? (
+                        fileContent(selected)
+                    ) : visibleId ? (
                         <p role="status" className="text-sm text-muted-foreground">
-                            {t('MissingFolder')}
+                            {loading ? t('Loading') : !loadError ? t('MissingFile') : null}
                         </p>
-                    )}
-                    {!unknownFolder && children.length > 0 && (
-                        <section>
-                            <h3 className="mb-3 text-sm font-semibold">{t('Folders')}</h3>
-                            <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-2">
-                                {children.map(folder => (
-                                    <li
-                                        key={folder.id}
-                                        {...draggable({ ...folder, kind: 'folder' }, data.canWrite && !folder.managed)}
-                                        {...dropTarget(folder)}
-                                        className={`group relative rounded-lg border bg-muted/20 hover:bg-accent ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
-                                    >
-                                        <button className="flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-4" onClick={() => navigate(folder.id)}>
-                                            <FolderClosed aria-hidden="true" className="mb-1 size-16 fill-muted-foreground/35 stroke-muted-foreground" strokeWidth={1} />
-                                            <span className="w-full truncate text-center text-sm font-medium" title={folder.name}>
-                                                {folder.name}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">{t('FileCount', { count: index.counts.get(folder.id) ?? 0 })}</span>
-                                        </button>
-                                        {!folder.managed && data.canWrite && <div className="absolute end-1 top-1">{actions({ ...folder, kind: 'folder' })}</div>}
-                                    </li>
-                                ))}
-                            </ul>
-                        </section>
-                    )}
-                    <section>
-                        <h3 className="mb-3 text-sm font-semibold">{t('Files')}</h3>
-                        {!unknownFolder && documents.length ? (
-                            <ul className="divide-y rounded-lg border">{documents.map(documentRow)}</ul>
-                        ) : (
-                            <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                                {loading ? t('Loading') : !unknownFolder && !loadError ? t('Empty') : null}
-                                {local && (
-                                    <Button size="sm" variant="outline" onClick={() => onNew(current.id || null)}>
-                                        <FilePlus2 />
-                                        {t('Create')}
-                                    </Button>
+                    ) : (
+                        <>
+                            {unknownFolder && !loading && !loadError && (
+                                <p role="status" className="text-sm text-muted-foreground">
+                                    {t('MissingFolder')}
+                                </p>
+                            )}
+                            {!unknownFolder && children.length > 0 && (
+                                <section>
+                                    <h3 className="mb-3 text-sm font-semibold">{t('Folders')}</h3>
+                                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(8rem,100%),1fr))] gap-2">
+                                        {children.map(folder => (
+                                            <li
+                                                key={folder.id}
+                                                {...draggable({ ...folder, kind: 'folder' }, data.canWrite && !folder.managed)}
+                                                {...dropTarget(folder)}
+                                                className={`group relative rounded-lg border bg-muted/20 hover:bg-accent ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
+                                            >
+                                                <button className="flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-4" onClick={() => navigate(folder.id)}>
+                                                    <FolderClosed aria-hidden="true" className="mb-1 size-16 fill-muted-foreground/35 stroke-muted-foreground" strokeWidth={1} />
+                                                    <span className="w-full truncate text-center text-sm font-medium" title={folder.name}>
+                                                        {folder.name}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground">{t('FileCount', { count: index.counts.get(folder.id) ?? 0 })}</span>
+                                                </button>
+                                                {!folder.managed && data.canWrite && <div className="absolute end-1 top-1">{actions({ ...folder, kind: 'folder' })}</div>}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            )}
+                            <section>
+                                <h3 className="mb-3 text-sm font-semibold">{t('Files')}</h3>
+                                {!unknownFolder && documents.length ? (
+                                    <ul className="divide-y rounded-lg border">{documents.map(documentRow)}</ul>
+                                ) : (
+                                    <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                                        {loading ? t('Loading') : !unknownFolder && !loadError ? t('Empty') : null}
+                                        {local && (
+                                            <Button size="sm" variant="outline" onClick={() => openFileCreation('document', current.id)}>
+                                                <FilePlus2 />
+                                                {t('Create')}
+                                            </Button>
+                                        )}
+                                    </div>
                                 )}
-                            </div>
-                        )}
-                    </section>
+                            </section>
+                        </>
+                    )}
                 </div>
             </div>
+            <AlertDialog open={Boolean(pending || historyChanged)} onOpenChange={open => !open && keepEditing()}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('UnsavedTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('UnsavedDescription')}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>{t('KeepEditing')}</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={event => {
+                                event.preventDefault();
+                                openDestination(pending ?? { folder: location, file });
+                            }}
+                        >
+                            {t('DiscardChanges')}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             <Sheet open={drawer} onOpenChange={setDrawer}>
                 <SheetContent side="left" className="gap-0 overflow-auto text-foreground">
                     <SheetHeader>
@@ -439,17 +605,45 @@ export function DocumentBrowser({
                     {sidebar()}
                 </SheetContent>
             </Sheet>
-            {prompt && (
-                <Dialog open onOpenChange={open => !open && setPrompt(null)}>
+            {fileCreation &&
+                data.canWrite &&
+                (fileCreation.kind === 'upload' ? (
+                    <UploadSourcesDialog
+                        open
+                        markdownOnly
+                        folderId={fileCreation.folderId || null}
+                        targetPath={path(fileCreation.folderId)}
+                        organization={organization}
+                        knowledgeModelId={modelId}
+                        dataSources={dataSources}
+                        onOpenChange={open => !open && setFileCreation(null)}
+                        onUploaded={() => navigate(fileCreation.folderId)}
+                    />
+                ) : (
+                    <SourceEditor
+                        open
+                        source={null}
+                        folderId={fileCreation.folderId || null}
+                        targetPath={path(fileCreation.folderId)}
+                        organization={organization}
+                        knowledgeModelId={modelId}
+                        dataSources={dataSources}
+                        onOpenChange={open => !open && setFileCreation(null)}
+                        onSaved={() => navigate(fileCreation.folderId)}
+                    />
+                ))}
+            {prompt && data.canWrite && (
+                <Dialog open onOpenChange={open => !open && !change.isPending && setPrompt(null)}>
                     <DialogContent className="text-foreground">
                         <DialogHeader>
                             <DialogTitle>{promptTitle}</DialogTitle>
+                            {prompt.operation === 'create' && <DialogDescription className="break-words">{t('TargetFolder', { path: path(prompt.folderId) })}</DialogDescription>}
                         </DialogHeader>
                         <form
                             className="space-y-4"
                             onSubmit={event => {
                                 event.preventDefault();
-                                if (prompt.operation === 'create') change.mutate({ operation: 'create', name: value, parentId: current.id || null });
+                                if (prompt.operation === 'create') change.mutate({ operation: 'create', name: value, parentId: prompt.folderId || null });
                                 else if (prompt.operation === 'rename') change.mutate({ operation: 'rename', name: value, id: prompt.entry.id, kind: prompt.entry.kind });
                                 else if (prompt.operation === 'move') change.mutate({ operation: 'move', parentId: value || null, id: prompt.entry.id, kind: prompt.entry.kind });
                                 else change.mutate({ operation: 'delete', id: prompt.entry.id, kind: 'folder' });
@@ -483,7 +677,7 @@ export function DocumentBrowser({
                                 />
                             )}
                             <DialogFooter>
-                                <Button type="button" variant="outline" onClick={() => setPrompt(null)}>
+                                <Button type="button" variant="outline" disabled={change.isPending} onClick={() => setPrompt(null)}>
                                     {knowledge('KnowledgeSources.Cancel')}
                                 </Button>
                                 <Button

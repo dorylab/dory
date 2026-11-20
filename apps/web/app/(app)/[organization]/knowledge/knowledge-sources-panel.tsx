@@ -29,6 +29,7 @@ import { parseAsString, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+import { getOrganizationAccess } from '@/lib/organization/api';
 import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 
 import { ExtractionConnectorStatus, SourceExtractionStatus } from './knowledge-extraction-panel';
@@ -74,7 +75,7 @@ export type KnowledgeSourceSummary = {
     remotePath: string | null;
 };
 type KnowledgeSource = KnowledgeSourceSummary & { contentText: string; remoteRevision: string | null };
-type PendingFile = { key: string; fileName: string; contentText: string; byteSize: number; connectionId: string | null };
+type PendingFile = { file: File; connectionId: string | null };
 type ImportSuggestion = Omit<Definition, 'sourceConnectionId'> & { sourceConnectionId?: string };
 type ImportVerifiedQuery = {
     id?: string;
@@ -120,16 +121,18 @@ function ScopeSelect({
     value,
     dataSources,
     onChange,
+    disabled,
     className = 'w-full',
 }: {
     value: string | null;
     dataSources: DataSource[];
     onChange: (value: string | null) => void;
+    disabled?: boolean;
     className?: string;
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
     return (
-        <Select value={value ?? '__shared__'} onValueChange={selected => onChange(selected === '__shared__' ? null : selected)}>
+        <Select disabled={disabled} value={value ?? '__shared__'} onValueChange={selected => onChange(selected === '__shared__' ? null : selected)}>
             <SelectTrigger className={className}>
                 <SelectValue />
             </SelectTrigger>
@@ -152,6 +155,8 @@ export function UploadSourcesDialog({
     knowledgeModelId,
     dataSources,
     folderId,
+    targetPath,
+    onUploaded,
     markdownOnly = false,
 }: {
     open: boolean;
@@ -160,6 +165,8 @@ export function UploadSourcesDialog({
     knowledgeModelId: string;
     dataSources: DataSource[];
     folderId?: string | null;
+    targetPath?: string;
+    onUploaded?: () => void;
     markdownOnly?: boolean;
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
@@ -168,7 +175,7 @@ export function UploadSourcesDialog({
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [files, setFiles] = useState<PendingFile[]>([]);
 
-    const addFiles = async (selected: File[]) => {
+    const addFiles = (selected: File[]) => {
         const accepted = selected.slice(0, MAX_FILES_PER_UPLOAD).filter(file => {
             if (!(markdownOnly ? /\.(md|markdown)$/i : SUPPORTED_FILE_NAME).test(file.name)) {
                 toast.error(t('Unsupported', { name: file.name }));
@@ -180,44 +187,42 @@ export function UploadSourcesDialog({
             }
             return true;
         });
-        const next = await Promise.all(
-            accepted.map(async file => ({
-                key: `${file.name}:${file.size}:${file.lastModified}`,
-                fileName: file.name,
-                contentText: await file.text(),
-                byteSize: file.size,
-                connectionId: null,
-            })),
-        );
-        setFiles(current => [...current, ...next.filter(item => !current.some(existing => existing.fileName === item.fileName))].slice(0, MAX_FILES_PER_UPLOAD));
+        setFiles(current => {
+            const byName = new Map(current.map(item => [item.file.name, item]));
+            for (const file of accepted) {
+                if (!byName.has(file.name)) byName.set(file.name, { file, connectionId: null });
+            }
+            return [...byName.values()].slice(0, MAX_FILES_PER_UPLOAD);
+        });
     };
 
     const upload = useMutation({
         mutationFn: async () => {
             const results = await Promise.allSettled(
-                files.map(file =>
+                files.map(async ({ file, connectionId }) =>
                     executeActionClient<KnowledgeSource>(
                         'knowledge.createKnowledgeSource',
-                        { knowledgeModelId, folderId, fileName: file.fileName, contentText: file.contentText, connectionId: file.connectionId },
+                        { knowledgeModelId, folderId, fileName: file.name, contentText: await file.text(), connectionId },
                         { organizationId: organization },
                     ),
                 ),
             );
             return {
-                uploadedNames: results.flatMap((result, index) => (result.status === 'fulfilled' ? [files[index]!.fileName] : [])),
+                uploadedNames: results.flatMap((result, index) => (result.status === 'fulfilled' ? [files[index]!.file.name] : [])),
                 errors: results.filter((result): result is PromiseRejectedResult => result.status === 'rejected').map(result => String(result.reason)),
             };
         },
-        onSuccess: result => {
-            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) });
+        onSuccess: async result => {
+            if (result.uploadedNames.length) await queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId), exact: true });
             if (result.uploadedNames.length) toast.success(t('Uploaded', { count: result.uploadedNames.length }));
             result.errors.forEach(error => toast.error(error));
-            if (result.uploadedNames.length === files.length) {
+            if (!result.errors.length) {
                 setFiles([]);
+                onUploaded?.();
                 onOpenChange(false);
             } else {
                 const uploadedNames = new Set(result.uploadedNames);
-                setFiles(current => current.filter(file => !uploadedNames.has(file.fileName)));
+                setFiles(current => current.filter(file => !uploadedNames.has(file.file.name)));
             }
         },
     });
@@ -226,23 +231,26 @@ export function UploadSourcesDialog({
         <Dialog
             open={open}
             onOpenChange={next => {
+                if (upload.isPending) return;
                 onOpenChange(next);
-                if (!next && !upload.isPending) setFiles([]);
             }}
         >
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>{t('UploadTitle')}</DialogTitle>
-                    <DialogDescription>{markdownOnly ? docs('Upload') : t('UploadDescription')}</DialogDescription>
+                    <DialogDescription className="break-words">
+                        {targetPath !== undefined ? docs('TargetFolder', { path: targetPath }) : markdownOnly ? docs('Upload') : t('UploadDescription')}
+                    </DialogDescription>
                 </DialogHeader>
                 <button
                     type="button"
                     className="flex min-h-36 w-full flex-col items-center justify-center rounded-md border border-dashed bg-muted/20 px-6 text-center transition-colors hover:bg-muted/35"
+                    disabled={upload.isPending}
                     onClick={() => inputRef.current?.click()}
                     onDragOver={event => event.preventDefault()}
                     onDrop={event => {
                         event.preventDefault();
-                        void addFiles(Array.from(event.dataTransfer.files));
+                        if (!upload.isPending) addFiles(Array.from(event.dataTransfer.files));
                     }}
                 >
                     <Upload className="size-5" />
@@ -257,30 +265,32 @@ export function UploadSourcesDialog({
                         onChange={event => {
                             const selected = Array.from(event.target.files ?? []);
                             event.target.value = '';
-                            void addFiles(selected);
+                            addFiles(selected);
                         }}
                     />
                 </button>
                 {files.length ? (
                     <div className="max-h-64 divide-y overflow-y-auto rounded-md border">
-                        {files.map(file => (
-                            <div key={file.key} className="flex items-center gap-3 p-3">
+                        {files.map(({ file, connectionId }) => (
+                            <div key={file.name} className="flex items-center gap-3 p-3">
                                 <FileText className="size-4 shrink-0 text-muted-foreground" />
                                 <div className="min-w-0 flex-1">
-                                    <div className="truncate text-sm font-medium">{file.fileName}</div>
-                                    <div className="text-xs text-muted-foreground">{formatBytes(file.byteSize)}</div>
+                                    <div className="truncate text-sm font-medium">{file.name}</div>
+                                    <div className="text-xs text-muted-foreground">{formatBytes(file.size)}</div>
                                 </div>
                                 <ScopeSelect
-                                    value={file.connectionId}
+                                    disabled={upload.isPending}
+                                    value={connectionId}
                                     dataSources={dataSources}
-                                    onChange={connectionId => setFiles(current => current.map(item => (item.key === file.key ? { ...item, connectionId } : item)))}
+                                    onChange={connectionId => setFiles(current => current.map(item => (item.file.name === file.name ? { ...item, connectionId } : item)))}
                                     className="w-48 shrink-0"
                                 />
                                 <Button
                                     variant="ghost"
                                     size="icon-sm"
-                                    aria-label={t('RemoveFile', { name: file.fileName })}
-                                    onClick={() => setFiles(current => current.filter(item => item.key !== file.key))}
+                                    disabled={upload.isPending}
+                                    aria-label={t('RemoveFile', { name: file.name })}
+                                    onClick={() => setFiles(current => current.filter(item => item.file.name !== file.name))}
                                 >
                                     <Trash2 />
                                 </Button>
@@ -301,16 +311,20 @@ export function UploadSourcesDialog({
     );
 }
 
-export function SourceViewerDialog({
+export function SourceViewer({
     source,
     organization,
     knowledgeModelId,
     onClose,
+    onEdit,
+    title = knowledgeSourceDisplayName(source),
 }: {
     source: KnowledgeSourceSummary;
     organization: string;
     knowledgeModelId: string;
-    onClose: () => void;
+    onClose?: () => void;
+    onEdit?: () => void;
+    title?: string;
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
     const detail = useQuery({
@@ -320,6 +334,66 @@ export function SourceViewerDialog({
         retry: false,
     });
 
+    const actions = (
+        <>
+            {onEdit && !source.connectorId && source.format === 'markdown' && (
+                <Button variant="outline" size="sm" onClick={onEdit}>
+                    <Pencil />
+                    {t('Edit')}
+                </Button>
+            )}
+            {source.sourceUrl ? (
+                <Button variant="outline" size="sm" asChild>
+                    <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink /> {t('OpenOriginal')}
+                    </a>
+                </Button>
+            ) : null}
+        </>
+    );
+    const content = (
+        <>
+            <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline">{source.format}</Badge>
+                <span>{source.connectorProvider === 'github' ? 'GitHub' : source.connectorProvider === 'linear' ? 'Linear' : t('ViewerLocalSource')}</span>
+                <span aria-hidden="true">·</span>
+                <time dateTime={source.updatedAt}>{new Date(source.updatedAt).toLocaleString()}</time>
+                {detail.data?.remoteRevision ? <span className="break-all">{t('SyncedRevision', { revision: detail.data.remoteRevision })}</span> : null}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-card p-4">
+                {detail.isFetching || detail.isPending ? (
+                    <div className="space-y-3" role="status" aria-label={t('ViewerLoading')}>
+                        <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+                        <div className="h-4 w-full animate-pulse rounded bg-muted" />
+                        <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                    </div>
+                ) : detail.isError ? (
+                    <div className="flex flex-col items-start gap-3 text-sm" role="alert">
+                        <p>{t('ViewerLoadFailed')}</p>
+                        <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
+                            {t('ViewerRetry')}
+                        </Button>
+                    </div>
+                ) : !detail.data?.contentText ? (
+                    <p className="text-sm text-muted-foreground">{t('ViewerEmpty')}</p>
+                ) : detail.data.format === 'markdown' ? (
+                    <MarkdownViewer mode="static">{detail.data.contentText}</MarkdownViewer>
+                ) : (
+                    <pre className="whitespace-pre-wrap break-words font-mono text-sm">{detail.data.contentText}</pre>
+                )}
+            </div>
+        </>
+    );
+    if (!onClose)
+        return (
+            <section aria-label={title} className="min-w-0 space-y-4">
+                <header className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="min-w-0 break-words text-lg font-semibold">{title}</h3>
+                    <div className="flex flex-wrap gap-2">{actions}</div>
+                </header>
+                {content}
+            </section>
+        );
     return (
         <Dialog open onOpenChange={open => !open && onClose()}>
             <DialogContent className="flex h-[min(48rem,calc(100dvh-2rem))] w-[calc(100vw-2rem)] flex-col sm:max-w-4xl">
@@ -327,43 +401,9 @@ export function SourceViewerDialog({
                     <DialogTitle className="break-words pr-8">{knowledgeSourceDisplayName(source)}</DialogTitle>
                     <DialogDescription>{t('ViewerDescription')}</DialogDescription>
                 </DialogHeader>
-                <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline">{source.format}</Badge>
-                    <span>{source.connectorProvider === 'github' ? 'GitHub' : source.connectorProvider === 'linear' ? 'Linear' : t('ViewerLocalSource')}</span>
-                    <span aria-hidden="true">·</span>
-                    <time dateTime={source.updatedAt}>{new Date(source.updatedAt).toLocaleString()}</time>
-                    {detail.data?.remoteRevision ? <span className="break-all">{t('SyncedRevision', { revision: detail.data.remoteRevision })}</span> : null}
-                </div>
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-card p-4">
-                    {detail.isFetching || detail.isPending ? (
-                        <div className="space-y-3" role="status" aria-label={t('ViewerLoading')}>
-                            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-                            <div className="h-4 w-full animate-pulse rounded bg-muted" />
-                            <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
-                        </div>
-                    ) : detail.isError ? (
-                        <div className="flex flex-col items-start gap-3 text-sm" role="alert">
-                            <p>{t('ViewerLoadFailed')}</p>
-                            <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
-                                {t('ViewerRetry')}
-                            </Button>
-                        </div>
-                    ) : !detail.data?.contentText ? (
-                        <p className="text-sm text-muted-foreground">{t('ViewerEmpty')}</p>
-                    ) : detail.data.format === 'markdown' ? (
-                        <MarkdownViewer mode="static">{detail.data.contentText}</MarkdownViewer>
-                    ) : (
-                        <pre className="whitespace-pre-wrap break-words font-mono text-sm">{detail.data.contentText}</pre>
-                    )}
-                </div>
+                {content}
                 <DialogFooter className="shrink-0">
-                    {source.sourceUrl ? (
-                        <Button variant="outline" size="sm" asChild>
-                            <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink /> {t('OpenOriginal')}
-                            </a>
-                        </Button>
-                    ) : null}
+                    {actions}
                     <Button variant="outline" size="sm" onClick={onClose}>
                         {t('ViewerClose')}
                     </Button>
@@ -373,7 +413,7 @@ export function SourceViewerDialog({
     );
 }
 
-export function SourceEditorDialog({
+export function SourceEditor({
     source,
     open,
     onOpenChange,
@@ -381,6 +421,10 @@ export function SourceEditorDialog({
     knowledgeModelId,
     dataSources,
     folderId,
+    targetPath,
+    onSaved,
+    inline = false,
+    onDirtyChange,
 }: {
     source: KnowledgeSourceSummary | null;
     open: boolean;
@@ -389,6 +433,10 @@ export function SourceEditorDialog({
     knowledgeModelId: string;
     dataSources: DataSource[];
     folderId?: string | null;
+    targetPath?: string;
+    onSaved?: () => void;
+    inline?: boolean;
+    onDirtyChange?: (dirty: boolean) => void;
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
     const docs = useTranslations('Knowledge.Documents');
@@ -399,13 +447,14 @@ export function SourceEditorDialog({
         queryFn: () => executeActionClient<KnowledgeSource>('knowledge.getKnowledgeSource', { knowledgeModelId, id: source!.id }, { organizationId: organization }),
         enabled: Boolean(source && open),
     });
-    const [contentText, setContentText] = useState('');
-    const [connectionId, setConnectionId] = useState<string | null>(null);
+    const [draft, setContentText] = useState<string>();
+    const [draftConnection, setConnectionId] = useState<string | null>();
+    const contentText = draft ?? detail.data?.contentText ?? '';
+    const connectionId = draftConnection === undefined ? (detail.data?.connectionId ?? null) : draftConnection;
+    const dirty = !!detail.data && (contentText !== detail.data.contentText || connectionId !== detail.data.connectionId);
     useEffect(() => {
-        if (!detail.data) return;
-        setContentText(detail.data.contentText);
-        setConnectionId(detail.data.connectionId);
-    }, [detail.data]);
+        onDirtyChange?.(dirty);
+    }, [dirty, onDirtyChange]);
     const save = useMutation({
         mutationFn: () =>
             executeActionClient<KnowledgeSource>(
@@ -415,70 +464,94 @@ export function SourceEditorDialog({
                     : { knowledgeModelId, folderId, fileName: /\.(md|markdown)$/i.test(title.trim()) ? title.trim() : title.trim() + '.md', contentText, connectionId },
                 { organizationId: organization },
             ),
-        onSuccess: updated => {
+        onSuccess: async updated => {
             queryClient.setQueryData([...knowledgeSourcesKey(knowledgeModelId), updated.id], updated);
-            void queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] });
-            onOpenChange(false);
+            await queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] });
             toast.success(t('Saved'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('SaveFailed')),
     });
 
+    const form = (
+        <>
+            {!source ? <Input aria-label={docs('Title')} placeholder={docs('Title')} value={title} maxLength={237} onChange={event => setTitle(event.target.value)} /> : null}
+            <div className="flex shrink-0 items-center gap-3">
+                <ScopeSelect disabled={save.isPending} value={connectionId} dataSources={dataSources} onChange={setConnectionId} />
+                {source ? <Badge variant="outline">{source.format}</Badge> : null}
+                {source ? <span className="text-xs text-muted-foreground">{formatBytes(new TextEncoder().encode(contentText).byteLength)}</span> : null}
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+                {detail.isLoading ? (
+                    <div className="h-full animate-pulse bg-muted" />
+                ) : detail.isError && !detail.data ? (
+                    <div role="alert" className="space-y-2 p-4 text-sm">
+                        <p>{t('ViewerLoadFailed')}</p>
+                        <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
+                            {t('ViewerRetry')}
+                        </Button>
+                    </div>
+                ) : source?.format === 'yaml' ? (
+                    <MonacoYamlEditor
+                        height="100%"
+                        language="yaml"
+                        value={contentText}
+                        onChange={value => setContentText(value ?? '')}
+                        options={{
+                            automaticLayout: true,
+                            minimap: { enabled: false },
+                            fontSize: 13,
+                            lineNumbers: 'off',
+                            lineNumbersMinChars: 0,
+                            scrollBeyondLastLine: false,
+                            tabSize: 2,
+                            wordWrap: 'on',
+                        }}
+                    />
+                ) : (
+                    <Textarea
+                        disabled={save.isPending}
+                        aria-label={source?.format === 'text' ? knowledgeSourceDisplayName(source) : docs('Body')}
+                        className="h-full resize-none rounded-none border-0 font-mono focus-visible:ring-0"
+                        value={contentText}
+                        onChange={event => setContentText(event.target.value)}
+                    />
+                )}
+            </div>
+            <DialogFooter className="shrink-0">
+                <Button variant="outline" disabled={save.isPending} onClick={() => onOpenChange(false)}>
+                    {t('Cancel')}
+                </Button>
+                <Button
+                    onClick={() =>
+                        save.mutate(undefined, {
+                            onSuccess: () => {
+                                onSaved?.();
+                                onOpenChange(false);
+                            },
+                        })
+                    }
+                    disabled={(source ? !detail.data : !title.trim() || !contentText.trim()) || save.isPending || new TextEncoder().encode(contentText).byteLength > MAX_FILE_BYTES}
+                >
+                    {save.isPending ? t('Saving') : t('Save')}
+                </Button>
+            </DialogFooter>
+        </>
+    );
+    if (inline && source)
+        return (
+            <section aria-label={knowledgeSourceDisplayName(source)} className="flex min-h-80 h-[min(42rem,70dvh)] min-w-0 flex-col gap-4">
+                <h3 className="break-words text-lg font-semibold">{knowledgeSourceDisplayName(source)}</h3>
+                {form}
+            </section>
+        );
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={next => !save.isPending && onOpenChange(next)}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>{source ? knowledgeSourceDisplayName(source) : docs('Create')}</DialogTitle>
-                    <DialogDescription>{t('EditorDescription')}</DialogDescription>
+                    <DialogDescription className="break-words">{targetPath !== undefined ? docs('TargetFolder', { path: targetPath }) : t('EditorDescription')}</DialogDescription>
                 </DialogHeader>
-                {!source ? <Input aria-label={docs('Title')} placeholder={docs('Title')} value={title} maxLength={237} onChange={event => setTitle(event.target.value)} /> : null}
-                <div className="flex shrink-0 items-center gap-3">
-                    <ScopeSelect value={connectionId} dataSources={dataSources} onChange={setConnectionId} />
-                    {source ? <Badge variant="outline">{source.format}</Badge> : null}
-                    {source ? <span className="text-xs text-muted-foreground">{formatBytes(new TextEncoder().encode(contentText).byteLength)}</span> : null}
-                </div>
-                <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-                    {detail.isLoading ? (
-                        <div className="h-full animate-pulse bg-muted" />
-                    ) : source?.format === 'yaml' ? (
-                        <MonacoYamlEditor
-                            height="100%"
-                            language="yaml"
-                            value={contentText}
-                            onChange={value => setContentText(value ?? '')}
-                            options={{
-                                automaticLayout: true,
-                                minimap: { enabled: false },
-                                fontSize: 13,
-                                lineNumbers: 'off',
-                                lineNumbersMinChars: 0,
-                                scrollBeyondLastLine: false,
-                                tabSize: 2,
-                                wordWrap: 'on',
-                            }}
-                        />
-                    ) : (
-                        <Textarea
-                            aria-label={source?.format === 'text' ? knowledgeSourceDisplayName(source) : docs('Body')}
-                            className="h-full resize-none rounded-none border-0 font-mono focus-visible:ring-0"
-                            value={contentText}
-                            onChange={event => setContentText(event.target.value)}
-                        />
-                    )}
-                </div>
-                <DialogFooter className="shrink-0">
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        {t('Cancel')}
-                    </Button>
-                    <Button
-                        onClick={() => save.mutate()}
-                        disabled={
-                            (source ? !detail.data : !title.trim() || !contentText.trim()) || save.isPending || new TextEncoder().encode(contentText).byteLength > MAX_FILE_BYTES
-                        }
-                    >
-                        {save.isPending ? t('Saving') : t('Save')}
-                    </Button>
-                </DialogFooter>
+                {form}
             </DialogContent>
         </Dialog>
     );
@@ -797,7 +870,14 @@ export function KnowledgeSourcesPanel({
     const [uploadOpen, setUploadOpen] = useState(false);
     const [connectorOpen, setConnectorOpen] = useState(Boolean(githubEntry.githubInstallationId && githubEntry.githubConnectionState));
     const [editing, setEditing] = useState<KnowledgeSourceSummary | null>(null);
-    const [viewing, setViewing] = useState<KnowledgeSourceSummary | null>(null);
+    const [viewId, setViewId] = useState<string | null>(null);
+    const access = useQuery({
+        queryKey: ['organization-access', organization],
+        queryFn: () => getOrganizationAccess(organization),
+        enabled: Boolean(organization),
+        staleTime: 60_000,
+    });
+    const canWrite = access.data?.permissions.workspace.write;
     const [deleting, setDeleting] = useState<KnowledgeSourceSummary | null>(null);
     const [reviewing, setReviewing] = useState<KnowledgeSourceSummary | null>(null);
     const [suggestions, setSuggestions] = useState<ImportSuggestion[]>([]);
@@ -817,6 +897,7 @@ export function KnowledgeSourcesPanel({
         queryKey: knowledgeSourcesKey(knowledgeModelId),
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
     });
+    const viewing = sources.data?.sources.find(source => source.id === viewId);
     const pagination = useKnowledgeListPagination('sources', sources.data?.sources.length, {
         id: selectedSourceId.source,
         index: sources.data?.sources.findIndex(source => source.id === selectedSourceId.source) ?? -1,
@@ -1059,10 +1140,10 @@ export function KnowledgeSourcesPanel({
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" onClick={event => event.stopPropagation()}>
-                                                    <DropdownMenuItem onSelect={() => setViewing(source)}>
+                                                    <DropdownMenuItem onSelect={() => setViewId(source.id)}>
                                                         <Eye /> {t('View')}
                                                     </DropdownMenuItem>
-                                                    {!source.connectorId ? (
+                                                    {canWrite && !source.connectorId ? (
                                                         <DropdownMenuItem onSelect={() => setEditing(source)}>
                                                             <Pencil /> {t('Edit')}
                                                         </DropdownMenuItem>
@@ -1072,7 +1153,7 @@ export function KnowledgeSourcesPanel({
                                                             <FileCode2 /> {t('ReviewImport')}
                                                         </DropdownMenuItem>
                                                     ) : null}
-                                                    {!source.connectorId ? (
+                                                    {canWrite && !source.connectorId ? (
                                                         <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(source)}>
                                                             <Trash2 /> {t('Delete')}
                                                         </DropdownMenuItem>
@@ -1154,7 +1235,7 @@ export function KnowledgeSourcesPanel({
                     </div>
                 </div>
             ) : null}
-            <UploadSourcesDialog open={uploadOpen} onOpenChange={setUploadOpen} organization={organization} knowledgeModelId={knowledgeModelId} dataSources={dataSources} />
+            {uploadOpen && <UploadSourcesDialog open onOpenChange={setUploadOpen} organization={organization} knowledgeModelId={knowledgeModelId} dataSources={dataSources} />}
             <Dialog open={providerOpen} onOpenChange={setProviderOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
@@ -1211,15 +1292,26 @@ export function KnowledgeSourcesPanel({
                     ]);
                 }}
             />
-            {viewing ? <SourceViewerDialog source={viewing} organization={organization} knowledgeModelId={knowledgeModelId} onClose={() => setViewing(null)} /> : null}
-            <SourceEditorDialog
-                source={editing}
-                open={Boolean(editing)}
-                onOpenChange={open => !open && setEditing(null)}
-                organization={organization}
-                knowledgeModelId={knowledgeModelId}
-                dataSources={dataSources}
-            />
+            {viewing && !editing && (
+                <SourceViewer
+                    source={viewing}
+                    organization={organization}
+                    knowledgeModelId={knowledgeModelId}
+                    onEdit={canWrite ? () => setEditing(viewing) : undefined}
+                    onClose={() => setViewId(null)}
+                />
+            )}
+            {editing && canWrite && (
+                <SourceEditor
+                    key={editing.id}
+                    source={editing}
+                    open
+                    onOpenChange={open => !open && setEditing(null)}
+                    organization={organization}
+                    knowledgeModelId={knowledgeModelId}
+                    dataSources={dataSources}
+                />
+            )}
             <ImportReviewDialog
                 source={reviewing}
                 suggestions={suggestions}

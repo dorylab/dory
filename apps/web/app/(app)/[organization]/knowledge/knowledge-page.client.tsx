@@ -1972,6 +1972,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                     </TabsList>
                     <TabsContent value="documents" className="pt-4">
                         <KnowledgeDocumentsPanel
+                            onEditModel={() => setEditingModel(model)}
                             model={model}
                             organization={organization}
                             sources={sources.data?.sources ?? []}

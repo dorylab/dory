@@ -574,12 +574,11 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
         await page.getByRole('button', { name: folder + ' 1 document', exact: true }).click();
     }
     await expect(page.getByRole('button', { name: 'New', exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: documentName, exact: true }).click();
+    await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: documentName, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'GitHub source snapshot' })).toBeVisible();
-    await expect(page.getByRole('dialog').getByText('Synced version · abc')).toBeVisible();
+    await expect(page.getByRole('region').getByText('Synced version · abc')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', /github.com\/dorylab/);
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('button', { name: 'Edit ' + documentName })).toHaveCount(0);
+    await expect(page.getByRole('region').getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     await expect(page.getByText('dorylab/docs', { exact: true })).toBeVisible();
     await expect(page.getByText('GitHub · Read-only')).toBeVisible();
@@ -668,17 +667,22 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
     await page.getByRole('button', { name: 'Analytics 2 documents', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Historical guide.md', exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Historical guide.md', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Revenue 1 document', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Linear guide.md', exact: true })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Linear guide.md', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Actions for Linear guide.md' })).toHaveCount(0);
+    await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Linear guide.md', exact: true }).click();
+    const inline = page.getByRole('region', { name: 'Linear guide.md' });
+    await expect(inline.getByText('Could not load the knowledge source.')).toBeVisible();
+    await inline.getByRole('button', { name: 'Retry' }).click();
+    await expect(inline.getByRole('cell', { name: 'GMV' })).toBeVisible();
+    await expect(inline.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', linearSource.sourceUrl);
+    await expect(inline.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Knowledge sources' }).click();
     const linearRow = page.getByRole('row').filter({ hasText: 'Linear guide.md' });
     await linearRow.getByRole('button', { name: /Actions for/ }).click();
     await page.getByRole('menuitem', { name: 'View', exact: true }).click();
     const linearViewer = page.getByRole('dialog', { name: 'Linear guide.md' });
-    await expect(linearViewer.getByText('Could not load the knowledge source.')).toBeVisible();
-    await linearViewer.getByRole('button', { name: 'Retry' }).click();
     await expect(linearViewer.getByRole('heading', { name: 'Linear snapshot' })).toBeVisible();
     await expect(linearViewer.getByRole('cell', { name: 'GMV' })).toBeVisible();
     await expect(linearViewer.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', linearSource.sourceUrl);

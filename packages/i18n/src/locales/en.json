@@ -3921,6 +3921,12 @@
     },
     "Knowledge": {
         "Documents": {
+            "MissingFile": "This document is no longer available.",
+            "UnsavedTitle": "Unsaved changes",
+            "UnsavedDescription": "Leaving this document will discard your edits.",
+            "KeepEditing": "Keep editing",
+            "DiscardChanges": "Discard changes",
+            "TargetFolder": "Target folder: {path}",
             "SearchPlaceholder": "Search…",
             "NonEmpty": "Move the contents out of “{name}” before deleting it.",
             "MissingFolder": "This folder is unavailable. Open the knowledge base root to continue.",

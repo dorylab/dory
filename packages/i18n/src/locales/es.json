@@ -3914,6 +3914,12 @@
     },
     "Knowledge": {
         "Documents": {
+            "MissingFile": "Este documento ya no está disponible.",
+            "UnsavedTitle": "Cambios sin guardar",
+            "UnsavedDescription": "Si sales de este documento, se perderán los cambios.",
+            "KeepEditing": "Seguir editando",
+            "DiscardChanges": "Descartar cambios",
+            "TargetFolder": "Carpeta de destino: {path}",
             "SearchPlaceholder": "Buscar…",
             "NonEmpty": "Mueve el contenido de «{name}» antes de eliminar la carpeta.",
             "MissingFolder": "Esta carpeta no está disponible. Abre la raíz de la base de conocimiento para continuar.",

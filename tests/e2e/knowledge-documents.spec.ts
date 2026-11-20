@@ -40,20 +40,21 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         tabsCreated.push(existing.tabId);
         await page.goto(detailUrl + '?tab=overview');
         await expect(page.getByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
-        await page.getByRole('button', { name: 'User guide' }).click();
+        await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'User guide' }).click();
         const dialog = page.getByRole('dialog');
-        await expect(dialog.getByRole('heading', { name: 'Original guide' })).toBeVisible();
+        const guide = page.getByRole('region', { name: 'User guide' });
+        await expect(guide.getByRole('heading', { name: 'Original guide' })).toBeVisible();
         access.resolve();
-        await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
-        await dialog.getByLabel('Markdown content').fill('# Updated guide');
-        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-        await expect(dialog.getByRole('heading', { name: 'Updated guide' })).toBeVisible();
+        await guide.getByRole('button', { name: 'Edit', exact: true }).click();
+        await guide.getByLabel('Markdown content').fill('# Updated guide');
+        await guide.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(guide.getByRole('heading', { name: 'Updated guide' })).toBeVisible();
         expect((await action<{ ossieDocument: { ai_context: unknown } }>('knowledge.get', scope)).ossieDocument.ai_context).toMatchObject({
             instructions: '# Updated guide',
             synonyms: ['orders'],
             examples: ['Count orders'],
         });
-        await page.keyboard.press('Escape');
+
         await page.getByRole('button', { name: 'New', exact: true }).click();
         await page.getByRole('menuitem', { name: 'New document' }).click();
         await dialog.getByLabel('Document title').fill('Reporting rules');
@@ -61,12 +62,10 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(dialog).toBeHidden();
         await page.getByRole('button', { name: 'Edit Reporting rules.md' }).click();
-        await dialog.getByLabel('Markdown content').fill('# Use UTC');
-        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-        await expect(dialog).toBeHidden();
-        await page.getByRole('button', { name: 'Reporting rules.md', exact: true }).click();
-        await expect(dialog.getByRole('heading', { name: 'Use UTC' })).toBeVisible();
-        await page.keyboard.press('Escape');
+        const preview = page.getByRole('region', { name: 'Reporting rules.md' });
+        await preview.getByLabel('Markdown content').fill('# Use UTC');
+        await preview.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(preview.getByRole('heading', { name: 'Use UTC' })).toBeVisible();
         await page.getByRole('tab', { name: 'Verified queries' }).click();
         const filter = page.getByRole('searchbox');
         await filter.fill('missing');

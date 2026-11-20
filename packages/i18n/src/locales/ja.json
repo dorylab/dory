@@ -3918,6 +3918,12 @@
     },
     "Knowledge": {
         "Documents": {
+            "MissingFile": "このドキュメントは利用できません。",
+            "UnsavedTitle": "未保存の変更があります",
+            "UnsavedDescription": "このドキュメントを離れると、編集中の変更は破棄されます。",
+            "KeepEditing": "編集を続ける",
+            "DiscardChanges": "変更を破棄",
+            "TargetFolder": "保存先：{path}",
             "SearchPlaceholder": "検索…",
             "NonEmpty": "「{name}」を削除する前に、中のドキュメントとフォルダーを移動してください。",
             "MissingFolder": "このフォルダーは利用できません。ナレッジベース名を選択してルートに戻ってください。",

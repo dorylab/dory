@@ -3925,6 +3925,12 @@
     },
     "Knowledge": {
         "Documents": {
+            "MissingFile": "此文档已不可用。",
+            "UnsavedTitle": "有未保存的修改",
+            "UnsavedDescription": "离开这篇文档将丢弃当前修改。",
+            "KeepEditing": "继续编辑",
+            "DiscardChanges": "放弃修改",
+            "TargetFolder": "目标目录：{path}",
             "SearchPlaceholder": "搜索…",
             "NonEmpty": "请先移走「{name}」中的文档和子文件夹，再删除此文件夹。",
             "MissingFolder": "此目录已不可用，点击知识库名称可返回根目录。",
