@@ -24,8 +24,8 @@ export function storedFolderId(id: string) {
     return id === ROOT ? null : id;
 }
 
-export function buildDocumentDirectory(guide: string | null, data: DirectoryData, sources: KnowledgeSourceSummary[]) {
-    const root: DocumentFolder = { id: ROOT, parentId: null, name: 'Dory', managed: false, provider: 'local' };
+export function buildDocumentDirectory(guide: string | null, data: DirectoryData, sources: KnowledgeSourceSummary[], rootName: string) {
+    const root: DocumentFolder = { id: ROOT, parentId: null, name: rootName, managed: false };
     const folders = new Map([[ROOT, root]]);
     const connectors = new Map(data.connectors.map(item => [item.id, item]));
     for (const folder of data.folders) folders.set(folder.id, { ...folder, parentId: folder.parentId ?? ROOT, managed: false });
@@ -107,5 +107,5 @@ export function buildDocumentDirectory(guide: string | null, data: DirectoryData
     for (const folder of ordered.reverse()) {
         if (folder.parentId !== null) counts.set(folder.parentId, (counts.get(folder.parentId) ?? 0) + (counts.get(folder.id) ?? 0));
     }
-    return { root, roots, folders, documents, documentsByFolder, children, counts, trail };
+    return { root, sourceRoots, folders, documents, documentsByFolder, children, counts, trail };
 }

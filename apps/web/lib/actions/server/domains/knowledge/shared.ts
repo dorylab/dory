@@ -30,6 +30,7 @@ export const knowledgeDefinitionSchema = z.object({
 
 export const knowledgeDataSourceSchema = z.object({ connectionId: z.string(), name: z.string(), type: z.string(), engine: z.string() });
 export const knowledgeSourceSummarySchema = z.object({
+    systemRole: z.literal('analysis_rules').nullable(),
     id: z.string(),
     organizationId: z.string(),
     knowledgeModelId: z.string(),

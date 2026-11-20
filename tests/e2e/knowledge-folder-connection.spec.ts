@@ -30,23 +30,24 @@ test('local folder connections sync nested Markdown, preserve IDs and expose onl
         const dialog = page.getByRole('dialog');
         const existing = page.getByRole('region', { name: 'Existing sources' });
         const tree = page.getByRole('navigation', { name: 'Directory' });
-        await expect(tree.getByRole('button', { name: 'Dory 0', exact: true })).toHaveAttribute('aria-current', 'location');
+        await expect(tree.getByRole('listitem')).toHaveCount(1);
+        await expect(tree.getByRole('button', { name: 'RULES.md', exact: true })).toBeVisible();
         await page.getByRole('button', { name: 'New', exact: true }).click();
         await page.getByRole('menuitem', { name: 'New document' }).click();
         await dialog.getByLabel('Document title').fill('other.md');
         await dialog.getByLabel('Markdown content').fill('# Built-in version');
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-        await expect(tree.getByRole('button', { name: 'Dory 1', exact: true })).toBeVisible();
+        await expect(tree.getByRole('button', { name: 'other.md', exact: true })).toBeVisible();
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await expect(page.getByText('Built into this knowledge base', { exact: true })).toBeVisible();
+        await expect(existing).toBeHidden();
         const choose = async (path: string) => {
             // Exercise the native directory-input fallback using actual files on disk.
             await dialog.locator('input[type=file]').setInputFiles(path);
         };
-        await page.getByRole('button', { name: 'Local folder 1 source' }).click();
+        await page.getByRole('button', { name: 'Local folder 0 sources' }).click();
         await choose(folder);
         await expect(existing.getByRole('heading', { name: basename(folder), exact: true })).toBeVisible();
-        await page.getByRole('button', { name: 'Local folder 2 sources' }).click();
+        await page.getByRole('button', { name: 'Local folder 1 source' }).click();
         // Supply a real browser directory handle at the OS selection boundary.
         const secondName = basename(second);
         await page.evaluate(async name => {
@@ -63,7 +64,7 @@ test('local folder connections sync nested Markdown, preserve IDs and expose onl
         const secondRow = existing.getByRole('listitem').filter({ has: page.getByRole('heading', { name: secondName, exact: true }) });
         await expect(secondRow).toBeVisible();
         await page.reload();
-        await expect(page.getByRole('button', { name: 'Local folder 3 sources' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Local folder 2 sources' })).toBeVisible();
         await secondRow.getByRole('button', { name: 'Sync now' }).click();
         await dialog.getByRole('button', { name: 'Sync now', exact: true }).click();
         await expect(secondRow).toBeVisible();
@@ -75,12 +76,11 @@ test('local folder connections sync nested Markdown, preserve IDs and expose onl
         });
         const row = existing.getByRole('listitem').filter({ has: page.getByRole('heading', { name: basename(folder), exact: true }) });
         await row.getByRole('link', { name: 'View in documents' }).click();
-        await expect(tree.locator(':scope > ul > li')).toHaveCount(3);
-        await expect(tree.locator(':scope > ul > li').first()).toContainText('Dory');
+        await expect(tree.locator(':scope > ul > li')).toHaveCount(4);
         const search = page.getByRole('searchbox', { name: 'Search folders and documents' });
         await search.fill('other.md');
         await expect(tree.getByRole('button')).toHaveCount(2);
-        await expect(tree).toContainText('Dory / other.md');
+        await expect(tree.getByRole('button', { name: 'other.md', exact: true })).toBeVisible();
         await expect(tree).toContainText(secondName + ' / other.md');
         await search.fill('');
         await page.getByRole('button', { name: 'orders 1 document', exact: true }).click();
@@ -89,7 +89,7 @@ test('local folder connections sync nested Markdown, preserve IDs and expose onl
         await expect(page.getByRole('region').getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
         const file = new URL(page.url()).searchParams.get('file')!;
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await expect(page.getByRole('button', { name: 'Local folder 3 sources' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Local folder 2 sources' })).toBeVisible();
         await row.getByRole('button', { name: 'Sync now' }).click();
         await choose(second);
         await expect(dialog.getByRole('alert')).toContainText(basename(folder));
@@ -110,9 +110,9 @@ test('local folder connections sync nested Markdown, preserve IDs and expose onl
         await page.setViewportSize({ width: 390, height: 844 });
         await page.reload();
         await page.evaluate(() => document.documentElement.classList.add('dark'));
-        await expect(page.getByRole('button', { name: 'Local folder 3 sources' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Local folder 2 sources' })).toBeVisible();
         await expect(row.getByRole('link', { name: 'View in documents' })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Local folder 3 sources' })).toBeDisabled();
+        await expect(page.getByRole('button', { name: 'Local folder 2 sources' })).toBeDisabled();
         await expect(page.getByRole('button', { name: /Disconnect|Sync now/ })).toHaveCount(0);
         await page.unroute('**/api/actions/execute');
         await page.reload();
@@ -120,7 +120,7 @@ test('local folder connections sync nested Markdown, preserve IDs and expose onl
         await dialog.getByRole('button', { name: 'Disconnect' }).click();
         await expect(row).toHaveCount(0);
         await expect(secondRow.getByRole('link', { name: 'View in documents' })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Local folder 2 sources' })).toBeEnabled();
+        await expect(page.getByRole('button', { name: 'Local folder 1 source' })).toBeEnabled();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     } finally {
         await action('knowledge.delete', scope, 'knowledge.delete');

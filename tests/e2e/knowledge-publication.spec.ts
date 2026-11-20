@@ -1,6 +1,6 @@
 import { openDataSources } from './helpers/navigation';
 import { randomUUID } from 'node:crypto';
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 async function action(request: APIRequestContext, actionId: string, input: Record<string, unknown>, confirmationToken?: string) {
     const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });
@@ -12,25 +12,69 @@ async function removeModel(request: APIRequestContext, id: string) {
     await action(request, 'knowledge.delete', { knowledgeModelId: id }, 'publication-ui-cleanup');
 }
 
-test('model publication defaults to review, persists automatic mode and keeps drafts unchanged', async ({ page, request }) => {
+async function openModelEditor(page: Page) {
+    await page.getByRole('button', { name: 'Knowledge base actions' }).click();
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    return page.getByRole('dialog', { name: 'Edit knowledge base' });
+}
+
+test('deleting a knowledge base from its actions menu requires confirmation', async ({ page, request }) => {
+    await page.goto('/');
+    await openDataSources(page);
+    const org = new URL(page.url()).pathname.split('/')[1];
+    const { connections } = await action(request, 'connection.list', {});
+    const model = await action(request, 'knowledge.create', { name: `delete-confirmation-${randomUUID()}`, connectionIds: [connections[0].connection.id] });
+    const listPath = `/${org}/knowledge`;
+    let deleteRequests = 0;
+    let deleted = false;
+
+    page.on('request', req => {
+        if (req.method() === 'POST' && new URL(req.url()).pathname === '/api/actions/execute' && req.postDataJSON().actionId === 'knowledge.delete') {
+            deleteRequests++;
+        }
+    });
+
+    try {
+        await page.goto(`${listPath}/${model.id}`);
+        const actions = page.getByRole('button', { name: 'Knowledge base actions' });
+        const deleteItem = page.getByRole('menuitem', { name: 'Delete', exact: true });
+        const confirm = page.getByRole('alertdialog', { name: 'Delete knowledge base?' });
+        await actions.click();
+        await deleteItem.click();
+        await expect(confirm).toContainText(model.name);
+        expect(deleteRequests).toBe(0);
+
+        await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(confirm).toBeHidden();
+        await expect(actions).toBeFocused();
+        expect(deleteRequests).toBe(0);
+
+        await actions.click();
+        await deleteItem.click();
+        await confirm.getByRole('button', { name: 'Delete knowledge base', exact: true }).click();
+        await expect(page).toHaveURL(new URL(listPath, page.url()).href);
+        deleted = true;
+        expect(deleteRequests).toBe(1);
+        const { models } = await action(request, 'knowledge.list', { query: model.name });
+        expect(models).toEqual([]);
+    } finally {
+        if (!deleted) await removeModel(request, model.id);
+    }
+});
+
+test('model publication defaults to off, persists automatic mode and keeps drafts unchanged', async ({ page, request }) => {
     await page.goto('/');
     await openDataSources(page);
     const org = new URL(page.url()).pathname.split('/')[1];
     const { connections } = await action(request, 'connection.list', {});
     const model = await action(request, 'knowledge.create', { name: `publication-${randomUUID()}`, connectionIds: [connections[0].connection.id] });
     try {
-        await page.goto(`/${org}/knowledge/${model.id}?tab=review`);
-        await expect(page.getByText('Publication mode: Review before publishing', { exact: true })).toHaveCount(0);
-        const toolbar = page.getByRole('toolbar', { name: 'Pending review actions' });
-        await expect(toolbar.getByRole('button')).toHaveCount(4);
-        expect(await toolbar.getByRole('button').allTextContents()).toEqual(['', '', 'AI organize drafts', 'Approve selected (0)']);
-        await toolbar.getByRole('button', { name: 'Processing history' }).hover();
-        await expect(page.getByRole('tooltip', { name: 'Processing history' })).toBeVisible();
-        await toolbar.getByRole('button', { name: 'Publication settings' }).hover();
-        await expect(page.getByRole('tooltip', { name: 'Publication settings' })).toBeVisible();
-        await page.getByRole('button', { name: 'Publication settings', exact: true }).click();
-        const dialog = page.getByRole('dialog');
-        await expect(dialog.getByRole('combobox', { name: 'Publication mode' })).toContainText('Review before publishing');
+        await page.goto(`/${org}/knowledge/${model.id}`);
+        const editor = await openModelEditor(page);
+        await expect(editor.getByText('Publication mode: Automatic publication off', { exact: true })).toBeVisible();
+        await editor.getByRole('button', { name: 'Publication settings', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Publication settings' });
+        await expect(dialog.getByRole('combobox', { name: 'Publication mode' })).toContainText('Automatic publication off');
         await dialog.getByRole('combobox', { name: 'Publication mode' }).click();
         await page.getByRole('option', { name: 'Automatically publish eligible new knowledge' }).click();
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
@@ -38,11 +82,12 @@ test('model publication defaults to review, persists automatic mode and keeps dr
         expect(await action(request, 'knowledge.getPublicationPolicy', { knowledgeModelId: model.id })).toMatchObject({ mode: 'automatic', version: 1 });
         expect((await action(request, 'knowledge.listCandidates', { knowledgeModelId: model.id })).candidates).toEqual([]);
         await page.reload();
-        await expect(page.getByText('Publication mode: Automatically publish eligible new knowledge', { exact: true })).toHaveCount(0);
-        await page.getByRole('button', { name: 'Publication settings', exact: true }).click();
+        await openModelEditor(page);
+        await expect(editor.getByText('Publication mode: Automatically publish eligible new knowledge', { exact: true })).toBeVisible();
+        await editor.getByRole('button', { name: 'Publication settings', exact: true }).click();
         await expect(dialog.getByRole('combobox', { name: 'Publication mode' })).toContainText('Automatically publish eligible new knowledge');
         await dialog.getByRole('combobox').click();
-        await page.getByRole('option', { name: 'Review before publishing', exact: true }).click();
+        await page.getByRole('option', { name: 'Automatic publication off', exact: true }).click();
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(dialog).toHaveCount(0);
         expect(await action(request, 'knowledge.getPublicationPolicy', { knowledgeModelId: model.id })).toMatchObject({ mode: 'review', version: 2 });
@@ -51,7 +96,7 @@ test('model publication defaults to review, persists automatic mode and keeps dr
     }
 });
 
-test('processing history shows background evidence, restore, withdrawal and failure retry on narrow dark screens', async ({ page, request }) => {
+test('processing history shows background evidence, withdrawal and failure retry on narrow dark screens', async ({ page, request }) => {
     await page.goto('/');
     await openDataSources(page);
     const org = new URL(page.url()).pathname.split('/')[1];
@@ -86,21 +131,21 @@ test('processing history shows background evidence, restore, withdrawal and fail
         const body = route.request().postDataJSON();
         if (body.actionId === 'knowledge.getProcessingHistory')
             return route.fulfill({ json: { ok: true, data: { events, tasks: [{ id: 'job', status: 'failed', error: 'temporary_publication_failure' }] } } });
-        if (['knowledge.restoreBackground', 'knowledge.withdrawAutomaticPublication', 'knowledge.retryPublication'].includes(body.actionId)) {
+        if (['knowledge.withdrawAutomaticPublication', 'knowledge.retryPublication'].includes(body.actionId)) {
             calls.push(body.actionId);
             return route.fulfill({ json: { ok: true, data: { ok: true } } });
         }
         return route.continue();
     });
     try {
-        await page.goto(`/${org}/knowledge/${model.id}?tab=review`);
-        await page.getByRole('button', { name: 'Processing history' }).click();
-        const dialog = page.getByRole('dialog');
+        await page.goto(`/${org}/knowledge/${model.id}`);
+        const editor = await openModelEditor(page);
+        await editor.getByRole('button', { name: 'Processing history' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Processing history' });
         await expect(dialog.getByText('Historical incident', { exact: true })).toBeVisible();
         await dialog.getByText('Source evidence', { exact: true }).first().click();
         await expect(dialog.getByRole('link', { name: 'Original incident' })).toHaveAttribute('href', 'https://example.com/incident');
-        await dialog.getByRole('button', { name: 'Restore for review' }).click();
-        await expect.poll(() => calls.includes('knowledge.restoreBackground')).toBe(true);
+        await expect(dialog.getByRole('button', { name: 'Restore for review' })).toHaveCount(0);
         await dialog.getByRole('button', { name: 'Withdraw automatic publication' }).click();
         await expect.poll(() => calls.includes('knowledge.withdrawAutomaticPublication')).toBe(true);
         await dialog.getByRole('button', { name: 'Retry', exact: true }).click();

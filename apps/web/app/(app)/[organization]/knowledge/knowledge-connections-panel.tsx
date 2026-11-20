@@ -15,7 +15,7 @@ import { DriveFolderDialog, LocalFolderDialog } from './folder-connector-dialogs
 import { ExtractionConnectorStatus } from './knowledge-extraction-panel';
 import { GitHubConnectorDialog, SourceViewer, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 import { LinearConnectorDialog, type KnowledgeConnectorView } from './linear-connector-dialog';
-import { providers, ROOT, type Provider } from './document-directory';
+import { providers, type Provider } from './document-directory';
 import { SourceLogo } from './source-logo';
 import { saveDirectoryHandle } from './local-folder';
 
@@ -98,7 +98,7 @@ export function KnowledgeSourcesPanel({ organization, knowledgeModelId }: { orga
         <>
             <div className="grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                 {providers.map(provider => {
-                    const count = rows.filter(c => c.provider === provider).length + (provider === 'local' ? 1 : 0);
+                    const count = rows.filter(c => c.provider === provider).length;
                     return (
                         <button
                             key={provider}
@@ -124,17 +124,9 @@ export function KnowledgeSourcesPanel({ organization, knowledgeModelId }: { orga
             {url.source && legacy.data && legacy.data.format !== 'markdown' && (
                 <SourceViewer source={legacy.data} organization={organization} knowledgeModelId={knowledgeModelId} onClose={() => void setUrl({ source: null })} />
             )}
-            <section className="mt-8 space-y-3" aria-label={t('Existing')}>
+            <section hidden={!rows.length} className="mt-8 space-y-3" aria-label={t('Existing')}>
                 <h2 className="text-base font-semibold">{t('Existing')}</h2>
                 <ul className="divide-y rounded-xl border bg-card">
-                    <li className="flex flex-wrap items-center gap-3 p-4">
-                        <SourceLogo provider="local" className="size-5 shrink-0" />
-                        <h3 className="font-medium">Dory</h3>
-                        <Badge variant="secondary">{t('BuiltIn')}</Badge>
-                        <Button size="sm" variant="outline" className="ms-auto" asChild>
-                            <Link href={`?tab=documents&folder=${ROOT}`}>{t('ViewDocuments')}</Link>
-                        </Button>
-                    </li>
                     {rows.map(c => (
                         <li key={c.id} className="grid min-w-0 gap-x-5 gap-y-2 p-4 md:grid-cols-[minmax(0,1fr)_auto]">
                             <div className="min-w-0 space-y-1">

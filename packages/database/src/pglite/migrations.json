@@ -723,5 +723,15 @@
     "bps": true,
     "folderMillis": 1795219200000,
     "hash": "46c43b6dcae584dbea6068c8bd1e47eceddbfd2e947415cec9ec5ee6e8a951fc"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"knowledge_sources\" ADD COLUMN \"system_role\" text;\n",
+      "\nALTER TABLE \"knowledge_sources\" ADD CONSTRAINT \"knowledge_sources_system_role_check\" CHECK (\n    \"system_role\" IS NULL OR (\"system_role\" = 'analysis_rules' AND \"file_name\" = 'RULES.md' AND \"format\" = 'markdown' AND \"folder_id\" IS NULL AND \"connection_id\" IS NULL)\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_knowledge_sources_analysis_rules\" ON \"knowledge_sources\" (\"knowledge_model_id\") WHERE \"system_role\" = 'analysis_rules';\n"
+    ],
+    "bps": true,
+    "folderMillis": 1795305600000,
+    "hash": "4afe7e6b968cbaab60bea8e57941af19de2da7b3d2a42f973decab325c999ab8"
   }
 ]

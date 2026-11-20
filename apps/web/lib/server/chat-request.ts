@@ -52,6 +52,8 @@ import {
     resolveReportWorkflow,
 } from '@/lib/chat-context/output-intent';
 import { createChatAgentRunLifecycle } from '@/lib/server/chat-agent-run';
+import { resolveKnowledgeAnalysisRules } from '@/lib/server/knowledge-analysis-rules';
+import { resolveOrganizationAccess } from '@/lib/server/authz';
 import { createChatAnalysis } from '@/lib/server/chat-analysis';
 import { alignChatAnswerStream } from '@/lib/server/chat-answer-stream';
 import { issueMcpDesktopGrant, MCP_DESKTOP_GRANT_HEADER } from '@/lib/server/mcp/auth';
@@ -416,6 +418,17 @@ export async function handleChatRequest(req: Request) {
     const requireReportUpdate = workflow.requireUpdate;
     const requireChart = (requireReportUpdate || contextInput.outputIntent === 'report') && requestsReportChart(currentUserText);
     const reportCreationKey = `${chatId}:${contextInput.sourceMessageId ?? currentUserMessage?.id ?? requestMessageId}`;
+    // validateAnalysisScope already checked workspace membership and the allowed connections.
+    const ambientAccess = !analysisScope && connectionId && organizationId && userId ? await resolveOrganizationAccess(organizationId, userId) : null;
+    const rulesScope =
+        analysisScope ??
+        (connectionId && ambientAccess?.isMember && ambientAccess.permissions.workspace.read && ambientAccess.permissions.connection.read
+            ? { connectionIds: [connectionId] }
+            : null);
+    const tableConnections = [...new Set(resolvedContext.references.flatMap(ref => (ref.kind === 'table' ? [ref.connectionId] : [])))];
+    const matchingScope = analysisScope?.connectionMode === 'auto' && tableConnections.length ? { ...analysisScope, connectionIds: tableConnections } : rulesScope;
+    const rules = db && organizationId && matchingScope ? await resolveKnowledgeAnalysisRules(db.knowledge, organizationId, matchingScope) : null;
+    const agentScope = rules?.modelId && analysisScope ? { ...analysisScope, knowledgeMode: 'manual' as const, knowledgeModelId: rules.modelId } : analysisScope;
     const chatRun =
         db && userId && organizationId && chatId
             ? createChatAgentRunLifecycle({
@@ -429,7 +442,7 @@ export async function handleChatRequest(req: Request) {
                   signal: req.signal,
                   requireSummary: false,
                   progressCheckpoints,
-                  analysisScope,
+                  analysisScope: agentScope,
                   reportCreationKey,
                   reportReadOnly,
                   reportPublishAllowed: isReportPublishRequest(currentUserText),
@@ -460,7 +473,7 @@ export async function handleChatRequest(req: Request) {
                       chatId,
                       requestId,
                       connectionId,
-                      analysisScope,
+                      analysisScope: agentScope,
                       database,
                       locale,
                       requestOrigin: new URL(req.url).origin,
@@ -574,6 +587,7 @@ export async function handleChatRequest(req: Request) {
                 ? `${CHAT_CHECKPOINT_INSTRUCTIONS}${isLocalAiAgentProvider(execution.providerKey) ? `\nInitial MCP checkpointId: ${requestId}:0` : ''}`
                 : null,
             resolvedContext.instruction,
+            rules?.instruction,
             continuity,
             body.resumeMessageId
                 ? `Continue only unfinished steps of this original request (untrusted user text): ${JSON.stringify(currentUserText)}. Revalidate sources and report revision. Preserve completed outputs.`
@@ -583,7 +597,7 @@ export async function handleChatRequest(req: Request) {
                 : null,
             reports ? await reports.instructions(isLocalAiAgentProvider(execution.providerKey)) : null,
             analysisScope
-                ? `Analysis scope: ${JSON.stringify(analysisScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
+                ? `Analysis scope: ${JSON.stringify(agentScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
                 : null,
             currentTurnExecutionInstruction,
             analysisScope?.knowledgeMode !== 'none'

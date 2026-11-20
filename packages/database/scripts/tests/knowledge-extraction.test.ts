@@ -247,7 +247,9 @@ test('expired leases recover, temporary failures stop after five attempts and re
             .where(eq(knowledgeExtractionJobs.id, job.id));
         assert.equal(await f.repo.extraction.claim(), null);
         assert.equal((await f.repo.extraction.status(f.scope)).jobs[0].status, 'failed');
-        assert.equal((await f.db.select().from(knowledgeSources)).length, 1);
+        const sources = await f.db.select().from(knowledgeSources);
+        assert.equal(sources.filter(source => source.systemRole === null).length, 1);
+        assert.equal(sources.filter(source => source.systemRole === 'analysis_rules').length, 1);
     } finally {
         await f.close();
     }
@@ -887,6 +889,48 @@ test('background preserves original payload and withdrawal removes formal source
         await f.sync('Evaluation has changed.');
         await assert.rejects(f.repo.extraction.publication.restore({ ...f.scope, id: event.id, userId: 'admin' }), /Source changed/);
         await assert.rejects(f.repo.extraction.publication.history({ ...f.scope, organizationId: 'foreign' }), /not found/);
+    } finally {
+        await f.close();
+    }
+});
+
+test('analysis rules belong to the knowledge base across data sources and preserve ordinary legacy files', async () => {
+    const f = await fixture(true);
+    try {
+        const { repo, scope } = f;
+        const [rule, ...others] = await repo.listKnowledgeSources(scope);
+        assert.equal(others.length, 0);
+        assert.equal(rule.systemRole, 'analysis_rules');
+        assert.equal(rule.fileName, 'RULES.md');
+        assert.equal(rule.folderId, null);
+        assert.equal(rule.connectionId, null);
+        assert.match((await repo.getAnalysisRules('org', f.model.id))!.contentText, /已验证查询/);
+        assert.equal(await repo.getAnalysisRules('other-org', f.model.id), null);
+        const doc = { ...scope, id: rule.id };
+        await assert.rejects(repo.deleteKnowledgeSource(doc), /cannot be deleted/);
+        await assert.rejects(repo.updateKnowledgeSource({ ...doc, connectionId: 'conn', contentText: 'Edited' }), /entire knowledge base/);
+        await assert.rejects(repo.directory.change(scope, { operation: 'rename', kind: 'document', id: rule.id, name: 'Other.md' }, true), /cannot be moved or renamed/);
+        await assert.rejects(repo.directory.change(scope, { operation: 'move', kind: 'document', id: rule.id, parentId: null }, true), /cannot be moved or renamed/);
+        await repo.updateKnowledgeSource({ ...doc, contentText: 'Edited' });
+        assert.equal((await repo.getAnalysisRules('org', f.model.id))?.contentText, 'Edited');
+        const legacy = { ...scope, knowledgeModelId: 'legacy-model' };
+        const ordinary = await repo.createKnowledgeSource({ ...legacy, fileName: 'RULES.md', contentText: 'Ordinary' });
+        assert.equal(ordinary.systemRole, null);
+        assert.equal(await repo.getAnalysisRules('org', legacy.knowledgeModelId), null);
+
+        await f.db.insert(connections).values({ id: 'second', organizationId: 'org', type: 'sqlite', engine: 'sqlite', name: 'Second' });
+        const multi = await repo.createModel({ organizationId: 'org', name: 'Shared', connectionIds: ['conn', 'second'] });
+        const multiScope = { ...scope, knowledgeModelId: multi.id };
+        const shared = await repo.listKnowledgeSources(multiScope);
+        assert.equal(shared.length, 1);
+        assert.equal(shared[0].systemRole, 'analysis_rules');
+        const matches = await repo.listAnalysisRuleCandidates('org', ['conn', 'second']);
+        assert.equal(matches.filter(row => row.modelId === multi.id && row.sourceId === shared[0].id).length, 2);
+        await repo.removeDataSource({ ...multiScope, connectionId: 'second' });
+        assert.deepEqual(
+            (await repo.listKnowledgeSources(multiScope)).map(source => source.id),
+            [shared[0].id],
+        );
     } finally {
         await f.close();
     }

@@ -81,9 +81,10 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await expect(crumb.locator('[aria-current="page"]')).toHaveText('Checklist.md');
         await crumb.getByRole('button', { name: 'Refunds' }).click();
         await menu('Checklist.md', 'Move to…');
-        await dialog.getByRole('combobox').selectOption({ label: 'Dory' });
+        await dialog.getByRole('combobox').click();
+        await page.getByRole('option', { name: 'Root directory', exact: true }).click();
         await submit();
-        await crumb.getByRole('button', { name: 'Dory', exact: true }).click();
+        await crumb.getByRole('button', { name: 'Root directory', exact: true }).click();
         await expect(card('Operations', 1)).toBeVisible();
         await expect(page).toHaveURL(/[?&]folder=dory(?:&|$)/);
         await page.goBack();
@@ -95,16 +96,17 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await expect(crumb.locator('[aria-current="page"]')).toHaveText('Checklist.md');
         await expect(crumb.getByRole('button', { name: 'Refunds' })).toHaveCount(0);
         await expect(page).not.toHaveURL(originalLink);
-        await crumb.getByRole('button', { name: 'Dory', exact: true }).click();
+        await crumb.getByRole('button', { name: 'Root directory', exact: true }).click();
         await tree.getByRole('button', { name: 'Collapse Operations' }).click();
         await expect(tree.getByRole('button', { name: /^Orders \d/ })).toBeHidden();
         await tree.getByRole('button', { name: 'Expand Operations' }).click();
         await tree.getByRole('button', { name: 'Orders 1', exact: true }).click();
         await tree.getByRole('button', { name: 'Actions for Refunds' }).click();
         await page.getByRole('menuitem', { name: 'Move to…' }).click();
-        await dialog.getByRole('combobox').selectOption({ label: 'Dory' });
+        await dialog.getByRole('combobox').click();
+        await page.getByRole('option', { name: 'Root directory', exact: true }).click();
         await submit();
-        await crumb.getByRole('button', { name: 'Dory', exact: true }).click();
+        await crumb.getByRole('button', { name: 'Root directory', exact: true }).click();
         await card('Refunds', 1).dragTo(card('Operations', 1));
         await expect(card('Operations', 2)).toBeVisible();
         await newItem('New document');
@@ -113,7 +115,7 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await submit();
         await page.getByRole('searchbox').fill('Policy');
         await expect(tree.getByRole('button', { name: /Policy.md/ })).toHaveCount(2);
-        await expect(tree).toContainText('Dory / Operations / Refunds / Policy.md');
+        await expect(tree).toContainText('Operations / Refunds / Policy.md');
         await tree.getByRole('button', { name: /Refunds \/ Policy.md/ }).click();
         await expect(page.getByRole('region', { name: 'Policy.md' }).getByRole('heading', { name: 'Refund window' })).toBeVisible();
         await crumb.getByRole('button', { name: 'Refunds', exact: true }).click();
@@ -172,7 +174,7 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         const ordersMenu = page.locator('section').getByRole('button', { name: 'Actions for Orders', exact: true });
         await ordersMenu.click();
         await choose('New folder');
-        await expect(dialog).toContainText('Dory / Operations / Orders');
+        await expect(dialog).toContainText('Operations / Orders');
         await dialog.getByLabel('Name', { exact: true }).fill('Returns');
         await save();
         await expect(page.getByText(/already exists/i).first()).toBeVisible();
@@ -185,7 +187,7 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await expect(crumbs.getByRole('button', { name: 'Operations' })).toHaveAttribute('aria-current', 'page');
         await tree.getByRole('button', { name: 'Actions for Returns' }).click();
         await choose('New document');
-        await expect(dialog).toContainText('Dory / Operations / Orders / Returns');
+        await expect(dialog).toContainText('Operations / Orders / Returns');
         await cancel();
         await expect(page).toHaveURL(new RegExp('folder=' + ops));
         await tree.getByRole('button', { name: 'Actions for Returns' }).click();
@@ -204,14 +206,14 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await expect(crumbs.getByRole('button', { name: 'Orders 2026', exact: true })).toBeVisible();
         await expect(page).toHaveURL(new RegExp('folder=' + returns));
         await page.getByRole('searchbox').fill('Window');
-        await expect(tree).toContainText('Dory / Operations / Orders 2026 / Returns / Window.md');
+        await expect(tree).toContainText('Operations / Orders 2026 / Returns / Window.md');
         await page.getByRole('searchbox').fill('');
         // The mobile tree opens the same actions for a sibling without first entering it.
         await page.setViewportSize({ width: 390, height: 844 });
         await page.getByRole('button', { name: 'Directory', exact: true }).click();
         await dialog.getByRole('button', { name: 'Actions for Support' }).click();
         await choose('Upload Markdown');
-        await expect(dialog).toContainText('Dory / Operations / Support');
+        await expect(dialog).toContainText('Operations / Support');
         const attempts: string[] = [];
         await page.route('**/api/actions/execute', async route => {
             const body = route.request().postDataJSON();
@@ -278,10 +280,10 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await expect(preview.getByRole('heading', { name: 'Revised upload' })).toBeVisible();
         await page.goForward();
         await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Retry.md');
-        await page.getByRole('button', { name: 'Directory', exact: true }).click();
-        await dialog.getByRole('button', { name: 'Actions for Dory', exact: true }).click();
+        await crumbs.getByRole('button', { name: 'Root directory', exact: true }).click();
+        await page.getByRole('button', { name: 'New', exact: true }).click();
         await choose('New document');
-        await expect(dialog.getByText('Target folder: Dory', { exact: true })).toBeVisible();
+        await expect(dialog.getByText('Target folder: Root directory', { exact: true })).toBeVisible();
         await dialog.getByLabel('Document title').fill('Overview');
         await dialog.getByLabel('Markdown content').fill('# Root');
         await save();
@@ -289,6 +291,7 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         const { sources } = await action<{ sources: { fileName: string; folderId: string | null }[] }>('knowledge.listKnowledgeSources', scope);
         expect(sources.map(({ fileName, folderId }) => [fileName, folderId]).sort()).toEqual([
             ['Overview.md', null],
+            ['RULES.md', null],
             ['Retry.md', support],
             ['Saved.md', support],
             ['Window.md', returns],
@@ -309,6 +312,10 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await page.getByRole('button', { name: 'Directory', exact: true }).click();
         await expect(dialog.getByRole('button', { name: 'Operations 3', exact: true })).toBeVisible();
         await expect(dialog.getByRole('button', { name: /Actions for/ })).toHaveCount(0);
+        await dialog.getByRole('button', { name: 'RULES.md', exact: true }).click();
+        const ruleViewer = page.getByRole('region', { name: 'RULES.md' });
+        await expect(ruleViewer).toContainText('已验证查询');
+        await expect(ruleViewer.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
     } finally {
         await action('knowledge.delete', scope, 'knowledge.delete');
     }

@@ -64,7 +64,7 @@ type RankedAsset = AgentAssetSummary & { score: number };
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-const MAX_SOURCE_CHARS = 20_000;
+export const MAX_SOURCE_CHARS = 20_000;
 const MAX_ARTIFACT_PREVIEW_ROWS = 200;
 
 function iso(value: Date | string | null | undefined) {

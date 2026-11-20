@@ -2,6 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -21,6 +31,7 @@ import type { KnowledgeConnectorView } from './linear-connector-dialog';
 
 type DataSource = { connectionId: string; name: string; type: string; engine: string };
 export type KnowledgeSourceSummary = {
+    systemRole?: 'analysis_rules' | null;
     id: string;
     organizationId: string;
     knowledgeModelId: string;
@@ -261,7 +272,7 @@ export function SourceViewer({
     knowledgeModelId,
     onClose,
     onEdit,
-    title = knowledgeSourceDisplayName(source),
+    title: requestedTitle,
 }: {
     source: KnowledgeSourceSummary;
     organization: string;
@@ -271,6 +282,9 @@ export function SourceViewer({
     title?: string;
 }) {
     const t = useTranslations('Knowledge.KnowledgeSources');
+    const docs = useTranslations('Knowledge.Documents');
+    const rules = source.systemRole === 'analysis_rules';
+    const title = requestedTitle ?? knowledgeSourceDisplayName(source);
     const detail = useQuery({
         queryKey: [...knowledgeSourcesKey(knowledgeModelId), source.id, source.updatedAt, 'viewer'],
         queryFn: () => executeActionClient<KnowledgeSource>('knowledge.getKnowledgeSource', { knowledgeModelId, id: source.id }, { organizationId: organization }),
@@ -340,7 +354,10 @@ export function SourceViewer({
         return (
             <section aria-label={title} className="min-w-0 space-y-4">
                 <header className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="min-w-0 break-words text-lg font-semibold">{title}</h3>
+                    <div className="min-w-0">
+                        <h3 className="break-words text-lg font-semibold">{title}</h3>
+                        {rules && <p className="text-xs text-muted-foreground">{docs('RulesScope')}</p>}
+                    </div>
                     <div className="flex flex-wrap gap-2">{actions}</div>
                 </header>
                 {content}
@@ -350,7 +367,7 @@ export function SourceViewer({
         <Dialog open onOpenChange={open => !open && onClose()}>
             <DialogContent className="flex h-[min(48rem,calc(100dvh-2rem))] w-[calc(100vw-2rem)] flex-col sm:max-w-4xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle className="break-words pr-8">{knowledgeSourceDisplayName(source)}</DialogTitle>
+                    <DialogTitle className="break-words pr-8">{title}</DialogTitle>
                     <DialogDescription>{t('ViewerDescription')}</DialogDescription>
                 </DialogHeader>
                 {content}
@@ -364,6 +381,9 @@ export function SourceViewer({
         </Dialog>
     );
 }
+
+const documentTemplates = ['blank', 'readme', 'metric', 'glossary'] as const;
+type DocumentTemplate = (typeof documentTemplates)[number];
 
 export function SourceEditor({
     source,
@@ -403,6 +423,21 @@ export function SourceEditor({
     const [draftConnection, setConnectionId] = useState<string | null>();
     const contentText = draft ?? detail.data?.contentText ?? '';
     const connectionId = draftConnection === undefined ? (detail.data?.connectionId ?? null) : draftConnection;
+    const [template, setTemplate] = useState<DocumentTemplate>('blank');
+    const [replacement, setReplacement] = useState<DocumentTemplate | null>(null);
+    const rules = source?.systemRole === 'analysis_rules';
+    const editorTitle = source ? knowledgeSourceDisplayName(source) : docs('Create');
+    function templateContent(key: DocumentTemplate) {
+        if (key === 'blank') return { name: '', body: '' };
+        return { name: docs(`Templates.${key}.file`), body: docs(`Templates.${key}.body`) };
+    }
+    function applyTemplate(key: DocumentTemplate) {
+        const { name, body } = templateContent(key);
+        setTitle(name);
+        setContentText(body);
+        setTemplate(key);
+        setReplacement(null);
+    }
     const dirty = !!detail.data && (contentText !== detail.data.contentText || connectionId !== detail.data.connectionId);
     useEffect(() => {
         onDirtyChange?.(dirty);
@@ -421,8 +456,9 @@ export function SourceEditor({
             queryClient.setQueryData([...key, updated.id], updated);
             queryClient.setQueryData([...key, updated.id, updated.updatedAt, 'viewer'], updated);
             const { contentText: _body, remoteRevision: _revision, ...summary } = updated;
-            queryClient.setQueryData<{ sources: KnowledgeSourceSummary[] }>(key, previous =>
-                previous && { sources: [summary, ...previous.sources.filter(item => item.id !== updated.id)] },
+            queryClient.setQueryData<{ sources: KnowledgeSourceSummary[] }>(
+                key,
+                previous => previous && { sources: [summary, ...previous.sources.filter(item => item.id !== updated.id)] },
             );
             void queryClient.invalidateQueries({ queryKey: ['knowledge-model', knowledgeModelId] });
             toast.success(t('Saved'));
@@ -432,9 +468,48 @@ export function SourceEditor({
 
     const form = (
         <>
+            {!source && (
+                <label className="grid gap-1.5 text-sm font-medium">
+                    {docs('Template')}
+                    <Select
+                        value={template}
+                        disabled={save.isPending}
+                        onValueChange={value => {
+                            const key = documentTemplates.find(item => item === value);
+                            if (!key || key === template) return;
+                            const previous = templateContent(template);
+                            if (title !== previous.name || contentText !== previous.body) setReplacement(key);
+                            else applyTemplate(key);
+                        }}
+                    >
+                        <SelectTrigger aria-label={docs('Template')}>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {documentTemplates.map(key => (
+                                <SelectItem key={key} value={key}>
+                                    {docs(`Templates.${key}.label`)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </label>
+            )}
+            <AlertDialog open={replacement !== null} onOpenChange={open => !open && setReplacement(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{docs('ReplaceTemplate')}</AlertDialogTitle>
+                        <AlertDialogDescription>{docs('ReplaceDraft')}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => replacement && applyTemplate(replacement)}>{docs('Replace')}</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             {!source ? <Input aria-label={docs('Title')} placeholder={docs('Title')} value={title} maxLength={237} onChange={event => setTitle(event.target.value)} /> : null}
             <div className="flex shrink-0 items-center gap-3">
-                <ScopeSelect disabled={save.isPending} value={connectionId} dataSources={dataSources} onChange={setConnectionId} />
+                {!rules && <ScopeSelect disabled={save.isPending} value={connectionId} dataSources={dataSources} onChange={setConnectionId} />}
                 {source ? <Badge variant="outline">{source.format}</Badge> : null}
                 {source ? <span className="text-xs text-muted-foreground">{formatBytes(new TextEncoder().encode(contentText).byteLength)}</span> : null}
             </div>
@@ -497,8 +572,11 @@ export function SourceEditor({
     );
     if (inline && source)
         return (
-            <section aria-label={knowledgeSourceDisplayName(source)} className="flex min-h-80 h-[min(42rem,70dvh)] min-w-0 flex-col gap-4">
-                <h3 className="break-words text-lg font-semibold">{knowledgeSourceDisplayName(source)}</h3>
+            <section aria-label={editorTitle} className="flex min-h-80 h-[min(42rem,70dvh)] min-w-0 flex-col gap-4">
+                <div>
+                    <h3 className="break-words text-lg font-semibold">{editorTitle}</h3>
+                    {rules && <p className="text-xs text-muted-foreground">{docs('RulesScope')}</p>}
+                </div>
                 {form}
             </section>
         );
@@ -506,7 +584,7 @@ export function SourceEditor({
         <Dialog open={open} onOpenChange={next => !save.isPending && onOpenChange(next)}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>{source ? knowledgeSourceDisplayName(source) : docs('Create')}</DialogTitle>
+                    <DialogTitle>{editorTitle}</DialogTitle>
                     <DialogDescription className="break-words">{targetPath !== undefined ? docs('TargetFolder', { path: targetPath }) : t('EditorDescription')}</DialogDescription>
                 </DialogHeader>
                 {form}

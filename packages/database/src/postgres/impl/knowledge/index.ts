@@ -358,18 +358,54 @@ export class PostgresKnowledgeRepository {
     async createModel(input: { organizationId: string; name: string; description?: string | null; connectionIds: string[] }) {
         const connectionIds = await this.assertConnections(input.organizationId, input.connectionIds);
         const ossieDocument = createOssieDocument(input.name, input.description, connectionIds[0]!);
-        const [model] = await this.db
-            .insert(knowledgeModels)
-            .values({
-                organizationId: input.organizationId,
-                name: input.name.trim(),
-                description: input.description?.trim() || null,
-                modelJson: ossieDocument,
-                modelYaml: serializeOssieDocument(ossieDocument),
-            })
-            .returning();
-        await this.db.insert(knowledgeModelSources).values(connectionIds.map(connectionId => ({ knowledgeModelId: model!.id, connectionId })));
-        return this.getModel({ organizationId: input.organizationId, knowledgeModelId: model!.id });
+        const knowledgeModelId = await this.db.transaction(async tx => {
+            const [model] = await tx
+                .insert(knowledgeModels)
+                .values({
+                    organizationId: input.organizationId,
+                    name: input.name.trim(),
+                    description: input.description?.trim() || null,
+                    modelJson: ossieDocument,
+                    modelYaml: serializeOssieDocument(ossieDocument),
+                })
+                .returning({ id: knowledgeModels.id });
+            const knowledgeModelId = model!.id;
+            await tx.insert(knowledgeModelSources).values(connectionIds.map(connectionId => ({ knowledgeModelId, connectionId })));
+            const rules = validateKnowledgeSource(
+                'RULES.md',
+                [
+                    '- 分析指标时优先使用本知识库中的定义。如果多个口径都适用且会影响结论，先向用户确认。',
+                    '- 编写 SQL 前先查找相关的已验证查询，复用时核对数据源、时间范围和筛选条件。',
+                ].join('\n'),
+            );
+            await tx.insert(knowledgeSources).values({ organizationId: input.organizationId, knowledgeModelId, systemRole: 'analysis_rules', ...rules });
+            return knowledgeModelId;
+        });
+        return this.getModel({ organizationId: input.organizationId, knowledgeModelId });
+    }
+
+    async listAnalysisRuleCandidates(organizationId: string, connectionIds: string[]) {
+        if (!connectionIds.length) return [];
+        return this.db
+            .select({ modelId: knowledgeModels.id, name: knowledgeModels.name, connectionId: knowledgeModelSources.connectionId, sourceId: knowledgeSources.id })
+            .from(knowledgeModels)
+            .innerJoin(knowledgeModelSources, eq(knowledgeModelSources.knowledgeModelId, knowledgeModels.id))
+            .leftJoin(knowledgeSources, and(eq(knowledgeSources.knowledgeModelId, knowledgeModels.id), eq(knowledgeSources.systemRole, 'analysis_rules')))
+            .where(and(eq(knowledgeModels.organizationId, organizationId), inArray(knowledgeModelSources.connectionId, connectionIds)));
+    }
+
+    async getAnalysisRules(organizationId: string, knowledgeModelId: string): Promise<{ id: string; contentText: string } | null> {
+        const [document] = await this.db
+            .select({ id: knowledgeSources.id, contentText: knowledgeSources.contentText })
+            .from(knowledgeSources)
+            .where(
+                and(
+                    eq(knowledgeSources.organizationId, organizationId),
+                    eq(knowledgeSources.knowledgeModelId, knowledgeModelId),
+                    eq(knowledgeSources.systemRole, 'analysis_rules'),
+                ),
+            );
+        return document ?? null;
     }
 
     async updateModel(input: {
@@ -675,6 +711,7 @@ export class PostgresKnowledgeRepository {
                 folderId: knowledgeSources.folderId,
                 projectId: knowledgeConnectorItems.projectId,
                 projectName: knowledgeConnectorItems.projectName,
+                systemRole: knowledgeSources.systemRole,
                 fileName: knowledgeSources.fileName,
                 format: knowledgeSources.format,
                 byteSize: knowledgeSources.byteSize,
@@ -744,6 +781,7 @@ export class PostgresKnowledgeRepository {
                 folderId: knowledgeSources.folderId,
                 projectId: knowledgeConnectorItems.projectId,
                 projectName: knowledgeConnectorItems.projectName,
+                systemRole: knowledgeSources.systemRole,
                 fileName: knowledgeSources.fileName,
                 format: knowledgeSources.format,
                 contentText: knowledgeSources.contentText,
@@ -821,6 +859,7 @@ export class PostgresKnowledgeRepository {
         await this.db.transaction(async tx => {
             await lockDirectory(tx, input);
             const existing = await localDocument(tx, model.id, input.id);
+            if (existing.systemRole && (input.folderId || input.connectionId)) throw new Error('Analysis rules apply to the entire knowledge base and must stay in its root.');
             const value = validateKnowledgeSource(existing.fileName, input.contentText);
             if (input.folderId !== undefined) {
                 if (input.folderId && value.format !== 'markdown') throw new Error('Choose a Markdown document for this folder.');
@@ -839,6 +878,7 @@ export class PostgresKnowledgeRepository {
         await this.db.transaction(async tx => {
             await lockDirectory(tx, input);
             const source = await localDocument(tx, input.knowledgeModelId, input.id);
+            if (source.systemRole) throw new Error('Analysis rules cannot be deleted individually.');
             await tx.delete(knowledgeSources).where(eq(knowledgeSources.id, source.id));
             await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
         });

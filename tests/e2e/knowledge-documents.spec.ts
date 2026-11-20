@@ -105,3 +105,74 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         await action('knowledge.delete', scope, 'knowledge.delete');
     }
 });
+
+test('shared rules and optional document templates', async ({ page, request }) => {
+    await page.goto('/');
+    await openDataSources(page);
+    const org = new URL(page.url()).pathname.split('/')[1];
+    async function action(actionId: string, input: Record<string, unknown>, confirmationToken?: string) {
+        const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });
+        const body = await response.json();
+        expect(body.ok, body.message).toBe(true);
+        return body.data;
+    }
+    const { connections } = await action('connection.list', {});
+    const model = await action('knowledge.create', { name: 'Rules ' + randomUUID(), connectionIds: [connections[0].connection.id] });
+    const scope = { knowledgeModelId: model.id };
+    const url = '/' + org + '/knowledge/' + model.id;
+    try {
+        await page.goto(url);
+        await page.getByRole('button', { name: 'Actions for RULES.md' }).click();
+        await expect(page.getByRole('menuitem')).toHaveText(['Edit']);
+        await page.getByRole('menuitem', { name: 'Edit' }).click();
+        const editor = page.getByRole('region', { name: 'RULES.md' });
+        await expect(editor.getByText('Applies to the entire knowledge base')).toBeVisible();
+        await expect(editor.getByRole('combobox')).toHaveCount(0);
+        await expect(editor.getByLabel('Markdown content')).toHaveValue(/已验证查询/);
+        await page.goto(url);
+        const search = page.getByRole('searchbox', { name: 'Search folders and documents' });
+        for (const term of ['rules.md', 'Analysis rules']) {
+            await search.fill(term);
+            await expect(page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: /RULES\.md/ })).toBeVisible();
+        }
+        await search.fill('');
+        const create = async () => {
+            await page.getByRole('button', { name: 'New', exact: true }).click();
+            await page.getByRole('menuitem', { name: 'New document' }).click();
+        };
+        await create();
+        const dialog = page.getByRole('dialog', { name: 'New document' });
+        const template = dialog.getByRole('combobox', { name: 'Template' });
+        const select = async (name: string) => {
+            await template.click();
+            await page.getByRole('option', { name, exact: true }).click();
+        };
+        await expect(template).toHaveText('Blank document');
+        await select('Metric notes');
+        await expect(dialog.getByLabel('Markdown content')).toHaveValue(/Calculation/);
+        await dialog.getByLabel('Document title').fill('My draft');
+        await select('Business glossary');
+        const replace = page.getByRole('alertdialog');
+        await replace.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog.getByLabel('Document title')).toHaveValue('My draft');
+        await select('Business glossary');
+        await replace.getByRole('button', { name: 'Replace', exact: true }).click();
+        await expect(dialog.getByLabel('Markdown content')).toHaveValue(/Aliases/);
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        expect((await action('knowledge.listKnowledgeSources', scope)).sources).toHaveLength(1);
+        await create();
+        await select('Knowledge base overview');
+        await dialog.getByLabel('Document title').fill('RULES.md');
+        await dialog.getByRole('button', { name: 'Save' }).click();
+        await expect(page.getByText(/already exists in this folder/)).toBeVisible();
+        await expect(dialog.getByLabel('Markdown content')).toHaveValue(/Data sources/);
+        await dialog.getByLabel('Document title').fill('README.md');
+        await dialog.getByRole('button', { name: 'Save' }).click();
+        await expect(dialog).toBeHidden();
+        const sources = (await action('knowledge.listKnowledgeSources', scope)).sources;
+        expect(sources).toHaveLength(2);
+        expect(sources).toContainEqual(expect.objectContaining({ fileName: 'README.md', folderId: null, systemRole: null }));
+    } finally {
+        await action('knowledge.delete', scope, 'knowledge.delete');
+    }
+});

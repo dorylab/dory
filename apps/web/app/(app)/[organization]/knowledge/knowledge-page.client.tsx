@@ -55,7 +55,7 @@ import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination
 import { useOrganizationId } from '../components/organization-context';
 import { KnowledgeDataSourceAvatars } from './knowledge-data-source-avatars';
 import { KnowledgeDocumentsPanel } from './knowledge-documents-panel';
-import { BusinessRulesPanel, KnowledgeEvidenceWarning, KnowledgeReviewPanel, MetricRulesPanel, useExtractionStatus } from './knowledge-extraction-panel';
+import { BusinessRulesPanel, KnowledgeEvidenceWarning, MetricRulesPanel } from './knowledge-extraction-panel';
 import { KnowledgePublicationControls } from './knowledge-publication-controls';
 import { useKnowledgeListPagination } from './knowledge-list-pagination';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
@@ -158,7 +158,14 @@ function AssetSourceEditor({
     );
     const selectedSourceIds = [...relationBySourceId.keys()];
     const linkedSources = sources.filter(source => relationBySourceId.has(source.id));
-    const matchingSources = sources.filter(source => knowledgeSourceDisplayName(source).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+    const rulesAlias = t('Documents.RulesSearchAlias').toLocaleLowerCase();
+    const needle = search.trim().toLocaleLowerCase();
+    const matchingSources = sources.filter(
+        source =>
+            knowledgeSourceDisplayName(source).toLocaleLowerCase().includes(needle) ||
+            source.fileName.toLocaleLowerCase().includes(needle) ||
+            (source.systemRole === 'analysis_rules' && rulesAlias.includes(needle)),
+    );
     const changed = draftSourceIds.length !== selectedSourceIds.length || draftSourceIds.some(id => !relationBySourceId.has(id));
     const update = useMutation({
         mutationFn: (sourceIds: string[]) =>
@@ -564,7 +571,7 @@ function EditKnowledgeModelDialog({
                     <DialogDescription>{t('EditDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
-                    {model ? <KnowledgePublicationControls organization={organization} modelId={model.id} variant="settingsOnly" /> : null}
+                    {model ? <KnowledgePublicationControls organization={organization} modelId={model.id} /> : null}
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">{t('Name')}</label>
                         <Input value={name} onChange={event => setName(event.target.value)} />
@@ -607,6 +614,46 @@ function EditKnowledgeModelDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function DeleteKnowledgeModelDialog({
+    modelName,
+    isPending,
+    onCancel,
+    onConfirm,
+    onCloseAutoFocus,
+}: {
+    modelName: string | null;
+    isPending: boolean;
+    onCancel: () => void;
+    onConfirm: () => void;
+    onCloseAutoFocus?: (event: Event) => void;
+}) {
+    const t = useTranslations('Knowledge');
+
+    return (
+        <AlertDialog open={modelName !== null} onOpenChange={open => !open && !isPending && onCancel()}>
+            <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{t('DeleteModelTitle')}</AlertDialogTitle>
+                    <AlertDialogDescription>{t('DeleteModelDescription', { name: modelName ?? '' })}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isPending}>{t('Cancel')}</AlertDialogCancel>
+                    <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={event => {
+                            event.preventDefault();
+                            onConfirm();
+                        }}
+                        disabled={isPending}
+                    >
+                        {isPending ? t('Deleting') : t('DeleteModel')}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }
 
@@ -754,27 +801,12 @@ function KnowledgeModelList({ organizationSlug }: { organizationSlug: string }) 
                     onOpenChange={open => !open && setEditingModel(null)}
                     onUpdated={updateModel}
                 />
-                <AlertDialog open={Boolean(deletingModel)} onOpenChange={open => !open && setDeletingModel(null)}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>{t('DeleteModelTitle')}</AlertDialogTitle>
-                            <AlertDialogDescription>{deletingModel ? t('DeleteModelDescription', { name: deletingModel.name }) : ''}</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel disabled={deleteModel.isPending}>{t('Cancel')}</AlertDialogCancel>
-                            <AlertDialogAction
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                onClick={event => {
-                                    event.preventDefault();
-                                    deleteModel.mutate();
-                                }}
-                                disabled={deleteModel.isPending}
-                            >
-                                {deleteModel.isPending ? t('Deleting') : t('DeleteModel')}
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+                <DeleteKnowledgeModelDialog
+                    modelName={deletingModel?.name ?? null}
+                    isPending={deleteModel.isPending}
+                    onCancel={() => setDeletingModel(null)}
+                    onConfirm={() => deleteModel.mutate()}
+                />
             </main>
         </div>
     );
@@ -1806,14 +1838,20 @@ function YamlEditorDialog({
 function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organizationSlug: string; knowledgeModelId: string }) {
     const organization = useOrganizationId();
     const t = useTranslations('Knowledge');
+    const common = useTranslations('Common');
     const router = useRouter();
     const queryClient = useQueryClient();
-    const extraction = useExtractionStatus(organization, knowledgeModelId);
+    const modelActionsRef = useRef<HTMLButtonElement>(null);
     const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
     const [askAiOpen, setAskAiOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [editingModel, setEditingModel] = useState<KnowledgeModelView | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [activeTab, setActiveTab] = useQueryState('tab', parseAsString.withDefault('documents'));
+    const sourceDetail = activeTab === 'definitions' || activeTab === 'rules';
+    let section = 'documents';
+    if (sourceDetail || activeTab === 'sources') section = 'sources';
+    if (activeTab === 'queries') section = 'queries';
     const [selectedQueryId, setSelectedQueryId] = useQueryState('query', parseAsString);
     const modelQuery = useQuery({
         queryKey: modelKey(knowledgeModelId),
@@ -1840,7 +1878,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     const sources = useQuery({
         enabled: activeTab !== 'sources',
         queryKey: [...modelKey(knowledgeModelId), 'knowledge-sources'],
-        refetchInterval: activeTab === 'documents' || activeTab === 'overview' ? 15_000 : false,
+        refetchInterval: section === 'documents' ? 15_000 : false,
         queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
     });
     const connections = useQuery({
@@ -1892,7 +1930,13 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     });
     const deleteModel = useMutation({
         mutationFn: () => executeActionClient('knowledge.delete', { knowledgeModelId }, { organizationId: organization, confirmationToken: 'knowledge.delete' }),
-        onSuccess: () => router.push(`/${organizationSlug}/knowledge`),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
+            setDeleteDialogOpen(false);
+            router.replace(`/${organizationSlug}/knowledge`);
+            toast.success(t('ModelDeleted'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.DeleteModel')),
     });
     const deleteQuery = useMutation({
         mutationFn: (id: string) => executeActionClient('knowledge.deleteVerifiedQuery', { knowledgeModelId, id }, { organizationId: organization }),
@@ -1919,11 +1963,6 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
     if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">{t('LoadingModel')}</div>;
     if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">{t('ModelNotFound')}</div>;
     const model = modelQuery.data;
-    const sourceDetail = activeTab === 'definitions' || activeTab === 'rules';
-    let section = 'documents';
-    if (sourceDetail || activeTab === 'sources') section = 'sources';
-    if (activeTab === 'queries') section = 'queries';
-    if (activeTab === 'review') section = 'review';
     return (
         <div className="bg-n8 h-screen overflow-auto">
             <main className="container mx-auto flex flex-col gap-6 px-4 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
@@ -1942,24 +1981,19 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                         {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
                     </div>
                     <div className="flex gap-2">
-                        {extraction.data?.canManage && extraction.data.pendingCount > 0 ? (
-                            <Button variant="outline" onClick={() => void setActiveTab('review')}>
-                                {t('Extraction.PendingReview')} {extraction.data.pendingCount}
-                            </Button>
-                        ) : null}
                         <Button variant="outline" onClick={() => setAskAiOpen(true)}>
                             {t('AskAi')}
                         </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon" aria-label={t('ModelActions')}>
+                                <Button ref={modelActionsRef} variant="outline" size="icon" aria-label={t('ModelActions')}>
                                     <MoreHorizontal />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => setEditingModel(model)}>{t('EditModel')}</DropdownMenuItem>
-                                <DropdownMenuItem variant="destructive" onSelect={() => deleteModel.mutate()}>
-                                    {t('DeleteModel')}
+                                <DropdownMenuItem onSelect={() => setEditingModel(model)}>{common('edit')}</DropdownMenuItem>
+                                <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialogOpen(true)}>
+                                    {common('delete')}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -2192,9 +2226,6 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                             </Card>
                         )}
                     </TabsContent>
-                    <TabsContent value="review" className="pt-4">
-                        <KnowledgeReviewPanel organization={organization} knowledgeModelId={knowledgeModelId} dataSources={model.dataSources} />
-                    </TabsContent>
                 </Tabs>
                 <AskAiDialog
                     open={askAiOpen}
@@ -2215,6 +2246,16 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId }: { organiza
                     onUpdated={updated => {
                         setModel(updated);
                         void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
+                    }}
+                />
+                <DeleteKnowledgeModelDialog
+                    modelName={deleteDialogOpen ? model.name : null}
+                    isPending={deleteModel.isPending}
+                    onCancel={() => setDeleteDialogOpen(false)}
+                    onConfirm={() => deleteModel.mutate()}
+                    onCloseAutoFocus={event => {
+                        event.preventDefault();
+                        modelActionsRef.current?.focus();
                     }}
                 />
             </main>

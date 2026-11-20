@@ -9,7 +9,7 @@ async function action(request: APIRequestContext, actionId: string, input: Recor
     return body.data;
 }
 
-test('knowledge asset and review lists paginate independently and preserve asset deep links', async ({ page, request }) => {
+test('knowledge asset lists paginate independently and preserve asset deep links', async ({ page, request }) => {
     await page.goto('/');
     await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/')[1];
@@ -55,14 +55,6 @@ test('knowledge asset and review lists paginate independently and preserve asset
         sourceState: 'current',
         evidence: [],
     }));
-    const candidates = Array.from({ length: 12 }, (_, index) => ({
-        id: `draft-${index}`,
-        payload: { kind: 'business_rule', name: `Draft ${index}`, description: `Draft description ${index}`, sourceConnectionId: null },
-        action: 'add',
-        targetAssetId: null,
-        targetRevision: null,
-        evidence: [],
-    }));
     try {
         await action(request, 'knowledge.saveDefinitions', { knowledgeModelId: model.id, definitions });
         await page.route('**/api/actions/execute', async route => {
@@ -71,8 +63,7 @@ test('knowledge asset and review lists paginate independently and preserve asset
                 'knowledge.listVerifiedQueries': { queries },
                 'knowledge.listKnowledgeSources': { sources },
                 'knowledge.listBusinessRules': { rules, metrics: [] },
-                'knowledge.getExtractionStatus': { canManage: true, connectors: [], jobs: [], pendingCount: candidates.length, organizationJob: null },
-                'knowledge.listCandidates': { candidates, targets: [], metrics: [], rules: [] },
+                'knowledge.getExtractionStatus': { canManage: true, connectors: [], jobs: [], organizationJob: null },
             };
             if (actionId in data) return route.fulfill({ json: { ok: true, data: data[actionId] } });
             return route.continue();
@@ -89,28 +80,23 @@ test('knowledge asset and review lists paginate independently and preserve asset
         await expect(page).toHaveURL(/queriesPage=2/);
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.goto(page.url().replace('tab=sources','tab=definitions'));
+        await page.goto(page.url().replace('tab=sources', 'tab=definitions'));
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
 
-        await page.goto(new URL('?tab=rules',page.url()).href);
+        await page.goto(new URL('?tab=rules', page.url()).href);
         await expect(page.locator('section[id^="rule-"]')).toHaveCount(10);
         await page.getByRole('button', { name: 'Next page' }).click();
         await expect(page.locator('section[id^="rule-"]')).toHaveCount(2);
 
-        await page.getByRole('button', { name: /Pending review \d+/ }).click();
-        const list = page.getByRole('list', { name: 'Pending review' });
-        await expect(list.getByRole('listitem')).toHaveCount(10);
-        await page.getByRole('button', { name: 'Next page' }).click();
-        await expect(list.getByRole('listitem')).toHaveCount(2);
         await page.setViewportSize({ width: 390, height: 844 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await page.setViewportSize({ width: 1440, height: 900 });
-        await page.getByRole('combobox').first().click();
+        await page.getByRole('combobox').filter({ hasText: /^10$/ }).click();
         await page.getByRole('option', { name: '20', exact: true }).click();
-        await expect(list.getByRole('listitem')).toHaveCount(12);
+        await expect(page.locator('section[id^="rule-"]')).toHaveCount(12);
         await expect(page).toHaveURL(/knowledgePageSize=20/);
         await page.getByRole('tab', { name: 'Knowledge sources' }).click();
-        await page.goto(page.url().replace('tab=sources','tab=definitions'));
+        await page.goto(page.url().replace('tab=sources', 'tab=definitions'));
         await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(12);
 
         for (const [tab, parameter, id, locator] of [

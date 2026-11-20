@@ -2,7 +2,7 @@ import { newEntityId } from '@dory/shared/id';
 import type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
 import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { sql } from 'drizzle-orm';
-import { type AnyPgColumn, boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { connections } from './connections';
 
@@ -260,6 +260,7 @@ export const knowledgeSources = pgTable(
             .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
         connectionId: text('connection_id').references(() => connections.id, { onDelete: 'set null' }),
         folderId: text('folder_id').references(() => knowledgeFolders.id),
+        systemRole: text('system_role').$type<'analysis_rules'>(),
         fileName: text('file_name').notNull(),
         format: text('format').$type<KnowledgeSourceFormat>().notNull(),
         contentText: text('content_text').notNull(),
@@ -272,6 +273,13 @@ export const knowledgeSources = pgTable(
             .$onUpdateFn(() => new Date()),
     },
     table => [
+        uniqueIndex('uidx_knowledge_sources_analysis_rules')
+            .on(table.knowledgeModelId)
+            .where(sql`${table.systemRole} = 'analysis_rules'`),
+        check(
+            'knowledge_sources_system_role_check',
+            sql`${table.systemRole} IS NULL OR (${table.systemRole} = 'analysis_rules' AND ${table.fileName} = 'RULES.md' AND ${table.format} = 'markdown' AND ${table.folderId} IS NULL AND ${table.connectionId} IS NULL)`,
+        ),
         uniqueIndex('uidx_knowledge_sources_folder_file').on(table.knowledgeModelId, sql`coalesce(${table.folderId}, '')`, table.fileName),
         index('idx_knowledge_sources_org_model').on(table.organizationId, table.knowledgeModelId),
         index('idx_knowledge_sources_connection').on(table.connectionId),

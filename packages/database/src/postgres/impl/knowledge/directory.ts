@@ -55,6 +55,7 @@ export async function localDocument(tx: Tx, modelId: string, id: string) {
     const [source] = await tx
         .select({
             id: knowledgeSources.id,
+            systemRole: knowledgeSources.systemRole,
             fileName: knowledgeSources.fileName,
             folderId: knowledgeSources.folderId,
             format: knowledgeSources.format,
@@ -109,6 +110,7 @@ export class KnowledgeDirectory {
                 id = folder.id;
             } else if (change.kind === 'document') {
                 const source = await localDocument(tx, modelId, change.id);
+                if (source.systemRole) throw new Error('Analysis rules cannot be moved or renamed.');
                 if (source.format !== 'markdown') throw new Error('Only Markdown documents can be organized here.');
                 const fileName = change.operation === 'rename' ? name : source.fileName;
                 if (!/\.(md|markdown)$/i.test(fileName)) throw new Error('Use a Markdown file extension (.md or .markdown).');

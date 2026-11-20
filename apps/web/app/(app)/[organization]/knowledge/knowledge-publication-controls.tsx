@@ -4,10 +4,8 @@ import { useState } from 'react';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { History, Settings } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -18,7 +16,6 @@ type Policy = { mode: Mode; version: number; canManage: boolean };
 type History = {
     events: Array<{
         id: string;
-        candidateId: string | null;
         kind: 'background' | 'automatic' | 'human' | 'rejected' | 'restored' | 'withdrawn' | 'edited';
         assetId: string | null;
         assetRevision: string | null;
@@ -30,7 +27,7 @@ type History = {
     tasks: Array<{ id: string; status: string; error: string | null }>;
 };
 
-export function KnowledgePublicationControls({ organization, modelId, variant = 'settingsOnly' }: { organization: string; modelId: string; variant?: 'settingsOnly' | 'toolbar' }) {
+export function KnowledgePublicationControls({ organization, modelId }: { organization: string; modelId: string }) {
     const t = useTranslations('Knowledge.Publication');
     const locale = useLocale();
     const client = useQueryClient();
@@ -38,11 +35,11 @@ export function KnowledgePublicationControls({ organization, modelId, variant = 
     const [historyOpen, setHistoryOpen] = useState(false);
     const [mode, setMode] = useState<Mode>('review');
     const policy = useQuery({
-        queryKey: ['knowledge-model', modelId, 'publication-policy'],
+        queryKey: ['knowledge-model', modelId, 'publication-policy', organization],
         queryFn: () => executeActionClient<Policy>('knowledge.getPublicationPolicy', { knowledgeModelId: modelId }, { organizationId: organization }),
     });
     const history = useQuery({
-        queryKey: ['knowledge-model', modelId, 'processing-history'],
+        queryKey: ['knowledge-model', modelId, 'processing-history', organization],
         queryFn: () => executeActionClient<History>('knowledge.getProcessingHistory', { knowledgeModelId: modelId }, { organizationId: organization }),
         enabled: historyOpen,
         refetchInterval: historyOpen ? 5000 : false,
@@ -58,54 +55,27 @@ export function KnowledgePublicationControls({ organization, modelId, variant = 
         onError: error => toast.error(error instanceof Error ? error.message : t('Failed')),
     });
     return (
-        <div className={variant === 'toolbar' ? 'inline-flex shrink-0 items-center gap-1' : 'flex flex-wrap items-center gap-2 text-sm'}>
-            {variant !== 'toolbar' ? (
-                <span className="text-muted-foreground">
-                    {t('Mode')}: {policy.data?.mode ? t(policy.data.mode) : t('Loading')}
-                </span>
-            ) : null}
-            {variant === 'toolbar' && policy.data?.canManage ? (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button size="icon-sm" variant="ghost" aria-label={t('History')} onClick={() => setHistoryOpen(true)}>
-                            <History aria-hidden="true" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('History')}</TooltipContent>
-                </Tooltip>
-            ) : null}
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">
+                {t('Mode')}: {policy.data?.mode ? t(policy.data.mode) : t('Loading')}
+            </span>
             {policy.data?.canManage ? (
-                variant === 'toolbar' ? (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                size="icon-sm"
-                                variant="ghost"
-                                aria-label={t('Settings')}
-                                disabled={!policy.data.mode || action.isPending}
-                                onClick={() => {
-                                    setMode(policy.data!.mode);
-                                    setSettings(true);
-                                }}
-                            >
-                                <Settings aria-hidden="true" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t('Settings')}</TooltipContent>
-                    </Tooltip>
-                ) : (
+                <>
                     <Button
                         size="sm"
                         variant="ghost"
-                        disabled={!policy.data.mode || action.isPending}
+                        disabled={action.isPending}
                         onClick={() => {
-                            setMode(policy.data!.mode);
+                            setMode(policy.data.mode);
                             setSettings(true);
                         }}
                     >
                         {t('Settings')}
                     </Button>
-                )
+                    <Button size="sm" variant="ghost" onClick={() => setHistoryOpen(true)}>
+                        {t('History')}
+                    </Button>
+                </>
             ) : null}
             {policy.isError ? (
                 <Button variant="ghost" size="sm" onClick={() => void policy.refetch()}>
@@ -127,7 +97,7 @@ export function KnowledgePublicationControls({ organization, modelId, variant = 
                             <SelectItem value="automatic">{t('automatic')}</SelectItem>
                         </SelectContent>
                     </Select>
-                    <p className="text-sm text-muted-foreground">{t(mode === 'automatic' ? 'AutomaticHelp' : 'ReviewHelp')}</p>
+                    <p className="text-sm text-muted-foreground">{t(mode === 'automatic' ? 'AutomaticHelp' : 'DisabledHelp')}</p>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setSettings(false)}>
                             {t('Cancel')}
@@ -157,21 +127,19 @@ export function KnowledgePublicationControls({ organization, modelId, variant = 
                         </div>
                     ) : null}
                     {(history.data?.tasks ?? [])
-                        .filter(task => task.status === 'failed' || task.status === 'review')
+                        .filter(task => task.status === 'failed')
                         .map(task => (
                             <div key={task.id} className="rounded-md border p-3 text-sm">
-                                <p>{t('NeedsAttention')}</p>
+                                <p>{t('PublicationFailed')}</p>
                                 <p className="break-words text-muted-foreground">{t.has(`Reasons.${task.error}`) ? t(`Reasons.${task.error}`) : task.error}</p>
-                                {task.status === 'failed' ? (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={action.isPending}
-                                        onClick={() => action.mutate({ id: 'knowledge.retryPublication', input: { id: task.id } })}
-                                    >
-                                        {t('Retry')}
-                                    </Button>
-                                ) : null}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={action.isPending}
+                                    onClick={() => action.mutate({ id: 'knowledge.retryPublication', input: { id: task.id } })}
+                                >
+                                    {t('Retry')}
+                                </Button>
                             </div>
                         ))}
                     {history.data && !history.data.events?.length ? <p className="text-muted-foreground">{t('Empty')}</p> : null}
@@ -205,16 +173,6 @@ export function KnowledgePublicationControls({ organization, modelId, variant = 
                                         </blockquote>
                                     ))}
                                 </details>
-                                {event.kind === 'background' && !(history.data?.events ?? []).some(e => e.kind === 'restored' && e.candidateId === event.candidateId) ? (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={action.isPending}
-                                        onClick={() => action.mutate({ id: 'knowledge.restoreBackground', input: { id: event.id } })}
-                                    >
-                                        {t('Restore')}
-                                    </Button>
-                                ) : null}
                                 {event.kind === 'automatic' && !(history.data?.events ?? []).some(e => ['withdrawn', 'edited'].includes(e.kind) && e.assetId === event.assetId) ? (
                                     <Button
                                         variant="outline"
