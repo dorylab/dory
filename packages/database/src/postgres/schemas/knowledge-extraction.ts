@@ -25,7 +25,6 @@ export type ExtractedKnowledge = {
 };
 export type ExtractionEvidenceInput = { quote: string; sourceId: string; sourceHash: string; sourceTitle: string; sourceUrl: string | null };
 export type ExtractedCandidate = { payload: ExtractedKnowledge; quotes: string[]; disposition?: 'knowledge' | 'background'; reason?: string };
-export type PublicationMode = 'review' | 'automatic';
 
 export const knowledgeExtractionJobs = pgTable(
     'knowledge_extraction_jobs',

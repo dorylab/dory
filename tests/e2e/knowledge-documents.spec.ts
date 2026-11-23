@@ -59,7 +59,7 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
             examples: ['Count orders'],
         });
 
-        await page.getByRole('button', { name: 'New', exact: true }).click();
+        await page.getByRole('button', { name: 'Knowledge base actions for Docs ' + id, exact: true }).click();
         await page.getByRole('menuitem', { name: 'New document' }).click();
         await dialog.getByLabel('Document title').fill('Reporting rules');
         await dialog.getByLabel('Markdown content').fill('# Reporting timezone');
@@ -163,7 +163,7 @@ test('shared rules and optional document templates', async ({ page, request }) =
         }
         await search.fill('');
         const create = async () => {
-            await page.getByRole('button', { name: 'New', exact: true }).click();
+            await page.getByRole('button', { name: 'Knowledge base actions for ' + model.name, exact: true }).click();
             await page.getByRole('menuitem', { name: 'New document' }).click();
         };
         await create();
@@ -234,9 +234,14 @@ test('switches knowledge bases, protects edits and resolves global search result
         });
         await page.goto('/' + org + '/knowledge/' + a!.id);
         const tree = page.getByRole('navigation', { name: 'Directory' });
+        await page.getByRole('button', { name: 'New knowledge base', exact: true }).click();
+        await expect(page.getByRole('dialog', { name: 'New knowledge base' })).toBeVisible();
+        await page.keyboard.press('Escape');
         await tree.getByRole('button', { name: 'Expand ' + b!.name, exact: true }).click();
         const otherModel = tree.getByRole('button', { name: b!.name, exact: true }).locator('xpath=ancestor::li[1]');
         await expect(otherModel.getByRole('button', { name: 'RULES.md', exact: true })).toBeVisible();
+        const entries = otherModel.locator(':scope > ul > li');
+        await expect(entries.first()).toContainText('Verified Queries');
         await expect(page).toHaveURL(new RegExp(a!.id));
         await tree.getByRole('button', { name: 'Collapse ' + b!.name, exact: true }).click();
         await page.getByRole('button', { name: 'Actions for RULES.md' }).click();
@@ -245,8 +250,11 @@ test('switches knowledge bases, protects edits and resolves global search result
         await tree.getByRole('button', { name: b!.name, exact: true }).click();
         await page.getByRole('button', { name: 'Keep editing' }).click();
         await expect(page.getByLabel('Markdown content')).toHaveValue('unsaved');
-        await tree.getByRole('button', { name: b!.name, exact: true }).click();
+        await tree.getByRole('button', { name: 'Knowledge base actions for ' + b!.name }).click();
+        await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
         await page.getByRole('button', { name: 'Discard changes' }).click();
+        await expect(page.getByRole('dialog').getByRole('textbox').first()).toHaveValue(b!.name);
+        await page.keyboard.press('Escape');
         await expect(page).toHaveURL(new RegExp(b!.id));
         await page.goto('/' + org + '/knowledge');
         await expect(page).toHaveURL(new RegExp(b!.id));

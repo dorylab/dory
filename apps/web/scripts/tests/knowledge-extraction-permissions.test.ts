@@ -12,11 +12,6 @@ const { extractionKnowledgeActions } = await import('../../lib/actions/server/do
 test('ordinary members cannot enable, retry, review, batch approve, or edit extracted knowledge', async () => {
     const context = { access: { role: 'member' }, actor: { type: 'user' }, services: {} } as unknown as ActionContext<WebActionServices>;
     for (const id of [
-        'knowledge.setPublicationPolicy',
-        'knowledge.getProcessingHistory',
-        'knowledge.restoreBackground',
-        'knowledge.withdrawAutomaticPublication',
-        'knowledge.retryPublication',
         'knowledge.organizeCandidates',
         'knowledge.updateMetricRules',
         'knowledge.reviewCandidateBundle',

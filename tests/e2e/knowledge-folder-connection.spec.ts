@@ -32,13 +32,13 @@ test('local folder connections sync nested Markdown, preserve IDs and expose onl
         const existing = page.getByRole('region', { name: 'Existing sources' });
         const tree = page.getByRole('navigation', { name: 'Directory' });
         const connectLocal = async () => {
-            await page.getByRole('button', { name: 'New', exact: true }).click();
+            await page.getByRole('button', { name: 'Knowledge base actions for ' + model.name, exact: true }).click();
             await page.getByRole('menuitem', { name: 'Knowledge sources' }).hover();
             await page.getByRole('menuitem', { name: 'Local folder' }).click();
         };
         const manage = (name: string) => tree.getByRole('button', { name: 'Actions for ' + name, exact: true }).click();
         await expect(tree.getByRole('button', { name: 'RULES.md', exact: true })).toBeVisible();
-        await page.getByRole('button', { name: 'New', exact: true }).click();
+        await page.getByRole('button', { name: 'Knowledge base actions for ' + model.name, exact: true }).click();
         await page.getByRole('menuitem', { name: 'New document' }).click();
         await dialog.getByLabel('Document title').fill('other.md');
         await dialog.getByLabel('Markdown content').fill('# Built-in version');

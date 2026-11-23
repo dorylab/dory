@@ -1,7 +1,7 @@
 # 同步后提取与发布知识
 
 Linear 和 GitHub 连接器在完整快照同步成功后，可以自动提取指标定义与共享业务规则。
-组织 owner/admin 可以在知识库的发布设置中开启自动发布。符合条件的新提取结果发布后可供 Agent 检索，其余结果保留为未发布状态。
+提取结果先保存为草稿。管理员审核通过的指标与规则可供 Agent 检索。
 不会生成已验证 SQL、实体或关系，也不会修改人工维护的模型业务背景。
 
 ## 开启与日常使用
@@ -19,7 +19,7 @@ Linear 和 GitHub 连接器在完整快照同步成功后，可以自动提取�
 
 ## 发布指标与业务规则
 
-自动发布指标需要模型已关联的数据源，以及文档明确提供的表和计算表达式。系统使用该连接的 Schema 元数据校验映射。
+审核带计算表达式的指标时，需要指定知识库已关联的数据源和来源表。系统使用该连接的 Schema 元数据校验映射。
 业务规则可作用于整个模型、指定数据源或指定指标，无需伪造表字段。指定指标范围在未选择指标时不能发布，也不会隐式成为全局约束。
 
 已发布的规则在“业务规则”列表展示，可编辑或停用。已停用条目不参与 Agent 检索。
@@ -78,27 +78,10 @@ Desktop 使用同一应用和队列，运行期间处理，关闭／休眠后在
 - `knowledge.organizeCandidates`、`knowledge.updateMetricRules`、`knowledge.reviewCandidateBundle`
 - `knowledge.listCandidates`、`knowledge.getCandidate`、`knowledge.reviewCandidate`、`knowledge.approveCandidates`
 - `knowledge.listBusinessRules`、`knowledge.getBusinessRule`、`knowledge.updateBusinessRule`、`knowledge.getAssetEvidence`
-- `knowledge.getPublicationPolicy`、`knowledge.setPublicationPolicy`、`knowledge.getProcessingHistory`
-- `knowledge.restoreBackground`、`knowledge.withdrawAutomaticPublication`、`knowledge.retryPublication`
 
-Action 请求通过 `/api/actions/execute` 调用。自动发布由后台任务执行。
+Action 请求通过 `/api/actions/execute` 调用。
 
 测试与真实电商验收记录见 [提取验收](testing/knowledge-extraction-acceptance-cn.md)。
-
-## 模型发布设置与处理历史
-
-在“知识库操作 → 编辑知识库 → 发布设置”开启自动发布。新模型默认关闭，已有模型沿用自己的配置。
-自动发布仅适用于开启后新提取的内容。既有草稿、同版本重跑及恢复项保持未发布。
-关闭或重新开启会更新策略版本，旧发布任务不能借此重新发布。设置不会开启连接器提取或触发历史补跑。
-
-自动发布要求当前原文证据、明确适用范围且没有冲突。指标还需要原文明确提供关联数据源、表和表达式，
-字段通过 Schema 校验。影响已有正式指标、覆盖正式内容、存在未发布依赖或分类不确定的条目保持未发布。
-
-自动发布内容显示“AI 自动发布”，Agent 收到 `automatic` 信任标记，不把它当成人工验证。
-后台发布独立于同步和提取，具有持久队列、租约、重启恢复及最多五次临时失败重试。
-在“编辑知识库 → 处理历史”可查看发布方式、原文证据、分类原因，并重试失败的发布任务。
-自动发布后未经修改且无新增引用的条目可以撤回。撤回后，条目退出正式检索。
-已编辑或被引用的条目应通过现有编辑／停用流程处理。人工编辑记录为人工维护，自动流程不会覆盖。
 
 ## 背景资料分类
 
@@ -109,5 +92,3 @@ Action 请求通过 `/api/actions/execute` 调用。自动发布由后台任务�
 0037 在 Postgres／PGlite 增加发布策略、任务及处理记录，并为有待审核草稿的存量模型安排一次分类整理。
 0036 历史迁移保留不变。整理不修改既有正式条目或连接器开关，失败保留旧草稿。
 Web／Docker 需要持续运行 Node 服务；Desktop 在运行期间处理，重启后恢复。
-
-本次发布策略、分类整理与兼容性验证见 [模型发布验收记录](testing/knowledge-publication-acceptance-cn.md)。

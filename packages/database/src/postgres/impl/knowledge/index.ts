@@ -7,12 +7,10 @@ import {
     knowledgeConnectors,
     knowledgeConnectorSyncJobs,
     knowledgeDriveAuthorizations,
-    knowledgeEvidence,
     knowledgeLinearCredentials,
     knowledgeMetricRules,
     knowledgeModels,
     knowledgeModelSources,
-    knowledgeProcessingHistory,
     knowledgeSources,
     knowledgeVerifiedQueries,
     OSSIE_VERSION,
@@ -451,41 +449,6 @@ export class PostgresKnowledgeRepository {
                 .where(and(eq(knowledgeModels.id, model.id), eq(knowledgeModels.organizationId, input.organizationId)))
                 .for('update');
             if (!locked || ossieRevision(locked.modelJson) !== model.modelRevision) throw new Error('Knowledge changed; reload before saving.');
-            for (const definition of document.definitions) {
-                const old = model.model.definitions.find(d => d.id === definition.id);
-                if (old?.status === 'auto_published' && knowledgeHash(old) !== knowledgeHash(definition)) {
-                    const links = await tx
-                        .select()
-                        .from(knowledgeEvidence)
-                        .where(and(eq(knowledgeEvidence.knowledgeModelId, model.id), eq(knowledgeEvidence.assetId, definition.id)));
-                    await tx.insert(knowledgeProcessingHistory).values({
-                        organizationId: input.organizationId,
-                        knowledgeModelId: model.id,
-                        kind: 'edited',
-                        actorId: input.userId ?? null,
-                        assetId: definition.id,
-                        assetRevision: knowledgeHash(definition),
-                        payload: {
-                            kind: 'metric',
-                            name: definition.name,
-                            description: definition.description ?? '',
-                            aliases: definition.aliases ?? [],
-                            sourceConnectionId: definition.sourceConnectionId,
-                            source: definition.source,
-                            expression: definition.expression,
-                            filters: definition.filters,
-                            timeDimension: definition.timeDimension,
-                        },
-                        evidence: links.map(e => ({
-                            quote: e.quote,
-                            sourceId: e.originalSourceId,
-                            sourceHash: e.sourceHash,
-                            sourceTitle: e.sourceTitle,
-                            sourceUrl: e.sourceUrl,
-                        })),
-                    });
-                }
-            }
             await tx
                 .update(knowledgeModels)
                 .set({ modelJson: ossieDocument, modelYaml: serializeOssieDocument(ossieDocument), businessContextMd: ossieBusinessContext(ossieDocument) })

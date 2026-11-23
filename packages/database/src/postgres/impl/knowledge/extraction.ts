@@ -15,11 +15,9 @@ import {
 import {
     knowledgeCandidates as candidates,
     knowledgeEvidence as evidence,
-    knowledgeProcessingHistory as historyEvents,
     knowledgeExtractionJobs as jobs,
     knowledgeMetricRules as metricRules,
     knowledgeOrganizationJobs as organizationJobs,
-    knowledgePublicationJobs as publicationJobs,
     knowledgeBusinessRules as rules,
     type ExtractedCandidate,
     type ExtractedKnowledge,
@@ -27,7 +25,6 @@ import {
 import { validateKnowledgeModelDocument } from './index';
 import { enqueueOrganization, KnowledgeOrganizationStore } from './organization';
 import { applyKnowledgeDefinitions, ossieRevision, projectOssieDocument, serializeOssieDocument } from './ossie';
-import { KnowledgePublicationStore } from './publication';
 
 export const EXTRACTION_VERSION = 5;
 type Executor = Pick<PostgresDBClient, 'select' | 'insert' | 'update' | 'delete'>;
@@ -58,13 +55,6 @@ const scope = (table: typeof candidates | typeof rules | typeof jobs | typeof ev
 
 export async function enqueueSourceExtraction(db: Executor, connector: typeof knowledgeConnectors.$inferSelect, source: typeof knowledgeSources.$inferSelect) {
     if (!connector.autoExtract) return;
-    const [model] = await db.select().from(knowledgeModels).where(eq(knowledgeModels.id, connector.knowledgeModelId));
-    // A previously seen source version stays manual even when re-extracted with a new prompt.
-    const previous = await db
-        .select({ id: jobs.id })
-        .from(jobs)
-        .where(and(eq(jobs.originalSourceId, source.id), eq(jobs.sourceHash, knowledgeHash(source.contentText))))
-        .limit(1);
     await db
         .insert(jobs)
         .values({
@@ -74,7 +64,6 @@ export async function enqueueSourceExtraction(db: Executor, connector: typeof kn
             sourceId: source.id,
             originalSourceId: source.id,
             sourceHash: knowledgeHash(source.contentText),
-            publicationEpoch: model?.publicationMode === 'automatic' && !previous.length ? model.publicationEpoch : null,
             extractionVersion: EXTRACTION_VERSION,
             createdBy: connector.createdBy,
         })
@@ -212,9 +201,6 @@ export async function invalidateSourceEvidence(db: Executor, sourceId: string, s
 
 export class KnowledgeExtractionStore {
     constructor(private readonly db: PostgresDBClient) {}
-    get publication() {
-        return new KnowledgePublicationStore(this.db, this);
-    }
     get organization() {
         return new KnowledgeOrganizationStore(this.db);
     }
@@ -596,13 +582,8 @@ export class KnowledgeExtractionStore {
                   .from(candidates)
                   .where(and(scope(candidates, input), inArray(candidates.id, dependencyIds), eq(candidates.status, 'approved')))
             : [];
-        const publicationTasks = await this.db
-            .select()
-            .from(publicationJobs)
-            .where(and(eq(publicationJobs.knowledgeModelId, input.knowledgeModelId), eq(publicationJobs.organizationId, input.organizationId)));
         return rows.map(row => ({
             ...row,
-            publicationReason: publicationTasks.find(task => task.candidateId === row.id)?.error ?? null,
             payload: dependencies.some(d => row.payload.ruleCandidateIds?.includes(d.id))
                 ? {
                       ...row.payload,
@@ -655,7 +636,6 @@ export class KnowledgeExtractionStore {
         input: ModelScope & {
             candidateId: string;
             userId: string;
-            automatic?: boolean;
             decision: 'approve' | 'reject' | 'keep' | 'archive';
             payload?: ExtractedKnowledge;
             targetAssetId?: string;
@@ -764,7 +744,7 @@ export class KnowledgeExtractionStore {
                         id: assetId,
                         kind: 'metric',
                         name: payload.name.trim(),
-                        status: input.decision === 'archive' ? 'unverified' : input.automatic ? 'auto_published' : 'verified',
+                        status: input.decision === 'archive' ? 'unverified' : 'verified',
                         sourceConnectionId: payload.sourceConnectionId,
                         description: payload.description,
                         aliases: payload.aliases,
@@ -799,7 +779,7 @@ export class KnowledgeExtractionStore {
                             .update(rules)
                             .set({
                                 ...(input.decision === 'approve'
-                                    ? { payload, applicationScope, publicationMethod: input.automatic ? ('automatic' as const) : ('human' as const) }
+                                    ? { payload, applicationScope, publicationMethod: 'human' as const }
                                     : {}),
                                 status: input.decision === 'archive' ? 'archived' : 'active',
                                 revision: sql`${rules.revision} + 1`,
@@ -816,8 +796,8 @@ export class KnowledgeExtractionStore {
                                 ...inputScope(input),
                                 payload,
                                 applicationScope,
-                                publicationMethod: input.automatic ? 'automatic' : 'human',
-                                updatedBy: input.automatic ? null : input.userId,
+                                publicationMethod: 'human',
+                                updatedBy: input.userId,
                             })
                             .returning();
                         assetId = created.id;
@@ -895,24 +875,12 @@ export class KnowledgeExtractionStore {
                     itemKey: knowledgeItemKey(payload),
                     targetAssetId: assetId,
                     targetRevision: revision,
-                    reviewedBy: input.automatic ? null : input.userId,
+                    reviewedBy: input.userId,
                     reviewedAt: new Date(),
                     reviewNote: input.note ?? input.decision,
                     updatedAt: new Date(),
                 })
                 .where(eq(candidates.id, draft.id));
-            await tx.insert(historyEvents).values({
-                ...inputScope(input),
-                candidateId: draft.id,
-                kind: input.decision === 'reject' ? 'rejected' : input.automatic ? 'automatic' : 'human',
-                assetId,
-                assetRevision: revision,
-                publicationEpoch: draft.publicationEpoch,
-                actorId: input.automatic ? null : input.userId,
-                payload,
-                reason: input.note ?? input.decision,
-                evidence: links.map(e => ({ quote: e.quote, sourceId: e.originalSourceId, sourceHash: e.sourceHash, sourceTitle: e.sourceTitle, sourceUrl: e.sourceUrl })),
-            });
             return { id: draft.id, assetId };
         };
         return executor ? publish(executor) : this.db.transaction(tx => publish(tx as unknown as PostgresDBClient));
@@ -1067,30 +1035,6 @@ export class KnowledgeExtractionStore {
                     .update(knowledgeModels)
                     .set({ modelJson: ossie, modelYaml: serializeOssieDocument(ossie) })
                     .where(eq(knowledgeModels.id, model.id));
-                const links = await tx
-                    .select()
-                    .from(evidence)
-                    .where(and(scope(evidence, input), eq(evidence.assetId, metric.id)));
-                await tx.insert(historyEvents).values({
-                    ...inputScope(input),
-                    kind: 'edited',
-                    assetId: metric.id,
-                    assetRevision: knowledgeHash(updated),
-                    actorId: input.userId ?? null,
-                    payload: {
-                        kind: 'metric',
-                        name: updated.name,
-                        description: updated.description ?? '',
-                        aliases: updated.aliases ?? [],
-                        sourceConnectionId: updated.sourceConnectionId,
-                        source: updated.source,
-                        expression: updated.expression,
-                        filters: updated.filters,
-                        timeDimension: updated.timeDimension,
-                        ruleIds: input.ruleIds,
-                    },
-                    evidence: links.map(e => ({ quote: e.quote, sourceId: e.originalSourceId, sourceHash: e.sourceHash, sourceTitle: e.sourceTitle, sourceUrl: e.sourceUrl })),
-                });
             }
             return { ok: true };
         });
@@ -1144,19 +1088,6 @@ export class KnowledgeExtractionStore {
                 await tx.delete(metricRules).where(and(eq(metricRules.knowledgeModelId, model.id), eq(metricRules.ruleId, current.id)));
                 for (const metricId of [...new Set(payload.metricIds ?? [])]) await tx.insert(metricRules).values({ ...inputScope(input), metricId, ruleId: current.id });
             }
-            const links = await tx
-                .select()
-                .from(evidence)
-                .where(and(scope(evidence, input), eq(evidence.assetId, updated.id)));
-            await tx.insert(historyEvents).values({
-                ...inputScope(input),
-                kind: 'edited',
-                assetId: updated.id,
-                assetRevision: String(updated.revision),
-                actorId: input.userId,
-                payload,
-                evidence: links.map(e => ({ quote: e.quote, sourceId: e.originalSourceId, sourceHash: e.sourceHash, sourceTitle: e.sourceTitle, sourceUrl: e.sourceUrl })),
-            });
             return updated;
         });
     }

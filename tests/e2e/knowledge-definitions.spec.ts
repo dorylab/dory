@@ -131,14 +131,14 @@ test('knowledge opens on documents and keeps model metadata in source details', 
     await page.keyboard.press('Escape');
     await expect(card).toBeHidden();
     await expect(pageHeader).not.toContainText('Apache Ossie');
-    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New knowledge base', exact: true })).toBeVisible();
     await page.goto(new URL('?tab=definitions', page.url()).href);
     await expect(page.getByText('Apache Ossie 0.2.0.dev0 · rev 01234567', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Root directory', exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     await page.getByRole('button', { name: 'Directory', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New knowledge base', exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -367,6 +367,7 @@ test('verified query details identify the updater and organize relationships', a
             input: { assetType?: string; assetId?: string; sourceIds?: string[]; definitionIds?: string[]; knowledgeSourceIds?: string[]; sql?: string };
         };
         if (body.actionId === 'knowledge.get') return actionResponse(route, queryModel);
+        if (body.actionId === 'knowledge.queryEntries') return actionResponse(route, { entries: [query] });
         if (body.actionId === 'knowledge.listVerifiedQueries') return actionResponse(route, { queries: [{ ...query, definitionIds: selectedDefinitionIds }] });
         if (body.actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [source, otherSource] });
         if (body.actionId === 'knowledge.getGraph') {
@@ -394,12 +395,32 @@ test('verified query details identify the updater and organize relationships', a
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-    await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Verified Queries', exact: true }).click();
+    const tree = page.getByRole('navigation', { name: 'Directory' });
+    const modelButton = tree.getByRole('button', { name: queryModel.name, exact: true });
+    const queryFolder = tree.getByRole('button', { name: 'Verified Queries', exact: true });
+    const currentRow = tree.locator('button[aria-current="page"]');
+    await expect(currentRow).toHaveText(queryModel.name);
+    await queryFolder.click();
+    await expect(currentRow).toHaveText('Verified Queries');
 
     await expect(page.getByText('Updated by Avery Chen', { exact: false })).toBeVisible();
     await expect(page.getByText('workspace', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'What is the average trip distance?', exact: true }).click();
 
+    await expect(currentRow).toHaveText(query.title);
+    const transparent = 'rgba(0, 0, 0, 0)';
+    await page.mouse.move(0, 0);
+    await expect(modelButton.locator('..')).toHaveCSS('background-color', transparent);
+    await expect(queryFolder.locator('..')).toHaveCSS('background-color', transparent);
+    await expect(currentRow).not.toHaveCSS('background-color', transparent);
+    await tree.getByRole('button', { name: 'Collapse Verified Queries' }).click();
+    await expect(currentRow).toHaveCount(0);
+    await tree.getByRole('button', { name: 'Expand Verified Queries' }).press('Enter');
+    await expect(currentRow).toHaveText(query.title);
+    await queryFolder.press('Enter');
+    await expect(currentRow).toHaveText('Verified Queries');
+    await tree.getByRole('button', { name: query.title, exact: true }).press('Enter');
+    await expect(currentRow).toHaveText(query.title);
     await expect(page.getByRole('button', { name: 'Open in workspace' })).toBeDisabled();
     await expect(page.getByText('This data source is unavailable to your account.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Referenced Definitions' })).toBeVisible();
@@ -614,7 +635,7 @@ test('GitHub-managed knowledge sources are read-only and connectors can be synch
     for (const folder of ['policies', 'orders']) {
         await page.getByRole('button', { name: folder + ' 1 document', exact: true }).click();
     }
-    await expect(page.getByRole('button', { name: 'New', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New knowledge base', exact: true })).toBeVisible();
     await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: documentName, exact: true }).click();
     await expect(page.getByRole('heading', { name: 'GitHub source snapshot' })).toBeVisible();
     await expect(page.getByRole('region').getByText('Synced version · abc')).toBeVisible();
@@ -673,7 +694,7 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
         if (body.actionId === 'knowledge.listDirectory')
             return actionResponse(route, {
                 canWrite: true,
-                folders: [],
+                folders: [{ id: 'ordinary-folder', name: 'Archive', parentId: null }],
                 connectors: [{ id: 'linear-connector', provider: 'linear', linearWorkspaceName: 'Analytics', repositoryFullName: null, rootPath: '' }],
             });
         if (body.actionId === 'knowledge.listKnowledgeSources')
@@ -681,6 +702,7 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
                 sources: [
                     linearSource,
                     { ...linearSource, id: 'history', fileName: 'Historical guide.md', projectId: null, projectName: null },
+                    { ...localSource, id: 'overview', fileName: 'Overview.md', format: 'markdown' },
                     localSource,
                     yamlSource,
                     emptySource,
@@ -702,6 +724,18 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
     });
 
     await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+
+    const tree = page.getByRole('navigation', { name: 'Directory' });
+    const modelRow = tree.getByRole('button', { name: model.name, exact: true }).locator('xpath=ancestor::li[1]');
+    const labels = modelRow.locator(':scope > ul > li > div > button:not([aria-label]) > span.truncate, :scope > ul > li > button > span.truncate');
+    await expect(labels).toHaveText(['Verified Queries', 'Analytics', 'Archive', 'Overview.md']);
+    const columns = await labels.evaluateAll(nodes => nodes.map(node => ({
+        icon: node.parentElement!.querySelector('svg')!.getBoundingClientRect().left,
+        label: node.getBoundingClientRect().left,
+    })));
+    expect(columns.every(({ icon, label }) => icon === columns[0]!.icon && label === columns[0]!.label)).toBe(true);
+    const cards = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Folders', exact: true }) });
+    await expect(cards.locator('button > span[title]')).toHaveText(['Verified Queries', 'Analytics', 'Archive']);
     await page.getByRole('button', { name: 'Analytics 2', exact: true }).click();
     await expect(page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Historical guide.md', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Revenue 1 document', exact: true }).click();

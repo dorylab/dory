@@ -27,6 +27,7 @@ import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { OSSIE_DIALECTS, OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { IconFileTypeSql } from '@tabler/icons-react';
 import { ArrowLeft, CheckCircle2, ChevronRight, ExternalLink, FileCode2, FileText, MoreHorizontal, Pencil, Plus, Sparkles, Trash2, Upload, UserRound, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsString, useQueryState } from 'nuqs';
@@ -39,7 +40,6 @@ import { useOrganizationId } from '../components/organization-context';
 import { KnowledgeDataSourceAvatars } from './knowledge-data-source-avatars';
 import { KnowledgeDocumentsPanel } from './knowledge-documents-panel';
 import { BusinessRulesPanel, KnowledgeEvidenceWarning, MetricRulesPanel } from './knowledge-extraction-panel';
-import { KnowledgePublicationControls } from './knowledge-publication-controls';
 import { useKnowledgeListPagination } from './knowledge-list-pagination';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
 import { KnowledgeSourcesPanel } from './knowledge-connections-panel';
@@ -567,7 +567,6 @@ function EditKnowledgeModelDialog({
                     <DialogDescription>{t('EditDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
-                    {model ? <KnowledgePublicationControls organization={organization} modelId={model.id} /> : null}
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">{t('Name')}</label>
                         <Input value={name} onChange={event => setName(event.target.value)} />
@@ -1929,6 +1928,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                         organizationSlug,
                         section: section === 'documents' ? 'documents' : activeTab,
                         createModel: () => setCreating(true),
+                        openSettings: () => setEditingModel(model),
                         header: (
                             <div className="flex shrink-0 items-center gap-2">
                                 <KnowledgeDataSourceAvatars sources={model.dataSources} />
@@ -2046,7 +2046,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                                                                     aria-label={item.question || item.title}
                                                                     onClick={() => void setSelectedQueryId(item.id)}
                                                                 >
-                                                                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                                                    <IconFileTypeSql className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                                                                     <span className="truncate">{item.question || item.title}</span>
                                                                 </button>
                                                             </td>

@@ -2,19 +2,45 @@
 
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, FileText, Folder, MoreHorizontal, Search } from 'lucide-react';
+import { IconFileTypeSql } from '@tabler/icons-react';
+import { ChevronDown, ChevronRight, FileText, LibraryBig, MoreHorizontal, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { createSerializer, parseAsString } from 'nuqs';
-import { buildDocumentDirectory, QUERY_FOLDER, ROOT, type DirectoryData, type NavigationHit } from '@dory/shared/utils/knowledge-directory';
+import { createSerializer, parseAsString, parseAsStringLiteral } from 'nuqs';
+import { buildDocumentDirectory, providers, QUERY_FOLDER, ROOT, type DirectoryData, type NavigationHit } from '@dory/shared/utils/knowledge-directory';
+import { getRootFolders } from './document-directory';
+import { DirectoryFolderIcon } from './source-logo';
 import type { KnowledgeSourceSummary } from './knowledge-sources-panel';
 
+import { FileTreeName } from '@/components/ai-elements/file-tree';
 import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 
 export type NavigationIndex = { models: { id: string; name: string; hasGuide?: boolean }[]; canWrite: boolean; canManageLinear: boolean; userId: string };
 export const navigationKey = (organization: string) => ['knowledge-models', organization, 'navigation'] as const;
-export const serializeKnowledge = createSerializer({ tab: parseAsString, file: parseAsString, folder: parseAsString, query: parseAsString, manageSource: parseAsString });
+const modelActions = ['settings', 'folder', 'document', 'upload', ...providers] as const;
+export type ModelAction = (typeof modelActions)[number];
+export const modelActionParser = parseAsStringLiteral(modelActions);
+export const serializeKnowledge = createSerializer({
+    tab: parseAsString,
+    file: parseAsString,
+    folder: parseAsString,
+    query: parseAsString,
+    manageSource: parseAsString,
+    modelAction: modelActionParser,
+});
+
+export const treeRowClassName =
+    'flex min-w-0 items-center rounded-md hover:bg-muted has-[>[aria-current=page]]:bg-accent has-[>[aria-current=page]]:font-medium has-[>[aria-current=page]]:text-accent-foreground';
+
+export function TreeDisclosure({ open, label, onToggle }: { open: boolean; label: string; onToggle?: () => void }) {
+    if (!onToggle) return <span className="w-6 shrink-0" aria-hidden="true" />;
+    return (
+        <button className="grid size-6 shrink-0 place-items-center rounded hover:bg-background" aria-expanded={open} aria-label={label} onClick={onToggle}>
+            {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+    );
+}
 
 function ExpandedModel({
     organization,
@@ -59,9 +85,9 @@ function ExpandedModel({
     function leaf(kind: 'document' | 'query', id: string, name: string) {
         return (
             <li key={id}>
-                <button className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm hover:bg-muted" onClick={() => hit(kind, id, name)}>
-                    <FileText size={15} className="shrink-0" />
-                    <span className="truncate">{name}</span>
+                <button className="flex w-full min-w-0 items-center gap-2 rounded-md py-1.5 ps-7 pe-2 text-start text-sm hover:bg-muted" onClick={() => hit(kind, id, name)}>
+                    {kind === 'query' ? <IconFileTypeSql size={16} className="shrink-0" /> : <FileText size={16} className="shrink-0" />}
+                    <FileTreeName>{name}</FileTreeName>
                 </button>
             </li>
         );
@@ -70,21 +96,18 @@ function ExpandedModel({
         if (!index) return null;
         if (parent === QUERY_FOLDER)
             return queries.error ? <li role="alert">{queries.error.message}</li> : queries.data?.entries.map(item => leaf('query', item.id, item.title || item.question));
-        const folders = [...(index.children.get(parent) ?? [])];
-        if (parent === ROOT) folders.push({ id: QUERY_FOLDER, name: t('VerifiedQueries'), parentId: ROOT, managed: true }, ...index.sourceRoots);
+        const folders = parent === ROOT ? getRootFolders(index, t('VerifiedQueries')) : (index.children.get(parent) ?? []);
         return (
             <>
-                {index.documentsByFolder.get(parent)?.map(doc => leaf('document', doc.id, doc.name))}
                 {folders.map(folder => {
                     const open = expanded.has(folder.id);
                     return (
                         <li key={folder.id}>
-                            <div className="flex items-center rounded-md hover:bg-muted">
-                                <button
-                                    aria-expanded={open}
-                                    aria-label={t(open ? 'Documents.Collapse' : 'Documents.Expand', { name: folder.name })}
-                                    className="p-1"
-                                    onClick={() =>
+                            <div className="flex min-w-0 items-center rounded-md px-1 hover:bg-muted">
+                                <TreeDisclosure
+                                    open={open}
+                                    label={t(open ? 'Documents.Collapse' : 'Documents.Expand', { name: folder.name })}
+                                    onToggle={() =>
                                         setExpanded(prev => {
                                             const next = new Set(prev);
                                             if (open) next.delete(folder.id);
@@ -92,12 +115,10 @@ function ExpandedModel({
                                             return next;
                                         })
                                     }
-                                >
-                                    {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                </button>
+                                />
                                 <button className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-sm" onClick={() => hit('folder', folder.id, folder.name)}>
-                                    <Folder size={15} />
-                                    <span className="truncate">{folder.name}</span>
+                                    <DirectoryFolderIcon folder={folder} className="size-4 shrink-0" />
+                                    <FileTreeName>{folder.name}</FileTreeName>
                                 </button>
                                 {folder.provider && (
                                     <Button variant="ghost" size="icon-sm" aria-label={t('Documents.Actions', { name: folder.name })} onClick={() => manage(model.id, folder.id)}>
@@ -109,6 +130,7 @@ function ExpandedModel({
                         </li>
                     );
                 })}
+                {index.documentsByFolder.get(parent)?.map(doc => leaf('document', doc.id, doc.name))}
             </>
         );
     }
@@ -119,16 +141,20 @@ export function KnowledgeNavigation({
     organization,
     models,
     active,
+    selectedModelId,
     onSelect,
     onManage,
+    modelMenu,
     children,
     create,
 }: {
     organization: string;
     models: NavigationIndex['models'];
     active: string;
+    selectedModelId: string | null;
     onSelect: (hit: NavigationHit) => void;
     onManage: (modelId: string, connectorId: string) => void;
+    modelMenu: (model: NavigationIndex['models'][number]) => ReactNode;
     children: ReactNode;
     create: ReactNode;
 }) {
@@ -175,7 +201,10 @@ export function KnowledgeNavigation({
                         onChange={event => setInput(event.target.value)}
                     />
                 </div>
-                <nav aria-label={t('Documents.Directory')}>
+                <nav
+                    aria-label={t('Documents.Directory')}
+                    className="[&_button:focus:not(:focus-visible)]:outline-none [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-ring"
+                >
                     <ul className="space-y-1">
                         {input.trim() ? (
                             <>
@@ -210,7 +239,7 @@ export function KnowledgeNavigation({
                                 const hit: NavigationHit = { modelId: model.id, id: model.id, kind: 'model', name: model.name, path: [model.name] };
                                 return (
                                     <li key={model.id}>
-                                        <div className={'flex items-center rounded-md ' + (active === model.id ? 'bg-accent' : 'hover:bg-muted')}>
+                                        <div className={treeRowClassName}>
                                             <button
                                                 className="p-1"
                                                 aria-label={t(open ? 'Documents.Collapse' : 'Documents.Expand', { name: model.name })}
@@ -226,10 +255,15 @@ export function KnowledgeNavigation({
                                             >
                                                 {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                             </button>
-                                            <button className="flex min-w-0 flex-1 items-center gap-2 py-2 text-start text-sm font-medium" onClick={() => select(hit)}>
-                                                <Folder size={16} />
-                                                <span className="truncate">{model.name}</span>
+                                            <button
+                                                aria-current={selectedModelId === model.id ? 'page' : undefined}
+                                                className="flex min-w-0 flex-1 items-center gap-2 py-2 text-start text-sm font-medium"
+                                                onClick={() => select(hit)}
+                                            >
+                                                <LibraryBig size={16} className="shrink-0" />
+                                                <FileTreeName>{model.name}</FileTreeName>
                                             </button>
+                                            {modelMenu(model)}
                                         </div>
                                         {open && (
                                             <ul className="ms-3 space-y-0.5 border-s ps-1">

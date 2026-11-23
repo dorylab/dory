@@ -1,7 +1,8 @@
 import type { ComponentProps } from 'react';
 import { IconBrandGithubFilled } from '@tabler/icons-react';
-import { Folder } from 'lucide-react';
-import type { Provider } from './document-directory';
+import { BadgeCheck, Folder, FolderClosed, FolderOpen } from 'lucide-react';
+import { QUERY_FOLDER } from '@dory/shared/utils/knowledge-directory';
+import type { DocumentFolder, Provider } from './document-directory';
 import { LinearLogo } from './linear-logo';
 
 function DriveLogo(props: ComponentProps<'svg'>) {
@@ -17,5 +18,13 @@ const logos = { local: Folder, github: IconBrandGithubFilled, linear: LinearLogo
 
 export function SourceLogo({ provider, className }: { provider: Provider; className: string }) {
     const Icon = logos[provider];
+    return <Icon aria-hidden="true" className={className} />;
+}
+
+export function DirectoryFolderIcon({ folder, open, card, className }: { folder: DocumentFolder; open?: boolean; card?: boolean; className: string }) {
+    if (folder.provider) return <SourceLogo provider={folder.provider} className={className} />;
+    if (folder.id === QUERY_FOLDER) return <BadgeCheck aria-hidden="true" className={className} />;
+    if (card) return <FolderClosed aria-hidden="true" className={`${className} fill-muted-foreground/35`} strokeWidth={1} />;
+    const Icon = open ? FolderOpen : Folder;
     return <Icon aria-hidden="true" className={className} />;
 }

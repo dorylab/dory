@@ -16,7 +16,6 @@ import {
     parseKnowledgeExtraction,
     splitKnowledgeContent,
 } from './knowledge-extraction-core';
-import { validateMetricMappingWithService } from './knowledge-metric-validation';
 import { ORGANIZATION_INSTRUCTIONS, parseKnowledgeOrganization, reconcileOrganizedItems } from './knowledge-organization-core';
 
 const runners = new WeakMap<DBService, KnowledgeExtractionRunner>();
@@ -107,38 +106,11 @@ export class KnowledgeExtractionRunner {
             }
         }
     }
-    private async publish() {
-        const store = this.db.knowledge.extraction.publication;
-        for (;;) {
-            const job = await store.claim();
-            if (!job) return;
-            const token = job.leaseToken!;
-            const heartbeat = setInterval(() => {
-                void store.heartbeat(job.id, token).catch(() => undefined);
-            }, 30_000);
-            heartbeat.unref?.();
-            try {
-                const state = await store.prepare(job);
-                if (state.reason || !state.draft) {
-                    await store.fail(job.id, token, state.reason ?? 'manual_review_required', false, true);
-                    continue;
-                }
-                await validateMetricMappingWithService(this.db, job.organizationId, job.knowledgeModelId, state.draft.payload);
-                await store.complete(job.id, token, state.fingerprint);
-            } catch (error) {
-                const failure = knowledgeExtractionFailure(error);
-                await store.fail(job.id, token, failure.retry ? 'temporary_publication_failure' : 'mapping_validation_failed', failure.retry, !failure.retry);
-            } finally {
-                clearInterval(heartbeat);
-            }
-        }
-    }
     private async drain() {
         for (;;) {
             const job = await this.db.knowledge.extraction.claim();
             if (!job) {
                 await this.organize();
-                await this.publish();
                 break;
             }
             const token = job.leaseToken!;

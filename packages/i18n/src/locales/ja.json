@@ -4065,6 +4065,7 @@
         "BusinessContext": "ビジネスコンテキスト",
         "BusinessContextPlaceholder": "ビジネスルール、用語、エージェントへの指示を Markdown で記録します。",
         "SaveContext": "コンテキストを保存",
+        "ActionsForModel": "{name} のナレッジ操作",
         "ModelActions": "ナレッジの操作",
         "ViewYaml": "YAML を表示",
         "ImportYaml": "YAML をインポート",
@@ -4444,52 +4445,6 @@
                 "metrics": "指定指標"
             },
             "AutomaticPublished": "AI 自動公開"
-        },
-        "Publication": {
-            "Mode": "公開方法",
-            "review": "自動公開オフ",
-            "automatic": "条件を満たす新しい知識を自動公開",
-            "Settings": "公開設定",
-            "History": "処理履歴",
-            "Help": "このナレッジの AI 抽出内容の公開方法を設定します。自動抽出は接続ごとに設定します。",
-            "AutomaticHelp": "有効化後に抽出され、最新の出典があり競合のない内容のみが自動公開の対象です。既存の下書きや公開条件を満たさない内容は未公開のままです。",
-            "DisabledHelp": "自動公開がオフのとき、抽出された内容は未公開のまま保持されます。",
-            "HistoryHelp": "公開と分類の記録を確認できます。背景情報は原文に保持されます。",
-            "Save": "保存",
-            "Saved": "保存しました",
-            "Cancel": "キャンセル",
-            "Loading": "読み込み中…",
-            "Failed": "読み込みに失敗しました。再試行してください。",
-            "Retry": "再試行",
-            "Empty": "処理履歴はありません",
-            "Evidence": "原文の証拠",
-            "Withdraw": "自動公開を取り消す",
-            "PublicationFailed": "公開に失敗しました",
-            "Kinds": {
-                "background": "原文のみに保持",
-                "automatic": "AI 自動公開",
-                "human": "手動レビュー済み",
-                "rejected": "却下",
-                "restored": "下書きに復元",
-                "withdrawn": "公開取り消し",
-                "edited": "手動編集済み"
-            },
-            "Reasons": {
-                "policy_changed": "公開設定が変更されたため、結果は未公開です。",
-                "manual_review_required": "手動レビューが必要です。",
-                "individual_review_required": "内容と分類を個別に確認してください。",
-                "joint_review_required": "依存ルールと一緒に確認してください。",
-                "evidence_required": "完全な原文の証拠が必要です。",
-                "mapping_required": "データソースと計算マッピングを補完してください。",
-                "mapping_validation_failed": "マッピングの検証に失敗しました。",
-                "conflict": "同名または競合する知識があります。",
-                "scope_required": "共有の根拠と適用範囲を確認してください。",
-                "affects_existing_metrics": "既存の指標に影響するため確認が必要です。",
-                "source_changed": "原文が変更されました。再抽出してください。",
-                "connector_disabled": "このソースの自動抽出は無効です。",
-                "version_changed": "知識が変更されました。再レビューしてください。",
-                "temporary_publication_failure": "一時的に公開できません。自動で再試行します。"
-            }
         }
     },
     "AppSidebar": {

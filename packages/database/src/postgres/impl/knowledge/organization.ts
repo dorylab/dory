@@ -7,9 +7,7 @@ import { knowledgeConnectorItems, knowledgeConnectors, knowledgeModels, knowledg
 import {
     knowledgeCandidates as candidates,
     knowledgeEvidence as evidence,
-    knowledgeProcessingHistory as historyEvents,
     knowledgeExtractionJobs as jobs,
-    knowledgePublicationJobs as publicationJobs,
     knowledgeOrganizationJobs as queue,
     knowledgeBusinessRules as rules,
     type ExtractedCandidate,
@@ -24,7 +22,6 @@ export type OrganizationItem = {
     payload: ExtractedKnowledge;
     evidence: ExtractionEvidenceInput[];
     candidateId?: string;
-    publicationEpoch?: number | null;
     manualOnly?: boolean;
     targetAssetId?: string | null;
     disposition?: 'knowledge' | 'background';
@@ -159,7 +156,6 @@ export class KnowledgeOrganizationStore {
                 items.push({
                     id: c.id,
                     candidateId: c.id,
-                    publicationEpoch: c.publicationEpoch,
                     manualOnly: Boolean(c.manualOnly),
                     targetAssetId: c.targetAssetId,
                     payload: c.payload,
@@ -183,7 +179,6 @@ export class KnowledgeOrganizationStore {
                 if (!reviewed)
                     items.push({
                         id: `${row.job.id}:${index}`,
-                        publicationEpoch: row.job.publicationEpoch,
                         disposition: item.disposition,
                         reason: item.reason,
                         payload: item.payload,
@@ -242,14 +237,11 @@ export class KnowledgeOrganizationStore {
                     .update(candidates)
                     .set({ status: 'superseded', updatedAt: new Date() })
                     .where(and(inArray(candidates.id, oldIds), eq(candidates.status, 'pending')));
-            const model = (await tx.select().from(knowledgeModels).where(eq(knowledgeModels.id, job.knowledgeModelId)))[0];
             const created: Array<{ id: string; item: OrganizedItem }> = [];
             for (const item of output) {
                 const inputs = item.inputIds.map(ref => inputMap.get(ref)!);
                 const background = item.disposition === 'background';
                 if (background && (!item.reason || inputs.some(i => i.manualOnly || i.targetAssetId))) throw new Error('Invalid background classification.');
-                const epoch =
-                    inputs.every(i => i.publicationEpoch === model.publicationEpoch && !i.manualOnly) && model.publicationMode === 'automatic' ? model.publicationEpoch : null;
                 const key = knowledgeItemKey(item.payload);
                 const matches =
                     item.payload.kind === 'metric'
@@ -273,7 +265,6 @@ export class KnowledgeOrganizationStore {
                         payload: item.payload,
                         action: conflicting || matches.length ? 'conflict' : 'add',
                         status: background ? 'background' : 'pending',
-                        publicationEpoch: epoch,
                         manualOnly: inputs.some(i => i.manualOnly) ? 1 : 0,
                         classificationReason: item.reason ?? null,
                         targetAssetId: matches.length === 1 ? matches[0].id : null,
@@ -303,26 +294,6 @@ export class KnowledgeOrganizationStore {
                         createdAt: new Date(),
                     })),
                 );
-            }
-            for (const { id: candidateId, item } of created) {
-                if (item.disposition === 'background') {
-                    await tx.insert(historyEvents).values({
-                        organizationId: job.organizationId,
-                        knowledgeModelId: job.knowledgeModelId,
-                        candidateId,
-                        kind: 'background',
-                        payload: { ...item.payload, classificationVersion: 5, inputIds: item.inputIds },
-                        reason: item.reason,
-                        evidence: item.inputIds.flatMap(ref => inputMap.get(ref)!.evidence),
-                    });
-                } else {
-                    const [candidate] = await tx.select().from(candidates).where(eq(candidates.id, candidateId));
-                    if (candidate.publicationEpoch !== null)
-                        await tx
-                            .insert(publicationJobs)
-                            .values({ organizationId: job.organizationId, knowledgeModelId: job.knowledgeModelId, candidateId, publicationEpoch: candidate.publicationEpoch })
-                            .onConflictDoNothing();
-                }
             }
             for (const c of created.filter(c => c.item.payload.kind === 'metric' && c.item.disposition !== 'background')) {
                 const ruleCandidateIds = (c.item.sharedRuleKeys ?? []).map(key => {

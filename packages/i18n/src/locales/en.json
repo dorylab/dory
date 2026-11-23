@@ -4068,6 +4068,7 @@
         "BusinessContext": "Business Context",
         "BusinessContextPlaceholder": "Document business rules, vocabulary, and agent instructions in Markdown.",
         "SaveContext": "Save context",
+        "ActionsForModel": "Knowledge base actions for {name}",
         "ModelActions": "Knowledge base actions",
         "ViewYaml": "View YAML",
         "ImportYaml": "Import YAML",
@@ -4447,52 +4448,6 @@
                 "metrics": "Selected metrics"
             },
             "AutomaticPublished": "AI automatically published"
-        },
-        "Publication": {
-            "Mode": "Publication mode",
-            "review": "Automatic publication off",
-            "automatic": "Automatically publish eligible new knowledge",
-            "Settings": "Publication settings",
-            "History": "Processing history",
-            "Help": "Choose how AI-extracted content is published to this knowledge base. Each connector controls extraction separately.",
-            "AutomaticHelp": "Only new extractions with current source evidence and no conflicts can publish automatically. Existing drafts and content that fails publication checks stay unpublished.",
-            "DisabledHelp": "Extracted content stays unpublished when automatic publication is off.",
-            "HistoryHelp": "View publication and classification records. Background material stays in its source.",
-            "Save": "Save",
-            "Saved": "Saved",
-            "Cancel": "Cancel",
-            "Loading": "Loading…",
-            "Failed": "Could not load. Please retry.",
-            "Retry": "Retry",
-            "Empty": "No processing history yet",
-            "Evidence": "Source evidence",
-            "Withdraw": "Withdraw automatic publication",
-            "PublicationFailed": "Publication failed",
-            "Kinds": {
-                "background": "Source context only",
-                "automatic": "AI automatically published",
-                "human": "Human reviewed",
-                "rejected": "Rejected",
-                "restored": "Restored as a draft",
-                "withdrawn": "Withdrawn",
-                "edited": "Human maintained"
-            },
-            "Reasons": {
-                "policy_changed": "Publication settings changed. The result stayed unpublished.",
-                "manual_review_required": "Manual review is required.",
-                "individual_review_required": "Review this content and classification individually.",
-                "joint_review_required": "Review together with required rules.",
-                "evidence_required": "Complete source evidence is required.",
-                "mapping_required": "Complete the data source and calculation mapping.",
-                "mapping_validation_failed": "Mapping validation failed. Check the mapping manually.",
-                "conflict": "Conflicting or duplicate knowledge exists.",
-                "scope_required": "Confirm the sharing evidence and application scope.",
-                "affects_existing_metrics": "This rule affects existing metrics and requires review.",
-                "source_changed": "Source changed. Extract its current version.",
-                "connector_disabled": "Automatic extraction is disabled for this source.",
-                "version_changed": "Knowledge changed. Review the current version.",
-                "temporary_publication_failure": "Publication temporarily failed and will retry."
-            }
         }
     },
     "AppSidebar": {

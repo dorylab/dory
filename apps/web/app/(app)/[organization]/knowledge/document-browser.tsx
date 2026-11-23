@@ -1,35 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { IconFileTypeSql } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-    ChevronDown,
-    ChevronRight,
-    FilePlus2,
-    FileText,
-    Folder,
-    FolderClosed,
-    FolderInput,
-    FolderOpen,
-    FolderPlus,
-    MoreHorizontal,
-    PanelLeft,
-    Pencil,
-    Pin,
-    Plus,
-    Trash2,
-    Upload,
-} from 'lucide-react';
+import { ChevronRight, FilePlus2, FileText, LibraryBig, FolderInput, Settings, FolderPlus, MoreHorizontal, PanelLeft, Pencil, Pin, Plus, Trash2, Upload } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsString, useQueryStates } from 'nuqs';
 import { useRouter } from 'next/navigation';
-import { KnowledgeNavigation, serializeKnowledge, type NavigationIndex } from './knowledge-navigation';
+import { KnowledgeNavigation, TreeDisclosure, treeRowClassName, modelActionParser, serializeKnowledge, type ModelAction, type NavigationIndex } from './knowledge-navigation';
 import { KnowledgeSourcesPanel } from './knowledge-connections-panel';
 import { QUERY_FOLDER, type NavigationHit } from '@dory/shared/utils/knowledge-directory';
 import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { providers, type Provider } from './document-directory';
 import { toast } from 'sonner';
 
+import { FileTreeName } from '@/components/ai-elements/file-tree';
 import { executeActionClient } from '@/lib/actions/client';
 import {
     AlertDialog,
@@ -47,9 +32,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/registry/new-york-v4/ui/sheet';
-import { buildDocumentDirectory, ROOT, storedFolderId, type DirectoryData, type DocumentFolder, type DirectoryDocument } from './document-directory';
+import { buildDocumentDirectory, getRootFolders, ROOT, storedFolderId, type DirectoryData, type DocumentFolder, type DirectoryDocument } from './document-directory';
 import type { KnowledgeModelView } from './knowledge-page.client';
-import { SourceLogo } from './source-logo';
+import { DirectoryFolderIcon, SourceLogo } from './source-logo';
 import { KnowledgeGuide } from './knowledge-guide';
 import { SourceEditor, SourceViewer, UploadSourcesDialog, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 
@@ -60,7 +45,7 @@ type Command =
     | { operation: 'rename'; id: string; kind: Entry['kind']; name: string }
     | { operation: 'delete'; id: string; kind: 'folder' };
 type Prompt = { operation: 'create'; folderId: string } | { operation: 'move' | 'rename' | 'delete'; entry: Entry };
-export type BrowserWorkspace = { navigation: NavigationIndex; organizationSlug: string; section: string; header: ReactNode; createModel: () => void };
+export type BrowserWorkspace = { navigation: NavigationIndex; organizationSlug: string; section: string; header: ReactNode; createModel: () => void; openSettings: () => void };
 type Props = {
     workspace: BrowserWorkspace;
     alternate: ReactNode;
@@ -73,7 +58,7 @@ type Props = {
     sourcesPending: boolean;
     sourcesError?: string;
 };
-type Destination = { folder: string | null; file: string | null; tab?: string | null; query?: string | null; modelId?: string; manageSource?: string };
+type Destination = { folder: string | null; file: string | null; tab?: string | null; query?: string | null; modelId?: string; manageSource?: string; modelAction?: ModelAction };
 const locationParsers = {
     folder: parseAsString,
     file: parseAsString,
@@ -81,6 +66,7 @@ const locationParsers = {
     query: parseAsString,
     source: parseAsString,
     manageSource: parseAsString,
+    modelAction: modelActionParser,
     querySearch: parseAsString,
     definition: parseAsString,
     rule: parseAsString,
@@ -90,6 +76,7 @@ const emptyDirectory: DirectoryData = { canWrite: false, folders: [], connectors
 export function DocumentBrowser({ workspace, alternate, model, organization, sources, directory, directoryPending, directoryError, sourcesPending, sourcesError }: Props) {
     const t = useTranslations('Knowledge.Documents');
     const knowledge = useTranslations('Knowledge');
+    const common = useTranslations('Common');
     const client = useQueryClient();
     const data = directory ?? emptyDirectory;
     const { id: modelId, dataSources } = model;
@@ -98,7 +85,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     const router = useRouter();
     const [localAction, setSourceAction] = useState<{ provider?: Provider; connectorId?: string } | null>(null);
     const index = useMemo(() => buildDocumentDirectory(guide, data, sources, rootName), [data, sources, guide, rootName]);
-    const [{ folder: location, file, query: queryId, manageSource }, setLocation] = useQueryStates(locationParsers, { history: 'push' });
+    const [{ folder: location, file, query: queryId, manageSource, modelAction }, setLocation] = useQueryStates(locationParsers, { history: 'push' });
     const sourceAction = localAction ?? (manageSource ? { connectorId: manageSource } : null);
     const closeSourceAction = () => {
         setSourceAction(null);
@@ -152,6 +139,17 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     }, [index, current.id]);
     const [expanded, setExpanded] = useState<Set<string>>(() => new Set([ROOT]));
     const showQueries = workspace.section === 'queries';
+    function currentTreeEntry(): Pick<NavigationHit, 'kind' | 'id'> | null {
+        if (documentsView || historyChanged) {
+            if (visibleId) return { kind: 'document', id: visibleId };
+            if (location && location !== ROOT) return { kind: 'folder', id: location };
+            return { kind: 'model', id: modelId };
+        }
+        if (showQueries) return queryId ? { kind: 'query', id: queryId } : { kind: 'folder', id: QUERY_FOLDER };
+        return null;
+    }
+    const treeEntry = currentTreeEntry();
+    const isCurrent = (kind: NavigationHit['kind'], id: string) => treeEntry?.kind === kind && treeEntry.id === id;
     const [queriesExpanded, setQueriesExpanded] = useState(showQueries);
     useEffect(() => {
         if (showQueries) setQueriesExpanded(true);
@@ -202,6 +200,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     tab,
                     query,
                     manageSource: destination.manageSource,
+                    modelAction: destination.modelAction,
                 }),
             );
         } else {
@@ -279,18 +278,22 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         setDrawer(false);
         setFileCreation({ kind, folderId });
     }
-    function creationItems(folderId: string) {
+    function createInFolder(kind: 'folder' | 'document' | 'upload', folderId: string) {
+        if (kind === 'folder') ask({ operation: 'create', folderId });
+        else openFileCreation(kind, folderId);
+    }
+    function creationItems(onCreate: (kind: 'folder' | 'document' | 'upload') => void) {
         return (
             <>
-                <DropdownMenuItem onSelect={() => ask({ operation: 'create', folderId })}>
+                <DropdownMenuItem onSelect={() => onCreate('folder')}>
                     <FolderPlus />
                     {t('NewFolder')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openFileCreation('document', folderId)}>
+                <DropdownMenuItem onSelect={() => onCreate('document')}>
                     <FilePlus2 />
                     {t('Create')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openFileCreation('upload', folderId)}>
+                <DropdownMenuItem onSelect={() => onCreate('upload')}>
                     <Upload />
                     {t('Upload')}
                 </DropdownMenuItem>
@@ -314,7 +317,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     )}
                     {entry.kind === 'folder' && (
                         <>
-                            {creationItems(entry.id)}
+                            {creationItems(kind => createInFolder(kind, entry.id))}
                             {entry.id !== ROOT && <DropdownMenuSeparator />}
                         </>
                     )}
@@ -344,14 +347,12 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         return (
             <li key={doc.id}>
                 <button
-                    aria-current={selected?.id === doc.id ? 'page' : undefined}
-                    className={`flex w-full min-w-0 items-center gap-2 rounded-md py-1.5 pe-2 text-start text-sm hover:bg-muted aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground ${doc.parentId === ROOT ? 'ps-2' : 'ps-7'}`}
+                    aria-current={isCurrent('document', doc.id) ? 'page' : undefined}
+                    className="flex w-full min-w-0 items-center gap-2 rounded-md py-1.5 ps-7 pe-2 text-start text-sm hover:bg-muted aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground"
                     onClick={() => navigate(doc.parentId, doc)}
                 >
-                    {doc.source ? <FileText size={15} className="shrink-0 text-muted-foreground" /> : <Pin size={15} className="shrink-0" />}
-                    <span title={doc.name} className="truncate">
-                        {doc.name}
-                    </span>
+                    {doc.source ? <FileText size={16} className="shrink-0 text-muted-foreground" /> : <Pin size={16} className="shrink-0" />}
+                    <FileTreeName title={doc.name}>{doc.name}</FileTreeName>
                 </button>
             </li>
         );
@@ -360,49 +361,36 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         const children = index.children.get(folder.id) ?? [];
         const files = index.documentsByFolder.get(folder.id) ?? [];
         const hasChildren = children.length > 0 || files.length > 0;
-        const pinned = files[0]?.source === null ? files[0] : null;
         const isOpen = expanded.has(folder.id);
         return (
             <li key={folder.id}>
                 <div
                     {...dropTarget(folder)}
                     {...draggable({ ...folder, kind: 'folder' }, data.canWrite && !folder.managed && folder.id !== ROOT)}
-                    className={`flex min-w-0 items-center rounded-md px-1 text-sm hover:bg-muted ${!selected && current.id === folder.id ? 'bg-accent font-medium text-accent-foreground' : ''} ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
+                    className={`${treeRowClassName} px-1 text-sm ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
                 >
-                    {hasChildren ? (
-                        <button
-                            className="shrink-0 rounded p-1 hover:bg-background"
-                            aria-expanded={isOpen}
-                            aria-label={t(isOpen ? 'Collapse' : 'Expand', { name: folder.name })}
-                            onClick={() =>
-                                setExpanded(previous => {
-                                    const next = new Set(previous);
-                                    if (isOpen) next.delete(folder.id);
-                                    else next.add(folder.id);
-                                    return next;
-                                })
-                            }
-                        >
-                            {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
-                    ) : (
-                        <span className="w-[22px] shrink-0" />
-                    )}
+                    <TreeDisclosure
+                        open={isOpen}
+                        label={t(isOpen ? 'Collapse' : 'Expand', { name: folder.name })}
+                        onToggle={
+                            hasChildren
+                                ? () =>
+                                      setExpanded(previous => {
+                                          const next = new Set(previous);
+                                          if (isOpen) next.delete(folder.id);
+                                          else next.add(folder.id);
+                                          return next;
+                                      })
+                                : undefined
+                        }
+                    />
                     <button
-                        aria-current={!selected && current.id === folder.id ? 'location' : undefined}
+                        aria-current={isCurrent('folder', folder.id) ? 'page' : undefined}
                         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-start"
                         onClick={() => navigate(folder.id)}
                     >
-                        {folder.provider ? (
-                            <SourceLogo provider={folder.provider} className="size-4 shrink-0" />
-                        ) : current.id === folder.id ? (
-                            <FolderOpen size={16} className="shrink-0" />
-                        ) : (
-                            <Folder size={16} className="shrink-0 text-muted-foreground" />
-                        )}
-                        <span className="truncate" title={folder.name}>
-                            {folder.name}
-                        </span>
+                        <DirectoryFolderIcon folder={folder} open={isOpen} className="size-4 shrink-0 text-muted-foreground" />
+                        <FileTreeName title={folder.name}>{folder.name}</FileTreeName>
                         <span className="ms-auto rounded-md border px-1.5 text-xs tabular-nums text-muted-foreground">{index.counts.get(folder.id) ?? 0}</span>
                     </button>
                     {data.canWrite && !folder.managed && actions({ ...folder, kind: 'folder' })}
@@ -422,9 +410,8 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                 </div>
                 {isOpen && hasChildren && (
                     <ul className="ms-3 border-s ps-1">
-                        {pinned && fileNode(pinned)}
                         {children.map(treeNode)}
-                        {(pinned ? files.slice(1) : files).map(fileNode)}
+                        {files.map(fileNode)}
                     </ul>
                 )}
             </li>
@@ -458,43 +445,53 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
             setPending(dest);
         } else openDestination(dest);
     }
-    function sidebar() {
-        const create = data.canWrite && workspace.navigation.canWrite && (
+    function runModelAction(action: ModelAction) {
+        setDrawer(false);
+        if (action === 'settings') workspace.openSettings();
+        else if (action === 'folder' || action === 'document' || action === 'upload') createInFolder(action, ROOT);
+        else if (action !== 'linear' || workspace.navigation.canManageLinear) setSourceAction({ provider: action });
+    }
+    const runRequestedAction = useEffectEvent(runModelAction);
+    useEffect(() => {
+        if (!modelAction || directoryPending) return;
+        if (workspace.navigation.canWrite && data.canWrite) runRequestedAction(modelAction);
+        void setLocation({ modelAction: null }, { history: 'replace' });
+    }, [modelAction, directoryPending, workspace.navigation.canWrite, data.canWrite, setLocation]);
+
+    function modelMenu(target: NavigationIndex['models'][number]) {
+        if (!workspace.navigation.canWrite || (target.id === modelId && !data.canWrite)) return null;
+        function selectAction(action: ModelAction) {
+            if (target.id === modelId) return runModelAction(action);
+            const destination = { modelId: target.id, folder: null, file: null, modelAction: action };
+            setDrawer(false);
+            if (dirty) setPending(destination);
+            else openDestination(destination);
+        }
+        return (
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                    <Button size="icon-sm" variant="ghost" aria-label={t('New')}>
-                        <Plus />
+                    <Button size="icon-sm" variant="ghost" aria-label={knowledge('ActionsForModel', { name: target.name })}>
+                        <MoreHorizontal />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                    align="start"
+                    align="end"
                     className="data-[state=closed]:animate-none"
                     onCloseAutoFocus={event => {
                         if (document.querySelector('[role="dialog"][data-state="open"]')) event.preventDefault();
                     }}
                 >
-                    <DropdownMenuItem
-                        onSelect={() => {
-                            setDrawer(false);
-                            if (dirty) setPendingCreate(true);
-                            else workspace.createModel();
-                        }}
-                    >
-                        {knowledge('NewModel')}
+                    <DropdownMenuItem onSelect={() => selectAction('settings')}>
+                        <Settings />
+                        {common('settings')}
                     </DropdownMenuItem>
-                    {creationItems(documentsView && !current.managed ? current.id : ROOT)}
+                    <DropdownMenuSeparator />
+                    {creationItems(selectAction)}
                     <DropdownMenuSub>
                         <DropdownMenuSubTrigger>{knowledge('KnowledgeSources.Tab')}</DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="data-[state=closed]:animate-none">
                             {providers.map(provider => (
-                                <DropdownMenuItem
-                                    key={provider}
-                                    disabled={provider === 'linear' && !workspace.navigation.canManageLinear}
-                                    onSelect={() => {
-                                        setDrawer(false);
-                                        setSourceAction({ provider });
-                                    }}
-                                >
+                                <DropdownMenuItem key={provider} disabled={provider === 'linear' && !workspace.navigation.canManageLinear} onSelect={() => selectAction(provider)}>
                                     <SourceLogo provider={provider} className="size-4" />
                                     {provider === 'local' ? knowledge('Connections.Local') : provider === 'drive' ? 'Google Drive' : provider === 'github' ? 'GitHub' : 'Linear'}
                                 </DropdownMenuItem>
@@ -504,6 +501,46 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                 </DropdownMenuContent>
             </DropdownMenu>
         );
+    }
+    function queryNode(folder: DocumentFolder) {
+        return (
+            <li key={folder.id}>
+                <div className={`${treeRowClassName} px-1`}>
+                    <TreeDisclosure
+                        open={queriesExpanded}
+                        label={t(queriesExpanded ? 'Collapse' : 'Expand', { name: folder.name })}
+                        onToggle={() => setQueriesExpanded(!queriesExpanded)}
+                    />
+                    <button
+                        aria-current={isCurrent('folder', QUERY_FOLDER) ? 'page' : undefined}
+                        className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-start text-sm"
+                        onClick={() => selectQueries()}
+                    >
+                        <DirectoryFolderIcon folder={folder} className="size-4 shrink-0" />
+                        <FileTreeName>{folder.name}</FileTreeName>
+                    </button>
+                </div>
+                {queriesExpanded && (
+                    <ul className="ms-3 border-s ps-1">
+                        {queryEntries.isError && <li role="alert">{queryEntries.error.message}</li>}
+                        {queryEntries.data?.entries.map(item => (
+                            <li key={item.id}>
+                                <button
+                                    className="flex w-full items-center gap-2 rounded-md py-1.5 ps-7 pe-2 text-start text-sm hover:bg-muted aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground"
+                                    aria-current={isCurrent('query', item.id) ? 'page' : undefined}
+                                    onClick={() => selectQueries(item.id)}
+                                >
+                                    <IconFileTypeSql size={16} className="shrink-0 text-muted-foreground" />
+                                    <FileTreeName>{item.title || item.question}</FileTreeName>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </li>
+        );
+    }
+    function sidebar() {
         return (
             <KnowledgeNavigation
                 organization={organization}
@@ -513,6 +550,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                         : [...workspace.navigation.models, { id: modelId, name: model.name }]
                 }
                 active={modelId}
+                selectedModelId={treeEntry?.kind === 'model' ? treeEntry.id : null}
                 onSelect={selectEntry}
                 onManage={(modelId, connectorId) => {
                     const destination = { modelId, folder: connectorId, file: null, manageSource: connectorId };
@@ -521,43 +559,27 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                         setPending(destination);
                     } else openDestination(destination);
                 }}
-                create={create}
-            >
-                {(index.documentsByFolder.get(ROOT) ?? []).map(fileNode)}
-                {(index.children.get(ROOT) ?? []).map(treeNode)}
-                <li>
-                    <div className={'flex items-center rounded-md ' + (showQueries ? 'bg-accent' : 'hover:bg-muted')}>
-                        <button
-                            className="p-1"
-                            aria-expanded={queriesExpanded}
-                            aria-label={t(queriesExpanded ? 'Collapse' : 'Expand', { name: knowledge('VerifiedQueries') })}
-                            onClick={() => setQueriesExpanded(!queriesExpanded)}
+                modelMenu={modelMenu}
+                create={
+                    workspace.navigation.canWrite && (
+                        <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={knowledge('NewModel')}
+                            title={knowledge('NewModel')}
+                            onClick={() => {
+                                setDrawer(false);
+                                if (dirty) setPendingCreate(true);
+                                else workspace.createModel();
+                            }}
                         >
-                            {queriesExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
-                        <button className="flex flex-1 items-center gap-2 py-1.5 text-sm" onClick={() => selectQueries()}>
-                            <Folder size={16} />
-                            {knowledge('VerifiedQueries')}
-                        </button>
-                    </div>
-                    {queriesExpanded && (
-                        <ul className="ms-3 border-s ps-1">
-                            {queryEntries.isError && <li role="alert">{queryEntries.error.message}</li>}
-                            {queryEntries.data?.entries.map(item => (
-                                <li key={item.id}>
-                                    <button
-                                        className="w-full truncate rounded-md px-3 py-1.5 text-start text-sm hover:bg-accent aria-[current=page]:bg-accent"
-                                        aria-current={showQueries && queryId === item.id ? 'page' : undefined}
-                                        onClick={() => selectQueries(item.id)}
-                                    >
-                                        {item.title || item.question}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </li>
-                {index.sourceRoots.map(treeNode)}
+                            <Plus />
+                        </Button>
+                    )
+                }
+            >
+                {rootFolders.map(folder => (folder.id === QUERY_FOLDER ? queryNode(folder) : treeNode(folder)))}
+                {(index.documentsByFolder.get(ROOT) ?? []).map(fileNode)}
             </KnowledgeNavigation>
         );
     }
@@ -636,8 +658,8 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     const unknownFolder = !selected && Boolean(location && !index.folders.has(location));
     const loading = directoryPending || sourcesPending;
     const loadError = directoryError || sourcesError;
-    const queryFolder: DocumentFolder = { id: QUERY_FOLDER, parentId: ROOT, managed: true, name: knowledge('VerifiedQueries') };
-    const children = current.id === ROOT ? [...(index.children.get(ROOT) ?? []), queryFolder, ...index.sourceRoots] : (index.children.get(current.id) ?? []);
+    const rootFolders = getRootFolders(index, knowledge('VerifiedQueries'));
+    const children = current.id === ROOT ? rootFolders : (index.children.get(current.id) ?? []);
     const documents = index.documentsByFolder.get(current.id) ?? [];
     const promptTitle = prompt?.operation === 'move' ? t('Move') : prompt?.operation === 'rename' ? t('Rename') : prompt?.operation === 'delete' ? t('Delete') : t('NewFolder');
     const nonEmpty = prompt?.operation === 'delete' && (Boolean(index.children.get(prompt.entry.id)?.length) || Boolean(index.counts.get(prompt.entry.id)));
@@ -664,13 +686,13 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                                     {...dropTarget(folder)}
                                     title={folder.name}
                                     aria-label={folder.id === ROOT ? rootName : undefined}
-                                    aria-current={!selected && folder.id === current.id ? 'page' : undefined}
+                                    aria-current={(folder.id === ROOT ? isCurrent('model', modelId) : isCurrent('folder', folder.id)) ? 'page' : undefined}
                                     className={`flex min-w-0 items-center gap-1.5 rounded px-1 text-sm hover:bg-muted ${i === trail.length - 1 ? 'font-medium' : 'text-muted-foreground'} ${over === folder.id ? 'ring-2 ring-ring' : ''}`}
                                     onClick={() => navigate(folder.id)}
                                 >
                                     {folder.id === ROOT ? (
                                         <>
-                                            <FolderOpen size={16} aria-hidden="true" />
+                                            <LibraryBig size={16} aria-hidden="true" />
                                             <span className="truncate">{model.name}</span>
                                         </>
                                     ) : (
@@ -686,7 +708,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                             <>
                                 <ChevronRight size={13} />
                                 {showQueries ? (
-                                    <button className="text-sm" onClick={() => selectQueries()}>
+                                    <button aria-current={isCurrent('folder', QUERY_FOLDER) ? 'page' : undefined} className="text-sm" onClick={() => selectQueries()}>
                                         {knowledge('VerifiedQueries')}
                                     </button>
                                 ) : (
@@ -700,7 +722,12 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                                         )}
                                     </span>
                                 )}
-                                {showQueries && queryId && <span className="truncate text-sm"> / {queryEntries.data?.entries.find(q => q.id === queryId)?.title}</span>}
+                                {showQueries && queryId && (
+                                    <span aria-current="page" className="truncate text-sm">
+                                        {' '}
+                                        / {queryEntries.data?.entries.find(q => q.id === queryId)?.title}
+                                    </span>
+                                )}
                             </>
                         )}
                         {documentsView && selected && (
@@ -749,7 +776,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                                                     className="flex w-full min-w-0 flex-col items-center gap-1 rounded-lg px-2 py-4"
                                                     onClick={() => (folder.id === QUERY_FOLDER ? selectQueries() : navigate(folder.id))}
                                                 >
-                                                    <FolderClosed aria-hidden="true" className="mb-1 size-16 fill-muted-foreground/35 stroke-muted-foreground" strokeWidth={1} />
+                                                    <DirectoryFolderIcon folder={folder} card className="mb-1 size-16 text-muted-foreground" />
                                                     <span className="w-full truncate text-center text-sm font-medium" title={folder.name}>
                                                         {folder.name}
                                                     </span>

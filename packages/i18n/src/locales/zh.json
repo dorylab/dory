@@ -4072,6 +4072,7 @@
         "BusinessContext": "业务上下文",
         "BusinessContextPlaceholder": "使用 Markdown 记录业务规则、词汇和 Agent 指令。",
         "SaveContext": "保存上下文",
+        "ActionsForModel": "{name} 的知识库操作",
         "ModelActions": "知识库操作",
         "ViewYaml": "查看 YAML",
         "ImportYaml": "导入 YAML",
@@ -4451,52 +4452,6 @@
                 "metrics": "指定指标"
             },
             "AutomaticPublished": "AI 自动发布"
-        },
-        "Publication": {
-            "Mode": "发布方式",
-            "review": "关闭自动发布",
-            "automatic": "自动发布符合条件的新内容",
-            "Settings": "发布设置",
-            "History": "处理历史",
-            "Help": "设置 AI 提取的内容如何加入当前知识库。自动提取由各连接器单独控制。",
-            "AutomaticHelp": "开启后，只有原文证据有效且无冲突的新提取结果才可能自动发布。已有草稿和未通过发布校验的内容会保留为未发布状态。",
-            "DisabledHelp": "关闭自动发布时，提取结果不会进入正式知识。",
-            "HistoryHelp": "查看发布和分类记录。背景资料保留在原文中。",
-            "Save": "保存",
-            "Saved": "已保存",
-            "Cancel": "取消",
-            "Loading": "加载中…",
-            "Failed": "加载失败，请重试",
-            "Retry": "重试",
-            "Empty": "暂无处理记录",
-            "Evidence": "原文证据",
-            "Withdraw": "撤回自动发布",
-            "PublicationFailed": "发布失败",
-            "Kinds": {
-                "background": "仅保留在原文",
-                "automatic": "AI 自动发布",
-                "human": "人工审核",
-                "rejected": "已驳回",
-                "restored": "已恢复为草稿",
-                "withdrawn": "已撤回",
-                "edited": "人工维护"
-            },
-            "Reasons": {
-                "policy_changed": "发布设置已变化，结果未发布。",
-                "manual_review_required": "此内容需要人工审核。",
-                "individual_review_required": "请逐条审核内容或分类。",
-                "joint_review_required": "请与依赖的规则共同审核。",
-                "evidence_required": "需要完整原文证据。",
-                "mapping_required": "请补全数据源和计算映射。",
-                "mapping_validation_failed": "计算映射未通过校验，请人工检查。",
-                "conflict": "与其他知识存在重名或冲突。",
-                "scope_required": "请确认共享依据和适用范围。",
-                "affects_existing_metrics": "此规则会影响已有指标，请人工确认。",
-                "source_changed": "来源已变化，请重新提取。",
-                "connector_disabled": "来源连接已停止自动提取。",
-                "version_changed": "知识版本已变化，请重新审核。",
-                "temporary_publication_failure": "发布暂时失败，将自动重试。"
-            }
         }
     },
     "AppSidebar": {

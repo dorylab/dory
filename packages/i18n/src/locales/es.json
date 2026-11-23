@@ -4061,6 +4061,7 @@
         "BusinessContext": "Contexto empresarial",
         "BusinessContextPlaceholder": "Documenta reglas empresariales, vocabulario e instrucciones para agentes en Markdown.",
         "SaveContext": "Guardar contexto",
+        "ActionsForModel": "Acciones de la base de conocimiento {name}",
         "ModelActions": "Acciones del conocimiento",
         "ViewYaml": "Ver YAML",
         "ImportYaml": "Importar YAML",
@@ -4440,52 +4441,6 @@
                 "metrics": "Métricas seleccionadas"
             },
             "AutomaticPublished": "Publicado automáticamente por IA"
-        },
-        "Publication": {
-            "Mode": "Modo de publicación",
-            "review": "Publicación automática desactivada",
-            "automatic": "Publicar automáticamente el conocimiento nuevo apto",
-            "Settings": "Configuración de publicación",
-            "History": "Historial de procesamiento",
-            "Help": "Elige cómo se publica el conocimiento extraído por IA en este conocimiento. La extracción se configura por conector.",
-            "AutomaticHelp": "Solo se publica automáticamente contenido extraído después de activar esta opción, con evidencia vigente y sin conflictos. Los borradores existentes y el contenido que no cumpla los requisitos quedan sin publicar.",
-            "DisabledHelp": "El contenido extraído queda sin publicar cuando la publicación automática está desactivada.",
-            "HistoryHelp": "Consulta el historial de publicación y clasificación. El material de contexto permanece en su fuente.",
-            "Save": "Guardar",
-            "Saved": "Guardado",
-            "Cancel": "Cancelar",
-            "Loading": "Cargando…",
-            "Failed": "No se pudo cargar. Inténtalo de nuevo.",
-            "Retry": "Reintentar",
-            "Empty": "No hay historial de procesamiento",
-            "Evidence": "Evidencia de la fuente",
-            "Withdraw": "Retirar publicación automática",
-            "PublicationFailed": "Error de publicación",
-            "Kinds": {
-                "background": "Solo contexto en la fuente",
-                "automatic": "Publicado automáticamente por IA",
-                "human": "Revisado por una persona",
-                "rejected": "Rechazado",
-                "restored": "Restaurado como borrador",
-                "withdrawn": "Retirado",
-                "edited": "Editado por una persona"
-            },
-            "Reasons": {
-                "policy_changed": "La configuración de publicación cambió. El resultado quedó sin publicar.",
-                "manual_review_required": "Se requiere revisión manual.",
-                "individual_review_required": "Revisa el contenido y la clasificación individualmente.",
-                "joint_review_required": "Revisa junto con las reglas necesarias.",
-                "evidence_required": "Se requiere evidencia completa de la fuente.",
-                "mapping_required": "Completa la fuente de datos y el mapeo del cálculo.",
-                "mapping_validation_failed": "El mapeo no superó la validación. Revísalo manualmente.",
-                "conflict": "Existe conocimiento duplicado o en conflicto.",
-                "scope_required": "Confirma la evidencia de reutilización y el alcance.",
-                "affects_existing_metrics": "La regla afecta métricas existentes y requiere revisión.",
-                "source_changed": "La fuente cambió. Extrae su versión actual.",
-                "connector_disabled": "La extracción automática de esta fuente está desactivada.",
-                "version_changed": "El conocimiento cambió. Revisa la versión actual.",
-                "temporary_publication_failure": "La publicación falló temporalmente y se reintentará."
-            }
         }
     },
     "AppSidebar": {

@@ -659,12 +659,9 @@ test('only successful organization commits advance last completion; retries, sta
     }
 });
 
-async function organizePublicationFixture(
-    f: Awaited<ReturnType<typeof fixture>>,
-    p: ExtractedKnowledge = { ...payload, applicationScope: 'model', sharingEvidence: 'Reports use UTC.' },
-    body = p.description,
-    background = false,
-) {
+async function organizeRuleFixture(f: Awaited<ReturnType<typeof fixture>>) {
+    const p: ExtractedKnowledge = { ...payload, applicationScope: 'model', sharingEvidence: payload.description };
+    const body = p.description;
     await f.sync(body);
     const job = await f.repo.extraction.claim();
     assert.ok(job);
@@ -679,197 +676,34 @@ async function organizePublicationFixture(
         snapshot.items.map(item => ({
             payload: item.payload,
             inputIds: [item.id],
-            ...(background ? { disposition: 'background' as const, reason: 'One-time evaluation context.' } : {}),
         })),
     );
 }
 
-test('0037 migrations match; new and upgraded models default to human review', async () => {
-    const text = await readFile(new URL('../../src/postgres/migrations/0037_knowledge_publication.sql', import.meta.url), 'utf8');
-    assert.equal(text, await readFile(new URL('../../src/pglite/migrations/0037_knowledge_publication.sql', import.meta.url), 'utf8'));
+test('0037 publication migration is retained for existing databases', async () => {
+    const migration = await readFile(new URL('../../src/postgres/migrations/0037_knowledge_publication.sql', import.meta.url), 'utf8');
+    assert.equal(migration, await readFile(new URL('../../src/pglite/migrations/0037_knowledge_publication.sql', import.meta.url), 'utf8'));
     assert.ok((await readFile(new URL('../../src/pglite/migrations.json', import.meta.url), 'utf8')).includes('knowledge_processing_history'));
+});
+
+test('legacy automatic publication settings leave newly extracted knowledge in draft', async () => {
     const f = await fixture('0036');
     try {
-        assert.deepEqual(await f.repo.extraction.publication.policy(f.scope), { mode: 'review', version: 0 });
-        assert.deepEqual(await f.repo.extraction.publication.policy({ organizationId: 'org', knowledgeModelId: 'legacy-model' }), { mode: 'review', version: 0 });
-        await assert.rejects(f.repo.extraction.publication.setPolicy({ ...f.scope, organizationId: 'foreign', mode: 'automatic', expectedVersion: 0 }), /not found/);
-        await organizePublicationFixture(f);
-        assert.equal(await f.repo.extraction.publication.claim(), null);
-    } finally {
-        await f.close();
-    }
-});
-
-test('automatic publication is attributable, idempotent, reversible and preserves source evidence', async () => {
-    const f = await fixture();
-    try {
-        await f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'automatic', expectedVersion: 0 });
-        await organizePublicationFixture(f);
-        const job = await f.repo.extraction.publication.claim();
-        assert.ok(job);
-        assert.equal(await f.repo.extraction.publication.claim(), null);
-        const state = await f.repo.extraction.publication.prepare(job);
-        assert.equal(state.reason, null);
-        await f.repo.extraction.publication.complete(job.id, job.leaseToken!, state.fingerprint);
-        const [rule] = await f.repo.extraction.listRules(f.scope);
-        assert.equal(rule.publicationMethod, 'automatic');
-        const [event] = (await f.repo.extraction.publication.history(f.scope)).events;
-        assert.equal(event.kind, 'automatic');
-        assert.equal(event.actorId, null);
-        assert.equal(event.evidence[0].quote, payload.description);
-        await assert.rejects(f.repo.extraction.publication.complete(job.id, job.leaseToken!, state.fingerprint), /lease/);
-        await f.repo.extraction.publication.withdraw({ ...f.scope, id: event.id, expectedRevision: event.assetRevision!, userId: 'admin' });
-        assert.equal((await f.repo.extraction.listRules(f.scope)).length, 0);
-        assert.equal((await f.repo.getGraph(f.scope)).sourceAssetEdges.length, 0);
+        await f.db.execute(sql`UPDATE knowledge_models SET publication_mode = 'automatic', publication_epoch = 1 WHERE id = ${f.model.id}`);
+        await organizeRuleFixture(f);
         const [draft] = await f.repo.extraction.listCandidates(f.scope);
-        assert.equal(draft.manualOnly, 1);
-        assert.equal(draft.targetAssetId, rule.id);
-        await assert.rejects(f.repo.extraction.publication.withdraw({ ...f.scope, id: event.id, expectedRevision: event.assetRevision!, userId: 'admin' }), /withdrawn/);
-    } finally {
-        await f.close();
-    }
-});
-
-test('enabling and re-organizing never promotes existing drafts or prior source versions', async () => {
-    const f = await fixture();
-    try {
-        await organizePublicationFixture(f);
-        await f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'automatic', expectedVersion: 0 });
-        await f.repo.extraction.organization.request(f.scope);
-        const job = await f.repo.extraction.organization.claim();
-        assert.ok(job);
-        const snapshot = await f.repo.extraction.organization.snapshot(job);
-        await f.repo.extraction.organization.complete(
-            job.id,
-            job.leaseToken!,
-            snapshot.fingerprint,
-            snapshot.items.map(item => ({ payload: item.payload, inputIds: [item.id] })),
-        );
-        assert.equal(await f.repo.extraction.publication.claim(), null);
-        assert.equal((await f.repo.extraction.listCandidates(f.scope))[0].publicationEpoch, null);
-        await f.sync();
-        assert.equal(await f.repo.extraction.claim(), null);
-    } finally {
-        await f.close();
-    }
-});
-
-test('background classification is recoverable, deduplicated and cannot erase protected knowledge', async () => {
-    const f = await fixture();
-    try {
-        await organizePublicationFixture(f, { ...payload, name: 'Evaluation period', description: 'Evaluation period is 2026 Q2.' }, 'Evaluation period is 2026 Q2.', true);
-        assert.equal((await f.repo.extraction.listCandidates(f.scope)).length, 0);
-        const [event] = (await f.repo.extraction.publication.history(f.scope)).events;
-        assert.equal(event.kind, 'background');
-        assert.equal(event.payload.classificationVersion, 5);
-        assert.ok(event.payload.inputIds?.length);
-        await f.repo.extraction.organization.request(f.scope);
-        let job = await f.repo.extraction.organization.claim();
-        assert.ok(job);
-        let snapshot = await f.repo.extraction.organization.snapshot(job);
-        assert.equal(snapshot.items.length, 0);
-        await f.repo.extraction.organization.complete(job.id, job.leaseToken!, snapshot.fingerprint, []);
-        await f.repo.extraction.publication.restore({ ...f.scope, id: event.id, userId: 'admin' });
-        const [restored] = await f.repo.extraction.listCandidates(f.scope);
-        assert.equal(restored.manualOnly, 1);
-        await f.repo.extraction.organization.request(f.scope);
-        job = await f.repo.extraction.organization.claim();
-        assert.ok(job);
-        snapshot = await f.repo.extraction.organization.snapshot(job);
-        await assert.rejects(
-            f.repo.extraction.organization.complete(
-                job.id,
-                job.leaseToken!,
-                snapshot.fingerprint,
-                snapshot.items.map(item => ({ payload: item.payload, inputIds: [item.id], disposition: 'background', reason: 'Hide restored content' })),
-            ),
-            /classification/,
-        );
-        assert.equal((await f.repo.extraction.listCandidates(f.scope))[0].id, restored.id);
-    } finally {
-        await f.close();
-    }
-});
-
-test('policy changes, stale source and manual review fence in-flight automatic publication', async () => {
-    const f = await fixture();
-    try {
-        await f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'automatic', expectedVersion: 0 });
-        await organizePublicationFixture(f);
-        const job = await f.repo.extraction.publication.claim();
-        assert.ok(job);
-        const state = await f.repo.extraction.publication.prepare(job);
-        await f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'review', expectedVersion: 1 });
-        await assert.rejects(f.repo.extraction.publication.complete(job.id, job.leaseToken!, state.fingerprint), /lease/);
-        await f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'automatic', expectedVersion: 2 });
-        assert.equal(await f.repo.extraction.publication.claim(), null);
+        assert.equal(draft.payload.name, payload.name);
+        assert.equal(draft.status, 'pending');
+        assert.equal(draft.publicationEpoch, null);
         assert.equal((await f.repo.extraction.listRules(f.scope)).length, 0);
-        await assert.rejects(f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'review', expectedVersion: 1 }), /changed/);
+        assert.equal((await f.db.execute(sql`SELECT id FROM knowledge_publication_jobs`)).rows.length, 0);
+        assert.equal((await f.db.execute(sql`SELECT id FROM knowledge_processing_history`)).rows.length, 0);
     } finally {
         await f.close();
     }
 });
 
-test('new shared rules affecting published metrics remain manual; complete mappings publish without a verified badge', async () => {
-    const f = await fixture();
-    try {
-        await f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'automatic', expectedVersion: 0 });
-        const body = 'Synthetic orders Revenue = SUM(orders.amount)';
-        await organizePublicationFixture(
-            f,
-            { kind: 'metric', name: 'Revenue', description: body, aliases: [], sourceConnectionId: 'conn', source: 'orders', expression: 'SUM(orders.amount)' },
-            body,
-        );
-        const job = await f.repo.extraction.publication.claim();
-        assert.ok(job);
-        const state = await f.repo.extraction.publication.prepare(job);
-        assert.equal(state.reason, null);
-        await f.repo.extraction.publication.complete(job.id, job.leaseToken!, state.fingerprint);
-        let model = await f.repo.getModel(f.scope);
-        const metric = model.model.definitions.find(d => d.kind === 'metric')!;
-        assert.equal(metric.status, 'auto_published');
-        assert.equal(model.readiness.status, 'ready');
-        await organizePublicationFixture(f);
-        const ruleJob = await f.repo.extraction.publication.claim();
-        assert.ok(ruleJob);
-        assert.equal((await f.repo.extraction.publication.prepare(ruleJob)).reason, 'affects_existing_metrics');
-        await f.repo.saveDefinitions({ ...f.scope, definitions: model.model.definitions.map(d => ({ ...d, description: 'Human maintained calculation' })) });
-        model = await f.repo.getModel(f.scope);
-        assert.equal(model.model.definitions.find(d => d.id === metric.id)?.status, 'verified');
-        const event = (await f.repo.extraction.publication.history(f.scope)).events.find(e => e.kind === 'automatic')!;
-        await assert.rejects(f.repo.extraction.publication.withdraw({ ...f.scope, id: event.id, expectedRevision: event.assetRevision!, userId: 'admin' }), /edited/);
-    } finally {
-        await f.close();
-    }
-});
-
-test('publication leases recover and retries stop after five attempts; stale sources never commit', async () => {
-    const f = await fixture();
-    try {
-        await f.repo.extraction.publication.setPolicy({ ...f.scope, mode: 'automatic', expectedVersion: 0 });
-        await organizePublicationFixture(f);
-        const first = await f.repo.extraction.publication.claim();
-        assert.ok(first);
-        await f.db.execute(sql`UPDATE knowledge_publication_jobs SET lease_expires_at = now() - interval '1 second' WHERE id = ${first.id}`);
-        const job = await f.repo.extraction.publication.claim();
-        assert.ok(job);
-        assert.equal(job.attempts, 2);
-        await assert.rejects(f.repo.extraction.publication.heartbeat(first.id, first.leaseToken!), /lease/);
-        const state = await f.repo.extraction.publication.prepare(job);
-        await f.sync('Reports now use a different timezone.');
-        assert.equal(await f.repo.extraction.publication.complete(job.id, job.leaseToken!, state.fingerprint), false);
-        assert.equal((await f.repo.extraction.listRules(f.scope)).length, 0);
-        await f.db.execute(
-            sql`UPDATE knowledge_publication_jobs SET status = 'running', attempts = 5, lease_token = 'last', lease_expires_at = now() - interval '1 second' WHERE id = ${job.id}`,
-        );
-        assert.equal(await f.repo.extraction.publication.claim(), null);
-        assert.equal((await f.repo.extraction.publication.history(f.scope)).tasks[0].status, 'failed');
-    } finally {
-        await f.close();
-    }
-});
-
-test('background preserves original payload and withdrawal removes formal source edges', async () => {
+test('background classification preserves the original payload and stays outside pending drafts', async () => {
     const f = await fixture();
     try {
         await f.sync('Evaluation is 2026 Q2.');
@@ -883,12 +717,13 @@ test('background preserves original payload and withdrawal removes formal source
         await f.repo.extraction.organization.complete(task.id, task.leaseToken!, state.fingerprint, [
             { payload: { ...payload, name: 'Unrelated official rule' }, inputIds: [state.items[0].id], disposition: 'background', reason: 'A test period.' },
         ]);
-        const [event] = (await f.repo.extraction.publication.history(f.scope)).events;
-        assert.equal(event.payload.name, original.name);
-        assert.equal(event.payload.description, original.description);
-        await f.sync('Evaluation has changed.');
-        await assert.rejects(f.repo.extraction.publication.restore({ ...f.scope, id: event.id, userId: 'admin' }), /Source changed/);
-        await assert.rejects(f.repo.extraction.publication.history({ ...f.scope, organizationId: 'foreign' }), /not found/);
+        const [background] = (await f.db.execute(sql`SELECT payload FROM knowledge_candidates WHERE status = 'background'`)).rows;
+        assert.deepEqual(background.payload, original);
+        assert.equal((await f.repo.extraction.listCandidates(f.scope)).length, 0);
+        await f.repo.extraction.organization.request(f.scope);
+        const next = await f.repo.extraction.organization.claim();
+        assert.ok(next);
+        assert.equal((await f.repo.extraction.organization.snapshot(next)).items.length, 0);
     } finally {
         await f.close();
     }

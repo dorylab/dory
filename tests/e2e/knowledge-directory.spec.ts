@@ -27,8 +27,8 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
     const tree = page.getByRole('navigation', { name: 'Directory' });
     const dialog = page.getByRole('dialog');
     const card = (folder: string, count: number) => page.getByRole('button', { name: folder + ' ' + count + ' ' + (count === 1 ? 'document' : 'documents'), exact: true });
-    async function newItem(label: string) {
-        await page.getByRole('button', { name: 'New', exact: true }).click();
+    async function newItem(label: string, folder?: string) {
+        await tree.getByRole('button', { name: folder ? 'Actions for ' + folder : 'Knowledge base actions for ' + name, exact: true }).click();
         await page.getByRole('menuitem', { name: label, exact: true }).click();
     }
     async function submit() {
@@ -41,13 +41,15 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
     }
     try {
         await page.goto('/' + slug + '/knowledge/' + knowledgeModelId);
+        let parent: string | undefined;
         for (const folder of ['Operations', 'Orders', 'Refunds']) {
-            await newItem('New folder');
+            await newItem('New folder', parent);
             await dialog.getByRole('textbox', { name: 'Name' }).fill(folder);
             await submit();
             await card(folder, 0).click();
+            parent = folder;
         }
-        await newItem('New document');
+        await newItem('New document', 'Refunds');
         await dialog.getByLabel('Document title').fill('Policy');
         await dialog.getByLabel('Markdown content').fill('# Refund window');
         await submit();
@@ -64,7 +66,7 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await page.reload();
         await expect(crumb.getByRole('button', { name: 'Refunds' })).toHaveAttribute('aria-current', 'page');
         await expect(tree.getByRole('button', { name: 'Policy.md', exact: true })).toBeVisible();
-        await newItem('Upload Markdown');
+        await newItem('Upload Markdown', 'Refunds');
         await dialog.locator('input[type=file]').setInputFiles({ name: 'Checklist.md', mimeType: 'text/markdown', buffer: Buffer.from('# Check') });
         await dialog.getByRole('button', { name: /Upload 1/ }).click();
         await expect(dialog).toBeHidden();
@@ -283,7 +285,7 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Retry.md');
         await crumbs.getByRole('button', { name: 'Root directory', exact: true }).click();
         await page.getByRole('button', { name: 'Directory', exact: true }).click();
-        await dialog.getByRole('button', { name: 'New', exact: true }).click();
+        await dialog.getByRole('button', { name: 'Knowledge base actions for ' + name, exact: true }).click();
         await choose('New document');
         await expect(dialog.getByText(/Target folder: Folder actions/)).toBeVisible();
         await dialog.getByLabel('Document title').fill('Overview');
@@ -306,7 +308,7 @@ test('creates in a targeted directory, retries only failed uploads and returns t
             return route.fulfill({ response, json: { ...body, data: { ...body.data, canWrite: false } } });
         });
         await page.reload();
-        await expect(page.getByRole('button', { name: 'New', exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Knowledge base actions for ' + name, exact: true })).toHaveCount(0);
         await page.getByRole('button', { name: 'Overview.md', exact: true }).click();
         await expect(page.getByRole('region', { name: 'Overview.md' }).getByRole('heading', { name: 'Root', exact: true })).toBeVisible();
         await expect(page.getByRole('region', { name: 'Overview.md' }).getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
