@@ -15,7 +15,7 @@ import { Pool } from 'pg';
 
 import { PostgresKnowledgeRepository } from '../../src/postgres/impl/knowledge';
 import { createOssieDocument } from '../../src/postgres/impl/knowledge/ossie';
-import { connections, knowledgeConnectors, knowledgeSources } from '../../src/postgres/schemas';
+import { connections, knowledgeConnectors, knowledgeDocumentBatches, knowledgeSources } from '../../src/postgres/schemas';
 import { knowledgeExtractionJobs } from '../../src/postgres/schemas/knowledge-extraction';
 import type { ExtractedKnowledge } from '../../src/postgres/schemas/knowledge-extraction';
 
@@ -791,5 +791,65 @@ test('directory search scopes paths to the organization and returns paged naviga
         assert.equal(result.items.length, 1);
     } finally {
         await f.close();
+    }
+});
+
+test('generated topic documents commit together, reuse local folders and record peer use only once', async () => {
+    const { repo, scope, db, close, connector } = await fixture();
+    try {
+        const evidence = { database: 'shop', tables: [{ name: 'orders', digest: 'a'.repeat(64) }], references: [] };
+        const document = { fileName: 'Guide.md', contentText: '# Orders', evidence };
+        const input = {
+            ...scope,
+            batchId: randomUUID(),
+            folderId: null,
+            createdBy: 'analyst',
+            connectionId: 'conn',
+            elapsedMs: 15000,
+            topics: [{ name: 'Orders', documents: [document] }],
+        };
+        assert.deepEqual((await repo.documentGenerationContext({ ...input, documentIds: [], queryIds: [] })).references, []);
+        await assert.rejects(repo.documentGenerationContext({ ...input, documentIds: ['missing'], queryIds: [] }), /reference/);
+        const query = await repo.createVerifiedQuery({
+            ...scope,
+            sourceConnectionId: 'conn',
+            title: 'Refund count',
+            question: 'How many refunds?',
+            sql: 'SELECT count(*) FROM refunds',
+        });
+        const reference = await repo.createKnowledgeSource({ ...scope, fileName: 'Policy.md', contentText: 'Use requested date.' });
+        const { references } = await repo.documentGenerationContext({ ...input, documentIds: [reference.id], queryIds: [query.id] });
+        assert.deepEqual(
+            references.map(item => item.kind),
+            ['document', 'query'],
+        );
+        assert.equal(references[0].text, 'Use requested date.');
+        assert.ok(references[1].text.includes(query.sql));
+        const parent = (await repo.directory.change(scope, { operation: 'create', parentId: null, name: 'Orders' }, true)).id;
+        const [first, retry] = await Promise.all([repo.createDocumentBatch(input), repo.createDocumentBatch(input)]);
+        assert.deepEqual(first, retry);
+        assert.equal(first[0].folderId, parent);
+        const [file] = await db.select().from(knowledgeSources).where(eq(knowledgeSources.id, first[0].id));
+        assert.deepEqual(file.schemaEvidence, { ...evidence, connectionId: 'conn' });
+        assert.equal(file.connectionId, 'conn');
+        await assert.rejects(
+            repo.createDocumentBatch({ ...input, batchId: randomUUID(), topics: [{ name: 'Rollback', documents: [document] }, ...input.topics] }),
+            /already exists/,
+        );
+        assert.ok(!(await repo.directory.list(scope)).folders.some(f => f.name === 'Rollback'));
+        await assert.rejects(repo.createDocumentBatch({ ...input, batchId: randomUUID(), folderId: connector.id }), /local folder/);
+        await assert.rejects(repo.createDocumentBatch({ ...input, batchId: randomUUID(), connectionId: 'unlinked' }), /no longer linked/);
+        await assert.rejects(repo.createDocumentBatch({ ...input, organizationId: 'another' }), /not found/);
+        const receipt = async () => (await db.select().from(knowledgeDocumentBatches).where(eq(knowledgeDocumentBatches.id, input.batchId)))[0];
+        await repo.recordDocumentUse(scope.knowledgeModelId, 'analyst', [file.id]);
+        assert.equal((await receipt()).firstPeerUseAt, null);
+        await repo.recordDocumentUse(scope.knowledgeModelId, 'reader', [file.id]);
+        const firstUse = await receipt();
+        assert.ok(firstUse.firstPeerUseAt);
+        assert.ok(firstUse.elapsedMs >= 15000);
+        await repo.recordDocumentUse(scope.knowledgeModelId, 'another reader', [file.id]);
+        assert.deepEqual((await receipt()).firstPeerUseAt, firstUse.firstPeerUseAt);
+    } finally {
+        await close();
     }
 });

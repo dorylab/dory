@@ -287,7 +287,7 @@ export function SourceViewer({
     const title = requestedTitle ?? knowledgeSourceDisplayName(source);
     const detail = useQuery({
         queryKey: [...knowledgeSourcesKey(knowledgeModelId), source.id, source.updatedAt, 'viewer'],
-        queryFn: () => executeActionClient<KnowledgeSource>('knowledge.getKnowledgeSource', { knowledgeModelId, id: source.id }, { organizationId: organization }),
+        queryFn: () => executeActionClient<KnowledgeSource>('knowledge.getKnowledgeSource', { knowledgeModelId, id: source.id, viewed: true }, { organizationId: organization }),
         refetchOnMount: 'always',
         retry: false,
     });
@@ -312,7 +312,7 @@ export function SourceViewer({
     const content = (
         <>
             <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline">{source.format}</Badge>
+                {source.format !== 'markdown' && <Badge variant="outline">{source.format}</Badge>}
                 <span>
                     {source.connectorProvider === 'github'
                         ? 'GitHub'
@@ -420,9 +420,8 @@ export function SourceEditor({
         enabled: Boolean(source && open),
     });
     const [draft, setContentText] = useState<string>();
-    const [draftConnection, setConnectionId] = useState<string | null>();
+    const [newDocumentConnectionId, setNewDocumentConnectionId] = useState<string | null>(null);
     const contentText = draft ?? detail.data?.contentText ?? '';
-    const connectionId = draftConnection === undefined ? (detail.data?.connectionId ?? null) : draftConnection;
     const [template, setTemplate] = useState<DocumentTemplate>('blank');
     const [replacement, setReplacement] = useState<DocumentTemplate | null>(null);
     const rules = source?.systemRole === 'analysis_rules';
@@ -438,7 +437,7 @@ export function SourceEditor({
         setTemplate(key);
         setReplacement(null);
     }
-    const dirty = !!detail.data && (contentText !== detail.data.contentText || connectionId !== detail.data.connectionId);
+    const dirty = !!detail.data && contentText !== detail.data.contentText;
     useEffect(() => {
         onDirtyChange?.(dirty);
     }, [dirty, onDirtyChange]);
@@ -447,8 +446,14 @@ export function SourceEditor({
             executeActionClient<KnowledgeSource>(
                 source ? 'knowledge.updateKnowledgeSource' : 'knowledge.createKnowledgeSource',
                 source
-                    ? { knowledgeModelId, id: source.id, contentText, connectionId }
-                    : { knowledgeModelId, folderId, fileName: /\.(md|markdown)$/i.test(title.trim()) ? title.trim() : title.trim() + '.md', contentText, connectionId },
+                    ? { knowledgeModelId, id: source.id, contentText, connectionId: detail.data?.connectionId ?? null }
+                    : {
+                          knowledgeModelId,
+                          folderId,
+                          fileName: /\.(md|markdown)$/i.test(title.trim()) ? title.trim() : title.trim() + '.md',
+                          contentText,
+                          connectionId: newDocumentConnectionId,
+                      },
                 { organizationId: organization },
             ),
         onSuccess: updated => {
@@ -508,11 +513,7 @@ export function SourceEditor({
                 </AlertDialogContent>
             </AlertDialog>
             {!source ? <Input aria-label={docs('Title')} placeholder={docs('Title')} value={title} maxLength={237} onChange={event => setTitle(event.target.value)} /> : null}
-            <div className="flex shrink-0 items-center gap-3">
-                {!rules && <ScopeSelect disabled={save.isPending} value={connectionId} dataSources={dataSources} onChange={setConnectionId} />}
-                {source ? <Badge variant="outline">{source.format}</Badge> : null}
-                {source ? <span className="text-xs text-muted-foreground">{formatBytes(new TextEncoder().encode(contentText).byteLength)}</span> : null}
-            </div>
+            {!source && <ScopeSelect disabled={save.isPending} value={newDocumentConnectionId} dataSources={dataSources} onChange={setNewDocumentConnectionId} />}
             <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
                 {detail.isLoading ? (
                     <div className="h-full animate-pulse bg-muted" />

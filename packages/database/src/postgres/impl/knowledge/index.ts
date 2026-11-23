@@ -1,3 +1,4 @@
+import type { CreatedDocument, DocumentTopic } from '@dory/shared/types/knowledge-document-draft';
 import { getClient } from '@dory/database/postgres/client';
 import {
     connections,
@@ -6,6 +7,8 @@ import {
     knowledgeConnectorItems,
     knowledgeConnectors,
     knowledgeConnectorSyncJobs,
+    knowledgeDocumentBatches,
+    knowledgeFolders,
     knowledgeDriveAuthorizations,
     knowledgeLinearCredentials,
     knowledgeMetricRules,
@@ -232,6 +235,23 @@ export function parseKnowledgeYaml(source: string, fallbackSourceConnectionId?: 
 
 export function parseKnowledgeSourceYaml(source: string, fallbackSourceConnectionId?: string) {
     return { definitions: parseKnowledgeYaml(source, fallbackSourceConnectionId).definitions, verifiedQueries: [] as KnowledgeSourceVerifiedQueryImport[] };
+}
+
+async function recordDocumentUse(db: Pick<PostgresDBClient, 'select' | 'update'>, knowledgeModelId: string, userId: string, sourceIds: string[]) {
+    await db
+        .update(knowledgeDocumentBatches)
+        .set({ firstPeerUseAt: new Date() })
+        .where(
+            and(
+                eq(knowledgeDocumentBatches.knowledgeModelId, knowledgeModelId),
+                ne(knowledgeDocumentBatches.createdBy, userId),
+                isNull(knowledgeDocumentBatches.firstPeerUseAt),
+                inArray(
+                    knowledgeDocumentBatches.id,
+                    db.select({ batch: knowledgeSources.generationBatchId }).from(knowledgeSources).where(inArray(knowledgeSources.id, sourceIds)),
+                ),
+            ),
+        );
 }
 
 export class PostgresKnowledgeRepository {
@@ -550,6 +570,7 @@ export class PostgresKnowledgeRepository {
                 })),
             );
         }
+        if (sourceIds.length && input.createdBy) await this.recordDocumentUse(input.knowledgeModelId, input.createdBy, sourceIds);
         await this.touchModel(input.knowledgeModelId);
     }
 
@@ -744,6 +765,7 @@ export class PostgresKnowledgeRepository {
                 folderId: knowledgeSources.folderId,
                 projectId: knowledgeConnectorItems.projectId,
                 projectName: knowledgeConnectorItems.projectName,
+                generationBatchId: knowledgeSources.generationBatchId,
                 systemRole: knowledgeSources.systemRole,
                 fileName: knowledgeSources.fileName,
                 format: knowledgeSources.format,
@@ -773,6 +795,145 @@ export class PostgresKnowledgeRepository {
         if (connectionId && !model.dataSources.some(source => source.connectionId === connectionId)) {
             throw new Error('The selected data source is not linked to this knowledge base.');
         }
+    }
+
+    async documentGenerationContext(input: { organizationId: string; knowledgeModelId: string; connectionId: string; documentIds: string[]; queryIds: string[] }) {
+        const [source] = await this.db
+            .select({ engine: connections.engine, name: connections.name })
+            .from(knowledgeModelSources)
+            .innerJoin(knowledgeModels, eq(knowledgeModelSources.knowledgeModelId, knowledgeModels.id))
+            .innerJoin(connections, eq(knowledgeModelSources.connectionId, connections.id))
+            .where(
+                and(
+                    eq(knowledgeModels.organizationId, input.organizationId),
+                    eq(connections.organizationId, input.organizationId),
+                    eq(knowledgeModels.id, input.knowledgeModelId),
+                    eq(connections.id, input.connectionId),
+                ),
+            );
+        if (!source) throw new Error('Choose a linked data source.');
+        const [documents, queries] = await Promise.all([
+            input.documentIds.length
+                ? this.db
+                      .select({
+                          id: knowledgeSources.id,
+                          fileName: knowledgeSources.fileName,
+                          content: sql<string>`left(${knowledgeSources.contentText}, 150001)`,
+                          remoteTitle: knowledgeConnectorItems.remoteTitle,
+                          remotePath: knowledgeConnectorItems.remotePath,
+                          connectorProvider: knowledgeConnectors.provider,
+                          connectorId: knowledgeConnectorItems.connectorId,
+                      })
+                      .from(knowledgeSources)
+                      .leftJoin(knowledgeConnectorItems, eq(knowledgeConnectorItems.knowledgeSourceId, knowledgeSources.id))
+                      .leftJoin(knowledgeConnectors, eq(knowledgeConnectors.id, knowledgeConnectorItems.connectorId))
+                      .where(
+                          and(
+                              eq(knowledgeSources.organizationId, input.organizationId),
+                              eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId),
+                              inArray(knowledgeSources.id, input.documentIds),
+                          ),
+                      )
+                : [],
+            input.queryIds.length
+                ? this.db
+                      .select({
+                          id: knowledgeVerifiedQueries.id,
+                          title: knowledgeVerifiedQueries.title,
+                          content: sql<string>`left(concat_ws(E'\n', ${knowledgeVerifiedQueries.question}, ${knowledgeVerifiedQueries.description}, ${knowledgeVerifiedQueries.sql}), 150001)`,
+                          connectionName: connections.name,
+                      })
+                      .from(knowledgeVerifiedQueries)
+                      .innerJoin(connections, eq(knowledgeVerifiedQueries.sourceConnectionId, connections.id))
+                      .where(and(eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId), inArray(knowledgeVerifiedQueries.id, input.queryIds)))
+                : [],
+        ]);
+        if (documents.length !== new Set(input.documentIds).size || queries.length !== new Set(input.queryIds).size)
+            throw new Error('A selected reference is no longer available.');
+        return {
+            source,
+            references: [
+                ...documents.map(d => ({ id: d.id, kind: 'document' as const, title: knowledgeSourceDisplayName(d), text: d.content })),
+                ...queries.map(q => ({ id: q.id, kind: 'query' as const, title: q.title + ' · ' + q.connectionName, text: q.content })),
+            ],
+        };
+    }
+
+    async createDocumentBatch(input: {
+        organizationId: string;
+        knowledgeModelId: string;
+        connectionId: string;
+        folderId: string | null;
+        batchId: string;
+        createdBy: string;
+        elapsedMs: number;
+        topics: DocumentTopic[];
+    }) {
+        const started = Date.now();
+        return this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            const { knowledgeModelId, organizationId, connectionId, createdBy } = input;
+            const [existing] = await tx.select().from(knowledgeDocumentBatches).where(eq(knowledgeDocumentBatches.id, input.batchId));
+            if (existing) {
+                if (existing.knowledgeModelId !== knowledgeModelId || existing.createdBy !== createdBy) throw new Error('Invalid batch.');
+                return existing.documents;
+            }
+            const [link] = await tx
+                .select()
+                .from(knowledgeModelSources)
+                .where(and(eq(knowledgeModelSources.knowledgeModelId, knowledgeModelId), eq(knowledgeModelSources.connectionId, connectionId)))
+                .for('share');
+            if (!link) throw new Error('The data source is no longer linked to this knowledge base.');
+            const documents: CreatedDocument[] = [];
+            await tx.insert(knowledgeDocumentBatches).values({ id: input.batchId, knowledgeModelId, createdBy, elapsedMs: input.elapsedMs });
+            for (const topic of input.topics) {
+                const name = topic.name.trim();
+                if (!name || name === '.' || name === '..' || /[/\\\0]/.test(name) || !topic.documents.length) throw new Error('Invalid topic folder.');
+                const [existingFolder] = await tx
+                    .select({ id: knowledgeFolders.id })
+                    .from(knowledgeFolders)
+                    .where(
+                        and(
+                            eq(knowledgeFolders.knowledgeModelId, knowledgeModelId),
+                            eq(knowledgeFolders.name, name),
+                            input.folderId === null ? isNull(knowledgeFolders.parentId) : eq(knowledgeFolders.parentId, input.folderId),
+                        ),
+                    );
+                await assertDestination(tx, knowledgeModelId, input.folderId, name, existingFolder?.id);
+                const folder =
+                    existingFolder ?? (await tx.insert(knowledgeFolders).values({ knowledgeModelId, parentId: input.folderId, name }).returning({ id: knowledgeFolders.id }))[0];
+                for (const doc of topic.documents) {
+                    const value = validateKnowledgeSource(doc.fileName, doc.contentText);
+                    if (value.format !== 'markdown') throw new Error('Choose a Markdown file name.');
+                    await assertDestination(tx, knowledgeModelId, folder.id, value.fileName);
+                    const [file] = await tx
+                        .insert(knowledgeSources)
+                        .values({
+                            ...value,
+                            organizationId,
+                            knowledgeModelId,
+                            connectionId,
+                            createdBy,
+                            folderId: folder.id,
+                            generationBatchId: input.batchId,
+                            schemaEvidence: { ...doc.evidence, connectionId },
+                        })
+                        .returning({ id: knowledgeSources.id });
+                    documents.push({ id: file.id, folderId: folder.id });
+                }
+            }
+            if (!documents.length) throw new Error('Select a document.');
+            const citations = input.topics.flatMap(topic => topic.documents.flatMap(doc => doc.evidence.references.filter(ref => ref.kind === 'document').map(ref => ref.id)));
+            if (citations.length) await recordDocumentUse(tx, knowledgeModelId, createdBy, citations);
+            const elapsedMs = Math.min(2147483647, input.elapsedMs + Math.max(0, Date.now() - started));
+            await tx.update(knowledgeDocumentBatches).set({ documents, elapsedMs }).where(eq(knowledgeDocumentBatches.id, input.batchId));
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, knowledgeModelId));
+            return documents;
+        });
+    }
+
+    async recordDocumentUse(knowledgeModelId: string, userId: string, sourceIds: string[]) {
+        return recordDocumentUse(this.db, knowledgeModelId, userId, sourceIds);
     }
 
     async createKnowledgeSource(input: {

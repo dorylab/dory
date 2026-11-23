@@ -239,6 +239,7 @@ function normalizeObjectRow(row: ObjectRow): DatabaseObjectRow | null {
 
     return {
         name,
+        schema: row.schemaName,
         engine: normalizePostgresTableKind(row.relkind),
         totalBytes: toNumberOrNull(row.totalBytes),
         totalRows: toNumberOrNull(row.totalRows),

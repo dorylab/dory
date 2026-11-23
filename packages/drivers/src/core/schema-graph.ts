@@ -1,4 +1,13 @@
-import type { SchemaGraphCapabilities, SchemaGraphColumn, SchemaGraphOptions, SchemaGraphRelationship, SchemaGraphResult, SchemaGraphTable } from '../types';
+import type {
+    DatabaseObjectRow,
+    SchemaGraphTableReference,
+    SchemaGraphCapabilities,
+    SchemaGraphColumn,
+    SchemaGraphOptions,
+    SchemaGraphRelationship,
+    SchemaGraphResult,
+    SchemaGraphTable,
+} from '../types';
 
 export const SCHEMA_GRAPH_MAX_TABLES = 200;
 export const SCHEMA_GRAPH_MAX_RELATIONSHIPS = 500;
@@ -11,6 +20,16 @@ export type SchemaGraphRelationshipInput = Omit<SchemaGraphRelationship, 'id' | 
     targetSchema?: string | null;
     targetTable: string;
 };
+
+/** Resolve the table spelling returned by listTablesOnly for both metadata APIs. */
+export function catalogTableReference(table: DatabaseObjectRow, engine: string): { identifier: string; focus: SchemaGraphTableReference } {
+    const defaultSchema: Partial<Record<string, string>> = { postgres: 'public', duckdb: 'main', sqlserver: 'dbo' };
+    const qualified = ['postgres', 'duckdb', 'snowflake', 'sqlserver', 'oracle'].includes(engine);
+    const dot = qualified ? table.name.indexOf('.') : -1;
+    const schema = table.schema ?? (dot >= 0 ? table.name.slice(0, dot) : defaultSchema[engine]) ?? null;
+    const name = schema && table.name.startsWith(schema + '.') ? table.name.slice(schema.length + 1) : table.name;
+    return { identifier: engine === 'postgres' && schema ? schema + '.' + name : table.name, focus: { schema, name } };
+}
 
 export function schemaGraphTableId(database: string, schema: string | null | undefined, table: string) {
     return ['schema-graph', database, schema ?? '', table].map(segment => encodeURIComponent(segment)).join(':');

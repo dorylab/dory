@@ -1,3 +1,4 @@
+import type { CreatedDocument, SchemaEvidence } from '@dory/shared/types/knowledge-document-draft';
 import { newEntityId } from '@dory/shared/id';
 import type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
 import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
@@ -248,6 +249,18 @@ export const knowledgeFolders = pgTable(
     table => [uniqueIndex('uidx_knowledge_folders_sibling').on(table.knowledgeModelId, sql`coalesce(${table.parentId}, '')`, table.name)],
 );
 
+export const knowledgeDocumentBatches = pgTable('knowledge_document_batches', {
+    id: text('id').primaryKey(),
+    knowledgeModelId: text('knowledge_model_id')
+        .notNull()
+        .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by').notNull(),
+    elapsedMs: integer('elapsed_ms').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    firstPeerUseAt: timestamp('first_peer_use_at', { withTimezone: true }),
+    documents: jsonb('documents').$type<CreatedDocument[]>().notNull().default([]),
+});
+
 export const knowledgeSources = pgTable(
     'knowledge_sources',
     {
@@ -260,6 +273,8 @@ export const knowledgeSources = pgTable(
             .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
         connectionId: text('connection_id').references(() => connections.id, { onDelete: 'set null' }),
         folderId: text('folder_id').references(() => knowledgeFolders.id),
+        generationBatchId: text('generation_batch_id').references(() => knowledgeDocumentBatches.id),
+        schemaEvidence: jsonb('schema_evidence').$type<SchemaEvidence & { connectionId: string }>(),
         systemRole: text('system_role').$type<'analysis_rules'>(),
         fileName: text('file_name').notNull(),
         format: text('format').$type<KnowledgeSourceFormat>().notNull(),

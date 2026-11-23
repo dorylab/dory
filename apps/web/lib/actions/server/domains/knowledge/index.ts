@@ -11,6 +11,7 @@ import { assertLinearAdmin, assertLinearAvailable } from '@/lib/server/linear-cr
 
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
+import { documentGenerationActions } from './document-generation';
 import { extractionKnowledgeActions } from './extraction';
 import { folderConnectorActions } from './folder-connectors';
 import { linearKnowledgeActions } from './linear';
@@ -382,7 +383,7 @@ export const knowledgeGetKnowledgeSourceAction = defineWebAction({
     domain: 'knowledge',
     kind: 'query',
     risk: 'read',
-    inputSchema: modelIdInput.extend({ id: z.string().min(1) }),
+    inputSchema: modelIdInput.extend({ id: z.string().min(1), viewed: z.boolean().optional() }),
     outputSchema: knowledgeSourceSchema,
     permissions: readWorkspace,
     scopes: ['knowledge:read'],
@@ -392,7 +393,12 @@ export const knowledgeGetKnowledgeSourceAction = defineWebAction({
         title: 'Get knowledge source',
         description: 'Read the full contents of one selected knowledge source by ID.',
     },
-    handler: (ctx, input) => ctx.services.db.knowledge.getKnowledgeSource({ organizationId: ctx.organizationId, ...input }),
+    handler: async (ctx, input) => {
+        const source = await ctx.services.db.knowledge.getKnowledgeSource({ organizationId: ctx.organizationId, ...input });
+        if (input.viewed && source.generationBatchId && source.createdBy !== ctx.userId && ctx.actor.type === 'user')
+            await ctx.services.db.knowledge.recordDocumentUse(input.knowledgeModelId, ctx.userId, [input.id]);
+        return source;
+    },
 });
 
 export const knowledgeCreateKnowledgeSourceAction = defineWebAction({
@@ -992,6 +998,7 @@ export const knowledgeDeleteConnectorAction = defineWebAction({
 });
 
 export const knowledgeActions = [
+    ...documentGenerationActions,
     ...extractionKnowledgeActions,
     ...linearKnowledgeActions,
     ...folderConnectorActions,

@@ -60,6 +60,60 @@ async function currentOrganization(page: import('@playwright/test').Page) {
     return new URL(page.url()).pathname.split('/')[1]!;
 }
 
+test('knowledge keeps the workspace fixed while the directory and document scroll independently', async ({ page }) => {
+    const source = { id: 'scroll-document', fileName: 'Scrolling.md', format: 'markdown', updatedAt: now, folderId: null };
+    const folders = Array.from({ length: 30 }, (_, index) => ({ id: 'folder-' + index, name: 'Folder ' + String(index).padStart(2, '0'), parentId: null }));
+    const contentText = ['# Scrolling document', ...Array.from({ length: 55 }, (_, index) => 'Paragraph ' + index), 'End of document'].join('\n\n');
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId } = route.request().postDataJSON();
+        if (actionId === 'knowledge.get') return actionResponse(route, model);
+        if (actionId === 'knowledge.listDirectory') return actionResponse(route, { canWrite: true, folders, connectors: [] });
+        if (actionId === 'knowledge.listKnowledgeSources') return actionResponse(route, { sources: [source] });
+        if (actionId === 'knowledge.getKnowledgeSource') return actionResponse(route, { ...source, contentText });
+        await route.fallback();
+    });
+
+    await page.setViewportSize({ width: 1280, height: 550 });
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}?file=${source.id}`);
+    const breadcrumb = page.getByRole('navigation', { name: 'Folder path' });
+    const search = page.getByRole('searchbox');
+    const lastFolder = page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Folder 29 0', exact: true });
+    const heading = page.getByRole('heading', { name: 'Scrolling document', exact: true });
+    const end = page.getByText('End of document', { exact: true });
+    const workspace = page.locator('[data-slot="sidebar-inset"] > div').first();
+    const workspaceOverflow = () => workspace.evaluate(element => element.scrollHeight - element.clientHeight);
+
+    await expect(heading).toBeVisible();
+    expect(await workspaceOverflow()).toBe(0);
+    const breadcrumbTop = (await breadcrumb.boundingBox())!.y;
+    const directoryTitle = page.getByRole('heading', { name: 'Knowledge base', exact: true });
+    const directoryTop = (await directoryTitle.boundingBox())!.y;
+    await expect(lastFolder).not.toBeInViewport();
+    await search.hover();
+    await page.mouse.wheel(0, 4000);
+    await expect(lastFolder).toBeInViewport();
+    expect((await directoryTitle.boundingBox())!.y).toBe(directoryTop);
+    await expect(heading).toBeInViewport();
+
+    await heading.hover();
+    await page.mouse.wheel(0, 6000);
+    await expect(end).toBeInViewport();
+    await page.mouse.wheel(0, 1000);
+    expect((await breadcrumb.boundingBox())!.y).toBe(breadcrumbTop);
+    expect(await workspaceOverflow()).toBe(0);
+    await expect(lastFolder).toBeInViewport();
+
+    await page.setViewportSize({ width: 390, height: 600 });
+    await page.getByRole('button', { name: 'Directory', exact: true }).click();
+    const drawer = page.getByRole('dialog', { name: 'Directory', exact: true });
+    await drawer.getByRole('searchbox').hover();
+    await page.mouse.wheel(0, 4000);
+    await expect(drawer.getByRole('button', { name: 'Folder 29 0', exact: true })).toBeInViewport();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+    expect(await workspaceOverflow()).toBe(0);
+});
+
 test('knowledge opens on documents and keeps model metadata in source details', async ({ page }) => {
     await page.route('**/_vercel/**', route => route.fulfill({ status: 204 }));
     await page.route('**/api/actions/execute', async route => {
@@ -803,9 +857,10 @@ for (const scenario of ['no sources', 'unselected source', 'selected source'] as
             await route.fallback();
         });
 
-        await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
-        await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: 'Ask AI' });
+        await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}?tab=definitions`);
+        await page.getByRole('button', { name: 'Add definition', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Generate definition suggestions' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Generate definition suggestions' });
         if (scenario === 'no sources') await expect(dialog.getByText('Knowledge sources are optional. Add one to provide additional context.')).toBeVisible();
         if (scenario === 'selected source') await dialog.getByRole('checkbox', { name: source.fileName }).check();
         await dialog.getByRole('button', { name: 'Generate suggestions' }).click();
@@ -817,3 +872,107 @@ for (const scenario of ['no sources', 'unselected source', 'selected source'] as
         await expect.poll(() => linkedInput).toMatchObject({ assetId: 'suggestion-1', sourceIds: expectedIds, relationType: 'generated' });
     });
 }
+
+test('database generation previews selected schema, handles unreadable tables and creates only after review', async ({ page }) => {
+    const source = {
+        id: 'linear-file',
+        fileName: 'Refund policy.md',
+        format: 'markdown',
+        connectorId: 'linear',
+        connectorProvider: 'linear',
+        remotePath: 'policy.md',
+        contentText: 'Use the requested date.',
+        updatedAt: now,
+    };
+    const directory = {
+        canWrite: true,
+        folders: [{ id: 'orders-folder', parentId: null, name: 'Orders' }],
+        connectors: [{ id: 'linear', displayName: 'Linear', provider: 'linear', rootPath: '' }],
+    };
+    const draft = {
+        fileName: 'Guide.md',
+        contentText: '# Read orders\n\nStart with the orders table.',
+        proof: 'test-proof',
+        evidence: { database: 'shop', tables: [{ name: 'orders', digest: 'a'.repeat(64) }], references: [] },
+    };
+    let writes = 0;
+    let empty = true;
+    const draftInputs: Record<string, unknown>[] = [];
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId, input } = route.request().postDataJSON();
+        switch (actionId) {
+            case 'knowledge.get':
+                return actionResponse(route, model);
+            case 'knowledge.listDirectory':
+                return actionResponse(route, empty ? { canWrite: true, folders: [], connectors: [] } : directory);
+            case 'knowledge.listKnowledgeSources':
+                return actionResponse(route, {
+                    sources: empty
+                        ? []
+                        : [
+                              source,
+                              { id: 'existing', fileName: 'Guide.md', folderId: 'orders-folder', format: 'markdown' },
+                              ...(writes ? [{ ...draft, id: 'saved', fileName: 'New guide.md', folderId: 'orders-folder', format: 'markdown' }] : []),
+                          ],
+                });
+            case 'knowledge.getKnowledgeSource':
+                return actionResponse(route, input.id === 'saved' ? { ...draft, id: 'saved', fileName: 'New guide.md', format: 'markdown', updatedAt: now } : source);
+            case 'knowledge.queryEntries':
+                return actionResponse(route, { entries: [] });
+            case 'schema.listDatabases':
+                return actionResponse(route, { databases: [{ value: 'shop', label: 'shop' }] });
+            case 'schema.listTables':
+                return actionResponse(route, { tables: [{ name: 'orders' }, { name: 'restricted' }] });
+            case 'knowledge.generateDocumentDraft':
+                draftInputs.push(input);
+                return actionResponse(
+                    route,
+                    input.tables.includes('restricted') ? { failedTables: ['restricted'], topics: [] } : { topics: [{ name: 'Orders', documents: [draft] }], failedTables: [] },
+                );
+            case 'knowledge.createDocumentBatch':
+                expect(input.folderId).toBeNull();
+                expect(input.topics[0].documents[0].fileName).toBe('New guide.md');
+                writes++;
+                return actionResponse(route, { documents: [{ id: 'saved', folderId: 'orders-folder' }] });
+            default:
+                return route.fallback();
+        }
+    });
+    const base = `/${await currentOrganization(page)}/knowledge/${modelId}`;
+    const dialog = page.getByRole('dialog', { name: 'Generate from database' });
+    await page.goto(base);
+    const emptyEntry = page.locator('section').getByRole('button', { name: 'Generate from database', exact: true });
+    await emptyEntry.click();
+    await expect(dialog.getByLabel('Destination folder')).toHaveText(model.name);
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    empty = false;
+    await page.goto(base + '?folder=orders-folder');
+    await page.getByRole('button', { name: 'Generate from database', exact: true }).first().click();
+    await expect(dialog.getByLabel('Destination folder')).toHaveText('Orders');
+    await dialog.getByRole('checkbox', { name: 'orders', exact: true }).check();
+    await dialog.getByRole('button', { name: 'Generate draft' }).click();
+    await expect(dialog.getByText('Start with the orders table.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(writes).toBe(0);
+
+    await page.goto(base + '?tab=documents&file=linear-file');
+    await page.getByRole('button', { name: 'Generate from database', exact: true }).first().click();
+    await expect(dialog.getByLabel('Destination folder')).toHaveText(model.name);
+    await dialog.getByLabel('orders', { exact: true }).check();
+    await dialog.getByLabel('restricted', { exact: true }).check();
+    await dialog.getByText('Additional context (optional)').click();
+    const ref = dialog.getByRole('checkbox', { name: /Current document/ });
+    await expect(ref).not.toBeChecked();
+    await ref.check();
+    await dialog.getByRole('button', { name: 'Generate draft' }).click();
+    await dialog.getByRole('button', { name: 'Exclude failed tables' }).click();
+    await dialog.getByRole('button', { name: 'Generate draft' }).click();
+    await expect(dialog.getByText('Start with the orders table.')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Create 0 folders and 1 document' })).toBeDisabled();
+    await dialog.getByLabel('Document name').fill('New guide.md');
+    expect(writes).toBe(0);
+    expect(draftInputs.at(-1)).toMatchObject({ tables: ['orders'], documentIds: ['linear-file'], queryIds: [] });
+    await dialog.getByRole('button', { name: 'Create 0 folders and 1 document' }).click();
+    await expect(page).toHaveURL(/file=saved/);
+    expect(writes).toBe(1);
+});

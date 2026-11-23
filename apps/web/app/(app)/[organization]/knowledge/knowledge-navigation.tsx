@@ -184,11 +184,11 @@ export function KnowledgeNavigation({
     };
     return (
         <>
-            <div className="flex min-h-12 items-center justify-between gap-2 border-b ps-3 pe-14 md:pe-3">
+            <div className="flex min-h-12 shrink-0 items-center justify-between gap-2 border-b ps-3 pe-14 md:pe-3">
                 <h2 className="text-sm font-semibold">{t('Title')}</h2>
                 {create}
             </div>
-            <div className="space-y-3 p-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
                 <div className="relative">
                     <Search className="pointer-events-none absolute start-2.5 top-2.5 size-4 text-muted-foreground" />
                     <Input

@@ -324,3 +324,37 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await action('knowledge.delete', scope, 'knowledge.delete');
     }
 });
+
+test('Markdown reader and editor omit redundant metadata and preserve the document connection on save', async ({ page, request }) => {
+    await page.goto('/');
+    await openDataSources(page);
+    const slug = new URL(page.url()).pathname.split('/')[1];
+    const action = knowledgeActions(request);
+    const { connections } = await action<{ connections: { connection: { id: string } }[] }>('connection.list', {});
+    const connectionId = connections[0]!.connection.id;
+    const { id: knowledgeModelId } = await action<{ id: string }>('knowledge.create', {
+        name: 'Document metadata ' + randomUUID().slice(0, 8),
+        connectionIds: [connectionId],
+    });
+    const scope = { knowledgeModelId };
+    try {
+        const fileName = 'Example.md';
+        const { id } = await action<{ id: string }>('knowledge.createKnowledgeSource', { ...scope, fileName, contentText: '# Example', connectionId });
+        await page.goto('/' + slug + '/knowledge/' + knowledgeModelId + '?file=' + id);
+        const document = page.getByRole('region', { name: fileName });
+        await expect(document.getByRole('heading', { name: 'Example', exact: true })).toBeVisible();
+        await expect(document.getByText('markdown', { exact: true })).toHaveCount(0);
+        await expect(document.getByText('Local file', { exact: true })).toBeVisible();
+
+        await document.getByRole('button', { name: 'Edit', exact: true }).click();
+        await expect(document.getByRole('combobox')).toHaveCount(0);
+        await expect(document.getByText('markdown', { exact: true })).toHaveCount(0);
+        await expect(document.getByText(/^\d+(\.\d+)? (B|KB|MB)$/)).toHaveCount(0);
+        await document.getByLabel('Markdown content').fill('# Updated example');
+        await document.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(document.getByRole('heading', { name: 'Updated example', exact: true })).toBeVisible();
+        expect(await action<{ connectionId: string | null }>('knowledge.getKnowledgeSource', { ...scope, id })).toMatchObject({ connectionId });
+    } finally {
+        await action('knowledge.delete', scope, 'knowledge.delete');
+    }
+});

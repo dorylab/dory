@@ -35,9 +35,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/registry/new-yor
 import { buildDocumentDirectory, getRootFolders, ROOT, storedFolderId, type DirectoryData, type DocumentFolder, type DirectoryDocument } from './document-directory';
 import type { KnowledgeModelView } from './knowledge-page.client';
 import { DirectoryFolderIcon, SourceLogo } from './source-logo';
+import dynamic from 'next/dynamic';
 import { KnowledgeGuide } from './knowledge-guide';
 import { SourceEditor, SourceViewer, UploadSourcesDialog, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 
+const GenerateDocumentsDialog = dynamic(() => import('./generate-documents-dialog').then(module => module.GenerateDocumentsDialog));
 type Entry = { id: string; kind: 'folder' | 'document'; name: string; parentId: string | null };
 type Command =
     | { operation: 'create'; parentId: string | null; name: string }
@@ -45,7 +47,14 @@ type Command =
     | { operation: 'rename'; id: string; kind: Entry['kind']; name: string }
     | { operation: 'delete'; id: string; kind: 'folder' };
 type Prompt = { operation: 'create'; folderId: string } | { operation: 'move' | 'rename' | 'delete'; entry: Entry };
-export type BrowserWorkspace = { navigation: NavigationIndex; organizationSlug: string; section: string; header: ReactNode; createModel: () => void; openSettings: () => void };
+export type BrowserWorkspace = {
+    navigation: NavigationIndex;
+    organizationSlug: string;
+    section: string;
+    header: (generate: ReactNode) => ReactNode;
+    createModel: () => void;
+    openSettings: () => void;
+};
 type Props = {
     workspace: BrowserWorkspace;
     alternate: ReactNode;
@@ -80,6 +89,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     const client = useQueryClient();
     const data = directory ?? emptyDirectory;
     const { id: modelId, dataSources } = model;
+    const [generationOpenedAt, setGenerationOpenedAt] = useState<number | null>(null);
     const guide = model.businessContextMd.trim() ? t('Guide') : null;
     const rootName = t('RootDirectory');
     const router = useRouter();
@@ -669,11 +679,16 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                   .filter(folder => validDestination(prompt.entry, folder))
                   .sort((a, b) => path(a.id).localeCompare(path(b.id)))
             : [];
+    const generateButton = data.canWrite && (
+        <Button variant="outline" disabled={loading || Boolean(loadError)} onClick={() => setGenerationOpenedAt(Date.now())}>
+            {knowledge('Generation.Title')}
+        </Button>
+    );
     return (
-        <div className="grid h-dvh min-w-0 bg-background text-foreground md:grid-cols-[minmax(14rem,22%)_minmax(0,1fr)]">
-            <aside className="hidden min-w-0 overflow-auto border-e bg-muted/20 md:block">{sidebar()}</aside>
-            <div className="min-w-0 overflow-y-auto">
-                <header className="flex min-h-12 items-center gap-2 border-b px-3 sm:px-5">
+        <div className="grid h-full min-w-0 grid-rows-[minmax(0,1fr)] bg-background text-foreground md:grid-cols-[minmax(14rem,22%)_minmax(0,1fr)]">
+            <aside className="hidden min-w-0 flex-col border-e bg-muted/20 md:flex">{sidebar()}</aside>
+            <div className="flex min-w-0 flex-col">
+                <header className="flex min-h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-5">
                     <Button className="md:hidden" variant="outline" size="sm" onClick={() => setDrawer(true)}>
                         <PanelLeft />
                         {t('Directory')}
@@ -737,9 +752,9 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                             </span>
                         )}
                     </nav>
-                    {workspace.header}
+                    {workspace.header(generateButton)}
                 </header>
-                <div className="min-h-72 space-y-6 p-4 sm:p-5">
+                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-5">
                     {loadError && (
                         <p role="alert" className="text-sm text-destructive">
                             {loadError}
@@ -795,10 +810,17 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                             <section>
                                 <h3 className="mb-3 text-sm font-semibold">{t('Files')}</h3>
                                 {!unknownFolder && documents.length ? (
-                                    <ul className="divide-y rounded-lg border">{documents.map(documentRow)}</ul>
+                                    <>
+                                        <ul className="divide-y rounded-lg border">{documents.map(documentRow)}</ul>
+                                        {current.id === ROOT &&
+                                            documents.every(doc => doc.source?.systemRole === 'analysis_rules') &&
+                                            !data.folders.length &&
+                                            !data.connectors.length && <div className="mt-3">{generateButton}</div>}
+                                    </>
                                 ) : (
                                     <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                                         {loading ? t('Loading') : !unknownFolder && !loadError ? t('Empty') : null}
+                                        {!current.managed && !unknownFolder && !loading && !loadError && generateButton}
                                     </div>
                                 )}
                             </section>
@@ -806,6 +828,30 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     )}
                 </div>
             </div>
+            {generationOpenedAt !== null && (
+                <GenerateDocumentsDialog
+                    opened={generationOpenedAt}
+                    model={model}
+                    organization={organization}
+                    sources={sources}
+                    folders={data.folders}
+                    targets={[...index.folders.values()].filter(f => !f.managed).map(f => ({ id: f.id, label: f.id === ROOT ? model.name : path(f.id) }))}
+                    target={documentsView && !current.managed ? current.id : ROOT}
+                    currentId={documentsView ? selected?.source?.id : undefined}
+                    close={() => setGenerationOpenedAt(null)}
+                    created={async (docs, parent, landing) => {
+                        await Promise.all([
+                            client.invalidateQueries({ queryKey: ['knowledge-model', modelId] }),
+                            client.invalidateQueries({ queryKey: ['knowledge-directory-search', organization] }),
+                        ]);
+                        setGenerationOpenedAt(null);
+                        setExpanded(prev => new Set([...prev, ...index.trail(parent).map(f => f.id), ...docs.map(doc => doc.folderId)]));
+                        const destination = { folder: landing.folderId, file: landing.id };
+                        if (dirty) setPending(destination);
+                        else openDestination(destination);
+                    }}
+                />
+            )}
             <AlertDialog open={Boolean(pending || pendingCreate || pendingPath || historyChanged)} onOpenChange={open => !open && keepEditing()}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -851,7 +897,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                 />
             )}
             <Sheet open={drawer} onOpenChange={setDrawer}>
-                <SheetContent side="left" className="gap-0 overflow-auto text-foreground">
+                <SheetContent side="left" className="gap-0 text-foreground">
                     <SheetHeader className="sr-only">
                         <SheetTitle>{t('Directory')}</SheetTitle>
                     </SheetHeader>

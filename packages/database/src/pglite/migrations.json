@@ -733,5 +733,14 @@
     "bps": true,
     "folderMillis": 1795305600000,
     "hash": "4afe7e6b968cbaab60bea8e57941af19de2da7b3d2a42f973decab325c999ab8"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"knowledge_document_batches\" (\n    \"id\" text PRIMARY KEY,\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\" (\"id\") ON DELETE CASCADE,\n    \"created_by\" text NOT NULL,\n    \"elapsed_ms\" integer NOT NULL,\n    \"created_at\" timestamptz NOT NULL DEFAULT now(),\n    \"first_peer_use_at\" timestamptz,\n    \"documents\" jsonb NOT NULL DEFAULT '[]'::jsonb\n);\n",
+      "\nALTER TABLE \"knowledge_sources\" ADD COLUMN \"generation_batch_id\" text REFERENCES \"knowledge_document_batches\" (\"id\"), ADD COLUMN \"schema_evidence\" jsonb;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1795392000000,
+    "hash": "fa93b39cb0d09997f819d2d20136fbc9f352bc22efb547bf93424fb35d9313c6"
   }
 ]

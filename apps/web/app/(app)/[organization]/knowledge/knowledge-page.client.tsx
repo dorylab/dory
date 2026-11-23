@@ -1063,7 +1063,7 @@ function DefinitionPanel({
     onSave,
     onUpdate,
     onImport,
-    onAskAi,
+    onGenerateDefinitions,
 }: {
     organization: string;
     model: KnowledgeModelView;
@@ -1073,7 +1073,7 @@ function DefinitionPanel({
     onSave: (definitions: Definition[]) => void;
     onUpdate: (definitionId: string, definition: Definition) => Promise<void>;
     onImport: () => void;
-    onAskAi: () => void;
+    onGenerateDefinitions: () => void;
 }) {
     const t = useTranslations('Knowledge');
     const [selectedDefinitionId, setSelectedDefinitionId] = useQueryState('definition', parseAsString);
@@ -1167,9 +1167,9 @@ function DefinitionPanel({
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={onAskAi}>
+                        <DropdownMenuItem onSelect={onGenerateDefinitions}>
                             <Sparkles />
-                            {t('CreateWithAi')}
+                            {t('Generation.Definitions')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onSelect={() => {
@@ -1381,7 +1381,7 @@ function DefinitionPanel({
     );
 }
 
-function AskAiDialog({
+function DefinitionSuggestionsDialog({
     open,
     onOpenChange,
     model,
@@ -1426,7 +1426,7 @@ function AskAiDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>{t('AskAi')}</DialogTitle>
+                    <DialogTitle>{t('Generation.Definitions')}</DialogTitle>
                     <DialogDescription>{t('AskAiDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
@@ -1727,7 +1727,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
     const queryClient = useQueryClient();
     const modelActionsRef = useRef<HTMLButtonElement>(null);
     const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
-    const [askAiOpen, setAskAiOpen] = useState(false);
+    const [definitionSuggestionsOpen, setDefinitionSuggestionsOpen] = useState(false);
     const [creating, setCreating] = useState(false);
     useEffect(() => {
         if (navigation.models.some(m => m.id === knowledgeModelId)) localStorage.setItem('knowledge.last.' + organization + '.' + navigation.userId, knowledgeModelId);
@@ -1915,8 +1915,8 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
         );
     }
     return (
-        <div className="bg-n8 h-screen overflow-auto">
-            <main className="min-h-full">
+        <div className="bg-n8 h-full min-h-0">
+            <main className="h-full">
                 <KnowledgeDocumentsPanel
                     model={model}
                     organization={organization}
@@ -1929,13 +1929,11 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                         section: section === 'documents' ? 'documents' : activeTab,
                         createModel: () => setCreating(true),
                         openSettings: () => setEditingModel(model),
-                        header: (
+                        header: generate => (
                             <div className="flex shrink-0 items-center gap-2">
                                 <KnowledgeDataSourceAvatars sources={model.dataSources} />
                                 <div className="flex gap-2">
-                                    <Button variant="outline" onClick={() => setAskAiOpen(true)}>
-                                        {t('AskAi')}
-                                    </Button>
+                                    {generate}
                                     {navigation.canWrite && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
@@ -1988,7 +1986,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                                             await updateDefinition.mutateAsync({ definitionId, definition });
                                         }}
                                         onImport={() => setImportOpen(true)}
-                                        onAskAi={() => setAskAiOpen(true)}
+                                        onGenerateDefinitions={() => setDefinitionSuggestionsOpen(true)}
                                     />
                                 </>
                             ) : activeTab === 'rules' ? (
@@ -2110,9 +2108,9 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                         router.push('/' + organizationSlug + '/knowledge/' + created.id);
                     }}
                 />
-                <AskAiDialog
-                    open={askAiOpen}
-                    onOpenChange={setAskAiOpen}
+                <DefinitionSuggestionsDialog
+                    open={definitionSuggestionsOpen}
+                    onOpenChange={setDefinitionSuggestionsOpen}
                     model={model}
                     organization={organization}
                     onAccept={(definitions, generatedIds, sourceIds) =>
