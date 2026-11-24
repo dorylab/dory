@@ -49,7 +49,7 @@ export function reportUpdateResults(item: StoredReportUpdate) {
 }
 
 export type ReportUpdateContext = {
-    document: Pick<WorkDocumentView, 'id' | 'title' | 'revision' | 'content'>;
+    document: Pick<WorkDocumentView, 'id' | 'title' | 'revision' | 'version' | 'content'>;
     latestRevision: number;
     baseRevision: number;
     draftRevision: number;

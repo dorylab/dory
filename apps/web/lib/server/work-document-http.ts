@@ -12,7 +12,7 @@ import { parseWorkRevision } from '@/lib/work-documents/revision';
 import { workDraftSchema } from '@/lib/work-documents/schema';
 
 import { listAgentWorks } from './agent-works';
-import { assertDocumentWrite, createWorkFromRun, publishWorkReport, saveWorkDraft } from './work-documents';
+import { assertDocumentWrite, createWorkFromRun, saveWorkDraft } from './work-documents';
 
 export async function documentHttp(req: NextRequest, documentId?: string) {
     try {
@@ -28,15 +28,12 @@ export async function documentHttp(req: NextRequest, documentId?: string) {
             if (documentId) {
                 const target = { ...owner, documentId };
                 const revision = parseWorkRevision(search.get('revision'));
-                const [document, versions, publications] = await Promise.all([
-                    search.get('publication')
-                        ? db.workDocuments.getPublication({ ...target, publicationId: search.get('publication')! })
-                        : revision === undefined
-                          ? db.workDocuments.get(target)
-                          : db.workDocuments.getVersion({ ...target, revision }),
+                if (search.has('publication')) throw new DatabaseError('REPORT_VERSION_REMOVED', 410);
+                const [document, versions] = await Promise.all([
+                    revision === undefined ? db.workDocuments.get(target) : db.workDocuments.getVersion({ ...target, revision }),
                     db.workDocuments.versions(target),
-                    db.workDocuments.publications(target),
                 ]);
+                if (!versions.length) throw new DatabaseError('Report generation has not completed.', 409);
                 workDraftSchema.parse({ title: document.title, markdown: document.content.markdown, visuals: document.content.visuals, status: document.status });
                 // Older reports may carry their originating run only on their evidence.
                 const evidenceRuns = new Set(document.content.evidence.map(item => item.runId).filter(Boolean));
@@ -50,7 +47,7 @@ export async function documentHttp(req: NextRequest, documentId?: string) {
                         : fallbackConnection
                           ? { workId: snapshot?.work.workId ?? reportWorkspaceRunId(documentId), connectionId: fallbackConnection }
                           : null;
-                return Response.json({ document, versions, publications, workspace });
+                return Response.json({ document, versions, workspace, editorOwnerId: userId });
             }
             return Response.json({
                 documents: await db.workDocuments.list({
@@ -74,7 +71,6 @@ export async function documentHttp(req: NextRequest, documentId?: string) {
         if (!documentId) throw new DatabaseError('Missing document ID.', 400);
         const input = z
             .discriminatedUnion('action', [
-                z.object({ action: z.literal('publish'), expectedRevision: z.number().int().positive(), requestId: z.string().min(1).max(200) }),
                 z.object({ action: z.literal('save'), expectedRevision: z.number().int().positive(), draft: workDraftSchema }),
                 z.object({ action: z.literal('restore'), expectedRevision: z.number().int().positive(), revision: z.number().int().positive() }),
                 z.object({ action: z.literal('archive'), archived: z.boolean() }),
@@ -83,15 +79,13 @@ export async function documentHttp(req: NextRequest, documentId?: string) {
             .parse(await req.json());
         const target = { ...owner, documentId };
         const document =
-            input.action === 'publish'
-                ? await publishWorkReport(db, { ...target, ...input })
-                : input.action === 'save'
-                  ? await saveWorkDraft(db, { ...target, ...input, source: 'user' })
-                  : input.action === 'restore'
-                    ? await db.workDocuments.restore({ ...target, ...input })
-                    : input.action === 'rename'
-                      ? await db.workDocuments.rename({ ...target, ...input })
-                      : await db.workDocuments.archive({ ...target, archived: input.archived });
+            input.action === 'save'
+                ? await saveWorkDraft(db, { ...target, ...input, source: 'user' })
+                : input.action === 'restore'
+                  ? await db.workDocuments.restore({ ...target, ...input })
+                  : input.action === 'rename'
+                    ? await db.workDocuments.rename({ ...target, ...input })
+                    : await db.workDocuments.archive({ ...target, archived: input.archived });
         return Response.json({ document });
     } catch (error) {
         return Response.json(

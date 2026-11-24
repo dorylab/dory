@@ -1,4 +1,5 @@
 'use client';
+import { ReportVersionRemoved } from './report-version-removed';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryStates, parseAsString } from 'nuqs';
 import { diffLines } from 'diff';
@@ -83,6 +84,8 @@ export function ReportRunWorkspace(initialProps: Props) {
                     notice={notice}
                     setNotice={setNotice}
                 />
+            ) : context.error?.message === 'REPORT_VERSION_REMOVED' ? (
+                <ReportVersionRemoved organization={props.organization} documentId={props.reference.documentId} />
             ) : (
                 <p className="p-4" role={context.error ? 'alert' : 'status'}>
                     {context.error?.message ?? t('Loading')}
@@ -253,7 +256,7 @@ function Workspace({
             setNotice({ reason: saved.reason || t('Unchanged') });
             return;
         }
-        const href = reportWorkspaceReturnPath(organization, { ...reference, publicationId: saved.publicationId, revision: saved.revision });
+        const href = reportWorkspaceReturnPath(organization, { ...reference, publicationId: undefined, revision: saved.revision });
         setNotice({ href });
         await Promise.all([
             client.invalidateQueries({ queryKey: ['work-document', organization, data.document.id] }),
@@ -271,7 +274,8 @@ function Workspace({
                 <div className="min-w-0">
                     <h2 className="font-semibold">{t('Title')}</h2>
                     <Link className="text-sm underline-offset-2 hover:underline" href={reportHref} onNavigate={leaveToReport(reportHref)}>
-                        {reportTitle} ↗
+                        {reportTitle}
+                        {data.document.version && ` · v${data.document.version}`} ↗
                     </Link>
                 </div>
                 <DropdownMenu>

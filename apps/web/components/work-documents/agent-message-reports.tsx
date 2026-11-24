@@ -48,6 +48,7 @@ export function getMessageReportIds(message: UIMessage): string[] {
         const name = getToolName(part);
         if (!['createWorkReport', 'updateWorkReport', 'dory_finish_work'].includes(name ?? '')) continue;
         const output = getToolOutput(part);
+        if (name === 'dory_finish_work' && output?.report && !output.reportSaved) continue;
         const id = output?.reportDocumentId ?? output?.id;
         if (typeof id === 'string') ids.add(id);
     }
@@ -61,7 +62,8 @@ export function reportsForMessage(message: UIMessage, messages: UIMessage[], rep
     const metadata = message.metadata as ChatMetadata | undefined;
     const ids = getMessageReportIds(message);
     return reports.filter(report => {
-        if (report.sourceMessageId !== message.id && messages.some(item => item.role === 'assistant' && item.id === report.sourceMessageId)) return false;
+        if (!ids.includes(report.id) && report.sourceMessageId !== message.id && messages.some(item => item.role === 'assistant' && item.id === report.sourceMessageId))
+            return false;
         return (
             ids.includes(report.id) || report.sourceMessageId === message.id || (report.sourceMessageId === (metadata?.userMessageId ?? user?.id) && !userMetadata?.sourceMessageId)
         );
@@ -79,22 +81,37 @@ export function AgentMessageReports({
     messages: UIMessage[];
     reports: WorkDocumentSummary[];
     busy: boolean;
-    onOpen: (id: string) => void;
+    onOpen: (id: string, revision?: number) => void;
 }) {
     const t = useTranslations('ChatComposer');
     if (message.role !== 'assistant') return null;
     const documents = reportsForMessage(message, messages, reports);
-    if (!documents.length) return null;
+    const generating = busy && messages.at(-1)?.id === message.id;
+    if (!documents.length) {
+        const prompt = messages.slice(0, messages.indexOf(message)).findLast(item => item.role === 'user');
+        const intent = (prompt?.metadata as ChatMetadata | undefined)?.outputIntent;
+        return generating && (intent === 'report' || getMessageReportIds(message).length > 0) ? (
+            <p role="status" className="my-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                {t('Generating')}
+            </p>
+        ) : null;
+    }
     return (
         <div className="my-4 space-y-3" data-testid="message-reports">
             {documents.map(document => {
-                const preview = reportPreview(document);
-                const generating = document.status !== 'ready' && busy && messages.at(-1)?.id === message.id;
+                const metadata = message.metadata as ChatMetadata | undefined;
+                const completion = metadata?.completion?.report;
+                const fixed = completion?.documentId === document.id ? completion : undefined;
+                const revision = (metadata?.reportDocumentId === document.id ? metadata.reportRevision : undefined) ?? fixed?.revision;
+                const failed = metadata?.reportSave?.status === 'failed';
+                const preview = revision && revision !== document.revision ? undefined : reportPreview(document);
+                const version = metadata?.reportVersion ?? fixed?.version ?? (revision === undefined || revision === document.revision ? document.version : undefined);
                 return (
                     <button
                         key={document.id}
                         type="button"
-                        onClick={() => onOpen(document.id)}
+                        onClick={() => onOpen(document.id, revision ?? document.revision)}
                         className="group flex w-full max-w-2xl cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-card p-4 text-left text-card-foreground shadow-xs transition-colors hover:border-primary/30 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:gap-4 sm:p-5"
                     >
                         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:text-primary">
@@ -103,9 +120,11 @@ export function AgentMessageReports({
                         <span className="min-w-0 flex-1">
                             <span className="flex items-start justify-between gap-3">
                                 <span className="line-clamp-2 break-words text-sm font-semibold leading-6">{document.title}</span>
-                                <Badge variant="secondary" className="mt-0.5 shrink-0 font-mono text-[11px] tabular-nums">
-                                    v{document.version ?? document.revision}
-                                </Badge>
+                                {version && (
+                                    <Badge variant="secondary" className="mt-0.5 shrink-0 font-mono text-[11px] tabular-nums">
+                                        v{version}
+                                    </Badge>
+                                )}
                             </span>
                             {preview && <span className="mt-1.5 line-clamp-2 break-words text-sm leading-6 text-muted-foreground">{preview}</span>}
                             <span className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs">
@@ -115,7 +134,17 @@ export function AgentMessageReports({
                                     ) : generating ? (
                                         <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
                                     ) : null}
-                                    {t(document.status === 'ready' ? 'Saved' : generating ? 'Generating' : 'Incomplete')}
+                                    {t(
+                                        failed
+                                            ? 'Incomplete'
+                                            : generating
+                                              ? document.status === 'ready'
+                                                  ? 'UpdatingReport'
+                                                  : 'Generating'
+                                              : document.status === 'ready'
+                                                ? 'ReportGenerated'
+                                                : 'Incomplete',
+                                    )}
                                 </span>
                                 <span className="inline-flex items-center gap-1 font-medium text-muted-foreground transition-colors group-hover:text-foreground">
                                     {t('OpenReport')}

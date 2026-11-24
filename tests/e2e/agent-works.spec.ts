@@ -1,4 +1,4 @@
-import { chooseReportMode } from './helpers/report';
+import { chooseReportMode, pendingReport } from './helpers/report';
 import { expect, type Page } from '@playwright/test';
 
 import { parseReport, reportEmbeds } from '../../apps/web/lib/work-documents/report-core';
@@ -703,6 +703,10 @@ test('report charts use compact independent controls, snapshot SQL and downloads
 test('Embedded report offers view, block editing and Source without saving on mode changes', async ({ page, appErrors }, testInfo) => {
     test.setTimeout(150_000);
     await setupWorks(page);
+    await page.route('**/api/actions/execute', route => {
+        if (route.request().postDataJSON().actionId !== 'report.component.sources') return route.fallback();
+        return route.fulfill({ json: { ok: true, data: { rows: [] } } });
+    });
     let saves = 0;
     let saved = {
         ...structuredClone(document),
@@ -735,6 +739,7 @@ test('Embedded report offers view, block editing and Source without saving on mo
         return route.fulfill({
             json: {
                 document: { ...saved, content: { ...saved.content, embeds: reportEmbeds(saved.content.visuals, saved.content.evidence) } },
+                editorOwnerId: 'fixture',
                 versions: [],
                 workspace: { workId: 'work-1', connectionId: 'private-connection' },
             },
@@ -745,8 +750,8 @@ test('Embedded report offers view, block editing and Source without saving on mo
     await expect(page.getByTestId('work-report').locator('[data-visual="trend"]')).toBeVisible();
     const toolbar = page.getByTestId('report-toolbar');
     const workspace = toolbar.getByRole('button', { name: 'Open SQL Workspace', exact: true });
-    const versionsButton = toolbar.getByRole('button', { name: 'Report versions', exact: true });
-    await expect(versionsButton).toHaveText('Draft');
+    const versionsButton = toolbar.getByRole('button', { name: 'Version history', exact: true });
+    await expect(versionsButton).toHaveText('Version history');
     await expect(workspace).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Open SQL Workspace', exact: true })).toHaveCount(1);
     const title = await toolbar.getByRole('heading').boundingBox();
@@ -781,17 +786,17 @@ test('Embedded report offers view, block editing and Source without saving on mo
     await page.keyboard.insertText(' Updated in chat.');
     await workspace.click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing', exact: true }).click();
     await chooseReportMode(page, 'Source');
     await expect(page.getByTestId('markdown-source')).toBeVisible();
     await chooseReportMode(page, 'Edit');
     await expect(paragraph).toContainText('Updated in chat.');
-    await expect.poll(() => saved.content.body).toContain('Updated in chat.');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('Updated in chat.');
     await editor.getByRole('button', { name: 'Edit Revenue trend', exact: true }).click();
     const dialog = page.getByTestId('report-component-dialog');
     await dialog.getByRole('textbox', { name: 'Component title', exact: true }).fill('Updated chart');
     await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
-    await expect.poll(() => saved.content.visuals[0]?.title).toBe('Updated chart');
+    await expect.poll(async () => (await pendingReport(page)).content.visuals[0]?.title).toBe('Updated chart');
     // The native side menu hides during ancestor scrolling; hover again once
     // scrolling the chart header into view has settled.
     await expect(async () => {
@@ -800,11 +805,13 @@ test('Embedded report offers view, block editing and Source without saving on mo
         await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toBeVisible();
     }).toPass();
     await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
-    await expect.poll(() => saved.content.visuals.length).toBe(0);
+    await expect.poll(async () => (await pendingReport(page)).content.body).not.toContain('<Chart source="trend" />');
     await editor.getByRole('button', { name: 'Undo', exact: true }).click();
-    await expect.poll(() => saved.content.visuals[0]?.title).toBe('Updated chart');
+    await expect.poll(async () => (await pendingReport(page)).content.visuals[0]?.title).toBe('Updated chart');
     await expect(editor.locator('[data-visual="trend"]')).toBeVisible();
-    await chooseReportMode(page, 'View');
+    expect(saves).toBe(0);
+    await toolbar.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => saves).toBe(1);
     await expect(editor).toHaveCount(0);
     await expectAppHealthy(appErrors);
 });

@@ -326,7 +326,7 @@ async function initSchema() {
 }
 
 await initSchema();
-for (const migration of ['0038_work_documents', '0041_report_publications', '0042_report_working_drafts']) {
+for (const migration of ['0038_work_documents', '0041_report_publications', '0042_report_working_drafts', '0043_report_connected_workspace', '0048_report_version_history']) {
     const migrationSql = await readFile(new URL(`../../../../packages/database/src/pglite/migrations/${migration}.sql`, import.meta.url), 'utf8');
     for (const statement of migrationSql.split('--> statement-breakpoint').filter(part => part.trim())) await db.execute(sql.raw(statement));
 }

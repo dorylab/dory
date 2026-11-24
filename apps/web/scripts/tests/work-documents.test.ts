@@ -76,18 +76,16 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
                 createdByActorType: 'user',
                 createdByActorId: 'alice',
             });
-            await client
-                .insert(artifacts)
-                .values({
-                    id: artifactId,
-                    organizationId,
-                    type: 'result_set',
-                    title: 'Revenue',
-                    resourceId: resultId,
-                    sourceResultSetId: resultId,
-                    createdByActorType: 'user',
-                    createdByActorId: 'alice',
-                });
+            await client.insert(artifacts).values({
+                id: artifactId,
+                organizationId,
+                type: 'result_set',
+                title: 'Revenue',
+                resourceId: resultId,
+                sourceResultSetId: resultId,
+                createdByActorType: 'user',
+                createdByActorId: 'alice',
+            });
         }
         const input = {
             ...owner,
@@ -107,7 +105,15 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         assert.deepEqual(await repository.list({ ...owner, userId: 'bob' }), []);
         assert.equal((await repository.list({ ...owner, connectionId: 'c2' })).length, 1);
         assert.equal((await repository.list({ ...owner, connectionId: 'c3' })).length, 0);
-        const edit = { ...target, expectedRevision: 1, title: 'Human title', content, scope: first.scope, status: 'ready' as const, source: 'user' as const };
+        const edit = {
+            ...target,
+            expectedRevision: 1,
+            title: 'Human title',
+            content: { ...content, markdown: 'Revised narrative', evidence: [] },
+            scope: first.scope,
+            status: 'ready' as const,
+            source: 'user' as const,
+        };
         const saves = await Promise.allSettled([repository.update(edit), repository.update({ ...edit, title: 'Agent title', source: 'agent' })]);
         assert.equal(saves.filter(result => result.status === 'fulfilled').length, 1);
         assert.equal(saves.filter(result => result.status === 'rejected').length, 1);
@@ -118,7 +124,7 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         assert.deepEqual(historical.content, content);
         assert.equal((await repository.get(target)).revision, 2);
         assert.equal((await repository.versions(target)).length, 2);
-        await assert.rejects(repository.getVersion({ ...target, revision: 99 }), /not found/);
+        await assert.rejects(repository.getVersion({ ...target, revision: 99 }), /REPORT_VERSION_REMOVED/);
         await assert.rejects(repository.getVersion({ ...target, userId: 'bob', revision: 1 }), /not found/);
         await assert.rejects(repository.getVersion({ ...target, organizationId: 'another', revision: 1 }), /not found/);
         await assert.rejects(repository.restore({ ...target, revision: 1, expectedRevision: 1 }), /changed/);
@@ -130,7 +136,7 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         await repository.archive({ ...target, archived: true });
         assert.equal((await repository.list(owner)).length, 0);
         assert.equal((await repository.list({ ...owner, archived: true })).length, 1);
-        await assert.rejects(repository.update({ ...edit, expectedRevision: 3 }), /changed or was archived/);
+        await assert.rejects(repository.update({ ...edit, expectedRevision: 3 }), /unavailable/);
         await repository.archive({ ...target, archived: false });
         assert.equal((await repository.list(owner)).length, 1);
         const renamed = await repository.rename({ ...target, expectedRevision: 3, title: 'Reviewed revenue' });
@@ -187,69 +193,48 @@ test('private report lifecycle, idempotency, concurrent edits, immutable snapsho
         await repository.create({ ...input, ...listOwner, creationKey: 'no-sources', title: 'No sources fixture', content: { ...content, evidence: [] } });
         assert.deepEqual((await repository.list({ ...listOwner, query: 'No sources fixture' }))[0].sourceLabels, []);
 
-        // One generation can create an empty draft and save several patches.
-        // Public versions follow turns while revisions retain every snapshot.
         const generated = await repository.create({ ...input, creationKey: 'incremental-report', content: { markdown: '', visuals: [], evidence: [], knowledge: [] } });
         const generatedTarget = { ...owner, documentId: generated.id };
-        let latest = generated;
-        for (let revision = 2; revision <= 5; revision++) {
-            latest = await repository.update({
-                ...generatedTarget,
-                expectedRevision: latest.revision,
-                title: latest.title,
-                scope: latest.scope,
-                content: { ...content, markdown: `Section ${revision}`, agentWrite: { requestId: 'generation-1', revision, visualIds: [] } },
-                status: revision === 5 ? 'ready' : 'draft',
-                source: 'agent',
+        const turn = { ...generatedTarget, requestId: 'generation-1' };
+        let preview = generated;
+        for (let step = 1; step <= 4; step++) {
+            preview = await repository.stageAgent({
+                ...turn,
+                expectedRevision: preview.revision,
+                title: generated.title,
+                scope: generated.scope,
+                content: { ...generated.content, markdown: `Section ${step}` },
+                status: step === 4 ? 'ready' : 'draft',
             });
-            assert.equal(latest.version, 1);
+            assert.deepEqual(await repository.versions(generatedTarget), []);
         }
-        assert.equal(latest.revision, 5);
-        assert.equal((await repository.get(generatedTarget)).version, 1);
+        const saved = await repository.finishAgent(turn);
+        assert.equal(saved.version, 1);
+        assert.equal(saved.revision, 2);
         assert.equal((await repository.findByCreationKey({ ...owner, creationKey: 'incremental-report' }))?.version, 1);
-        assert.equal((await repository.list({ ...owner, query: latest.title })).find(row => row.id === latest.id)?.version, 1);
-        assert.deepEqual(
-            (await repository.versions(generatedTarget)).map(({ revision, version }) => ({ revision, version })),
-            [{ revision: 5, version: 1 }],
-        );
-        const intermediate = await repository.getVersion({ ...generatedTarget, revision: 3 });
-        assert.equal(intermediate.version, 1);
-        assert.equal(intermediate.content.markdown, 'Section 3');
-        const view: WorkDocumentView = { ...latest, createdAt: latest.createdAt.toISOString(), updatedAt: latest.updatedAt.toISOString(), archivedAt: null };
-        assert.match(renderWorkHtml(view), /<p>r5 ·/);
-        assert.match(new TextDecoder().decode(markdownExportFiles(view)['report.md']), /\nDraft r5 ·/);
-        for (let revision = 6; revision <= 7; revision++) {
-            latest = await repository.update({
-                ...generatedTarget,
-                expectedRevision: latest.revision,
-                title: latest.title,
-                scope: latest.scope,
-                content: { ...content, agentWrite: { requestId: 'generation-2', revision, visualIds: [] } },
-                status: 'ready',
-                source: 'agent',
-            });
-            assert.equal(latest.version, 2);
-        }
-        const humanVersion = await repository.rename({ ...generatedTarget, expectedRevision: latest.revision, title: 'Reviewed generation' });
-        assert.equal(humanVersion.version, 3);
-        const afterHuman = await repository.update({
-            ...generatedTarget,
-            expectedRevision: humanVersion.revision,
-            title: humanVersion.title,
-            scope: humanVersion.scope,
-            content: { ...content, agentWrite: { requestId: 'generation-2', revision: humanVersion.revision + 1, visualIds: [] } },
+        assert.equal((await repository.list({ ...owner, query: saved.title })).find(row => row.id === saved.id)?.version, 1);
+        const view: WorkDocumentView = { ...saved, createdAt: saved.createdAt.toISOString(), updatedAt: saved.updatedAt.toISOString(), archivedAt: null };
+        assert.match(renderWorkHtml(view), /<p>v1 ·/);
+        assert.match(new TextDecoder().decode(markdownExportFiles(view)['report.md']), /\nv1 ·/);
+        const nextTurn = { ...generatedTarget, requestId: 'generation-2' };
+        await repository.stageAgent({
+            ...nextTurn,
+            expectedRevision: saved.revision,
+            title: saved.title,
+            scope: saved.scope,
+            content: { ...saved.content, markdown: 'Follow-up' },
             status: 'ready',
-            source: 'agent',
         });
-        assert.equal(afterHuman.version, 4);
-        const restoredGeneration = await repository.restore({ ...generatedTarget, expectedRevision: afterHuman.revision, revision: 5 });
-        assert.equal(restoredGeneration.version, 5);
-        assert.equal(restoredGeneration.content.markdown, 'Section 5');
+        const updated = await repository.finishAgent(nextTurn);
+        const humanVersion = await repository.rename({ ...generatedTarget, expectedRevision: updated.revision, title: 'Reviewed generation' });
+        assert.equal(humanVersion.version, 3);
+        const restoredGeneration = await repository.restore({ ...generatedTarget, expectedRevision: humanVersion.revision, revision: saved.revision });
+        assert.equal(restoredGeneration.version, 4);
+        assert.equal(restoredGeneration.content.markdown, 'Section 4');
         assert.deepEqual(
             (await repository.versions(generatedTarget)).map(row => row.version),
-            [5, 4, 3, 2, 1],
+            [4, 3, 2, 1],
         );
-        assert.equal((await repository.getVersion({ ...generatedTarget, revision: 5 })).version, 1);
     } finally {
         await db?.close();
         await postgres?.end();

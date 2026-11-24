@@ -16,7 +16,6 @@ export const workDocuments = pgTable(
         scope: jsonb('scope').$type<AnalysisScope>().notNull(),
         content: jsonb('content').$type<WorkDocumentContent>().notNull(),
         revision: integer('revision').notNull().default(1),
-        publishedVersionId: text('published_version_id'),
         status: text('status').$type<'draft' | 'ready'>().notNull().default('draft'),
         archivedAt: timestamp('archived_at', { withTimezone: true }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -38,10 +37,12 @@ export const workDocumentVersions = pgTable(
         content: jsonb('content').$type<WorkDocumentContent>().notNull(),
         scope: jsonb('scope').$type<AnalysisScope>().notNull(),
         status: text('status').$type<'draft' | 'ready'>().notNull(),
-        source: text('source').$type<'user' | 'agent' | 'restore'>().notNull(),
+        requestKey: text('request_key'),
+        sourceChatId: text('source_chat_id'),
+        source: text('source').$type<'user' | 'agent' | 'restore' | 'workspace' | 'baseline'>().notNull(),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
-    table => [primaryKey({ columns: [table.documentId, table.revision] })],
+    table => [primaryKey({ columns: [table.documentId, table.revision] }), uniqueIndex('work_document_versions_request').on(table.documentId, table.requestKey)],
 );
 
 export const reportSnapshots = pgTable(
@@ -56,29 +57,23 @@ export const reportSnapshots = pgTable(
     },
     table => [index('report_snapshots_document').on(table.documentId)],
 );
-export const reportPublications = pgTable(
-    'report_publications',
+export const reportAgentDrafts = pgTable(
+    'report_agent_drafts',
     {
-        id: text('id')
-            .primaryKey()
-            .$defaultFn(() => `pub_${newEntityId()}`),
         documentId: text('document_id')
             .notNull()
             .references(() => workDocuments.id, { onDelete: 'cascade' }),
-        number: integer('number').notNull(),
-        revision: integer('revision').notNull(),
         requestId: text('request_id').notNull(),
+        completedRevision: integer('completed_revision'),
+        baseRevision: integer('base_revision').notNull(),
+        revision: integer('revision').notNull(),
         title: text('title').notNull(),
         content: jsonb('content').$type<WorkDocumentContent>().notNull(),
         scope: jsonb('scope').$type<AnalysisScope>().notNull(),
-        chatId: text('chat_id'),
-        publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+        status: text('status').$type<'draft' | 'ready'>().notNull(),
+        sourceChatId: text('source_chat_id'),
     },
-    table => [
-        uniqueIndex('report_publications_number').on(table.documentId, table.number),
-        uniqueIndex('report_publications_request').on(table.documentId, table.requestId),
-        uniqueIndex('report_publications_revision').on(table.documentId, table.revision),
-    ],
+    table => [primaryKey({ columns: [table.documentId, table.requestId] })],
 );
 
 /** Personal editing state; saving here never changes an immutable report version. */

@@ -11,7 +11,7 @@ import { reconcileReportEvidenceGroups } from '@/lib/work-documents/evidence-gro
 import { REPORT_SNAPSHOT_ROW_LIMIT } from '@/lib/work-documents/evidence-preview';
 import { reportNumber } from '@/lib/work-documents/format';
 import { referencedEvidence } from '@/lib/work-documents/markdown';
-import { legacyToMdx, parseReport, reportEmbeds, reportTagSource, resolvedReport } from '@/lib/work-documents/report-core';
+import { legacyToMdx, parseReport, reportEmbeds, reportTagSource } from '@/lib/work-documents/report-core';
 import { applyReportTextPatch } from '@/lib/work-documents/report-patch';
 import { analysisScopeSchema, workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
 import { canonicalValue } from '@/lib/work-documents/workspace-presentation';
@@ -95,7 +95,18 @@ export async function saveWorkDraft(
     },
 ) {
     await assertDocumentWrite(input);
-    const existing = await db.workDocuments.get(input);
+    const requestKey =
+        input.source === 'user'
+            ? 'manual:' +
+              createHash('sha256')
+                  .update(canonicalValue([input.expectedRevision, input.draft]))
+                  .digest('hex')
+            : undefined;
+    if (requestKey) {
+        const saved = await db.workDocuments.savedRequest({ ...input, requestKey });
+        if (saved) return saved;
+    }
+    const existing = input.requestId ? await db.workDocuments.agentView({ ...input, requestId: input.requestId }) : await db.workDocuments.get(input);
     if (existing.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest version before editing.', 409);
     const draft = workDraftSchema.parse(input.draft);
     // Workspace chart projections are computed from trusted immutable results, never accepted as client data.
@@ -162,6 +173,7 @@ export async function saveWorkDraft(
             throw new DatabaseError(error instanceof Error ? error.message : 'Invalid evidence groups.', 400);
         }
     }
+    let sourceChatId: string | undefined;
     const previousWrite = existing.content.agentWrite;
     const changedVisualIds = draft.visuals
         .filter(
@@ -173,6 +185,7 @@ export async function saveWorkDraft(
         .map(visual => visual.id);
     if (input.source === 'agent' && input.runId && input.requestId) {
         const work = await db.works.assertChatTurn({ ...input, workId: input.runId, requestId: input.requestId });
+        sourceChatId = typeof work.metadata?.chatId === 'string' ? work.metadata.chatId : undefined;
         const target = (work.metadata?.chatTurn as { reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean } } | undefined)?.reportTarget;
         if (target && target.documentId !== input.documentId) throw new DatabaseError('Update the selected report.', 403);
         const requirements =
@@ -201,7 +214,7 @@ export async function saveWorkDraft(
             throw new DatabaseError('The requested chart must be embedded in the report before saving it as ready.', 400);
     }
     const scope = input.scope ?? existing.scope;
-    if (input.source === 'agent' && existing.status === 'ready' && draft.status === 'draft' && !parsed.diagnostics.length) {
+    if (input.source === 'agent' && !input.requestId && existing.status === 'ready' && draft.status === 'draft' && !parsed.diagnostics.length) {
         throw new DatabaseError('The update is incomplete. The previous report is preserved. Explain the missing sources in chat, then retry.', 409);
     }
     let references: ReturnType<typeof referencedEvidence>;
@@ -381,13 +394,15 @@ export async function saveWorkDraft(
             : {}),
     };
     if (Buffer.byteLength(JSON.stringify(content), 'utf8') > 4_000_000) throw new DatabaseError('Report snapshot is too large. Use smaller aggregated results.', 400);
-    return db.workDocuments.update({
+    const update = {
         ...input,
+        requestKey,
         title: draft.title,
         content,
         scope: scope.connectionMode === 'auto' ? { ...scope, connectionIds: [...new Set(evidence.flatMap(item => (item.connectionId ? [item.connectionId] : [])))] } : scope,
         status: draft.status,
-    });
+    };
+    return input.source === 'agent' && input.requestId ? db.workDocuments.stageAgent({ ...update, requestId: input.requestId, sourceChatId }) : db.workDocuments.update(update);
 }
 
 /** Explicit promotion of a historical run; old runs are never migrated automatically. */
@@ -459,7 +474,7 @@ export async function patchWorkDocument(
     },
 ) {
     await assertDocumentWrite(input);
-    const existing = await db.workDocuments.get(input);
+    const existing = input.requestId ? await db.workDocuments.agentView({ ...input, requestId: input.requestId }) : await db.workDocuments.get(input);
     const writeKey = createHash('sha256')
         .update(JSON.stringify([input.expectedRevision, input.patch]))
         .digest('hex');
@@ -504,16 +519,4 @@ export async function patchWorkDocument(
             status: patch.status,
         },
     });
-}
-
-/** Publishing never executes SQL or resolves a newer Artifact. */
-export async function publishWorkReport(db: DBService, input: Owner & { documentId: string; expectedRevision: number; requestId: string }) {
-    await assertDocumentWrite(input);
-    const existing = await db.workDocuments.get(input);
-    // Retries are resolved in the repository against the original immutable publication.
-    if (existing.revision === input.expectedRevision) {
-        resolvedReport(existing.content);
-        if (existing.content.evidenceGroups?.some(group => group.needsReview)) throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
-    }
-    return db.workDocuments.publish(input);
 }

@@ -17,11 +17,12 @@ export function ChatCompletionCard({
 }: {
     completion: ChatCompletion;
     onContinue?: () => void;
-    onOpenReport?: (id: string) => void;
+    onOpenReport?: (id: string, revision?: number) => void;
     disabled?: boolean;
 }) {
     const t = useTranslations('AgentRuns.Chat.Completion');
     const { organization } = useParams<{ organization: string }>();
+    const history = useTranslations('WorkDocuments.VersionHistory');
     const report = completion.report;
     const snapshot = useQuery({
         queryKey: ['work-document', organization, report?.documentId, report?.revision],
@@ -32,6 +33,7 @@ export function ChatCompletionCard({
     });
     if (completion.status === 'completed' && !completion.report && !completion.unfinished.length && !completion.canContinue) return null;
 
+    const version = report?.version ?? snapshot.data?.document.version;
     return (
         <section className="my-3 space-y-2 rounded-lg border border-border bg-muted/20 p-3 text-sm" data-testid="chat-completion">
             <p role="status" aria-live="polite" className="font-medium">
@@ -39,9 +41,13 @@ export function ChatCompletionCard({
             </p>
             {completion.report && (
                 <p className="text-muted-foreground">
-                    {t(completion.report.saved ? 'reportSaved' : completion.report.documentId ? 'reportPreserved' : 'reasons.REPORT_NOT_SAVED', {
-                        revision: completion.report.version ?? snapshot.data?.document.version ?? completion.report.revision ?? '',
-                    })}
+                    {snapshot.error?.message === 'REPORT_VERSION_REMOVED'
+                        ? history('Removed')
+                        : completion.report.saved && !version
+                          ? t('reportSavedWithoutVersion')
+                          : t(completion.report.saved ? 'reportSaved' : completion.report.documentId ? 'reportPreserved' : 'reasons.REPORT_NOT_SAVED', {
+                                revision: version ?? '',
+                            })}
                 </p>
             )}
             {completion.unfinished.length > 0 && (
@@ -56,7 +62,11 @@ export function ChatCompletionCard({
             )}
             <div className="flex flex-wrap gap-2">
                 {completion.report?.documentId && onOpenReport && (
-                    <Button size="sm" variant="outline" onClick={() => onOpenReport(completion.report!.documentId)}>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onOpenReport(completion.report!.documentId, completion.report!.saved ? completion.report!.revision : undefined)}
+                    >
                         {t('viewReport')}
                     </Button>
                 )}

@@ -33,9 +33,9 @@ const continueUrl = createSerializer({ document: parseAsString, revision: parseA
 
 type Detail = {
     workspace: (AgentWorkspaceTarget & { workId: string }) | null;
-    publications?: Array<{ id: string; number: number; revision: number; publishedAt: string }>;
+    editorOwnerId: string;
     document: WorkDocumentView;
-    versions: Array<{ revision: number; version?: number; source: string; createdAt: string }>;
+    versions: Array<{ revision: number; version?: number; sourceChatId?: string | null; source: string; createdAt: string }>;
 };
 export type WorkReportHandle = { requestLeave: () => Promise<boolean> };
 export function WorkReport({
@@ -57,17 +57,28 @@ export function WorkReport({
     const t = useTranslations('WorkDocuments');
     const reportT = useTranslations('WorkDocuments.Report');
     const evidenceT = useTranslations('WorkDocuments.Evidence');
-    const analysisT = useTranslations('WorkDocuments.Analysis');
     const router = useRouter();
     const [listState] = useQueryStates(reportListParsers);
     const client = useQueryClient();
     const key = ['work-document', organization, documentId];
-    const query = useQuery({ queryKey: key, queryFn: () => workRequest<Detail>(`/api/work-documents/${encodeURIComponent(documentId)}`), refetchInterval: busy ? 2000 : false });
+    const query = useQuery({ queryKey: key, queryFn: () => workRequest<Detail>(`/api/work-documents/${encodeURIComponent(documentId)}`), refetchInterval: busy ? 2000 : 15000 });
+    const updates = useRef<BroadcastChannel | null>(null);
+    useEffect(() => {
+        if (typeof BroadcastChannel === 'undefined') return;
+        const channel = new BroadcastChannel(`report:${organization}:${documentId}`);
+        updates.current = channel;
+        channel.onmessage = () => void client.invalidateQueries({ queryKey: ['work-document', organization, documentId] });
+        return () => {
+            channel.close();
+            updates.current = null;
+        };
+    }, [client, documentId, organization]);
     const [selectedPublication, setSelectedPublication] = useQueryState('publication', parseAsString);
     const [selectedRevision, setSelectedRevision] = useQueryState('revision', parseAsInteger);
     const previousDocument = useRef(documentId);
     const changingDocument = previousDocument.current !== documentId;
-    const historical = (selectedRevision !== null || selectedPublication !== null) && !changingDocument;
+    const latestRevision = query.data?.document.revision;
+    const historical = !changingDocument && (selectedPublication !== null || (selectedRevision !== null && latestRevision !== undefined && selectedRevision !== latestRevision));
     const historyQuery = useQuery({
         queryKey: [...key, selectedRevision, selectedPublication],
         enabled: historical,
@@ -82,6 +93,7 @@ export function WorkReport({
         mutationFn: ({ revision, expectedRevision }: { revision: number; expectedRevision: number }) =>
             workRequest<{ document: WorkDocumentView }>(`/api/work-documents/${encodeURIComponent(documentId)}`, { action: 'restore', revision, expectedRevision }),
         onSuccess: async data => {
+            updates.current?.postMessage(data.document.revision);
             client.setQueryData<Detail>(key, previous => (previous ? { ...previous, document: data.document } : undefined));
             setRestoreOpen(false);
             await setSelectedRevision(null);
@@ -97,6 +109,7 @@ export function WorkReport({
             void query.refetch();
         },
     });
+    const [editorReady, setEditorReady] = useState(false);
     const editorRef = useRef<ReportEditorHandle>(null);
     const [editing, setEditing] = useState<WorkDocumentView | null>(null);
     const [editMode, setEditMode] = useState<'blocks' | 'source'>('blocks');
@@ -123,8 +136,10 @@ export function WorkReport({
     const mutation = useMutation({
         mutationFn: (body: unknown) => workRequest<{ document: WorkDocumentView }>(`/api/work-documents/${encodeURIComponent(documentId)}`, body),
         onSuccess: async data => {
+            updates.current?.postMessage(data.document.revision);
             client.setQueryData<Detail>(key, previous => (previous ? { ...previous, document: data.document } : undefined));
             if (editRef.current) {
+                baseline.current = data.document;
                 const wasChangedDuringSave = editRef.current !== savingRef.current;
                 setEditing(previous =>
                     previous
@@ -143,6 +158,8 @@ export function WorkReport({
                         : null,
                 );
                 setDirty(wasChangedDuringSave);
+                if (wasChangedDuringSave) finishAfterSave.current = false;
+                if (!wasChangedDuringSave && recoveryKey) sessionStorage.removeItem(recoveryKey);
                 if (!wasChangedDuringSave && leaveAfterSave.current) resolveLeave(true);
                 if (!wasChangedDuringSave && finishAfterSave.current) {
                     finishAfterSave.current = false;
@@ -160,6 +177,7 @@ export function WorkReport({
             leaveAfterSave.current = false;
             finishAfterSave.current = false;
             setSaveError(true);
+            void query.refetch();
             toast.error(error.message);
         },
     });
@@ -208,9 +226,8 @@ export function WorkReport({
         setSaveError(false);
         setRestoreOpen(false);
         setEvidenceSelection(null);
-        void setSelectedRevision(null);
-        void setSelectedPublication(null);
-    }, [documentId, setSelectedRevision, setSelectedPublication]);
+        recovered.current = null;
+    }, [documentId]);
     const savingRef = useRef<WorkDocumentView | null>(null);
     const { mutate, isPending } = mutation;
     const save = useCallback(() => {
@@ -228,15 +245,45 @@ export function WorkReport({
                 visuals: current.content.visuals,
                 evidenceGroups: current.content.evidenceGroups?.map(({ id, references }) => ({ id, references })),
                 reviewedEvidenceGroupIds: current.content.reviewedEvidenceGroupIds,
-                status: 'draft',
+                status: 'ready',
             },
         });
     }, [mutate, isPending]);
+    const recoveryKey = query.data?.editorOwnerId ? JSON.stringify(['report-editor', organization, query.data.editorOwnerId, documentId]) : null;
+    const recovered = useRef<string | null>(null);
+    const baseline = useRef<WorkDocumentView | null>(null);
+    const discard = () => {
+        if (recoveryKey) sessionStorage.removeItem(recoveryKey);
+        setEditing(null);
+        setDirty(false);
+        setSaveError(false);
+    };
     useEffect(() => {
-        if (!dirty || busy || saveError || mutation.isPending || leaveDecision) return;
-        const timer = setTimeout(save, 1200);
-        return () => clearTimeout(timer);
-    }, [editing, dirty, busy, saveError, mutation.isPending, save, leaveDecision]);
+        if (historical || !recoveryKey || !query.data || changingDocument || recovered.current === recoveryKey) return;
+        recovered.current = recoveryKey;
+        try {
+            const raw = sessionStorage.getItem(recoveryKey);
+            if (!raw) return;
+            const draft: WorkDocumentView = JSON.parse(raw);
+            if (draft.id !== documentId || !draft.content) return;
+            if (selectedRevision !== null) void setSelectedRevision(null);
+            baseline.current = query.data.document;
+            setEditing(draft);
+            setDirty(true);
+            setEditMode(parseReport(draft.content.body ?? '', draft.content.visuals).diagnostics.length ? 'source' : 'blocks');
+            setSaveError(draft.revision !== query.data.document.revision);
+        } catch {
+            /* Unavailable browser storage does not prevent editing. */
+        }
+    }, [recoveryKey, historical, query.data, changingDocument, documentId, selectedRevision, setSelectedRevision]);
+    useEffect(() => {
+        if (editing?.id !== documentId || !dirty || !recoveryKey) return;
+        try {
+            sessionStorage.setItem(recoveryKey, JSON.stringify(editing));
+        } catch {
+            /* Keep in-memory edits when storage is full. */
+        }
+    }, [editing, dirty, recoveryKey, documentId]);
     useEffect(() => {
         const warn = (event: BeforeUnloadEvent) => {
             if (dirty || editorRef.current?.hasPendingChanges()) event.preventDefault();
@@ -248,7 +295,15 @@ export function WorkReport({
             if ((dirty || editorRef.current?.hasPendingChanges()) && event.target instanceof Element && event.target.closest('a[href]')) {
                 event.preventDefault();
                 event.stopPropagation();
-                toast.info(t('LeaveUnsaved'));
+                const link = event.target.closest<HTMLAnchorElement>('a[href]');
+                if (link && (link.protocol === 'http:' || link.protocol === 'https:')) {
+                    const href = link.href;
+                    void requestLeave().then(leave => {
+                        if (!leave) return;
+                        if (link.origin === window.location.origin) router.push(href);
+                        else window.location.assign(href);
+                    });
+                }
             }
         };
         window.addEventListener('beforeunload', warn);
@@ -257,21 +312,7 @@ export function WorkReport({
             window.removeEventListener('beforeunload', warn);
             window.document.removeEventListener('click', guard, true);
         };
-    }, [dirty, t]);
-    const publish = useMutation({
-        mutationFn: ({ revision }: { revision: number }) =>
-            workRequest<{ document: WorkDocumentView }>(`/api/work-documents/${encodeURIComponent(documentId)}`, {
-                action: 'publish',
-                expectedRevision: revision,
-                requestId: `publish:${documentId}:${revision}`,
-            }),
-        onSuccess: async data => {
-            await client.invalidateQueries({ queryKey: key });
-            await setSelectedRevision(null);
-            await setSelectedPublication(data.document.publication?.id ?? null);
-        },
-        onError: error => toast.error(error.message),
-    });
+    }, [dirty, requestLeave, router]);
     const isEditing = !historical && !changingDocument && Boolean(editing);
     const sourceMode = isEditing && editMode === 'source';
     const viewPending = historical && historyQuery.isPending;
@@ -289,8 +330,8 @@ export function WorkReport({
               : null;
         if (selector) reportBodyRef.current?.querySelector(selector)?.scrollIntoView({ block: 'center' });
     }, [document]);
-    const latestRevision = query.data?.document.revision;
     const versions = query.data?.versions ?? [];
+    const editingConflict = Boolean(isEditing && editing && latestRevision && editing.revision !== latestRevision);
     const displayedVersion = historical
         ? (historyQuery.data?.document.version ?? versions.find(version => version.revision === selectedRevision)?.version ?? selectedRevision!)
         : (document?.version ?? document?.revision);
@@ -304,7 +345,9 @@ export function WorkReport({
     if (!document) return null;
     const change = (next: WorkDocumentView) => {
         setEditing(next);
-        setDirty(true);
+        const changed = next.title !== baseline.current?.title || JSON.stringify(next.content) !== JSON.stringify(baseline.current?.content);
+        setDirty(changed);
+        if (!changed && recoveryKey) sessionStorage.removeItem(recoveryKey);
         setSaveError(false);
     };
     const switchMode = async (mode: ReportMode) => {
@@ -313,33 +356,35 @@ export function WorkReport({
             setRestoreOpen(true);
             return;
         }
-        if (!((await editorRef.current?.requestLeave()) ?? true)) return;
         if (mode === 'view') {
-            if (dirty) {
-                finishAfterSave.current = true;
-                save();
-            } else setEditing(null);
+            if (await requestLeave()) discard();
             return;
         }
+        if (!((await editorRef.current?.requestLeave()) ?? true)) return;
         const content = editableReport(editRef.current?.content ?? document.content);
         if (mode === 'blocks' && parseReport(content.body ?? '', content.visuals).diagnostics.length) {
             toast.error(reportT('FixSourceFirst'));
             return;
         }
         // Both editing surfaces share the same draft. Entering an editor alone is not a mutation.
-        if (!editRef.current) setEditing({ ...structuredClone(document), content });
+        if (!editRef.current) {
+            if (selectedRevision !== null) await setSelectedRevision(null);
+            baseline.current = { ...structuredClone(document), content };
+            setEditing(baseline.current);
+        }
         finishAfterSave.current = false;
         setEditMode(mode);
     };
     const exportReport = async (format: 'html' | 'pdf' | 'markdown' | 'mdx') => {
-        if (viewUnavailable) return;
+        const snapshot = (historical ? historyQuery.data : query.data)?.document;
+        if (viewUnavailable || !snapshot) return;
         let html: string;
         try {
-            html = renderWorkHtml(document);
+            html = renderWorkHtml(snapshot);
             if (format === 'pdf') {
                 const frame = window.document.createElement('iframe');
                 frame.style.cssText = 'position:fixed;width:0;height:0;border:0';
-                frame.title = document.title;
+                frame.title = snapshot.title;
                 frame.onload = () => {
                     frame.contentWindow?.focus();
                     frame.contentWindow?.print();
@@ -350,14 +395,14 @@ export function WorkReport({
             } else {
                 const bytes =
                     format === 'markdown'
-                        ? (await import('@/lib/work-documents/export')).exportMarkdownZip(document)
+                        ? (await import('@/lib/work-documents/export')).exportMarkdownZip(snapshot)
                         : format === 'mdx'
-                          ? (await import('@/lib/work-documents/export')).exportDoryMdxZip(document)
+                          ? (await import('@/lib/work-documents/export')).exportDoryMdxZip(snapshot)
                           : null;
                 const url = URL.createObjectURL(bytes ? new Blob([new Uint8Array(bytes)], { type: 'application/zip' }) : new Blob([html], { type: 'text/html;charset=utf-8' }));
                 const anchor = window.document.createElement('a');
                 anchor.href = url;
-                anchor.download = `${document.title.replace(/[/\\:*?"<>|]/g, '-')}.${format === 'markdown' || format === 'mdx' ? 'zip' : 'html'}`;
+                anchor.download = `${snapshot.title.replace(/[/\\:*?"<>|]/g, '-')}.${format === 'markdown' || format === 'mdx' ? 'zip' : 'html'}`;
                 anchor.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             }
@@ -377,7 +422,6 @@ export function WorkReport({
                             revision: document.revision,
                             artifactId: origin.artifactId ?? '',
                             componentId: origin.componentId,
-                            publicationId: document.publication?.id,
                         },
                         { ...workspace, historical, section: origin.section },
                     ),
@@ -417,16 +461,23 @@ export function WorkReport({
                             <AlertDialogTitle>{t('Resources.UnsavedTitle')}</AlertDialogTitle>
                             <AlertDialogDescription>{t('Resources.UnsavedDescription')}</AlertDialogDescription>
                         </AlertDialogHeader>
-                        {saveError ? (
+                        {saveError || editingConflict ? (
                             <p role="alert" className="text-sm text-destructive">
                                 {t('Resources.SaveFailed')}
                             </p>
                         ) : null}
                         <AlertDialogFooter>
                             <Button variant="ghost" onClick={() => resolveLeave(false)}>
-                                {t('Resources.Cancel')}
+                                {t('VersionHistory.KeepEditing')}
                             </Button>
-                            <Button variant="outline" disabled={mutation.isPending} onClick={() => resolveLeave(true)}>
+                            <Button
+                                variant="outline"
+                                disabled={mutation.isPending}
+                                onClick={() => {
+                                    discard();
+                                    resolveLeave(true);
+                                }}
+                            >
                                 {t('Resources.Discard')}
                             </Button>
                             <Button
@@ -456,21 +507,11 @@ export function WorkReport({
                     saveError={saveError}
                     unavailable={viewUnavailable}
                     disabled={busy || restore.isPending || Boolean(document.archivedAt)}
-                    publications={query.data?.publications ?? []}
                     versions={versions}
                     latestRevision={latestRevision}
-                    canPublish={
-                        !historical &&
-                        !dirty &&
-                        !busy &&
-                        !isEditing &&
-                        !publish.isPending &&
-                        !document.archivedAt &&
-                        !document.content.evidenceGroups?.some(group => group.needsReview) &&
-                        Boolean(document.content.format && document.content.body?.trim()) &&
-                        !document.content.diagnostics?.length
-                    }
-                    canExport={!viewUnavailable && !dirty && !busy && !isEditing && !restore.isPending}
+                    onCancel={discard}
+                    onSourceChat={id => void leaveReport(() => router.push(continueUrl(`/${organization}/work`, { chat: id })))}
+                    canExport={!viewUnavailable && !busy && !restore.isPending}
                     onBack={() => void leaveReport(() => router.push(serializeReportList(`/${organization}/reports`, listState)))}
                     onContinue={() =>
                         void leaveReport(() => {
@@ -481,22 +522,16 @@ export function WorkReport({
                     onTitle={title => change({ ...document, title })}
                     mode={isEditing ? editMode : 'view'}
                     onMode={mode => void switchMode(mode)}
-                    onEdit={() => void switchMode(isEditing ? 'view' : 'blocks')}
-                    onPublish={() => publish.mutate({ revision: document.revision })}
-                    onVersion={value => {
-                        if (value === 'draft') void switchVersion(null);
-                        else if (value.startsWith('revision:')) void switchVersion(Number(value.slice(9)));
-                        else
-                            void leaveReport(() => {
-                                void setSelectedRevision(null);
-                                void setSelectedPublication(value.slice(12));
-                            });
+                    onEdit={() => {
+                        if (!dirty) discard();
+                        else {
+                            finishAfterSave.current = true;
+                            save();
+                        }
                     }}
-                    onRestore={() => {
-                        restore.reset();
-                        setRestoreOpen(true);
-                    }}
+                    onVersion={revision => void switchVersion(revision)}
                     onExport={format => void exportReport(format)}
+                    editorReady={editorReady}
                     onInsert={type => editorRef.current?.insert(type)}
                 />
                 <div className={cn('mx-auto w-full max-w-[960px] px-4 sm:px-6', sourceMode ? 'flex min-h-0 flex-1 flex-col pb-4' : 'pb-8')} data-testid="report-content">
@@ -531,17 +566,29 @@ export function WorkReport({
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
-                    {saveError ? (
+                    {saveError || editingConflict ? (
                         <div role="alert" className="mb-4 rounded border border-destructive p-3 text-sm">
-                            {t('Conflict')}{' '}
+                            {editingConflict ? t('VersionHistory.Conflict') : t('Conflict')}{' '}
+                            {editingConflict && (
+                                <Button asChild variant="outline">
+                                    <a
+                                        data-report-evidence-navigation
+                                        href={`/${encodeURIComponent(organization)}/reports/${encodeURIComponent(documentId)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        {t('VersionHistory.OpenCurrent')}
+                                    </a>
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
-                                onClick={() => {
-                                    setEditing(null);
-                                    setDirty(false);
-                                    setSaveError(false);
-                                    void query.refetch();
-                                }}
+                                onClick={() =>
+                                    void leaveReport(() => {
+                                        discard();
+                                        void query.refetch();
+                                    })
+                                }
                             >
                                 {t('Reload')}
                             </Button>
@@ -551,15 +598,26 @@ export function WorkReport({
                         <p role="status">{t('Loading')}</p>
                     ) : viewError ? (
                         <div role="alert" className="text-destructive">
-                            {viewError.message}{' '}
+                            {viewError.message === 'REPORT_VERSION_REMOVED' ? t('VersionHistory.Removed') : viewError.message}{' '}
+                            <Button variant="outline" onClick={() => void switchVersion(null)}>
+                                {t(viewError.message === 'REPORT_VERSION_REMOVED' ? 'VersionHistory.OpenCurrent' : 'VersionHistory.BackToLatest')}
+                            </Button>
                             <Button variant="outline" onClick={() => void historyQuery.refetch()}>
                                 {t('Reload')}
                             </Button>
                         </div>
                     ) : (
                         <>
-                            {document.content.workspaceOrigin && (
-                                <p className="mb-3 text-xs text-muted-foreground">{analysisT('BasedOn', { version: document.content.workspaceOrigin.baseRevision })}</p>
+                            {historical && (
+                                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
+                                    {t('VersionHistory.ReadOnly', { revision: displayedVersion! })}
+                                    <Button size="sm" variant="outline" onClick={() => void switchVersion(null)}>
+                                        {t('VersionHistory.BackToLatest')}
+                                    </Button>
+                                    <Button size="sm" disabled={busy || Boolean(document.archivedAt) || latestRevision === document.revision} onClick={() => setRestoreOpen(true)}>
+                                        {t('VersionHistory.Restore')}
+                                    </Button>
+                                </div>
                             )}
                             {document.content.evidenceGroups?.some(group => group.needsReview) ? (
                                 <p role="status" className="mb-3 text-sm text-muted-foreground">
@@ -587,22 +645,16 @@ export function WorkReport({
                                 {isEditing ? (
                                     <ReportEditor
                                         ref={editorRef}
+                                        onReadyChange={setEditorReady}
                                         mode={editMode}
                                         onSource={() => void switchMode('source')}
                                         documentId={documentId}
                                         content={document.content}
-                                        title={document.title}
                                         onChange={content => change({ ...document, content })}
                                         onEvidenceGroup={openEvidenceGroup}
                                     />
                                 ) : (
-                                    <ReportBody
-                                        key={document.revision}
-                                        content={document.content}
-                                        title={document.title}
-                                        onEvidenceGroup={openEvidenceGroup}
-                                        onOpenSql={workspace ? openAt : undefined}
-                                    />
+                                    <ReportBody key={document.revision} content={document.content} onEvidenceGroup={openEvidenceGroup} onOpenSql={workspace ? openAt : undefined} />
                                 )}
                             </div>
                             {!isEditing && !definition ? (

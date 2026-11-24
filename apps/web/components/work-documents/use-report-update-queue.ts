@@ -94,7 +94,7 @@ export function useReportUpdateQueue(initial: ReportUpdateContext, workId: strin
             await saveTabs();
             await flush();
             if (request.current?.revision !== revision.current) request.current = { revision: revision.current, id: crypto.randomUUID() };
-            const value = await executeActionClient<{ revision: number; publicationId?: string; unchanged?: boolean; reason?: string; draftRevision?: number }>(
+            const value = await executeActionClient<{ revision: number; unchanged?: boolean; reason?: string; draftRevision?: number }>(
                 'report.updates.commit',
                 { ...input, expectedDraftRevision: revision.current, requestId: request.current.id },
                 { organizationId },

@@ -5,15 +5,24 @@ import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { ReportWorkingDraft, ReportWorkingState } from '@dory/shared/types/report-workspace';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { getClient } from '../../client';
-import { reportPublications, reportSnapshots, reportWorkingDrafts, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
-import { reportArtifactReference, retainReportEvidence, validateReportPublicationEvidence } from './evidence-retention';
+import { reportAgentDrafts, reportSnapshots, reportWorkingDrafts, workDocuments, workDocumentVersions } from '../../schemas/work-documents';
+import { reportArtifactReference, retainReportEvidence, validateReportVersionEvidence } from './evidence-retention';
 
 type Owner = { organizationId: string; userId: string };
 type Target = Owner & { documentId: string };
 type Record = typeof workDocuments.$inferSelect;
+type Write = Pick<Record, 'title' | 'content' | 'scope' | 'status'>;
+type Writer = Pick<PostgresDBClient, 'insert' | 'select' | 'update' | 'delete' | 'execute'>;
+function sameReport(left: Write, right: Write) {
+    const comparable = ({ title, content, scope }: Write) => {
+        const { agentWrite: _agentWrite, workspaceOrigin: _workspaceOrigin, ...report } = content;
+        return JSON.stringify(canonical([title, scope, report]));
+    };
+    return comparable(left) === comparable(right);
+}
 function canonical(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(canonical);
     if (value && typeof value === 'object')
@@ -35,38 +44,26 @@ export class PostgresWorkDocumentsRepository {
     }
     private async numberedHistory(documentIds: string[], db: Pick<PostgresDBClient, 'select'> = this.db) {
         if (!documentIds.length) return [];
-        const snapshots = await db
+        return db
             .select({
                 documentId: workDocumentVersions.documentId,
                 revision: workDocumentVersions.revision,
+                version: sql<number>`(row_number() over (partition by ${workDocumentVersions.documentId} order by ${workDocumentVersions.revision}))::integer`,
                 title: workDocumentVersions.title,
                 createdAt: workDocumentVersions.createdAt,
                 source: workDocumentVersions.source,
-                requestId: sql<string | null>`${workDocumentVersions.content}->'agentWrite'->>'requestId'`,
-                emptyDraft: sql<boolean>`${workDocumentVersions.status} = 'draft' and coalesce(${workDocumentVersions.content}->>'markdown', '') = '' and coalesce(${workDocumentVersions.content}->'visuals', '[]'::jsonb) = '[]'::jsonb`,
+                sourceChatId: workDocumentVersions.sourceChatId,
             })
             .from(workDocumentVersions)
             .where(inArray(workDocumentVersions.documentId, documentIds))
-            .orderBy(asc(workDocumentVersions.documentId), asc(workDocumentVersions.revision));
-        let previous: (typeof snapshots)[number] | undefined;
-        let version = 0;
-        return snapshots.map(snapshot => {
-            if (previous?.documentId !== snapshot.documentId) {
-                previous = undefined;
-                version = 0;
-            }
-            // The initial empty draft and incremental writes in one agent turn
-            // are one public version. Revisions still identify immutable saves.
-            const initialDraft = snapshot.revision === 1 && snapshot.emptyDraft;
-            const sameTurn = snapshot.source === 'agent' && snapshot.requestId && previous?.source === 'agent' && previous.requestId === snapshot.requestId;
-            if (!initialDraft && !sameTurn) version++;
-            previous = snapshot;
-            return { ...snapshot, version: Math.max(1, version) };
-        });
+            .orderBy(desc(workDocumentVersions.revision));
     }
     private async withVersion<T extends { id: string; revision: number }>(row: T, db: Pick<PostgresDBClient, 'select'> = this.db) {
-        const history = await this.numberedHistory([row.id], db);
-        return { ...row, version: history.find(snapshot => snapshot.revision === row.revision)?.version ?? 1 };
+        const [saved] = await db
+            .select({ version: count() })
+            .from(workDocumentVersions)
+            .where(and(eq(workDocumentVersions.documentId, row.id), lte(workDocumentVersions.revision, row.revision)));
+        return { ...row, version: saved.version || 1 };
     }
     private async getRow(input: Target) {
         const [row] = await this.db.select().from(workDocuments).where(this.owned(input));
@@ -77,14 +74,26 @@ export class PostgresWorkDocumentsRepository {
         return this.withVersion(await this.getRow(input));
     }
     async list(input: Owner & { query?: string; connectionId?: string; chatId?: string; archived?: boolean; archiveState?: 'active' | 'archived' | 'all' }) {
-        const conditions = [eq(workDocuments.organizationId, input.organizationId), eq(workDocuments.userId, input.userId)];
+        const conditions = [
+            sql`exists (select 1 from work_document_versions v where v.document_id = ${workDocuments.id})`,
+            eq(workDocuments.organizationId, input.organizationId),
+            eq(workDocuments.userId, input.userId),
+        ];
         const archiveState = input.archiveState ?? (input.archived ? 'all' : 'active');
         if (archiveState === 'active') conditions.push(isNull(workDocuments.archivedAt));
         if (archiveState === 'archived') conditions.push(isNotNull(workDocuments.archivedAt));
         if (input.query) conditions.push(ilike(workDocuments.title, `%${input.query.replace(/[\\%_]/g, '\\$&')}%`));
-        if (input.chatId) conditions.push(eq(workDocuments.chatId, input.chatId));
+        if (input.chatId)
+            conditions.push(
+                or(
+                    eq(workDocuments.chatId, input.chatId),
+                    sql`exists (
+            select 1 from work_document_versions v where v.document_id = ${workDocuments.id} and v.source_chat_id = ${input.chatId}
+        )`,
+                )!,
+            );
         if (input.connectionId) conditions.push(sql`${workDocuments.scope}->'connectionIds' @> ${JSON.stringify([input.connectionId])}::jsonb`);
-        const rows = await this.db
+        return this.db
             .select({
                 id: workDocuments.id,
                 sourceMessageId: sql<
@@ -108,6 +117,7 @@ export class PostgresWorkDocumentsRepository {
                 chatId: workDocuments.chatId,
                 scope: workDocuments.scope,
                 revision: workDocuments.revision,
+                version: sql<number>`(select count(*)::integer from work_document_versions v where v.document_id = ${workDocuments.id})`,
                 status: workDocuments.status,
                 archivedAt: workDocuments.archivedAt,
                 createdAt: workDocuments.createdAt,
@@ -117,9 +127,6 @@ export class PostgresWorkDocumentsRepository {
             .where(and(...conditions))
             .orderBy(desc(workDocuments.updatedAt))
             .limit(100);
-        const history = await this.numberedHistory(rows.map(row => row.id));
-        const versions = new Map(history.map(snapshot => [`${snapshot.documentId}:${snapshot.revision}`, snapshot.version]));
-        return rows.map(row => ({ ...row, version: versions.get(`${row.id}:${row.revision}`) ?? 1 }));
     }
     async listReferencingArtifact(input: Owner & { artifactId: string }) {
         const reference = JSON.stringify([{ artifactId: input.artifactId }]);
@@ -132,9 +139,6 @@ export class PostgresWorkDocumentsRepository {
                     else (select max(v.revision) from ${workDocumentVersions} v
                         where v.document_id = ${workDocuments.id} and v.content->'evidence' @> ${reference}::jsonb)
                     end`,
-                publicationId: sql<string | null>`(select p.id from ${reportPublications} p
-                    where p.document_id = ${workDocuments.id} and p.content->'evidence' @> ${reference}::jsonb
-                    order by p.number desc limit 1)`,
             })
             .from(workDocuments)
             .where(
@@ -146,13 +150,7 @@ export class PostgresWorkDocumentsRepository {
             )
             .orderBy(desc(workDocuments.updatedAt));
         // Pending SQL candidates are retained for recovery but are not report citations yet.
-        return rows.flatMap<{ id: string; title: string; revision?: number; publicationId?: string }>(row =>
-            row.revision !== null
-                ? [{ id: row.id, title: row.title, revision: row.revision }]
-                : row.publicationId
-                  ? [{ id: row.id, title: row.title, revision: undefined, publicationId: row.publicationId }]
-                  : [],
-        );
+        return rows.flatMap(row => (row.revision === null ? [] : [{ id: row.id, title: row.title, revision: row.revision }]));
     }
 
     async findByCreationKey(input: Owner & { creationKey: string }) {
@@ -189,7 +187,7 @@ export class PostgresWorkDocumentsRepository {
                     .where(and(eq(workDocuments.organizationId, input.organizationId), eq(workDocuments.userId, input.userId), eq(workDocuments.creationKey, input.creationKey)));
                 return this.withVersion(existing!, tx);
             }
-            await tx.insert(workDocumentVersions).values(this.version(created, 'agent'));
+            if (input.content.markdown.trim() || input.content.visuals.length) await tx.insert(workDocumentVersions).values(this.version(created, 'agent'));
             return this.withVersion(created, tx);
         });
     }
@@ -350,12 +348,12 @@ export class PostgresWorkDocumentsRepository {
         await this.getRow(input);
         const [row] = await this.db
             .select()
-            .from(reportPublications)
-            .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.requestId, `workspace:${input.requestId}`)));
+            .from(workDocumentVersions)
+            .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.requestKey, `workspace:${input.requestId}`)));
         if (!row) return null;
         if (row.content.workspaceOrigin?.baseRevision !== input.baseRevision || row.content.workspaceOrigin?.draftRevision !== input.expectedDraftRevision)
             throw new DatabaseError('Save request already used for another draft.', 409);
-        return this.getPublication({ ...input, publicationId: row.id });
+        return this.getVersion({ ...input, revision: row.revision });
     }
     async saveWorkingVersion(
         input: Target & {
@@ -366,84 +364,60 @@ export class PostgresWorkDocumentsRepository {
             selection?: { revision: number; remaining: NonNullable<ReportWorkingState['updates']>; title: string; state: ReportWorkingState };
         },
     ) {
-        const publicationId = await this.db.transaction(async tx => {
+        const revision = await this.db.transaction(async tx => {
             const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
             if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
             // Idempotency is checked before the revision check, including after a lost response.
             const requestKey = `workspace:${input.requestId}`;
             const [retry] = await tx
                 .select()
-                .from(reportPublications)
-                .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.requestId, requestKey)));
+                .from(workDocumentVersions)
+                .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.requestKey, requestKey)));
             if (retry) {
                 if (retry.content.workspaceOrigin?.baseRevision !== input.baseRevision || retry.content.workspaceOrigin?.draftRevision !== input.expectedDraftRevision)
                     throw new DatabaseError('Save request already used for another draft.', 409);
-                return retry.id;
+                return retry.revision;
             }
             const [draft] = await tx.select().from(reportWorkingDrafts).where(this.draftOwned(input)).for('update');
             if (!draft || draft.revision !== input.expectedDraftRevision || current.revision !== draft.expectedReportRevision)
                 throw new DatabaseError('The report or working draft changed. Your draft is preserved; open the latest version to resolve the conflict.', 409);
             if (input.selection && current.revision !== input.selection.revision) throw new DatabaseError('Report changed. Review the latest revision.', 409);
             if (!input.selection && draft.state.proseNeedsReview) throw new DatabaseError('Review the report text after applying new data.', 400);
-            if (!input.selection && input.content.evidenceGroups?.some(group => group.needsReview))
-                throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
+            if (input.content.evidenceGroups?.some(group => group.needsReview)) throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
             const [base] = await tx
                 .select()
                 .from(workDocumentVersions)
                 .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.baseRevision)));
             if (!base) throw new DatabaseError('Base version unavailable.', 404);
-            await validateReportPublicationEvidence(tx, this.artifactStore, input.organizationId, input.content.evidence, input.documentId);
-            const content = await this.snapshotContent(
-                input.documentId,
-                { ...input.content, workspaceOrigin: { baseRevision: input.baseRevision, draftRevision: input.expectedDraftRevision } },
+            const title = input.selection?.title ?? draft.state.title;
+            if (sameReport(current, { ...current, title, content: input.content })) return current.revision;
+            const row = await this.writeVersion(
                 tx,
-            );
-            const [row] = await tx
-                .update(workDocuments)
-                .set({
-                    content,
+                current,
+                {
+                    content: { ...input.content, workspaceOrigin: { baseRevision: input.baseRevision, draftRevision: input.expectedDraftRevision } },
                     scope: input.selection
                         ? current.scope
                         : {
                               ...base.scope,
-                              connectionIds: [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))],
+                              connectionIds: [...new Set(input.content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))],
                               databasesByConnection: Object.fromEntries(
-                                  [...new Set(content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))].flatMap(connectionId => {
+                                  [...new Set(input.content.evidence.flatMap(e => (e.connectionId ? [e.connectionId] : [])))].flatMap(connectionId => {
                                       const databases = [
-                                          ...new Set(content.evidence.flatMap(e => (e.connectionId === connectionId && e.sourceDatabaseName ? [e.sourceDatabaseName] : []))),
+                                          ...new Set(input.content.evidence.flatMap(e => (e.connectionId === connectionId && e.sourceDatabaseName ? [e.sourceDatabaseName] : []))),
                                       ];
                                       return databases.length ? [[connectionId, databases]] : [];
                                   }),
                               ),
                           },
-                    title: input.selection?.title ?? draft.state.title,
-                    revision: current.revision + 1,
+                    title,
                     status: 'ready',
-                    updatedAt: new Date(),
-                })
-                .where(this.owned(input))
-                .returning();
-            await tx.insert(workDocumentVersions).values(this.version(row, 'user'));
-            const [latest] = await tx
-                .select({ number: reportPublications.number })
-                .from(reportPublications)
-                .where(eq(reportPublications.documentId, input.documentId))
-                .orderBy(desc(reportPublications.number))
-                .limit(1);
-            const [publication] = await tx
-                .insert(reportPublications)
-                .values({
-                    documentId: row.id,
-                    number: (latest?.number ?? 0) + 1,
-                    revision: row.revision,
-                    requestId: requestKey,
-                    title: row.title,
-                    content,
-                    scope: row.scope,
-                    chatId: row.chatId,
-                })
-                .returning();
-            await tx.update(workDocuments).set({ publishedVersionId: publication.id }).where(this.owned(input));
+                },
+                'workspace',
+                requestKey,
+            );
+            const content = row.content;
+            if (row.revision === current.revision) return row.revision;
             if (input.selection) {
                 // Leave the previous version's independent report edits available to its author.
                 await tx
@@ -456,9 +430,14 @@ export class PostgresWorkDocumentsRepository {
                     userId: input.userId,
                     baseRevision: row.revision,
                     expectedReportRevision: row.revision,
-                    state: { ...input.selection.state, content, baseline: { revision: row.revision, title: row.title, content }, updates: input.selection.remaining },
+                    state: {
+                        ...input.selection.state,
+                        content,
+                        baseline: { revision: row.revision, version: row.version, title: row.title, content },
+                        updates: input.selection.remaining,
+                    },
                 });
-                return publication.id;
+                return row.revision;
             }
             await tx
                 .update(reportWorkingDrafts)
@@ -469,131 +448,157 @@ export class PostgresWorkDocumentsRepository {
                         ...draft.state,
                         content,
                         proseNeedsReview: false,
-                        baseline: { revision: row.revision, title: row.title, content },
+                        baseline: { revision: row.revision, version: row.version, title: row.title, content },
                         canvas: draft.state.canvas
                             ? { ...draft.state.canvas, baselineBlocks: draft.state.canvas.blocks, baselineRevision: row.revision, undo: undefined }
                             : undefined,
                     },
                 })
                 .where(this.draftOwned(input));
-            return publication.id;
+            return row.revision;
         });
-        return this.getPublication({ ...input, publicationId });
+        return this.getVersion({ ...input, revision });
     }
 
-    async publications(input: Target) {
-        await this.getRow(input);
-        return this.db
-            .select({ id: reportPublications.id, number: reportPublications.number, revision: reportPublications.revision, publishedAt: reportPublications.publishedAt })
-            .from(reportPublications)
-            .where(eq(reportPublications.documentId, input.documentId))
-            .orderBy(desc(reportPublications.number));
-    }
-    async getPublication(input: Target & { publicationId: string }) {
-        const current = await this.getRow(input);
-        const [publication] = await this.db
-            .select()
-            .from(reportPublications)
-            .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.id, input.publicationId)));
-        if (!publication) throw new DatabaseError('Published report not found.', 404);
-        return {
-            ...current,
-            title: publication.title,
-            content: publication.content,
-            scope: publication.scope,
-            chatId: publication.chatId,
-            revision: publication.revision,
-            version: publication.number,
-            updatedAt: publication.publishedAt,
-            publication: { id: publication.id, number: publication.number, publishedAt: publication.publishedAt.toISOString() },
-        };
-    }
-    async publish(input: Target & { expectedRevision: number; requestId: string }) {
-        const publicationId = await this.db.transaction(async tx => {
-            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
-            if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
-            const [retry] = await tx
-                .select()
-                .from(reportPublications)
-                .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.requestId, input.requestId)));
-            if (retry) {
-                if (retry.revision !== input.expectedRevision) throw new DatabaseError('Publication request key was already used for another revision.', 409);
-                return retry.id;
-            }
-            if (current.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Read the latest draft before publishing.', 409);
-            const [already] = await tx
-                .select()
-                .from(reportPublications)
-                .where(and(eq(reportPublications.documentId, input.documentId), eq(reportPublications.revision, current.revision)));
-            if (already) return already.id;
-            if (!current.content.markdown.trim() || current.content.diagnostics?.length) throw new DatabaseError('Fix report diagnostics before publishing.', 400);
-            if (current.content.format !== 'restricted-mdx') throw new DatabaseError('Save this report in the new format before publishing.', 400);
-            if (current.content.evidenceGroups?.some(group => group.needsReview)) throw new DatabaseError('Review the changed report evidence before saving a version.', 400);
-            await validateReportPublicationEvidence(tx, this.artifactStore, input.organizationId, current.content.evidence, input.documentId);
-            for (const embed of Object.values(current.content.embeds ?? {})) {
-                const [snapshot] = await tx
-                    .select()
-                    .from(reportSnapshots)
-                    .where(and(eq(reportSnapshots.id, embed.snapshotId), eq(reportSnapshots.documentId, current.id)));
-                if (!snapshot || snapshot.evidence.artifactId !== embed.artifactId) throw new DatabaseError('Missing report snapshot.', 409);
-            }
-            const [latest] = await tx
-                .select({ number: reportPublications.number })
-                .from(reportPublications)
-                .where(eq(reportPublications.documentId, current.id))
-                .orderBy(desc(reportPublications.number))
-                .limit(1);
-            const [published] = await tx
-                .insert(reportPublications)
-                .values({
-                    documentId: current.id,
-                    number: (latest?.number ?? 0) + 1,
-                    revision: current.revision,
-                    requestId: input.requestId,
-                    title: current.title,
-                    content: current.content,
-                    scope: current.scope,
-                    chatId: current.chatId,
-                })
-                .returning();
-            await tx.update(workDocuments).set({ publishedVersionId: published.id }).where(this.owned(input));
-            return published.id;
-        });
-        return this.getPublication({ ...input, publicationId });
-    }
-    private version(row: Record, source: 'user' | 'agent' | 'restore') {
+    private version(row: Record, source: typeof workDocumentVersions.$inferSelect.source) {
         return { documentId: row.id, revision: row.revision, title: row.title, content: row.content, scope: row.scope, status: row.status, source };
     }
-    async update(
-        input: Target & {
-            expectedRevision: number;
-            title: string;
-            content: WorkDocumentContent;
-            scope: AnalysisScope;
-            status: 'draft' | 'ready';
-            source: 'user' | 'agent' | 'restore';
-        },
+    private async writeVersion(
+        tx: Writer,
+        current: Record,
+        input: Write,
+        source: typeof workDocumentVersions.$inferSelect.source,
+        requestKey?: string,
+        sourceChatId?: string | null,
     ) {
+        if (input.content.diagnostics?.length || input.content.evidenceGroups?.some(group => group.needsReview))
+            throw new DatabaseError('Fix the report syntax and review changed evidence before saving.', 400);
+        if (source !== 'restore') await validateReportVersionEvidence(tx, this.artifactStore, current.organizationId, input.content.evidence, current.id);
+        const content = source === 'restore' ? input.content : await this.snapshotContent(current.id, input.content, tx);
+        if (source !== 'restore' && sameReport(current, { ...input, content })) return this.withVersion(current, tx);
+        const revision = current.revision + 1;
+        if (source === 'agent' && content.agentWrite) content.agentWrite = { ...content.agentWrite, revision };
+        const [row] = await tx
+            .update(workDocuments)
+            .set({
+                title: input.title,
+                content,
+                scope: input.scope,
+                status: input.status,
+                revision,
+                updatedAt: new Date(),
+            })
+            .where(eq(workDocuments.id, current.id))
+            .returning();
+        await tx.insert(workDocumentVersions).values({ ...this.version(row, source), requestKey, sourceChatId });
+        return this.withVersion(row, tx);
+    }
+    async savedRequest(input: Target & { requestKey: string }) {
+        await this.getRow(input);
+        const [saved] = await this.db
+            .select({ revision: workDocumentVersions.revision })
+            .from(workDocumentVersions)
+            .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.requestKey, input.requestKey)));
+        return saved ? this.getVersion({ ...input, revision: saved.revision }) : null;
+    }
+    async update(input: Target & Write & { expectedRevision: number; source: 'user' | 'agent' | 'restore'; requestKey?: string }) {
         return this.db.transaction(async tx => {
             const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
-            if (!current || current.archivedAt || current.revision !== input.expectedRevision)
-                throw new DatabaseError('Report changed or was archived. Reload the latest version before saving.', 409);
+            if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            if (input.requestKey) {
+                const [saved] = await tx
+                    .select()
+                    .from(workDocumentVersions)
+                    .where(and(eq(workDocumentVersions.documentId, current.id), eq(workDocumentVersions.requestKey, input.requestKey)));
+                if (saved)
+                    return this.withVersion(
+                        { ...current, title: saved.title, content: saved.content, scope: saved.scope, status: saved.status, revision: saved.revision, updatedAt: saved.createdAt },
+                        tx,
+                    );
+            }
+            if (current.revision !== input.expectedRevision) throw new DatabaseError('Report changed. Reload the latest version before saving.', 409);
+            return this.writeVersion(tx, current, input, input.source, input.requestKey);
+        });
+    }
+    async completedAgent(input: Target & { requestId: string }) {
+        const saved = await this.savedRequest({ ...input, requestKey: 'agent:' + input.requestId });
+        if (saved) return saved;
+        const [receipt] = await this.db
+            .select({ revision: reportAgentDrafts.completedRevision })
+            .from(reportAgentDrafts)
+            .where(and(eq(reportAgentDrafts.documentId, input.documentId), eq(reportAgentDrafts.requestId, input.requestId), isNotNull(reportAgentDrafts.completedRevision)));
+        return receipt?.revision ? this.getVersion({ ...input, revision: receipt.revision }) : null;
+    }
+    async discardAgent(input: Target & { requestId: string }) {
+        await this.getRow(input);
+        await this.db
+            .delete(reportAgentDrafts)
+            .where(and(eq(reportAgentDrafts.documentId, input.documentId), eq(reportAgentDrafts.requestId, input.requestId), isNull(reportAgentDrafts.completedRevision)));
+    }
+    async agentView(input: Target & { requestId: string }) {
+        const row = await this.get(input);
+        const [draft] = await this.db
+            .select()
+            .from(reportAgentDrafts)
+            .where(and(eq(reportAgentDrafts.documentId, row.id), eq(reportAgentDrafts.requestId, input.requestId)));
+        return draft ? { ...row, title: draft.title, scope: draft.scope, content: draft.content, revision: draft.revision, status: draft.status } : row;
+    }
+    async stageAgent(input: Target & Write & { requestId: string; expectedRevision: number; sourceChatId?: string }) {
+        return this.db.transaction(async tx => {
+            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            const [previous] = await tx
+                .select()
+                .from(reportAgentDrafts)
+                .where(and(eq(reportAgentDrafts.documentId, current.id), eq(reportAgentDrafts.requestId, input.requestId)));
+            const [committed] = await tx
+                .select({ revision: workDocumentVersions.revision })
+                .from(workDocumentVersions)
+                .where(and(eq(workDocumentVersions.documentId, current.id), eq(workDocumentVersions.requestKey, 'agent:' + input.requestId)));
+            if (previous?.completedRevision || committed) throw new DatabaseError('This turn has already saved its report.', 409);
+            if ((previous?.revision ?? current.revision) !== input.expectedRevision || (previous && previous.baseRevision !== current.revision))
+                throw new DatabaseError('Report changed. Read the latest report before editing.', 409);
             await retainReportEvidence(tx, input.organizationId, input.content.evidence, input.documentId);
-            const content = await this.snapshotContent(input.documentId, input.content, tx);
-            const [row] = await tx
-                .update(workDocuments)
-                .set({ title: input.title, content, scope: input.scope, status: input.status, revision: sql`${workDocuments.revision} + 1`, updatedAt: new Date() })
-                .where(and(this.owned(input), eq(workDocuments.revision, input.expectedRevision), isNull(workDocuments.archivedAt)))
+            const state = { title: input.title, scope: input.scope, content: input.content, status: input.status, revision: input.expectedRevision + 1 };
+            const [staged] = await tx
+                .insert(reportAgentDrafts)
+                .values({ ...state, documentId: current.id, requestId: input.requestId, sourceChatId: input.sourceChatId, baseRevision: current.revision })
+                .onConflictDoUpdate({ target: [reportAgentDrafts.documentId, reportAgentDrafts.requestId], set: state })
                 .returning();
-            if (!row) throw new DatabaseError('Report changed or was archived. Reload the latest version before saving.', 409);
-            await tx.insert(workDocumentVersions).values(this.version(row, input.source));
-            return this.withVersion(row, tx);
+            return { ...(await this.withVersion(current, tx)), ...state, content: staged.content };
+        });
+    }
+    async finishAgent(input: Target & { requestId: string }) {
+        return this.db.transaction(async tx => {
+            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!current || current.archivedAt) throw new DatabaseError('Report unavailable.', 404);
+            const predicate = and(eq(reportAgentDrafts.documentId, current.id), eq(reportAgentDrafts.requestId, input.requestId));
+            const [draft] = await tx.select().from(reportAgentDrafts).where(predicate);
+            if (!draft || draft.completedRevision) {
+                const [saved] = await tx
+                    .select()
+                    .from(workDocumentVersions)
+                    .where(
+                        and(
+                            eq(workDocumentVersions.documentId, current.id),
+                            draft?.completedRevision ? eq(workDocumentVersions.revision, draft.completedRevision) : eq(workDocumentVersions.requestKey, 'agent:' + input.requestId),
+                        ),
+                    );
+                if (saved)
+                    return this.withVersion({ ...current, title: saved.title, scope: saved.scope, content: saved.content, status: saved.status, revision: saved.revision }, tx);
+                throw new DatabaseError('No completed report update in this turn.', 409);
+            }
+            if (draft.status !== 'ready' || draft.baseRevision !== current.revision) throw new DatabaseError('Report changed or the update is incomplete.', 409);
+            const row = await this.writeVersion(tx, current, draft, 'agent', 'agent:' + input.requestId, draft.sourceChatId);
+            if (row.revision === current.revision) await tx.update(reportAgentDrafts).set({ completedRevision: row.revision, content: current.content }).where(predicate);
+            else await tx.delete(reportAgentDrafts).where(predicate);
+            return row;
         });
     }
     async versions(input: Target) {
         await this.getRow(input);
         const history = await this.numberedHistory([input.documentId]);
-        return [...new Map(history.map(({ revision, version, title, createdAt, source }) => [version, { revision, version, title, createdAt, source }])).values()].reverse();
+        return history;
     }
     async getVersion(input: Target & { revision: number }) {
         const current = await this.getRow(input);
@@ -601,27 +606,48 @@ export class PostgresWorkDocumentsRepository {
             .select()
             .from(workDocumentVersions)
             .where(and(eq(workDocumentVersions.documentId, input.documentId), eq(workDocumentVersions.revision, input.revision)));
-        if (!version) throw new DatabaseError('Version not found.', 404);
-        const history = await this.numberedHistory([input.documentId]);
-        return {
+        if (!version) throw new DatabaseError('REPORT_VERSION_REMOVED', 410);
+        return this.withVersion({
             ...current,
             title: version.title,
             content: version.content,
             scope: version.scope,
             status: version.status,
             revision: version.revision,
-            version: history.find(snapshot => snapshot.revision === version.revision)!.version,
             updatedAt: version.createdAt,
-        };
+        });
     }
     async restore(input: Target & { revision: number; expectedRevision: number }) {
         const version = await this.getVersion(input);
-        return this.update({ ...input, title: version.title, content: version.content, scope: version.scope, status: version.status, source: 'restore' });
+        if (input.revision === input.expectedRevision) {
+            const current = await this.get(input);
+            if (current.revision !== input.expectedRevision || current.archivedAt) throw new DatabaseError('Report changed or was archived.', 409);
+            return current;
+        }
+        return this.update({
+            ...input,
+            title: version.title,
+            content: version.content,
+            scope: version.scope,
+            status: version.status,
+            requestKey: `restore:${input.expectedRevision}:${input.revision}`,
+            source: 'restore',
+        });
     }
 
     async rename(input: Target & { title: string; expectedRevision: number }) {
-        const current = await this.get(input);
-        return this.update({ ...input, content: current.content, scope: current.scope, status: current.status, source: 'user' });
+        return this.db.transaction(async tx => {
+            const [current] = await tx.select().from(workDocuments).where(this.owned(input)).for('update');
+            if (!current || current.archivedAt || current.revision !== input.expectedRevision) throw new DatabaseError('Report changed or was archived.', 409);
+            if (input.title === current.title) return this.withVersion(current, tx);
+            const [row] = await tx
+                .update(workDocuments)
+                .set({ title: input.title, revision: current.revision + 1, updatedAt: new Date() })
+                .where(eq(workDocuments.id, current.id))
+                .returning();
+            await tx.insert(workDocumentVersions).values(this.version(row, 'user'));
+            return this.withVersion(row, tx);
+        });
     }
     async archive(input: Target & { archived: boolean }) {
         const [row] = await this.db

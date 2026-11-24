@@ -22,8 +22,8 @@ export function reportArtifactReference(organizationId: string, artifactId: SQLW
             retention_document.content->'evidence' @> ${reference}
             or exists (select 1 from work_document_versions retention_version
                 where retention_version.document_id = retention_document.id and retention_version.content->'evidence' @> ${reference})
-            or exists (select 1 from report_publications retention_publication
-                where retention_publication.document_id = retention_document.id and retention_publication.content->'evidence' @> ${reference})
+            or exists (select 1 from report_agent_drafts agent_draft
+                where agent_draft.document_id = retention_document.id and agent_draft.content->'evidence' @> ${reference})
             or exists (select 1 from report_working_drafts retention_draft
                 where retention_draft.document_id = retention_document.id and (
                     retention_draft.state->'content'->'evidence' @> ${reference}
@@ -125,8 +125,8 @@ export async function retainReportEvidence(db: ReadDb, organizationId: string, e
     }
 }
 
-/** Publication verifies durable data, not a stale catalog flag or the embedded preview. */
-export async function validateReportPublicationEvidence(db: ReadDb, store: DoryArtifactStore, organizationId: string, evidence: WorkEvidence[], documentId: string) {
+/** Verify the retained result and every stored data part before committing a version. */
+export async function validateReportVersionEvidence(db: ReadDb, store: DoryArtifactStore, organizationId: string, evidence: WorkEvidence[], documentId: string) {
     await retainReportEvidence(db, organizationId, evidence, documentId);
     if (evidence.length) {
         const capacity = await db.execute<{ metadata: string | null; bytes: string }>(sql`

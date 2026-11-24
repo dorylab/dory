@@ -117,8 +117,8 @@ test('real PGlite drafts enforce ownership, atomic immutable versions, replay an
         const reviewed = await repo.saveWorkingDraft({ ...target, expectedDraftRevision: applied.revision, state: { ...applied.state, proseNeedsReview: false } });
         const request = { ...target, expectedDraftRevision: reviewed.revision, requestId: 'save', content: versionContent(reviewed) };
         const [first, retry] = await Promise.all([repo.saveWorkingVersion(request), repo.saveWorkingVersion(request)]);
-        assert.equal(first.publication.id, retry.publication.id);
-        assert.equal((await repo.publications(target)).length, 1);
+        assert.equal(first.revision, retry.revision);
+        assert.equal((await repo.versions(target)).length, 2);
         assert.equal(first.content.workspaceOrigin?.baseRevision, 1);
         assert.equal(first.content.evidence[0].rows[0].count, 2);
         assert.equal((await repo.getVersion({ ...target, revision: 1 })).content.evidence[0].rows[0].count, 3);
@@ -135,7 +135,7 @@ test('real PGlite drafts enforce ownership, atomic immutable versions, replay an
             requestId: 'branch',
             content: versionContent(historical),
         });
-        assert.equal(branch.publication.number, 2);
+        assert.equal(branch.version, 4);
         assert.equal(branch.revision, first.revision + 2);
     } finally {
         await fixture.close();

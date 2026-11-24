@@ -45,7 +45,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             await assert.rejects(validateAnalysisScope(db, owner, { connectionIds: [], connectionMode: 'manual' }));
             await assert.rejects(validateAnalysisScope(db, owner, { connectionIds: ['unavailable'], connectionMode: 'manual' }), /unavailable/);
             assert.equal((await validateAnalysisScope(db, owner, { connectionIds: [], knowledgeMode: 'none' })).knowledgeMode, 'none');
-            await assert.rejects(validateAnalysisScope(db, owner, { connectionIds: [], knowledgeMode: 'manual' }), /Select a Knowledge/);
+            await assert.rejects(validateAnalysisScope(db, owner, { connectionIds: [], knowledgeMode: 'manual' }), /Select a knowledge/i);
             await assert.rejects(validateAnalysisScope(db, { ...owner, userId: 'outsider' }, { connectionIds: [], connectionMode: 'auto' }), /denied/);
         });
         await t.test('stored attachments retain full text, enforce conversation ownership and work in SDK and MCP tools', async () => {
@@ -449,7 +449,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 options: { xKeyType: 'category' },
             });
             assert.deepEqual(saved.content.evidence[0].rows, rows);
-            const persisted = await db.workDocuments.get({ ...owner, documentId: saved.id });
+            const persisted = await db.workDocuments.agentView({ ...owner, documentId: saved.id, requestId: 'turn-1' });
             assert.deepEqual(persisted.content.visuals[0].chart, saved.content.visuals[0].chart);
             const updated = await tools.tools.updateWorkReport.execute!(
                 {
@@ -570,6 +570,8 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             assert.deepEqual(saved.content.visuals, input.visuals);
             assert.equal(saved.content.evidence[0].rows[0].order_count, 421);
             assert.equal(await tools.completionStatus(), 'ready');
+            assert.deepEqual((await db.workDocuments.get({ ...owner, documentId: saved.id })).content.visuals, []);
+            await tools.assertReady();
             assert.deepEqual((await db.workDocuments.get({ ...owner, documentId: saved.id })).content.visuals, input.visuals);
             await assert.rejects(
                 tools.tools.updateWorkReport.execute!(
@@ -672,10 +674,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             assert.ok('id' in saved);
             assert.match(saved.content.body!, /<Metric source="metric"/);
             assert.match(saved.content.body!, /<DataTable source="rows"/);
-            await assert.rejects(
-                tools.tools.publishWorkReport.execute!({ documentId: saved.id, expectedRevision: saved.revision, requestId: 'not-authorized' }, call) as Promise<unknown>,
-                /explicit user request/,
-            );
+            assert.ok(!('publishWorkReport' in tools.tools));
             await db.workDocuments.archive({ ...owner, documentId: saved.id, archived: true });
         });
         await t.test('MDX updates default to the saved body and automatically embed new visuals', async t => {
@@ -706,7 +705,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 ) as Promise<unknown>,
                 /WORK_REFERENCE_INVALID: Line 5:.*Offending text:.*Metrics.*No changes were saved/,
             );
-            const preserved = await db.workDocuments.get({ ...owner, documentId: created.id });
+            const preserved = await db.workDocuments.agentView({ ...owner, documentId: created.id, requestId: 'turn-1' });
             assert.equal(preserved.revision, created.revision);
             assert.equal(preserved.content.body, body);
             const saved = await tools.tools.updateWorkReport.execute!(
@@ -740,19 +739,27 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             reports.tools.updateWorkReport.execute!({ documentId: created.id, expectedRevision: ready.revision, patch }, call) as Promise<unknown>,
             /latest version/,
         );
-        await assert.rejects(
-            reports.tools.updateWorkReport.execute!({ documentId: created.id, expectedRevision: human.revision, patch: { edits: [], status: 'draft' } }, call) as Promise<unknown>,
-            /previous report is preserved/,
-        );
-        const saved = await reports.tools.readWorkReport.execute!({ documentId: created.id }, call);
-        assert.ok('id' in saved);
+        const editRun = await start('edit-turn');
+        const updateTools = createWorkDocumentTools({
+            db,
+            ...owner,
+            chatId: 'reports',
+            documentId: created.id,
+            requestId: 'edit-turn',
+            creationKey: 'reports:user-message',
+            scope: human.scope,
+            runId: async () => editRun.workId,
+        });
+        const staged = await updateTools.tools.updateWorkReport.execute!({ documentId: created.id, expectedRevision: human.revision, patch: { edits: [], status: 'draft' } }, call);
+        assert.ok('revision' in staged);
+        const saved = await db.workDocuments.get({ ...owner, documentId: created.id });
         assert.equal(saved.title, 'Human reviewed');
         assert.equal(saved.revision, human.revision);
         assert.equal(saved.content.evidence.length, 2);
-        const edited = await reports.tools.updateWorkReport.execute!(
+        const edited = await updateTools.tools.updateWorkReport.execute!(
             {
                 documentId: created.id,
-                expectedRevision: human.revision,
+                expectedRevision: staged.revision,
                 patch: { edits: [{ oldText: '## October', newText: '## October reviewed' }], visuals: [{ ...draft.visuals[0], title: 'Orders reviewed' }], status: 'ready' },
             },
             call,
@@ -824,7 +831,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         assert.equal(read.report.markdown, '');
         assert.equal(read.report.body, '');
         assert.equal(read.report.format, 'restricted-mdx');
-        assert.equal((await db.workDocuments.versions({ ...owner, documentId: partial.reportDocumentId })).length, 1);
+        assert.equal((await db.workDocuments.versions({ ...owner, documentId: partial.reportDocumentId })).length, 0);
         expired = false;
         dataAvailability = 'none';
         await assert.rejects(
@@ -889,7 +896,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
             const legacy = await resolveChatContext(db, owner, { references: [{ ...ref, revision: undefined }] }, { connectionIds: [] });
             assert.match(legacy.instruction, /Updated revenue: 99/);
             assert.equal(legacy.references[0].kind === 'report' && legacy.references[0].revision, 2);
-            await assert.rejects(resolveChatContext(db, owner, { references: [{ ...ref, revision: 999 }] }, { connectionIds: [] }), /Version not found/);
+            await assert.rejects(resolveChatContext(db, owner, { references: [{ ...ref, revision: 999 }] }, { connectionIds: [] }), /REPORT_VERSION_REMOVED/);
             await assert.rejects(resolveChatContext(db, { ...owner, userId: 'outsider' }, { references: [ref] }, { connectionIds: [] }));
             await assert.rejects(
                 resolveChatContext(db, owner, { references: [ref], mentionSpans: [{ start: 0, end: 999, referenceKey: 'invalid' }] }, { connectionIds: [] }),
@@ -978,7 +985,7 @@ test('report tools preserve human edits, validate and retain evidence, reject in
         });
         context.services.agentTurn = { ...context.services.agentTurn, requestId: 'missing-report', responseMessageId: 'msg_missing-report' };
         await assert.rejects(finish.execute(context, { workId: localTurn.workId, status: 'completed', findings: [], steps: ['Finish'], finalAnswer: 'Done' }), /requested report/);
-        await t.test('external MCP report lifecycle keeps drafts separate from publications and requires write scope', async () => {
+        await t.test('external MCP saves completed reports and requires write scope', async () => {
             const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
             const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
             const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
@@ -1002,30 +1009,15 @@ test('report tools preserve human edits, validate and retain evidence, reject in
                 const retry = await client.callTool({ name: 'dory_create_report', arguments: args });
                 assert.equal(z.object({ document: z.object({ id: z.string() }) }).parse(retry.structuredContent).document.id, initial.id);
                 const target = { ...owner, documentId: initial.id };
-                assert.equal((await db.workDocuments.publications(target)).length, 0);
+                assert.equal((await db.workDocuments.versions(target)).length, 1);
                 const invalid = await client.callTool({
                     name: 'dory_update_report',
                     arguments: { documentId: initial.id, expectedRevision: initial.revision, title: args.title, body: '{process.exit()}', visuals: [] },
                 });
-                assert.notEqual(invalid.isError, true);
-                const invalidDraft = await db.workDocuments.get(target);
-                assert.ok(invalidDraft.content.diagnostics?.length);
-                const blocked = await client.callTool({
-                    name: 'dory_publish_report',
-                    arguments: { documentId: initial.id, expectedRevision: invalidDraft.revision, requestId: 'invalid-publication' },
-                });
-                assert.equal(blocked.isError, true);
-                await client.callTool({
-                    name: 'dory_update_report',
-                    arguments: { documentId: initial.id, expectedRevision: invalidDraft.revision, title: args.title, body: args.body, visuals: [] },
-                });
+                assert.equal(invalid.isError, true);
                 const valid = await db.workDocuments.get(target);
-                const publishArgs = { documentId: initial.id, expectedRevision: valid.revision, requestId: 'external-publication' };
-                const published = await client.callTool({ name: 'dory_publish_report', arguments: publishArgs });
-                assert.notEqual(published.isError, true, JSON.stringify(published));
-                const duplicate = await client.callTool({ name: 'dory_publish_report', arguments: publishArgs });
-                assert.deepEqual(published.structuredContent, duplicate.structuredContent);
-                assert.equal((await db.workDocuments.publications(target)).length, 1);
+                assert.equal(valid.revision, initial.revision);
+                assert.ok(!tools.some(tool => tool.name === 'dory_publish_report'));
                 const readOnly = { ...context, actor: { type: 'mcp' as const, scopes: ['read'] }, services: { db } };
                 await assert.rejects(
                     tools

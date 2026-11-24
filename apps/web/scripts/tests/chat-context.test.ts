@@ -159,10 +159,8 @@ test('saving resolves one workflow for open, referenced, unfinished, new and amb
     assert.equal(requestsReportChart('生成包含柱状图的报告'), true);
 });
 
-test('saving never authorizes publication and chart replacement selects the requested new type', async () => {
-    const { isReportPublishRequest, requestedChartType } = await import('@/lib/chat-context/output-intent');
-    for (const text of ['帮我保存报告', 'Save report', '不要发布报告', '如何发布报告', '`publish report`']) assert.equal(isReportPublishRequest(text), false);
-    assert.equal(isReportPublishRequest('发布这份报告'), true);
+test('chart replacement selects the requested new type', async () => {
+    const { requestedChartType } = await import('@/lib/chat-context/output-intent');
     assert.equal(requestedChartType('将柱状图改成折线图，保留饼图'), 'line');
     assert.equal(requestedChartType('不要饼图，添加柱状图'), 'bar');
 });

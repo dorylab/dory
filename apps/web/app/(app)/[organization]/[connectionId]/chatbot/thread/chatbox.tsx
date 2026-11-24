@@ -8,7 +8,7 @@ import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from 'ai';
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslations } from 'next-intl';
-import { parseAsString, useQueryState } from 'nuqs';
+import { parseAsInteger, parseAsString, useQueryState } from 'nuqs';
 import posthog from 'posthog-js';
 import { toast } from 'sonner';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
@@ -100,6 +100,7 @@ const ChatBotComp = ({
     const sidebarConfig = useMemo(() => getSidebarConfig(currentConnection?.connection?.type), [currentConnection?.connection?.type]);
 
     const [reportId, setReportId] = useQueryState('report', parseAsString);
+    const [, setReportRevision] = useQueryState('revision', parseAsInteger);
     const [editingReport, setEditingReport] = useState(false);
     const reportRef = useRef<WorkReportHandle>(null);
     const sendFailed = useRef(false);
@@ -505,7 +506,10 @@ const ChatBotComp = ({
                                 onCopySql={handleCopySql}
                                 onManualExecute={handleManualExecute}
                                 onExecuteAction={onExecuteAction}
-                                onOpenReport={id => void setReportId(id)}
+                                onOpenReport={(id, revision) => {
+                                    void setReportRevision(revision ?? null);
+                                    void setReportId(id);
+                                }}
                                 onContinue={messageId => {
                                     if (busy || submitInFlightRef.current) return;
                                     submitInFlightRef.current = true;
@@ -523,7 +527,10 @@ const ChatBotComp = ({
                                     messages={renderedMessages}
                                     reports={reports.data?.documents ?? []}
                                     busy={busy}
-                                    onOpen={id => void setReportId(id)}
+                                    onOpen={(id, revision) => {
+                                        void setReportRevision(revision ?? null);
+                                        void setReportId(id);
+                                    }}
                                 />
                             )}
                         </div>

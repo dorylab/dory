@@ -1,4 +1,4 @@
-import { chooseReportMode, replaceReportSource } from './helpers/report';
+import { chooseReportMode, pendingReport, replaceReportSource } from './helpers/report';
 import type { AnalysisScope, WorkDocumentContent } from '@dory/shared/types/work-document';
 import { expect, type Page } from '@playwright/test';
 import type { UIMessage } from 'ai';
@@ -111,11 +111,11 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
             else document = { ...document, title: body.draft.title, content: savedDraft(document.content, body.draft), revision: document.revision + 1 };
             versions.unshift({ revision: document.revision, source: 'user', createdAt: now });
         }
-        await route.fulfill({ json: { document, versions } });
+        await route.fulfill({ json: { document, versions, editorOwnerId: 'fixture' } });
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    await page.goto(`/${organization}/reports/doc-report`);
+    await page.goto(`/${organization}/reports/doc-report?revision=${document.revision}`);
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     await expect(page.getByRole('img', { name: 'Monthly revenue' })).toBeVisible();
     await chooseReportMode(page, 'Source');
@@ -126,14 +126,15 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     const source = page.getByTestId('markdown-source').locator('textarea').first();
     await source.press('ControlOrMeta+Home');
     await page.keyboard.insertText('Source note preserved.\n\n');
-    await expect.poll(() => document.content.markdown).toContain('Source note preserved.');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('Source note preserved.');
     await source.press('ControlOrMeta+End');
     await page.keyboard.insertText('\n\nHuman note preserved.');
-    await expect.poll(() => document.content.markdown).toContain('Human note preserved.');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('Human note preserved.');
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Human-reviewed analysis');
-    await expect.poll(() => document.title).toBe('Human-reviewed analysis');
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    expect(document.title).toBe(original.title);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Human-reviewed analysis' })).toBeVisible();
+    await expect(page).not.toHaveURL(/revision=/);
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export', exact: true }).click();
     await page.getByRole('menuitem', { name: 'HTML', exact: true }).click();
@@ -147,12 +148,14 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     expect(html).not.toContain('SELECT month');
     expect(html).toContain('<strong>Revenue</strong>');
     await selectReportVersion(page, 1);
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();
+    await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     const addDefinition = page.getByRole('button', { name: 'Add definition to knowledge base', exact: true });
-    const term = page.getByTestId('work-markdown').locator('strong').filter({ hasText: /^Revenue$/ });
+    const term = page
+        .getByTestId('work-markdown')
+        .locator('strong')
+        .filter({ hasText: /^Revenue$/ });
     await expect(addDefinition).toBeHidden();
     await term.dblclick();
     await expect(addDefinition).toBeVisible();
@@ -329,15 +332,15 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
     await page.getByRole('button', { name: 'Work resources', exact: true }).click();
-    await expect(page.getByRole('button', { name: /Revenue analysis Report.*Draft/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Revenue analysis Report/ })).toBeVisible();
     await expect(page.getByTestId('work-report')).toHaveCount(0);
-    await page.getByRole('button', { name: /Revenue analysis Report.*Draft/ }).click();
+    await page.getByRole('button', { name: /Revenue analysis Report/ }).click();
     await expect(page.getByTestId('work-report')).toBeVisible();
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
     await expect(page.getByTestId('work-report')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Work resources', exact: true }).click();
-    await page.getByRole('button', { name: /Revenue analysis Report.*Draft/ }).click();
+    await page.getByRole('button', { name: /Revenue analysis Report/ }).click();
     await expect(page.getByTestId('work-report')).toBeVisible();
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
@@ -348,9 +351,8 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     document.content.markdown = 'Latest generated content';
     await expect.poll(() => latestRead).toBe(3);
     await expect(page.getByTestId('work-markdown')).toHaveText('Historical snapshot content');
-    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Historical r1');
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Back to latest', exact: true }).click();
+    await expect(page.getByText('Viewing historical version v1 · Read only')).toBeVisible();
+    await page.getByRole('button', { name: 'Back to current report', exact: true }).click();
     await expect(page.getByTestId('work-markdown')).toHaveText('Latest generated content');
     await page.evaluate(() => (window as unknown as { finishReportStream: () => void }).finishReportStream());
     await expect(page.getByText('Preparing both sources. Report completed.', { exact: true })).toBeVisible();
@@ -381,7 +383,7 @@ test('unsupported Markdown stays intact in source mode and never executes HTML',
     await chooseReportMode(page, 'Source');
     await expect(page.getByTestId('markdown-source')).toBeVisible();
     expect(writes).toBe(0);
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByTestId('work-markdown')).toContainText('Raw HTML stays literal');
     expect(writes).toBe(0);
     await expectAppHealthy(appErrors);
@@ -404,8 +406,11 @@ test('data components retain snapshots while moving and deleting MDX references'
     await page.goto(`/${organization}/reports/doc-report`);
     await chooseReportMode(page, 'Source');
     await replaceReportSource(page, '<Chart source="chart" />\n\n## Move target\n\nParagraph before the chart.\n\nClosing note.');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => document.content.markdown.indexOf('![Monthly revenue]') < document.content.markdown.indexOf('## Move target')).toBe(true);
+    await chooseReportMode(page, 'Source');
     await replaceReportSource(page, '## Move target\n\nParagraph before the chart.\n\nClosing note.');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => document.content.markdown).not.toContain('dory://visual/chart');
     expect(document.content.evidence[0].rows).toHaveLength(2);
     await expectAppHealthy(appErrors);
@@ -640,7 +645,7 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Discard this');
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Keep editing', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Title', exact: true }).first()).toHaveValue('Discard this');
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
     await dialog.getByRole('button', { name: 'Discard changes' }).click();
@@ -854,8 +859,8 @@ test('global SQL tools show saved rows and Queries restore the exact source and 
 });
 
 async function selectReportVersion(page: Page, revision: number | 'latest') {
-    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
-    await page.getByRole('menuitemradio', { name: revision === 'latest' ? /^Draft$/ : new RegExp(`^r${revision} ·`) }).click();
+    await page.getByRole('button', { name: 'Version history', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: revision === 'latest' ? / · Current$/ : new RegExp(`· v${revision}(?: · Current)?$`) }).click();
 }
 
 test('report versions keep exact snapshots for viewing, export, restore and reload', async ({ page, appErrors }, testInfo) => {
@@ -890,7 +895,7 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     await selectReportVersion(page, 1);
     await expect(page).toHaveURL(/revision=1/);
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Restore this version', exact: true })).toBeEnabled();
     await expect(page.getByRole('img', { name: 'Monthly revenue' })).toBeVisible();
     expect(writes).toBe(0);
     await page.getByTestId('work-markdown').getByRole('link', { name: 'Source', exact: true }).click();
@@ -902,7 +907,7 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     const stream = await (await download).createReadStream();
     let html = '';
     for await (const chunk of stream!) html += chunk.toString();
-    expect(html).toContain('r1');
+    expect(html).toContain('v1');
     expect(html).toContain('September');
     expect(html).not.toContain('Latest content');
     await page.reload();
@@ -912,10 +917,9 @@ test('report versions keep exact snapshots for viewing, export, restore and relo
     await page.evaluate(() => window.document.documentElement.classList.add('dark'));
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('version-dark-mobile.png'), fullPage: true });
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();
+    await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Draft');
+    await expect(page.getByRole('button', { name: 'Version history', exact: true })).toHaveText('Version history');
     expect(writes).toBe(1);
     await selectReportVersion(page, 1);
     await expect(page).toHaveURL(/revision=1/);
@@ -948,9 +952,9 @@ test('version switching protects dirty edits and remains on the draft after a fa
     await page.goto(`/${organization}/reports/doc-report`);
     await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Unsaved draft');
-    await expect.poll(() => writes).toBe(1);
+    expect(writes).toBe(0);
     await selectReportVersion(page, 1);
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Unsaved draft');
     await selectReportVersion(page, 1);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Save and continue', exact: true }).click();
@@ -960,8 +964,7 @@ test('version switching protects dirty edits and remains on the draft after a fa
     await page.getByRole('alertdialog').getByRole('button', { name: 'Save and continue', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     expect(latest.title).toBe('Unsaved draft');
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Back to latest', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to current report', exact: true }).click();
     await chooseReportMode(page, 'Edit');
     failSave = true;
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Discard me');
@@ -1009,26 +1012,24 @@ test('history loading protects selection and restore conflicts preserve the old 
     await expect.poll(() => Boolean(releaseFirst)).toBe(true);
     await expect(page.getByTestId('work-markdown')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Version history', exact: true })).toBeDisabled();
     releaseFirst!();
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
     await selectReportVersion(page, 2);
     await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();
+    await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
     await expect(page.getByRole('alertdialog').getByRole('alert')).toContainText('Report changed');
     expect(restoreCalls).toBe(1);
     await expect(page.getByRole('heading', { name: 'Second version', includeHidden: true })).toBeVisible();
     conflict = false;
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Draft');
+    await expect(page.getByRole('button', { name: 'Version history', exact: true })).toHaveText('Version history');
     failHistory = true;
     await page.goto(url + '?revision=1');
     await expect(page.getByTestId('work-report').getByRole('alert')).toContainText('Version not found.');
     await expect(page.getByTestId('work-markdown')).toHaveCount(0);
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Back to latest', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to current report', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Second version' })).toBeVisible();
 });
 
@@ -1121,14 +1122,14 @@ test('selecting a different report clears the previous historical revision', asy
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/work?chat=report-chat&document=doc-report&panel=report&revision=1`);
-    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Historical r1');
+    await expect(page.getByText('Viewing historical version v1 · Read only')).toBeVisible();
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
     await page
         .getByRole('region', { name: 'Outputs', exact: true })
         .getByRole('button', { name: /^Another report Report/ })
         .click();
     await expect(page.getByRole('heading', { name: 'Another report' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Draft');
+    await expect(page.getByRole('button', { name: 'Version history', exact: true })).toHaveText('Version history');
     await expect(page).not.toHaveURL(/revision=/);
 });
 
@@ -1235,7 +1236,7 @@ test('Agent references, attachments and per-turn reports survive history without
     expect(requests[0].analysisScope.connectionIds).toEqual([connection.connection.id]);
     expect(requests[0].messages.at(-1)?.parts.find(part => part.type === 'file')?.url).toMatch(/^\/api\/chat\/attachments\//);
     await expect(composer.getByRole('button', { name: 'Remove Report' })).toHaveCount(0);
-    const card = page.getByTestId('message-reports').getByRole('button', { name: /Revenue analysis.*Saved/ });
+    const card = page.getByTestId('message-reports').getByRole('button', { name: /Revenue analysis.*Report generated/ });
     await expect(card).toBeVisible();
     await card.click();
     await expect(page.getByTestId('work-report')).toBeVisible();
@@ -1590,6 +1591,7 @@ test('one report generation displays v1 across cards, completion and history des
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     const session = { id: 'version-chat', title: 'Key Findings Report', type: 'global', connectionId: null };
     const document = { ...makeDocument(), chatId: session.id, revision: 5, version: 1, sourceMessageId: 'version-request' };
+    document.content.markdown = `# ${document.title}\n\n${document.content.markdown}`;
     const versions = [{ revision: 5, version: 1, source: 'agent', createdAt: now }];
     const messages = [
         { id: 'version-request', role: 'user', parts: [{ type: 'text', text: 'Generate a report' }] },
@@ -1607,7 +1609,7 @@ test('one report generation displays v1 across cards, completion and history des
     await page.route('**/api/data-agent', route => route.fulfill({ json: { connections: [], models: [], sessions: [session] } }));
     await page.route('**/api/chat/session/version-chat', route => route.fulfill({ json: { code: 0, data: { session, messages } } }));
     await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [document] } }));
-    await page.route('**/api/work-documents/doc-report*', route => route.fulfill({ json: { document, versions } }));
+    await page.route('**/api/work-documents/doc-report*', route => route.fulfill({ json: { document, versions, editorOwnerId: 'fixture' } }));
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
     await page.goto(`/${organization}/work?chat=${session.id}&panel=closed`);
@@ -1615,14 +1617,19 @@ test('one report generation displays v1 across cards, completion and history des
         await expect(page.getByTestId('message-reports')).toContainText('v1');
         await expect(page.getByTestId('chat-completion')).toContainText('Report saved · v1');
         await expect(page.getByTestId('message-reports')).not.toContainText('v5');
+        const entry = page.getByTestId(i === 0 ? 'message-reports' : 'chat-completion');
+        await entry.getByRole('button').click();
+        await expect(page.getByTestId('work-markdown').getByRole('heading', { level: 1, name: document.title, exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Restore this version', exact: true })).toHaveCount(0);
+        await page.getByRole('button', { name: 'Close resources', exact: true }).click();
         if (i === 0) await page.reload();
     }
     await page.goto(`/${organization}/reports/${document.id}`);
-    const selector = page.getByRole('button', { name: 'Report versions', exact: true });
-    await expect(selector).toHaveText('Draft');
+    const selector = page.getByRole('button', { name: 'Version history', exact: true });
+    await expect(selector).toHaveText('Version history');
     await selector.click();
-    await expect(page.getByRole('menuitemradio')).toHaveCount(2);
-    await expect(page.getByRole('menuitemradio').filter({ hasText: 'r5' })).toBeVisible();
+    await expect(page.getByRole('menuitemradio')).toHaveCount(1);
+    await expect(page.getByRole('menuitemradio').filter({ hasText: 'v1' })).toBeVisible();
     await expectAppHealthy(appErrors);
 });
 
@@ -2335,9 +2342,9 @@ test('report navigation protects unsaved changes and exports a complete Markdown
     await page.goto(`/${organization}/reports/doc-report?q=Revenue&archiveState=all`);
     await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Human changes');
-    await expect.poll(() => writes).toBe(1);
+    expect(writes).toBe(0);
     await page.getByRole('button', { name: 'Continue analysis', exact: true }).click();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Human changes');
     await page.getByRole('button', { name: 'Back to Reports', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Save and continue', exact: true }).click();

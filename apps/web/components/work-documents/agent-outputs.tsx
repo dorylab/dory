@@ -29,7 +29,7 @@ export function AgentOutputs({
         const item = output.kind === 'report' ? output.report : output.artifact;
         const Icon = artifact?.type === 'chart' ? ChartNoAxesCombined : artifact?.type === 'result_set' ? Table2 : FileText;
         const metadata = report
-            ? [t('Report'), t('Updated', { time: format.relativeTime(new Date(report.updatedAt), now) }), report.status === 'draft' ? t('Draft') : null]
+            ? [t('Report'), t('Updated', { time: format.relativeTime(new Date(report.updatedAt), now) })]
             : artifact
               ? [
                     artifactsT(`Viewer.Types.${artifact.type}`),

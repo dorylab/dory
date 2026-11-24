@@ -1,5 +1,6 @@
 'use client';
 
+import { ReportVersionRemoved } from './report-version-removed';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -77,6 +78,8 @@ export function ReportAnalysisWorkspace({ organization, reference, intercepted =
                         reference={reference}
                         closeGuard={closeGuard}
                     />
+                ) : context.error?.message === 'REPORT_VERSION_REMOVED' ? (
+                    <ReportVersionRemoved organization={organization} documentId={reference.documentId} />
                 ) : (
                     <p className="p-6" role={context.error ? 'alert' : 'status'}>
                         {context.error ? workspaceErrorMessage(context.error, t('Unavailable')) : t('Loading')}
@@ -509,7 +512,7 @@ function Analysis({
                         {state.title}
                     </span>
                     <span className="text-xs text-muted-foreground">{t('WorkspaceTitle')}</span>
-                    <span className="text-xs text-muted-foreground">{t('Baseline', { revision: state.baseline?.revision ?? draft.baseRevision })}</span>
+                    {state.baseline?.version && <span className="text-xs text-muted-foreground">{t('Baseline', { revision: state.baseline.version })}</span>}
                     <span role="status" className="text-xs text-muted-foreground">
                         {working.saving || working.dirty ? t('Saving') : t('Saved')}
                     </span>
@@ -851,7 +854,7 @@ function Analysis({
                             <DialogTitle>{t('Preview')}</DialogTitle>
                             <DialogDescription>{t('PreviewDescription')}</DialogDescription>
                         </DialogHeader>
-                        <ReportBody title={state.title} content={state.content} />
+                        <ReportBody content={state.content} />
                     </DialogContent>
                 </Dialog>
                 <Dialog open={review} onOpenChange={setReview}>
@@ -867,7 +870,7 @@ function Analysis({
                                 </li>
                             ))}
                         </ul>
-                        <ReportBody title={state.title} content={state.content} />
+                        <ReportBody content={state.content} />
                         <label className="flex gap-2 text-sm">
                             <input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />
                             {t('Reviewed')}

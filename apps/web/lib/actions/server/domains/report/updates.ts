@@ -100,12 +100,15 @@ const load = defineWebAction({
                       ...target,
                       baseRevision: document.revision,
                       recoverUpdates: true,
-                      state: { ...initialWorkingState(document.title, content), baseline: { revision: document.revision, title: document.title, content } },
+                      state: {
+                          ...initialWorkingState(document.title, content),
+                          baseline: { revision: document.revision, version: document.version, title: document.title, content },
+                      },
                   })
                 : null;
         const bindings = await reportBindings(ctx, content, input.workId);
         return {
-            document: { id: document.id, title: document.title, revision: document.revision, content },
+            document: { id: document.id, title: document.title, revision: document.revision, version: document.version, content },
             latestRevision: current.revision,
             userId: ctx.userId,
             baseRevision: draft?.baseRevision ?? document.revision,
@@ -279,7 +282,6 @@ function commitAction(decide: Decide) {
         inputSchema: edit.extend({ requestId: z.string().uuid() }),
         outputSchema: z.object({
             revision,
-            publicationId: z.string().optional(),
             unchanged: z.boolean().optional(),
             reason: z.string().optional(),
             draftRevision: revision.optional(),
@@ -288,7 +290,7 @@ function commitAction(decide: Decide) {
             const db = ctx.services.db;
             const target = { ...owner(ctx), ...input };
             const retry = await db.workDocuments.savedWorkingVersion(target);
-            if (retry) return { revision: retry.revision, publicationId: retry.publication?.id };
+            if (retry) return { revision: retry.revision };
             const { current, draft } = await readCurrent(ctx, input);
             const { working, results, replacements } = await collectTabResults(ctx, input.workId, current, draft);
             const content = working.state.content;
@@ -352,7 +354,7 @@ function commitAction(decide: Decide) {
                 content: updated,
                 selection: { revision: current.revision, remaining: [], title: current.title, state: initialWorkingState(current.title, updated) },
             });
-            return { revision: saved.revision, publicationId: saved.publication?.id };
+            return { revision: saved.revision };
         },
     });
 }

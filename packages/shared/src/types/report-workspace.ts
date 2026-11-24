@@ -81,7 +81,7 @@ export type ReportWorkingState = {
     canvas?: ReportCanvasState;
     title: string;
     bindingVersion?: 2;
-    baseline?: { revision: number; title: string; content: import('./work-document').WorkDocumentContent };
+    baseline?: { revision: number; version?: number; title: string; content: import('./work-document').WorkDocumentContent };
     charts?: WorkspaceChart[];
     content: import('./work-document').WorkDocumentContent;
     tabs: ReportQueryTab[];

@@ -43,7 +43,6 @@ export function createChatAnalysis(options: {
     requestOrigin: string;
     signal: AbortSignal;
     access?: NonNullable<Awaited<ReturnType<typeof resolveOrganizationAccess>>>;
-    beforeComplete?: () => Promise<void>;
     progressCheckpoints?: boolean;
     resolveWork: () => ReturnType<DBService['works']['startChatTurn']>;
 }) {

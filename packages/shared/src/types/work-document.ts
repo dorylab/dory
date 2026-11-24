@@ -91,10 +91,8 @@ export type WorkDocumentView = {
     scope: AnalysisScope;
     content: WorkDocumentContent;
     revision: number;
-    /** Legacy history grouping; explicit publications use publication.number. */
+    /** Ordinal of this saved version in the report history. */
     version?: number;
-    publishedVersionId?: string | null;
-    publication?: { id: string; number: number; publishedAt: string };
     status: 'draft' | 'ready';
     archivedAt: string | null;
     createdAt: string;

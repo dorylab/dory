@@ -59,7 +59,7 @@ test('component source search filters by the report connection, database, attach
     }
 });
 
-test('drafts, historical versions, publications and archived reports retain full data through expiration and capacity cleanup', async () => {
+test('working drafts, historical versions and archived reports retain full data through expiration and capacity cleanup', async () => {
     const f = await reportRetentionFixture();
     try {
         const rows = Array.from({ length: 750 }, (_, value) => ({ value }));
@@ -69,7 +69,6 @@ test('drafts, historical versions, publications and archived reports retain full
         await f.seedEvidence('disposable');
         const report = await f.reports.create({ ...owner, creationKey: 'report', title: 'Report', scope: { connectionIds: [] }, content: content([original]) });
         const target = { ...owner, documentId: report.id };
-        await f.reports.publish({ ...target, expectedRevision: 1, requestId: 'first' });
         const changed = await f.reports.update({
             ...target,
             expectedRevision: 1,
@@ -115,7 +114,7 @@ test('drafts, historical versions, publications and archived reports retain full
     }
 });
 
-test('publications validate actual stored results while incomplete data and capacity failures leave editable drafts intact', async () => {
+test('saved versions validate actual stored results while incomplete data and capacity failures leave editable drafts intact', async () => {
     const f = await reportRetentionFixture();
     try {
         const evidence = await f.seedEvidence('result', [{ value: 1 }], 'select value from fixture limit 1');
@@ -125,37 +124,42 @@ test('publications validate actual stored results while incomplete data and capa
         const [record] = await f.db.select().from(resultSets).where(eq(resultSets.id, artifact.sourceResultSetId!));
         const manifest = await f.store.resultSets.readManifest(record.artifactRefJson);
         assert.ok(manifest.files.data?.parts?.length);
-        const published = await f.reports.publish({ ...target, expectedRevision: 1, requestId: 'limited-sql' });
-        assert.equal(published.publication.number, 1, 'an explicit SQL LIMIT is a complete query result');
-
         const next = await f.reports.update({ ...target, expectedRevision: 1, title: 'Changed', scope: report.scope, content: report.content, status: 'ready', source: 'user' });
+        const save = () =>
+            f.reports.update({ ...target, expectedRevision: next.revision, title: 'Updated', scope: report.scope, content: report.content, status: 'ready', source: 'user' });
         await f.db.update(resultSets).set({ dataAvailability: 'preview-only' }).where(eq(resultSets.id, record.id));
-        await assert.rejects(f.reports.publish({ ...target, expectedRevision: next.revision, requestId: 'preview' }), /complete retained result/);
+        await assert.rejects(save(), /complete retained result/);
         assert.equal((await f.reports.get(target)).revision, next.revision);
         await f.db
             .update(resultSets)
             .set({ dataAvailability: 'full', byteSize: 6 * 1024 ** 3 })
             .where(eq(resultSets.id, record.id));
-        await assert.rejects(f.reports.publish({ ...target, expectedRevision: next.revision, requestId: 'capacity' }), /storage limit/);
+        await assert.rejects(save(), /storage limit/);
         await f.db.update(resultSets).set({ byteSize: record.byteSize }).where(eq(resultSets.id, record.id));
         await f.store.objectStore.delete(joinObjectPath(record.artifactRefJson.basePath, manifest.files.data!.parts![0].path));
-        await assert.rejects(f.reports.publish({ ...target, expectedRevision: next.revision, requestId: 'missing-part' }), /complete retained result/);
-        assert.equal((await f.reports.publications(target)).length, 1);
+        await assert.rejects(save(), /complete retained result/);
+        assert.equal((await f.reports.versions(target)).length, 2);
         assert.equal((await f.reports.getVersion({ ...target, revision: 1 })).content.evidence[0].rows[0].value, 1);
-        assert.equal(
-            (await f.reports.publish({ ...target, expectedRevision: 1, requestId: 'limited-sql' })).publication.id,
-            published.publication.id,
-            'publication retries remain idempotent',
-        );
-
         const empty = await f.seedEvidence('empty', [], 'select value from fixture where false');
         const emptyReport = await f.reports.create({ ...owner, creationKey: 'empty', title: 'Empty', scope: { connectionIds: [] }, content: content([empty]) });
-        await f.reports.publish({ ...owner, documentId: emptyReport.id, expectedRevision: 1, requestId: 'empty' });
+        await f.reports.rename({ ...owner, documentId: emptyReport.id, expectedRevision: 1, title: 'Renamed empty' });
         const preview = await f.seedEvidence('preview');
         const previewArtifact = await f.catalog.get({ ...owner, artifactId: preview.artifactId });
         await f.db.update(resultSets).set({ dataAvailability: 'preview-only' }).where(eq(resultSets.id, previewArtifact.sourceResultSetId!));
         const previewDraft = await f.reports.create({ ...owner, creationKey: 'preview-draft', title: 'Preview draft', scope: { connectionIds: [] }, content: content([preview]) });
-        await assert.rejects(f.reports.publish({ ...owner, documentId: previewDraft.id, expectedRevision: 1, requestId: 'preview-publication' }), /complete retained result/);
+        await assert.rejects(
+            f.reports.update({
+                ...owner,
+                documentId: previewDraft.id,
+                expectedRevision: 1,
+                title: 'Changed',
+                status: 'ready',
+                source: 'user',
+                content: previewDraft.content,
+                scope: previewDraft.scope,
+            }),
+            /complete retained result/,
+        );
         assert.equal((await f.reports.get({ ...owner, documentId: previewDraft.id })).content.evidence[0].rows.length, 1);
     } finally {
         await f.close();

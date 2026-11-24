@@ -1,4 +1,4 @@
-import { chooseReportMode } from './helpers/report';
+import { chooseReportMode, pendingReport } from './helpers/report';
 import { initialWorkingState, materializeWorkingContent } from '../../apps/web/lib/work-documents/working-draft';
 import type { ReportWorkingDraft } from '@dory/shared/types/report-workspace';
 import type { WorkDocumentView, WorkVisual } from '@dory/shared/types/work-document';
@@ -64,11 +64,10 @@ function fixture(): WorkDocumentView {
     };
 }
 
-test('Reports publish immutable snapshots, interact locally, restore to draft and export selected versions', async ({ page, appErrors }, testInfo) => {
+test('Reports save once, restore immutable history and export the selected version', async ({ page, appErrors }, testInfo) => {
     test.setTimeout(180_000);
     let document = fixture();
     const history = new Map([[1, structuredClone(document)]]);
-    const publications: WorkDocumentView[] = [];
     let originalRequests = 0;
     const drafts = new Map<number, ReportWorkingDraft>();
     await mockWorkbenchApis(page, { initialConnections: [connection] });
@@ -114,15 +113,6 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
             draft.revision++;
             return route.fulfill({ json: { ok: true, data: draft } });
         }
-        if (actionId === 'report.workspace.saveVersion') {
-            const draft = drafts.get(input.baseRevision)!;
-            document = { ...document, revision: document.revision + 1, title: draft.state.title, content: draft.state.content };
-            const published = { ...structuredClone(document), publication: { id: `pub-${publications.length + 1}`, number: publications.length + 1, publishedAt: now } };
-            publications.push(published);
-            document.publishedVersionId = published.publication.id;
-            history.set(document.revision, structuredClone(document));
-            return route.fulfill({ json: { ok: true, data: published } });
-        }
         if (actionId === 'report.workspace.context')
             return route.fulfill({
                 json: {
@@ -148,13 +138,6 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
         if (route.request().method() === 'PATCH') {
             const input = route.request().postDataJSON();
             if (input.expectedRevision !== document.revision) return route.fulfill({ status: 409, json: { error: 'Report changed.' } });
-            if (input.action === 'publish') {
-                resolvedReport(document.content);
-                const published = { ...structuredClone(document), publication: { id: `pub-${publications.length + 1}`, number: publications.length + 1, publishedAt: now } };
-                publications.push(published);
-                document.publishedVersionId = published.publication.id;
-                return route.fulfill({ json: { document: published } });
-            }
             if (input.action === 'restore') document = { ...structuredClone(history.get(input.revision)!), revision: document.revision + 1 };
             else {
                 const parsed = parseReport(input.draft.body, input.draft.visuals);
@@ -175,23 +158,21 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
             history.set(document.revision, structuredClone(document));
             return route.fulfill({ json: { document } });
         }
-        const selected = url.searchParams.get('publication')
-            ? publications.find(item => item.publication?.id === url.searchParams.get('publication'))
-            : url.searchParams.has('revision')
-              ? history.get(Number(url.searchParams.get('revision')))
-              : document;
+        if (url.searchParams.has('publication')) return route.fulfill({ status: 410, json: { error: 'REPORT_VERSION_REMOVED' } });
+        const selected = url.searchParams.has('revision') ? history.get(Number(url.searchParams.get('revision'))) : document;
+        if (!selected) return route.fulfill({ status: 410, json: { error: 'REPORT_VERSION_REMOVED' } });
         return route.fulfill({
             json: {
-                document: selected,
-                versions: [...history.values()].map(item => ({ revision: item.revision, source: 'user', createdAt: now })),
-                publications: publications.map(item => ({ ...item.publication, revision: item.revision })),
+                document: { ...selected, version: selected?.revision },
+                editorOwnerId: 'fixture',
+                versions: [...history.values()].reverse().map(item => ({ revision: item.revision, version: item.revision, source: 'user', createdAt: now })),
             },
         });
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/')[1];
     await page.goto(`/${organization}/reports/report-v2`);
-    await expect(page.getByRole('heading', { name: 'Revenue report', exact: true })).toHaveCount(1);
+    await expect(page.getByTestId('work-markdown').getByRole('heading', { level: 1, name: 'Revenue report', exact: true })).toBeVisible();
     await expect(page.getByText('$123.45', { exact: true })).toBeVisible();
     const filter = page.getByRole('textbox', { name: 'Filter saved rows' });
     await filter.fill('category-59');
@@ -242,30 +223,31 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     await editMetric.click();
     await component.getByRole('textbox', { name: 'Component title', exact: true }).fill('Reviewed revenue');
     await component.getByRole('button', { name: 'Apply', exact: true }).click();
-    await expect.poll(() => document.content.visuals[0].title).toBe('Reviewed revenue');
+    expect(document.content.visuals[0].title).toBe('Revenue');
     await page.getByRole('button', { name: 'Edit Reviewed revenue', exact: true }).click();
     await expect(component.getByRole('textbox', { name: 'Component title', exact: true })).toHaveValue('Reviewed revenue');
     await component.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
-    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Publish version', exact: true }).click();
-    await expect.poll(() => publications.length).toBe(1);
-    await expect(page.getByRole('button', { name: 'Report versions', exact: true })).toHaveText('Published v1');
-    await page.getByRole('button', { name: 'More actions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Restore this version', exact: true }).click();
+    const save = page.getByTestId('report-toolbar').getByRole('button', { name: 'Save', exact: true });
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Edit Reviewed revenue', exact: true })).toBeVisible();
+    await save.click();
+    await expect.poll(() => document.revision).toBe(2);
+    expect(document.content.visuals[0].title).toBe('Reviewed revenue');
+    const versions = page.getByRole('button', { name: 'Version history', exact: true });
+    await versions.click();
+    await page.getByRole('menuitemradio', { name: /v1$/ }).click();
+    await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
-    await chooseReportMode(page, 'Edit');
+    await expect.poll(() => document.revision).toBe(3);
     await chooseReportMode(page, 'Source');
     const source = page.getByTestId('markdown-source').locator('textarea').first();
     await source.press('ControlOrMeta+Home');
     await page.keyboard.insertText('Updated summary.\n\n');
-    await expect.poll(() => document.content.body).toContain('Updated summary.');
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
-    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Publish version', exact: true }).click();
-    await expect.poll(() => publications.length).toBe(2);
-    await page.getByRole('button', { name: 'Report versions', exact: true }).click();
-    await page.getByRole('menuitemradio', { name: 'Published v1', exact: true }).click();
+    expect(document.content.body).not.toContain('Updated summary.');
+    await save.click();
+    await expect.poll(() => document.revision).toBe(4);
+    await versions.click();
+    await page.getByRole('menuitemradio', { name: /v1$/ }).click();
     await expect(page.getByText('Updated summary.', { exact: true })).toHaveCount(0);
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Export', exact: true }).click();
@@ -295,6 +277,12 @@ test('Reports publish immutable snapshots, interact locally, restore to draft an
     await expect(page.getByRole('menuitem', { name: 'Continue analysis', exact: true })).not.toBeVisible();
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('report-v2-dark-mobile.png'), fullPage: true });
     expect(await page.getByTestId('work-report').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    for (const selector of ['publication=old-release', 'revision=23']) {
+        await page.goto(`/${organization}/reports/report-v2?${selector}`);
+        await expect(page.getByTestId('work-report').getByRole('alert')).toContainText('This historical version has been cleared.');
+        await page.getByRole('button', { name: 'Open current report', exact: true }).click();
+        await expect(page.getByTestId('work-markdown')).toContainText('Updated summary.');
+    }
     await expectAppHealthy(appErrors);
 });
 
@@ -323,6 +311,7 @@ test('Compact report toolbar handles long titles, empty sources, archives and sa
     await page.reload();
     await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Keep my unsaved title');
+    await page.getByTestId('report-toolbar').getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByTestId('report-toolbar').getByRole('status')).toHaveText('Save failed');
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Keep my unsaved title');
     await expectAppHealthy(appErrors);
@@ -418,7 +407,7 @@ test('Wide report tables scroll within the editor and keep their theme colors wh
     await expect(lastHeader).toBeInViewport();
     await table.locator('summary').click();
     await editor.getByText('A stable report.', { exact: true }).click();
-    await page.keyboard.press('End');
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
     await page.keyboard.press('ArrowDown');
     for (const colorScheme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme });
@@ -585,6 +574,7 @@ test('Report chart fields are searchable and the series layout updates before an
         await apply.click();
         await expect(dialog).toHaveCount(0);
         await expect(inlineChart).toHaveCount(2);
+        await page.getByTestId('report-toolbar').getByRole('button', { name: 'Save', exact: true }).click();
         await expect.poll(() => saves).toBe(1);
     } finally {
         releaseSave();
@@ -592,7 +582,6 @@ test('Report chart fields are searchable and the series layout updates before an
     await expect.poll(() => document.revision).toBe(2);
     const inserted = document.content.visuals.find(visual => visual.evidenceId === 'financials')!;
     expect(inserted.chart?.seriesLayout).toBe('combined');
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
     const savedChart = page.getByTestId('report-content').locator(`[data-visual="${inserted.id}"]`);
     await expect(savedChart.locator('.recharts-wrapper')).toHaveCount(1);
     await expect(savedChart.locator('.recharts-line-curve')).toHaveCount(2);
@@ -630,7 +619,7 @@ test('Report block editing preserves source through mode switches, saves prose, 
             };
             return route.fulfill({ json: { document } });
         }
-        return route.fulfill({ json: { document, versions: [], publications: [] } });
+        return route.fulfill({ json: { document, versions: [], editorOwnerId: 'fixture' } });
     });
     await page.goto('/');
     const organization = new URL(page.url()).pathname.split('/')[1];
@@ -668,30 +657,36 @@ test('Report block editing preserves source through mode switches, saves prose, 
     await paragraph.click();
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
     await page.keyboard.insertText(' 中文输入。');
-    await expect.poll(() => document.content.body).toContain('中文输入。');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('中文输入。');
     await page.keyboard.insertText(' Still focused.');
-    await expect.poll(() => document.content.body).toContain('中文输入。 Still focused.');
-    expect(document.content.body).toContain('[Reference][ref]\n\n[ref]: https://example.com');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('中文输入。 Still focused.');
+    expect((await pendingReport(page)).content.body).toContain('[Reference][ref]\n\n[ref]: https://example.com');
     await page.keyboard.press('Enter');
     await page.keyboard.insertText('Second block.');
     await expect(editor.locator('.bn-block-outer').filter({ hasText: 'Second block.' })).toHaveCount(1);
-    await expect.poll(() => document.content.body).toContain('Second block.');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('Second block.');
     const second = editor.locator('.bn-block-outer').filter({ hasText: 'Second block.' });
     await second.hover();
     await second.locator('.bn-inline-content').click();
     await second.hover();
     await page.getByRole('button', { name: 'Open block menu', exact: true }).click();
+    // Isolate this command from the preceding typing in ProseMirror's undo history.
+    await page.waitForTimeout(550);
     await page.getByRole('menuitem', { name: 'Move up', exact: true }).click();
-    await expect.poll(() => document.content.body!.indexOf('Second block.') < document.content.body!.indexOf('Original paragraph.')).toBe(true);
+    await expect
+        .poll(async () => (await pendingReport(page)).content.body!.indexOf('Second block.') < (await pendingReport(page)).content.body!.indexOf('Original paragraph.'))
+        .toBe(true);
     await editor.getByRole('button', { name: 'Undo', exact: true }).click();
-    await expect.poll(() => document.content.body!.indexOf('Second block.') > document.content.body!.indexOf('Original paragraph.')).toBe(true);
+    await expect
+        .poll(async () => (await pendingReport(page)).content.body!.indexOf('Second block.') > (await pendingReport(page)).content.body!.indexOf('Original paragraph.'))
+        .toBe(true);
     await second.hover();
     await second.locator('.bn-inline-content').click();
     await editor.getByRole('button', { name: 'Block actions', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
-    await expect.poll(() => document.content.body).not.toContain('Second block.');
+    await expect.poll(async () => (await pendingReport(page)).content.body).not.toContain('Second block.');
     await editor.getByRole('button', { name: 'Undo', exact: true }).click();
-    await expect.poll(() => document.content.body).toContain('Second block.');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('Second block.');
     await second.locator('.bn-inline-content').click();
     await editor.getByRole('button', { name: 'Insert block', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Metric', exact: true }).click();
@@ -715,14 +710,14 @@ test('Report block editing preserves source through mode switches, saves prose, 
     await page.getByRole('option', { name: 'value', exact: true }).click();
     await dialog.getByRole('textbox', { name: 'Component title', exact: true }).fill('Inserted metric');
     await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
-    await expect.poll(() => document.content.visuals.some(visual => visual.title === 'Inserted metric')).toBe(true);
-    const inserted = document.content.visuals.find(visual => visual.title === 'Inserted metric')!;
-    expect(document.content.body).toContain(`Second block.\n\n<Metric source="${inserted.id}" />`);
+    await expect.poll(async () => (await pendingReport(page)).content.visuals.some(visual => visual.title === 'Inserted metric')).toBe(true);
+    const inserted = (await pendingReport(page)).content.visuals.find(visual => visual.title === 'Inserted metric')!;
+    expect((await pendingReport(page)).content.body).toContain(`Second block.\n\n<Metric source="${inserted.id}" />`);
     await editor.getByRole('button', { name: 'Insert block', exact: true }).first().click();
     await page.getByRole('menuitem', { name: 'Table', exact: true }).click();
     await editor.getByRole('cell').first().locator('p').click();
     await page.keyboard.insertText('Definition');
-    await expect.poll(() => document.content.body).toContain('Definition');
+    await expect.poll(async () => (await pendingReport(page)).content.body).toContain('Definition');
     const firstProseBlock = editor.locator('.bn-block-outer').filter({ hasText: 'Original paragraph.' });
     await firstProseBlock.hover();
     const handle = await page.locator('[data-test="dragHandle"]').boundingBox();
@@ -733,7 +728,9 @@ test('Report block editing preserves source through mode switches, saves prose, 
     await page.mouse.move(target!.x + 100, target!.y + target!.height + 5, { steps: 15 });
     await page.mouse.move(target!.x + 101, target!.y + target!.height + 6);
     await page.mouse.up();
-    await expect.poll(() => document.content.body!.indexOf('Original paragraph.') > document.content.body!.indexOf('Second block.')).toBe(true);
+    await expect
+        .poll(async () => (await pendingReport(page)).content.body!.indexOf('Original paragraph.') > (await pendingReport(page)).content.body!.indexOf('Second block.'))
+        .toBe(true);
     await page.screenshot({ path: testInfo.outputPath('report-block-editor-light.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => window.document.documentElement.classList.add('dark'));
@@ -748,11 +745,14 @@ test('Report block editing preserves source through mode switches, saves prose, 
     await expect(page.getByTestId('markdown-source')).toBeVisible();
     await expect(editor).toHaveCount(0);
     await expect(page.getByText('Fix the MDX errors in Source before opening block editing.')).toBeVisible();
+    expect(saves).toBe(0);
+    await page.getByTestId('report-toolbar').getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(document.content.body).toBe(body);
     await expectAppHealthy(appErrors);
 });
 
 for (const status of [409, 500]) {
-    test(`BlockNote keeps new input during autosave and preserves the draft after ${status}`, async ({ page, appErrors }) => {
+    test(`BlockNote keeps new input during save and preserves the draft after ${status}`, async ({ page, appErrors }) => {
         let document = fixture();
         document.content.body = 'Original paragraph.';
         document.content.markdown = 'Original paragraph.';
@@ -786,21 +786,30 @@ for (const status of [409, 500]) {
         await paragraph.click();
         await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
         await page.keyboard.insertText(' First edit.');
+        const save = page.getByTestId('report-toolbar').getByRole('button', { name: 'Save', exact: true });
+        await save.click();
         await expect.poll(() => saving).toBe(true);
+        await paragraph.click();
+        await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
         await page.keyboard.insertText(' New input.');
         releaseSave();
+        await expect(save).toBeEnabled();
+        await save.click();
         await expect(page.getByTestId('report-toolbar').getByRole('status')).toHaveText('Save failed');
         await expect(paragraph).toContainText('First edit. New input.');
+        await paragraph.click();
+        await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End');
         await page.keyboard.insertText(' Caret retained.');
         await expect(paragraph).toContainText('New input. Caret retained.');
         await chooseReportMode(page, 'View');
+        await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
         await expect(editor).toBeVisible();
         await chooseReportMode(page, 'Source');
         await expect(page.getByTestId('markdown-source')).toBeVisible();
         await chooseReportMode(page, 'Edit');
         await expect(paragraph).toContainText('New input. Caret retained.');
         fail = false;
-        await chooseReportMode(page, 'View');
+        await save.click();
         await expect(editor).toHaveCount(0);
         expect(document.content.body).toContain('New input. Caret retained.');
         await expectAppHealthy(

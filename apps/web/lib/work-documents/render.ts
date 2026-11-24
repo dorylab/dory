@@ -216,7 +216,7 @@ export function renderWorkHtml(document: WorkDocumentView): string {
         )
         .join('');
     const body = renderWorkMarkdown(document.content, true, document.title).replace(/href="dory:\/\/evidence\/([^"<>]+)"/g, 'href="#evidence-$1"');
-    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>${workPrintStyles}</style></head><body><header><h1>${escapeHtml(document.title)}</h1><p>${document.publication ? `v${document.publication.number}` : `r${document.revision}`} · ${escapeHtml(document.updatedAt)}${document.publication ? ' · Published / 已发布' : ' · Draft / 草稿'}</p></header>${body}<footer><h2>Sources / 来源</h2><ul>${groups}${sources}</ul></footer></body></html>`;
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(document.title)}</title><style>${workPrintStyles}</style></head><body><header><h1>${escapeHtml(document.title)}</h1><p>v${document.version ?? document.revision} · ${escapeHtml(document.updatedAt)}</p></header>${body}<footer><h2>Sources / 来源</h2><ul>${groups}${sources}</ul></footer></body></html>`;
 }
 
 /** Portable chart projection computed from the full immutable ResultSet at Apply time. */

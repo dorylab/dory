@@ -1,6 +1,6 @@
 'use client';
 
-import { useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import dynamic from 'next/dynamic';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import type { WorkDocumentContent, WorkEvidence, WorkVisual } from '@dory/shared/types/work-document';
@@ -31,24 +31,27 @@ export default function ReportEditor({
     content,
     documentId,
     restrictSources,
-    title,
     onChange,
     onEvidenceGroup,
+    onReadyChange,
 }: {
     ref?: Ref<ReportEditorHandle>;
+    onReadyChange: (ready: boolean) => void;
     mode: 'blocks' | 'source';
     onSource: () => void;
     content: WorkDocumentContent;
     documentId: string;
     restrictSources?: boolean;
-    title: string;
     onChange: (content: WorkDocumentContent) => void;
     onEvidenceGroup?: (id: string) => void;
 }) {
     const t = useTranslations('WorkDocuments.Report');
+    useEffect(() => {
+        onReadyChange(true);
+        return () => onReadyChange(false);
+    }, [onReadyChange]);
     const incoming = editableReport(content);
-    // Autosave prunes unreferenced metadata on the server. Keep the editing
-    // session's bindings available for undo and for switching editing surfaces.
+    // Keep bindings for deleted blocks available until the user saves, so undo and mode switches can recover them.
     const retained = useRef(incoming);
     const retain = <T,>(latest: T[], previous: T[], key: (value: T) => string) => [...latest, ...previous.filter(value => !latest.some(item => key(item) === key(value)))];
     const current = {
@@ -153,7 +156,6 @@ export default function ReportEditor({
                             ) : (
                                 <ReportBody
                                     content={displayContent}
-                                    title={title}
                                     onEvidenceGroup={onEvidenceGroup}
                                     onEditComponent={id => {
                                         const visual = current.visuals.find(item => item.id === id);

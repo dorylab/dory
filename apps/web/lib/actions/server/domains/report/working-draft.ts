@@ -76,16 +76,15 @@ const context = defineWebAction({
     actors: ['user'],
     handler: async (ctx, reference) => {
         const target = { ...owner(ctx), documentId: reference.documentId };
-        const document = reference.publicationId
-            ? await ctx.services.db.workDocuments.getPublication({ ...target, publicationId: reference.publicationId })
-            : await ctx.services.db.workDocuments.getVersion({ ...target, revision: reference.revision });
+        if (reference.publicationId) throw new DatabaseError('REPORT_VERSION_REMOVED', 410);
+        const document = await ctx.services.db.workDocuments.getVersion({ ...target, revision: reference.revision });
         let draft = await ctx.services.db.workDocuments.initializeWorkingDraft({
             ...owner(ctx),
             documentId: reference.documentId,
             baseRevision: reference.revision,
             state: {
                 ...initialWorkingState(document.title, document.content),
-                baseline: { revision: document.revision, title: document.title, content: editableReport(document.content) },
+                baseline: { revision: document.revision, version: document.version, title: document.title, content: editableReport(document.content) },
             },
         });
         const origin = draft.baseRevision === document.revision ? document : await ctx.services.db.workDocuments.getVersion({ ...target, revision: draft.baseRevision });
@@ -324,7 +323,7 @@ const apply = defineWebAction({
         return ctx.services.db.workDocuments.saveWorkingDraft({ ...owner(ctx), ...input, state });
     },
 });
-const publish = defineWebAction({
+const saveVersion = defineWebAction({
     id: 'report.workspace.saveVersion',
     domain: 'report',
     kind: 'command',
@@ -343,4 +342,4 @@ const publish = defineWebAction({
         return { ...document, draft: await readDraft(ctx, input) };
     },
 });
-export const reportWorkingDraftActions = [context, save, apply, publish];
+export const reportWorkingDraftActions = [context, save, apply, saveVersion];

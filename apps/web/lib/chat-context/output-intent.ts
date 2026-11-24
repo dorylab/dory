@@ -81,15 +81,14 @@ export function resolveReportWorkflow(context: ChatContext, text: string, docume
     const references = context.references.filter(ref => ref.kind === 'report').map(ref => ref.id);
     const create = context.outputIntent === 'report' || isNewReportRequest(text);
     const editing = !create && (isReportEditRequest(text) || resume);
-    const publishing = !create && isReportPublishRequest(text);
-    const target = create ? { documentId: null, ambiguous: false } : selectReportTarget(documentId, references, editing || publishing ? candidates : []);
+    const target = create ? { documentId: null, ambiguous: false } : selectReportTarget(documentId, references, editing ? candidates : []);
     const outputIntent =
         create || (!target.documentId && !target.ambiguous && (isReportSaveRequest(text) || resolveChatOutputIntent(context, text) === 'report')) ? 'report' : 'answer';
     return {
         outputIntent: outputIntent as ChatContext['outputIntent'],
         documentId: target.documentId,
         ambiguous: target.ambiguous,
-        readOnly: target.ambiguous || (!editing && !publishing && Boolean(target.documentId || references.length) && outputIntent !== 'report'),
+        readOnly: target.ambiguous || (outputIntent !== 'report' && !(editing && target.documentId)),
         requireUpdate: editing && Boolean(target.documentId),
     };
 }
@@ -100,10 +99,6 @@ export function requestsReportChart(text: string): boolean {
 
 export function isReportEditRequest(text: string): boolean {
     return isReportContentEditRequest(text) || isReportSaveRequest(text);
-}
-
-export function isReportPublishRequest(text: string): boolean {
-    return actionableReportClauses(text).some(clause => /发布|\bpublish\b/i.test(clause));
 }
 
 export function requestedReportVisualTypes(text: string): Array<'chart' | 'metric' | 'table'> {

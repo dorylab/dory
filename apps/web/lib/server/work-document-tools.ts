@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { workDraftSchema, workPatchSchema } from '@/lib/work-documents/schema';
 
-import { assertDocumentWrite, emptyWorkContent, patchWorkDocument, publishWorkReport, saveWorkDraft } from './work-documents';
+import { assertDocumentWrite, emptyWorkContent, patchWorkDocument, saveWorkDraft } from './work-documents';
 
 function agentDocument(document: Awaited<ReturnType<DBService['workDocuments']['get']>>) {
     return {
@@ -34,7 +34,6 @@ export function createWorkDocumentTools(options: {
     scope: AnalysisScope;
     documentId?: string | null;
     requireReport?: boolean;
-    allowPublish?: boolean;
     requireUpdate?: boolean;
     requireChart?: boolean;
     requiredVisualTypes?: Array<'chart' | 'metric' | 'table'>;
@@ -47,8 +46,7 @@ export function createWorkDocumentTools(options: {
     let producedVersion: number | undefined;
     const remember = (document: Parameters<typeof agentDocument>[0]) => {
         producedId = document.id;
-        producedRevision = document.revision;
-        producedVersion = document.version;
+
         return agentDocument(document);
     };
     const owner = { organizationId: options.organizationId, userId: options.userId };
@@ -81,7 +79,7 @@ export function createWorkDocumentTools(options: {
         completionStatus: async (): Promise<'missing' | 'draft' | 'ready'> => {
             const id = currentId ?? (await options.db.workDocuments.findByCreationKey({ ...owner, creationKey: options.creationKey }))?.id;
             if (!id) return 'missing';
-            const document = await options.db.workDocuments.get({ ...owner, documentId: id });
+            const document = await options.db.workDocuments.agentView({ ...owner, requestId: options.requestId, documentId: id });
             return isSaved(document) ? 'ready' : 'draft';
         },
         assertReady: async () => {
@@ -92,15 +90,14 @@ export function createWorkDocumentTools(options: {
                 producedId = currentId;
             }
             if (!currentId) return;
-            const document = await options.db.workDocuments.get({ ...owner, documentId: currentId });
-            if (isSaved(document) && (options.requireUpdate || producedId === document.id)) {
-                producedId = document.id;
-                producedRevision = document.content.agentWrite?.revision ?? document.revision;
-                producedVersion =
-                    producedRevision === document.revision
-                        ? document.version
-                        : (await options.db.workDocuments.getVersion({ ...owner, documentId: document.id, revision: producedRevision })).version;
+            const completed = await options.db.workDocuments.completedAgent({ ...owner, documentId: currentId, requestId: options.requestId });
+            if (completed) {
+                producedId = completed.id;
+                producedRevision = completed.revision;
+                producedVersion = completed.version;
+                return;
             }
+            const document = await options.db.workDocuments.agentView({ ...owner, requestId: options.requestId, documentId: currentId });
             if (options.requireUpdate && !isSaved(document))
                 throw new Error(
                     'The requested report update was not saved in this turn. The previous report is preserved. Read the latest report and complete the requested update.',
@@ -109,12 +106,21 @@ export function createWorkDocumentTools(options: {
                 throw new Error(
                     'The report is still a draft. Read it and save a complete patch with status: ready before finishing, or finish with status: error and explain what remains.',
                 );
+            if (isSaved(document) && (options.requireUpdate || producedId === document.id)) {
+                const saved = await options.db.workDocuments.finishAgent({ ...owner, documentId: document.id, requestId: options.requestId });
+                producedId = saved.id;
+                producedRevision = saved.revision;
+                producedVersion = saved.version;
+            }
+        },
+        discardPreview: async () => {
+            if (currentId) await options.db.workDocuments.discardAgent({ ...owner, documentId: currentId, requestId: options.requestId });
         },
         instructions: async (local = false) => {
-            const current = currentId ? await options.db.workDocuments.get({ ...owner, documentId: currentId }) : null;
+            const current = currentId ? await options.db.workDocuments.agentView({ ...owner, requestId: options.requestId, documentId: currentId }) : null;
             return [
                 'Attach evidence to substantive findings with a paragraph-end [Evidence](dory://evidence-group/GROUP_ID) link and evidenceGroups:[{id:GROUP_ID,references:[{artifactId:RETURNED_ARTIFACT_ID,explanation:"How this result supports or qualifies the claim"}]}]. One group belongs to one prose paragraph and can cite several query results. Use existing report evidence or results from the current Work. Keep the stable group ID when editing or moving its paragraph; remove its link to remove that association. Omit evidenceGroups on updates to preserve existing groups, or provide the complete list when editing associations. Never invent IDs or claim these citations verify correctness. A changed paragraph or reference needs human review; an agent cannot mark it reviewed. Existing [Source](dory://evidence/ARTIFACT_ID) citations remain supported.',
-                'Prefer Overview, Key Metrics, Key Findings, Detailed Analysis, Recommendations, then Methodology and Limitations. Distinguish data coverage from query execution time. status ready means the draft is complete, not published. Publish only when explicitly requested by the user.',
+                'Prefer Overview, Key Metrics, Key Findings, Detailed Analysis, Recommendations, then Methodology and Limitations. Distinguish data coverage from query execution time. A ready report is committed once when the turn finishes.',
                 'A report is a persistent Markdown report, distinct from an Agent Run. Create one when asked for a report/deliverable, not for ordinary questions. Continue the current report unless explicitly asked for a separate one.',
                 'New reports use restricted MDX: pass format: restricted-mdx and put the MDX text in markdown. Updates edit the latest content.body; patch.format defaults to the stored format. Legacy dory://visual edits continue to use content.markdown. Prefer patch.embedVisualIds:[VISUAL_ID] to embed registered visuals; the server writes the correct component tags. When writing tags directly, use standalone <Metric source="VISUAL_ID" />, <Chart source="VISUAL_ID" />, <DataTable source="VISUAL_ID" />. source is the visual.id, NEVER the artifactId; the artifactId belongs only in visual.evidenceId. Do not use JavaScript, imports or HTML. Legacy Markdown inputs remain supported. Include analysis period, definitions, missing sources and limitations in the prose. Use headings, paragraphs, lists, simple tables and citations [source](dory://evidence/ARTIFACT_ID). Embed data visuals on their own line using the registered MDX tags. A visual is {id,type:chart|table|metric,title,evidenceId,chart?:{type:bar|line|area|pie,xKey,yKey?:string,yKeys?:[{key,label?}]},metric?:{column,rowIndex}}. IDs use letters, digits, hyphens and underscores. Each visual references ONE real query Artifact. Use table visuals for query results, never copy query rows into editable Markdown tables. Markdown tables are only for prose. Metrics reference a real cell, not a generated value. Compute totals and percentages in SQL and cite those query results; never calculate them mentally from previews. Do not repeat the report title as a Markdown h1. Never include result rows, HTML, SVG, executable code or MDX as visuals. To persist report charts, use updateWorkReport visuals. chartBuilder can preview a chart in chat but does not save or embed it. Pie charts use one non-negative numeric series with a positive total and complete aggregate evidence. The category column must represent the requested groups (for example active=true/false). If evidence is a single totals row with separate active/inactive count or percentage columns, rerun queryAttachment grouped by active to get category/value rows; never use one percentage metric as the category of another.',
                 options.requiredVisualTypes?.length
@@ -144,19 +150,6 @@ export function createWorkDocumentTools(options: {
             ].join('\n');
         },
         tools: {
-            publishWorkReport: tool({
-                description: 'Publish a fixed report version only when the user explicitly asks to publish. Generating a report alone does not authorize publishing.',
-                inputSchema: z.object({ documentId: z.string(), expectedRevision: z.number().int().positive(), requestId: z.string().min(1).max(200) }),
-                execute: async input => {
-                    if (!options.allowPublish) throw new Error('Publication requires an explicit user request. Save changes with updateWorkReport.');
-                    const workId = await assertActive();
-                    const work = await options.db.works.assertChatTurn({ ...owner, workId, requestId: options.requestId });
-                    const turn = work.metadata?.chatTurn as { reportReadOnly?: boolean } | undefined;
-                    if (turn?.reportReadOnly) throw new Error('This turn can only read the selected report.');
-                    if (currentId && input.documentId !== currentId) throw new Error('Publish the selected report.');
-                    return agentDocument(await publishWorkReport(options.db, { ...owner, ...input }));
-                },
-            }),
             createWorkReport: tool({
                 description: 'Create a Markdown report draft for a requested deliverable. Stable request key prevents duplicate documents.',
                 inputSchema: workDraftSchema,
@@ -201,7 +194,7 @@ export function createWorkDocumentTools(options: {
                 description:
                     'Read the latest report, human changes, visual registry and revision. editTarget identifies the exact field to copy oldText anchors from. content.markdown is a rendered representation when editTarget.field is content.body.',
                 inputSchema: z.object({ documentId: z.string() }),
-                execute: async input => agentDocument(await options.db.workDocuments.get({ ...owner, documentId: input.documentId })),
+                execute: async input => agentDocument(await options.db.workDocuments.agentView({ ...owner, requestId: options.requestId, documentId: input.documentId })),
             }),
             updateWorkReport: tool({
                 description:

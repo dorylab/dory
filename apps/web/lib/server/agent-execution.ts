@@ -1782,13 +1782,19 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         throw new McpFacadeError('FINAL_ANSWER_REQUIRED', 'Provide finalAnswer with the exact answer to display in chat.');
     let reportDocumentId: string | undefined;
     let reportRevision: number | undefined;
+    let reportVersion: number | undefined;
     if (turn && input.finalAnswer && input.status === 'completed') {
         const run = await ctx.services.db.works.getById({ organizationId: ctx.organizationId, userId: ctx.userId, workId: turn.workId });
         const chatTurn = run?.metadata?.chatTurn as
             | { outputIntent?: string; reportCreationKey?: string; reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean } }
             | undefined;
         if (chatTurn?.reportTarget && !input.report) {
-            const report = await ctx.services.db.workDocuments.get({ organizationId: ctx.organizationId, userId: ctx.userId, documentId: chatTurn.reportTarget.documentId });
+            const report = await ctx.services.db.workDocuments.agentView({
+                requestId: turn.requestId,
+                organizationId: ctx.organizationId,
+                userId: ctx.userId,
+                documentId: chatTurn.reportTarget.documentId,
+            });
             if (report.status !== 'ready' || report.content.agentWrite?.requestId !== turn.requestId)
                 throw new McpFacadeError('REPORT_INCOMPLETE', 'The requested report update was not saved in this turn. The previous report is preserved.');
             reportDocumentId = report.id;
@@ -1798,7 +1804,12 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
             const report = chatTurn.reportCreationKey
                 ? await ctx.services.db.workDocuments.findByCreationKey({ organizationId: ctx.organizationId, userId: ctx.userId, creationKey: chatTurn.reportCreationKey })
                 : null;
-            if (!report || report.status !== 'ready') throw new McpFacadeError('REPORT_INCOMPLETE', 'Create and save the requested report before completing.');
+            if (
+                !report ||
+                (await ctx.services.db.workDocuments.agentView({ organizationId: ctx.organizationId, userId: ctx.userId, requestId: turn.requestId, documentId: report.id }))
+                    .status !== 'ready'
+            )
+                throw new McpFacadeError('REPORT_INCOMPLETE', 'Create and save the requested report before completing.');
             reportDocumentId = report.id;
             reportRevision = report.revision;
         }
@@ -1823,7 +1834,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                 throw new McpFacadeError('REPORT_REQUIRES_NEW', 'Create a new report for this turn; do not overwrite an existing report.');
         }
         const existing = input.report.documentId
-            ? await ctx.services.db.workDocuments.get({ ...owner, documentId: input.report.documentId })
+            ? await ctx.services.db.workDocuments.agentView({ ...owner, requestId: turn.requestId, documentId: input.report.documentId })
             : await ctx.services.db.workDocuments.create({
                   ...owner,
                   title: input.report.draft!.title,
@@ -1858,8 +1869,11 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         if (input.status === 'completed' && (input.report.draft?.status ?? input.report.patch?.status) !== 'ready')
             throw new McpFacadeError('REPORT_INCOMPLETE', 'Save a ready report before marking this analysis completed.');
         if (input.report.documentId && !input.report.expectedRevision) throw new McpFacadeError('VERSION_REQUIRED', 'Pass the version from the current report snapshot.');
+        const completed =
+            input.status === 'completed' ? await ctx.services.db.workDocuments.completedAgent({ ...owner, documentId: existing.id, requestId: turn.requestId }) : null;
         const saved =
-            !input.report.documentId && existing.revision > 1
+            completed ??
+            (!input.report.documentId && existing.revision > 1
                 ? existing
                 : input.report.documentId
                   ? await patchWorkDocument(ctx.services.db, {
@@ -1880,16 +1894,28 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                         runId: run.workId,
                         requestId: turn.requestId,
                         scope,
-                    });
+                    }));
         reportDocumentId = saved.id;
         reportRevision = saved.revision;
         if (saved.status === 'draft' && !input.finalAnswer) {
-            return withWork({ status: 'active', reportDocumentId: saved.id, reportRevision: saved.revision, reportSaved: true, incomplete: true }, work);
+            return withWork({ status: 'active', reportDocumentId: saved.id, reportRevision: saved.revision, reportSaved: false, incomplete: true }, work);
         }
     }
+    const commitReport = async () => {
+        if (!turn || !reportDocumentId || input.status !== 'completed') return;
+        const saved = await ctx.services.db.workDocuments.finishAgent({
+            organizationId: ctx.organizationId,
+            userId: ctx.userId,
+            documentId: reportDocumentId,
+            requestId: turn.requestId,
+        });
+        reportRevision = saved.revision;
+        reportVersion = saved.version;
+    };
     // A report has its own persistence contract; it does not require Findings.
     if (turn && input.report && findings.length === 0) {
         const current = await ctx.services.db.works.assertChatTurn({ organizationId: ctx.organizationId, userId: ctx.userId, workId: turn.workId, requestId: turn.requestId });
+        await commitReport();
         let finalAnswer = input.finalAnswer;
         if (finalAnswer && typeof current.metadata?.chatId === 'string') {
             const message = await ctx.services.db.chat.appendMessage({
@@ -1904,13 +1930,21 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                     connectionId: current.connectionId,
                     role: 'assistant',
                     parts: [{ type: 'text', text: finalAnswer }],
-                    metadata: { agentRunId: work.workId, requestId: turn.requestId, reportSaved: true, reportDocumentId, reportRevision, summarySaved: false },
+                    metadata: {
+                        agentRunId: work.workId,
+                        requestId: turn.requestId,
+                        reportSaved: input.status === 'completed',
+                        reportDocumentId,
+                        reportRevision,
+                        reportVersion,
+                        summarySaved: false,
+                    },
                     createdAt: new Date(),
                 },
             });
             finalAnswer = getChatResponseText(message.parts);
         }
-        return withWork({ status: input.status, reportDocumentId, reportRevision, reportSaved: true, finalAnswer }, work);
+        return withWork({ status: input.status, reportDocumentId, reportRevision, reportVersion, reportSaved: input.status === 'completed', finalAnswer }, work);
     }
     if (turn)
         await revalidateChatFindingEvidence(
@@ -1928,6 +1962,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         steps: input.steps,
         ...(turn ? { requestId: turn.requestId, responseMessageId: turn.responseMessageId } : {}),
     });
+    await commitReport();
 
     let finalAnswer = input.finalAnswer;
     if (turn && input.finalAnswer && typeof updated.metadata?.chatId === 'string') {
@@ -1949,6 +1984,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                     summarySaved: true,
                     reportDocumentId,
                     reportRevision,
+                    reportVersion,
                     ...(input.status === 'error' ? { finishReason: 'error', responseError: input.summaryTitle ?? 'Analysis incomplete.' } : {}),
                 },
                 createdAt: new Date(),
@@ -1964,7 +2000,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     return withWork(
         {
             status: updated.status,
-            ...(reportDocumentId ? { reportDocumentId } : {}),
+            ...(reportDocumentId ? { reportDocumentId, reportRevision, reportVersion, reportSaved: Boolean(reportVersion) } : {}),
             ...(turn ? { summarySaved: true, finalAnswer } : {}),
             summaryTitle: summary?.summaryTitle ?? null,
             findings: summary?.findings ?? findings.map(finding => (typeof finding === 'string' ? finding : finding.title)),

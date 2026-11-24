@@ -84,7 +84,7 @@ test('legacy conversion preserves literal Markdown, code examples and visual ref
     assert.match(body, /Metric source="total"/);
 });
 
-test('publication freezes the selected revision, is idempotent, retains snapshots and enforces ownership', async () => {
+test('saved versions retain immutable snapshots and enforce ownership', async () => {
     const fixture = await reportRetentionFixture();
     const repo = fixture.reports;
     const db = fixture.client;
@@ -100,16 +100,10 @@ test('publication freezes the selected revision, is idempotent, retains snapshot
         });
         const target = { ...owner, documentId: first.id };
         const saved = await repo.update({ ...target, expectedRevision: 1, title: first.title, content: content(), scope: first.scope, status: 'ready', source: 'user' });
-        assert.equal((await repo.publications(target)).length, 0, 'ready is not published');
+        assert.equal(saved.version, 1);
         assert.ok(saved.content.evidence[0].snapshotId);
         assert.equal(saved.content.embeds!.total.snapshotId, saved.content.evidence[0].snapshotId);
         assert.doesNotThrow(() => resolvedReport(saved.content));
-        const [published, duplicate] = await Promise.all([
-            repo.publish({ ...target, expectedRevision: 2, requestId: 'publish' }),
-            repo.publish({ ...target, expectedRevision: 2, requestId: 'publish' }),
-        ]);
-        assert.equal(published.publication.id, duplicate.publication.id);
-        assert.equal(published.publication.number, 1);
         const next = await repo.update({
             ...target,
             expectedRevision: 2,
@@ -120,18 +114,14 @@ test('publication freezes the selected revision, is idempotent, retains snapshot
             source: 'user',
         });
         assert.equal(next.content.evidence[0].snapshotId, saved.content.evidence[0].snapshotId, 'reuses immutable data');
-        assert.equal((await repo.getPublication({ ...target, publicationId: published.publication.id })).title, 'Revenue');
-        assert.equal((await repo.publish({ ...target, expectedRevision: 2, requestId: 'publish' })).publication.id, published.publication.id);
-        await assert.rejects(repo.publish({ ...target, expectedRevision: 2, requestId: 'stale' }), /changed/);
-        await assert.rejects(repo.publish({ ...target, expectedRevision: 3, requestId: 'publish' }), /already used/);
-        await assert.rejects(repo.getPublication({ ...target, userId: 'bob', publicationId: published.publication.id }), /not found/);
-        const second = await repo.publish({ ...target, expectedRevision: 3, requestId: 'second' });
-        assert.equal(second.publication.number, 2);
+        assert.equal((await repo.getVersion({ ...target, revision: saved.revision })).title, 'Revenue');
+        await assert.rejects(repo.getVersion({ ...target, userId: 'bob', revision: saved.revision }), /not found/);
+        assert.equal(next.version, 2);
         const restored = await repo.restore({ ...target, revision: 2, expectedRevision: 3 });
         assert.equal(restored.revision, 4);
-        assert.equal((await repo.publications(target)).length, 2);
+        assert.equal((await repo.versions(target)).length, 3);
         await repo.archive({ ...target, archived: true });
-        const historical = await repo.getPublication({ ...target, publicationId: published.publication.id });
+        const historical = await repo.getVersion({ ...target, revision: saved.revision });
         // Historical rendering/exporting still uses the original embedded report data.
         const view: WorkDocumentView = {
             ...historical,
@@ -182,7 +172,7 @@ test('static exports preserve metric formatting and attach only the saved table 
         content: { markdown: '![Details](dory://visual/table)', visuals: [table], evidence: [tableEvidence], knowledge: [] },
     };
     const files = markdownExportFiles(doc);
-    assert.match(strFromU8(files['report.md']), /Draft r1/);
+    assert.match(strFromU8(files['report.md']), /v1/);
     assert.doesNotMatch(strFromU8(files['report.md']), /row-69/);
     assert.match(strFromU8(files['data/table.csv']), /row-69/);
     const invalid = editableReport(doc.content);

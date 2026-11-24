@@ -10,9 +10,8 @@ const owner = (ctx: Context) => ({ organizationId: ctx.organizationId, userId: c
 
 export async function loadReportEvidence(ctx: Context, reference: ReportEvidenceReference) {
     const target = { ...owner(ctx), documentId: reference.documentId };
-    const document = reference.publicationId
-        ? await ctx.services.db.workDocuments.getPublication({ ...target, publicationId: reference.publicationId })
-        : await ctx.services.db.workDocuments.getVersion({ ...target, revision: reference.revision });
+    if (reference.publicationId) throw new DatabaseError('REPORT_VERSION_REMOVED', 410);
+    const document = await ctx.services.db.workDocuments.getVersion({ ...target, revision: reference.revision });
     const evidence = selectReportEvidence(document, reference, ctx.userId);
     return { document, evidence };
 }

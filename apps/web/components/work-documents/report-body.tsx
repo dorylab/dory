@@ -214,12 +214,10 @@ export function ReportVisual({
 export function ReportBody({
     onOpenSql,
     content,
-    title,
     onEvidenceGroup,
     onEditComponent,
 }: {
     content: WorkDocumentContent;
-    title: string;
     onOpenSql?: (origin: { artifactId?: string; componentId?: string; section?: string }) => void;
     onEvidenceGroup?: (id: string) => void;
     onEditComponent?: (id: string) => void;
@@ -240,9 +238,7 @@ export function ReportBody({
         }
     };
     if (!content.format && !onOpenSql)
-        return (
-            <div data-testid="work-markdown" className="report-prose" onClick={groupClick} dangerouslySetInnerHTML={{ __html: labels(renderWorkMarkdown(content, true, title)) }} />
-        );
+        return <div data-testid="work-markdown" className="report-prose" onClick={groupClick} dangerouslySetInnerHTML={{ __html: labels(renderWorkMarkdown(content)) }} />;
     let prepared: WorkDocumentContent;
     try {
         prepared = resolvedReport(content);
@@ -293,15 +289,6 @@ export function ReportBody({
         if (from < key + body.length) chunks.push(renderProse(editable.body!.slice(from, key + body.length), from));
         return <div key={'section-' + key}>{chunks}</div>;
     };
-    // Suppress only a matching leading H1; the stored content stays untouched.
-    const first = parsed.tree?.children[0];
-    if (
-        first?.type === 'heading' &&
-        first.depth === 1 &&
-        first.children.every(child => child.type === 'text') &&
-        first.children.map(child => ('value' in child ? child.value : '')).join('') === title
-    )
-        offset = first.position?.end.offset ?? 0;
     for (const component of parsed.components) {
         sections.push(prose(editable.body!.slice(offset, component.start), offset));
         const visual = prepared.visuals.find(item => item.id === component.visualId)!;

@@ -63,7 +63,6 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
     'dory_get_report',
-    'dory_publish_report',
     'dory_publish_progress',
     'dory_read',
     'dory_write',

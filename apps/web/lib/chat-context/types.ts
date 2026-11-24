@@ -1,3 +1,4 @@
+import type { ChatCompletion } from '@dory/shared/types/chat-completion';
 import type { FileUIPart } from 'ai';
 import { z } from 'zod';
 
@@ -24,6 +25,8 @@ export type ChatMetadata = Partial<ChatContext> & {
     userMessageId?: string;
     reportDocumentId?: string;
     reportRevision?: number;
+    reportVersion?: number;
+    completion?: ChatCompletion;
     reportSave?: { status: 'saved' | 'failed'; error?: string };
 };
 

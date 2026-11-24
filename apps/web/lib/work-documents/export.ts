@@ -88,7 +88,7 @@ export function markdownExportFiles(document: WorkDocumentView): Record<string, 
         .map((e, index) => `${index + 1}. ${cell(e.connectionName ?? e.connectionId)} — ${cell(e.title)} — ${e.capturedAt}${e.truncated ? ' (Preview / 数据预览)' : ''}`)
         .join('\n');
     files['report.md'] = strToU8(
-        `# ${cell(document.title)}\n\n${document.publication ? `Published v${document.publication.number}` : `Draft r${document.revision}`} · ${document.updatedAt}\n\n${markdown}\n\n## Sources / 来源\n\n${sources}\n`,
+        `# ${cell(document.title)}\n\nv${document.version ?? document.revision} · ${document.updatedAt}\n\n${markdown}\n\n## Sources / 来源\n\n${sources}\n`,
     );
     return files;
 }
@@ -145,7 +145,7 @@ export function exportDoryMdxZip(document: WorkDocumentView): Uint8Array {
                     format: 'restricted-mdx',
                     title: document.title,
                     revision: document.revision,
-                    publication: document.publication ?? null,
+                    version: document.version,
                     exportedAt: new Date().toISOString(),
                     embeds: content.embeds,
                     snapshots: evidence,

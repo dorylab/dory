@@ -6,7 +6,7 @@ import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { AnalysisScope } from '@dory/shared/types/work-document';
 import { z } from 'zod';
 
-import { emptyWorkContent, publishWorkReport, saveWorkDraft, validateAnalysisScope } from '@/lib/server/work-documents';
+import { emptyWorkContent, saveWorkDraft, validateAnalysisScope } from '@/lib/server/work-documents';
 import { analysisScopeSchema, reportEvidenceGroupsSchema, reviewedEvidenceGroupIdsSchema, workVisualSchema } from '@/lib/work-documents/schema';
 
 import { defineWebAction } from '../../define-web-action';
@@ -61,7 +61,7 @@ const reportCreate = defineWebAction({
     mcp: {
         name: 'dory_create_report',
         title: 'Create Report',
-        description: 'Create an idempotent private report draft in restricted MDX. Use standalone Metric, Chart and DataTable tags with source="visual-id". This does not publish.',
+        description: 'Create an idempotent private report in restricted MDX. Use standalone Metric, Chart and DataTable tags with source="visual-id".',
     },
     audit: { allowInputFields: ['requestId', 'sourceWorkId'] },
     handler: async (ctx, input) => {
@@ -97,7 +97,7 @@ const reportCreate = defineWebAction({
                         visuals: input.visuals,
                         evidenceGroups: input.evidenceGroups,
                         reviewedEvidenceGroupIds: input.reviewedEvidenceGroupIds,
-                        status: 'draft',
+                        status: 'ready',
                     },
                 }),
             ),
@@ -117,15 +117,12 @@ const reportGet = defineWebAction({
     mcp: {
         name: 'dory_get_report',
         title: 'Read Report',
-        description: 'Read a private report, diagnostics, revision and bounded evidence preview. Select a publication or historical revision explicitly.',
+        description: 'Read a private report, diagnostics, revision and bounded evidence preview. Select a saved revision to read a historical version.',
     },
     handler: async (ctx, input) => {
         const target = { ...owner(ctx), documentId: input.documentId };
-        const document = input.publicationId
-            ? await ctx.services.db.workDocuments.getPublication({ ...target, publicationId: input.publicationId })
-            : input.revision
-              ? await ctx.services.db.workDocuments.getVersion({ ...target, revision: input.revision })
-              : await ctx.services.db.workDocuments.get(target);
+        if (input.publicationId) throw new DatabaseError('REPORT_VERSION_REMOVED', 410);
+        const document = input.revision ? await ctx.services.db.workDocuments.getVersion({ ...target, revision: input.revision }) : await ctx.services.db.workDocuments.get(target);
         assertScope(ctx, document.scope);
         return { document: bounded(document) };
     },
@@ -143,12 +140,14 @@ const reportUpdate = defineWebAction({
     actors: ['user', 'agent', 'mcp', 'automation'],
     mcp: {
         name: 'dory_update_report',
-        title: 'Update Report Draft',
-        description: 'Atomically update MDX and component configurations with expectedRevision. Read again on conflict and preserve human edits. Never changes published versions.',
+        title: 'Update Report',
+        description:
+            'Atomically update MDX and component configurations with expectedRevision. Read again on conflict and preserve human edits. Creates one saved version when content changes.',
     },
     audit: { allowInputFields: ['documentId', 'expectedRevision'] },
     handler: async (ctx, input) => {
         await writableReport(ctx, input.documentId);
+        if (ctx.services.agentTurn) throw new DatabaseError('Use the turn-bound updateWorkReport or dory_finish_work report tool in the built-in Work.', 409);
         if (ctx.actor.type !== 'user' && input.reviewedEvidenceGroupIds?.length) throw new DatabaseError('Only a person can mark evidence as reviewed.', 403);
         return {
             document: bounded(
@@ -165,40 +164,11 @@ const reportUpdate = defineWebAction({
                         visuals: input.visuals,
                         evidenceGroups: input.evidenceGroups,
                         reviewedEvidenceGroupIds: input.reviewedEvidenceGroupIds,
-                        status: 'draft',
+                        status: 'ready',
                     },
                 }),
             ),
         };
     },
 });
-const reportPublish = defineWebAction({
-    id: 'report.publish',
-    domain: 'report',
-    kind: 'command',
-    risk: 'write',
-    requiresConfirmation: false,
-    inputSchema: z.object({ documentId: z.string().min(1), expectedRevision: z.number().int().positive(), requestId: z.string().min(1).max(200) }),
-    outputSchema: documentOutput,
-    permissions: writeWorkspace,
-    scopes: ['write'],
-    actors: ['user', 'agent', 'mcp', 'automation'],
-    mcp: {
-        name: 'dory_publish_report',
-        title: 'Publish Report',
-        description:
-            'Freeze an immutable report version only when the user explicitly requests publication. Generating or completing a report does not authorize publication. Retry with the same requestId and revision.',
-    },
-    audit: { allowInputFields: ['documentId', 'expectedRevision', 'requestId'] },
-    handler: async (ctx, input) => {
-        await writableReport(ctx, input.documentId);
-        if (ctx.services.agentTurn) {
-            const { workId, requestId } = ctx.services.agentTurn;
-            const work = await ctx.services.db.works.assertChatTurn({ ...owner(ctx), workId, requestId });
-            if (!(work.metadata?.chatTurn as { reportPublishAllowed?: boolean } | undefined)?.reportPublishAllowed)
-                throw new DatabaseError('Publication requires an explicit user request.', 403);
-        }
-        return { document: bounded(await publishWorkReport(ctx.services.db, { ...owner(ctx), ...input })) };
-    },
-});
-export const reportActions = [reportCreate, reportGet, reportUpdate, reportPublish, reportComponentSourcesAction, reportEvidenceCandidatesAction, ...reportWorkspaceActions];
+export const reportActions = [reportCreate, reportGet, reportUpdate, reportComponentSourcesAction, reportEvidenceCandidatesAction, ...reportWorkspaceActions];

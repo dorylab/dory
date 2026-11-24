@@ -1,3 +1,4 @@
+import { ReportVersionRemoved } from './report-version-removed';
 import { ReportRunWorkspace } from './report-run-workspace';
 import { ReportWorkspace } from './report-workspace';
 
@@ -22,6 +23,7 @@ export default async function ReportWorkspacePage({
     }>;
 }) {
     const [path, query] = await Promise.all([params, searchParams]);
+    if (query.publication) return <ReportVersionRemoved organization={path.organization} documentId={path.documentId} />;
     if (query.run && query.connection)
         return (
             <ReportRunWorkspace

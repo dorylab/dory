@@ -9,7 +9,6 @@ import {
     DropdownMenuLabel,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
-    DropdownMenuSeparator,
     DropdownMenuSub,
     DropdownMenuSubContent,
     DropdownMenuSubTrigger,
@@ -19,7 +18,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { WorkDocumentView, WorkVisual } from '@dory/shared/types/work-document';
 import { ArrowLeft, ChevronDown, Download, MoreHorizontal, Plus } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import type { ReportMode } from '@/lib/work-documents/report-blocks';
 
@@ -35,10 +34,9 @@ type Props = {
     saveError: boolean;
     unavailable: boolean;
     disabled: boolean;
-    canPublish: boolean;
+    onCancel: () => void;
     canExport: boolean;
-    publications: Array<{ id: string; number: number; revision: number; publishedAt: string }>;
-    versions: Array<{ revision: number; source: string; createdAt: string }>;
+    versions: Array<{ revision: number; version?: number; sourceChatId?: string | null; source: string; createdAt: string }>;
     latestRevision?: number;
     onOpenWorkspace?: () => void;
     workspaceAvailable: boolean;
@@ -46,10 +44,10 @@ type Props = {
     onContinue: () => void;
     onEdit: () => void;
     onTitle: (title: string) => void;
-    onPublish: () => void;
-    onVersion: (value: string) => void;
-    onRestore: () => void;
+    onSourceChat: (chatId: string) => void;
+    onVersion: (revision: number | null) => void;
     onExport: (format: 'html' | 'pdf' | 'markdown' | 'mdx') => void;
+    editorReady: boolean;
     onInsert: (type: WorkVisual['type']) => void;
 };
 function IconHint({ label, children }: { label: string; children: ReactNode }) {
@@ -71,12 +69,14 @@ export function ReportToolbar(p: Props) {
     }, []);
     const t = useTranslations('WorkDocuments');
     const r = useTranslations('WorkDocuments.Report');
-    const version = p.document.publication ? `publication:${p.document.publication.id}` : p.historical ? `revision:${p.document.revision}` : 'draft';
-    const status = p.document.publication
-        ? r('Published', { number: p.document.publication.number })
-        : p.historical
-          ? r('HistoricalRevision', { revision: p.document.revision })
-          : r('Draft');
+    const locale = useLocale();
+    const days = new Map<string, Props['versions']>();
+    for (const entry of p.versions) {
+        const day = new Date(entry.createdAt).toLocaleDateString(locale, { dateStyle: 'medium' });
+        const entries = days.get(day);
+        if (entries) entries.push(entry);
+        else days.set(day, [entry]);
+    }
     const exports = (
         <>
             <DropdownMenuItem onSelect={() => p.onExport('html')}>HTML</DropdownMenuItem>
@@ -120,45 +120,33 @@ export function ReportToolbar(p: Props) {
                         disabled={p.unavailable}
                         aria-label={r('VersionMenu')}
                     >
-                        <span className="truncate">{status}</span>
+                        <span className="truncate">{r('VersionMenu')}</span>
                         <ChevronDown className="size-3 shrink-0" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="max-h-[70dvh] max-w-[calc(100vw-2rem)] overflow-y-auto">
-                    <DropdownMenuRadioGroup value={version} onValueChange={p.onVersion}>
-                        <DropdownMenuRadioItem value="draft">{r('Draft')}</DropdownMenuRadioItem>
-                        {p.publications.length > 0 && (
-                            <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel>{r('PublishedVersions')}</DropdownMenuLabel>
-                                {p.publications.map(item => (
-                                    <DropdownMenuRadioItem key={item.id} value={`publication:${item.id}`}>
-                                        {r('Published', { number: item.number })}
-                                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioGroup value={String(p.document.revision)} onValueChange={value => p.onVersion(value === String(p.latestRevision) ? null : Number(value))}>
+                        {[...days].map(([day, entries]) => (
+                            <div key={day}>
+                                <DropdownMenuLabel>{day}</DropdownMenuLabel>
+                                {entries.map(item => (
+                                    <div key={item.revision}>
+                                        <DropdownMenuRadioItem value={String(item.revision)}>
+                                            {new Date(item.createdAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })} ·{' '}
+                                            {t(
+                                                `VersionHistory.${item.source === 'agent' ? 'Agent' : item.source === 'workspace' ? 'Workspace' : item.source === 'restore' ? 'Restored' : item.source === 'baseline' ? 'Baseline' : 'User'}`,
+                                            )}{' '}
+                                            · v{item.version ?? item.revision}
+                                            {item.revision === p.latestRevision && ` · ${t('VersionHistory.Latest')}`}
+                                        </DropdownMenuRadioItem>
+                                        {item.sourceChatId && (
+                                            <DropdownMenuItem onSelect={() => p.onSourceChat(item.sourceChatId!)}>{t('VersionHistory.OpenChat')}</DropdownMenuItem>
+                                        )}
+                                    </div>
                                 ))}
-                            </>
-                        )}
-                        {p.versions.length > 0 && (
-                            <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel>{r('History')}</DropdownMenuLabel>
-                                {p.versions.map(item => (
-                                    <DropdownMenuRadioItem key={item.revision} value={`revision:${item.revision}`}>
-                                        r{item.revision} · {new Date(item.createdAt).toLocaleString()}
-                                        {item.revision === p.latestRevision ? ` · ${t('VersionHistory.Latest')}` : ''}
-                                    </DropdownMenuRadioItem>
-                                ))}
-                            </>
-                        )}
+                            </div>
+                        ))}
                     </DropdownMenuRadioGroup>
-                    {!p.historical && (
-                        <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem disabled={!p.canPublish} onSelect={p.onPublish}>
-                                {r('Publish')}
-                            </DropdownMenuItem>
-                        </>
-                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
             {p.onOpenWorkspace && (
@@ -195,6 +183,7 @@ export function ReportToolbar(p: Props) {
                             size="icon"
                             variant="ghost"
                             className="report-toolbar-secondary size-7 shrink-0"
+                            disabled={!p.editorReady}
                             data-report-insert
                             aria-label={r('InsertComponent')}
                             title={r('InsertComponent')}
@@ -211,46 +200,52 @@ export function ReportToolbar(p: Props) {
                     </DropdownMenuContent>
                 </DropdownMenu>
             )}
-            {compact ? (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" aria-label={r('Mode')}>
-                            {r(p.mode === 'view' ? 'ViewMode' : p.mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
-                            <ChevronDown className="ml-1 size-3" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuRadioGroup value={p.mode} onValueChange={value => p.onMode(value as ReportMode)}>
-                            {(['view', 'blocks', 'source'] as const).map(mode => (
-                                <DropdownMenuRadioItem key={mode} value={mode} disabled={p.unavailable || (mode !== 'view' && p.disabled) || (mode === 'view' && p.saving)}>
-                                    {r(mode === 'view' ? 'ViewMode' : mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
-                                </DropdownMenuRadioItem>
-                            ))}
-                        </DropdownMenuRadioGroup>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            ) : (
-                <div role="group" aria-label={r('Mode')} className="flex shrink-0 rounded-md border p-0.5">
-                    {(['view', 'blocks', 'source'] as const).map(mode => (
-                        <Button
-                            key={mode}
-                            type="button"
-                            size="sm"
-                            variant={p.mode === mode ? 'secondary' : 'ghost'}
-                            className="h-6 px-2 text-xs"
-                            aria-pressed={p.mode === mode}
-                            disabled={p.unavailable || (mode !== 'view' && p.disabled) || (mode === 'view' && p.saving)}
-                            onClick={() => p.onMode(mode)}
-                        >
-                            {r(mode === 'view' ? 'ViewMode' : mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
-                        </Button>
-                    ))}
-                </div>
-            )}
+            {!p.historical &&
+                (compact ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" aria-label={r('Mode')}>
+                                {r(p.mode === 'view' ? 'ViewMode' : p.mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
+                                <ChevronDown className="ml-1 size-3" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuRadioGroup value={p.mode} onValueChange={value => p.onMode(value as ReportMode)}>
+                                {(['view', 'blocks', 'source'] as const).map(mode => (
+                                    <DropdownMenuRadioItem key={mode} value={mode} disabled={p.unavailable || (mode !== 'view' && p.disabled) || (mode === 'view' && p.saving)}>
+                                        {r(mode === 'view' ? 'ViewMode' : mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
+                                    </DropdownMenuRadioItem>
+                                ))}
+                            </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : (
+                    <div role="group" aria-label={r('Mode')} className="flex shrink-0 rounded-md border p-0.5">
+                        {(['view', 'blocks', 'source'] as const).map(mode => (
+                            <Button
+                                key={mode}
+                                type="button"
+                                size="sm"
+                                variant={p.mode === mode ? 'secondary' : 'ghost'}
+                                className="h-6 px-2 text-xs"
+                                aria-pressed={p.mode === mode}
+                                disabled={p.unavailable || (mode !== 'view' && p.disabled) || (mode === 'view' && p.saving)}
+                                onClick={() => p.onMode(mode)}
+                            >
+                                {r(mode === 'view' ? 'ViewMode' : mode === 'blocks' ? 'BlockMode' : 'SourceMode')}
+                            </Button>
+                        ))}
+                    </div>
+                ))}
             {p.editing && (
-                <Button size="sm" className="h-7 shrink-0 px-2 text-xs" variant="outline" disabled={p.saving} onClick={p.onEdit}>
-                    {t('Done')}
-                </Button>
+                <>
+                    <Button size="sm" className="h-7 px-2 text-xs" variant="ghost" disabled={p.saving} onClick={p.onCancel}>
+                        {t('Resources.Cancel')}
+                    </Button>
+                    <Button size="sm" className="h-7 px-2 text-xs" disabled={p.saving || p.disabled} onClick={p.onEdit}>
+                        {t('Save')}
+                    </Button>
+                </>
             )}
             <DropdownMenu>
                 <IconHint label={t('Export')}>
@@ -262,7 +257,7 @@ export function ReportToolbar(p: Props) {
                 </IconHint>
                 <DropdownMenuContent align="end">{exports}</DropdownMenuContent>
             </DropdownMenu>
-            {(compact || p.historical) && (
+            {compact && (
                 <DropdownMenu>
                     <IconHint label={r('More')}>
                         <DropdownMenuTrigger asChild>
@@ -278,7 +273,7 @@ export function ReportToolbar(p: Props) {
                             </DropdownMenuItem>
                             {p.editing && (
                                 <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger>{r('InsertComponent')}</DropdownMenuSubTrigger>
+                                    <DropdownMenuSubTrigger disabled={!p.editorReady}>{r('InsertComponent')}</DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent>
                                         {(['metric', 'chart', 'table'] as const).map(type => (
                                             <DropdownMenuItem key={type} onSelect={() => p.onInsert(type)}>
@@ -293,15 +288,6 @@ export function ReportToolbar(p: Props) {
                                 <DropdownMenuSubContent>{exports}</DropdownMenuSubContent>
                             </DropdownMenuSub>
                         </div>
-                        {p.historical && (
-                            <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem disabled={p.disabled || p.unavailable} onSelect={p.onRestore}>
-                                    {t('VersionHistory.Restore')}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => p.onVersion('draft')}>{t('VersionHistory.BackToLatest')}</DropdownMenuItem>
-                            </>
-                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
             )}

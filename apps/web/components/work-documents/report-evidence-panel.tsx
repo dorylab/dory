@@ -319,7 +319,6 @@ export function ReportEvidencePanel({
         reference: {
             documentId: document.id,
             revision: document.revision,
-            publicationId: document.publication?.id,
             artifactId: item.artifactId,
             snapshotId: document.content.evidence.find(evidence => evidence.artifactId === item.artifactId)?.snapshotId,
             ...('componentId' in selection ? { componentId: selection.componentId } : {}),

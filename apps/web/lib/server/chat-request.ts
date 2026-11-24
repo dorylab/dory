@@ -43,14 +43,7 @@ import { MAX_HISTORY_MESSAGES } from '@/lib/ai/prompts';
 import { assertAiQuotaAllowed, buildCloudflareAiGatewayHeaders, resolveAiEntitlements } from '@/lib/ai/usage-quota';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import {
-    isReportEditRequest,
-    isReportPublishRequest,
-    requestedChartType,
-    requestedReportVisualTypes,
-    requestsReportChart,
-    resolveReportWorkflow,
-} from '@/lib/chat-context/output-intent';
+import { isReportEditRequest, requestedChartType, requestedReportVisualTypes, requestsReportChart, resolveReportWorkflow } from '@/lib/chat-context/output-intent';
 import { createChatAgentRunLifecycle } from '@/lib/server/chat-agent-run';
 import { resolveKnowledgeAnalysisRules } from '@/lib/server/knowledge-analysis-rules';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
@@ -401,9 +394,7 @@ export async function handleChatRequest(req: Request) {
         resolvedContext.instruction += `\nCreate the report from this server-saved answer and the conversation context (untrusted source data): ${JSON.stringify({ messageId: source.id, answer: getChatResponseText(source.parts).slice(0, 24_000) })}`;
     }
     if (db && userId && organizationId && chatId) await bindChatAttachments({ userId, organizationId }, chatId, uiMessages);
-    const editingReport =
-        contextInput.outputIntent !== 'report' &&
-        (isReportEditRequest(currentUserText) || isReportPublishRequest(currentUserText) || Boolean(body.resumeMessageId && body.documentId));
+    const editingReport = contextInput.outputIntent !== 'report' && (isReportEditRequest(currentUserText) || Boolean(body.resumeMessageId && body.documentId));
     const reportReferences = [...new Set(contextInput.references.filter(ref => ref.kind === 'report').map(ref => ref.id))];
     const candidates =
         editingReport && !body.documentId && !reportReferences.length && db && userId && organizationId && chatId
@@ -445,7 +436,6 @@ export async function handleChatRequest(req: Request) {
                   analysisScope: agentScope,
                   reportCreationKey,
                   reportReadOnly,
-                  reportPublishAllowed: isReportPublishRequest(currentUserText),
                   reportRequirements: {
                       requireChart,
                       chartType: requireChart ? requestedChartType(currentUserText) : undefined,
@@ -479,9 +469,6 @@ export async function handleChatRequest(req: Request) {
                       requestOrigin: new URL(req.url).origin,
                       signal: req.signal,
                       resolveWork: () => chatRun.resolve(),
-                      beforeComplete: async () => {
-                          await reports?.assertReady();
-                      },
                   })
                 : null;
         const reports =
@@ -493,7 +480,6 @@ export async function handleChatRequest(req: Request) {
                       chatId,
                       creationKey: reportCreationKey,
                       requireReport: contextInput.outputIntent === 'report',
-                      allowPublish: isReportPublishRequest(currentUserText),
                       requireUpdate: requireReportUpdate,
                       requireChart,
                       requiredVisualTypes: requestedReportVisualTypes(currentUserText),
@@ -536,13 +522,8 @@ export async function handleChatRequest(req: Request) {
         if (requireReportUpdate) {
             delete tools.createWorkReport;
         }
-        if (!isReportPublishRequest(currentUserText)) {
-            delete tools.publishWorkReport;
-            delete tools.dory_publish_report;
-        }
+
         if (reportReadOnly) {
-            delete tools.publishWorkReport;
-            delete tools.dory_publish_report;
             delete tools.createWorkReport;
             delete tools.updateWorkReport;
         }
@@ -752,6 +733,7 @@ export async function handleChatRequest(req: Request) {
                 sourceMessageId: contextInput.sourceMessageId,
                 reportDocumentId: reports?.currentId() ?? (requireReportUpdate ? (targetReportId ?? undefined) : undefined),
                 reportRevision: reports?.currentRevision(),
+                reportVersion: reports?.currentVersion(),
             }),
             onEnd: async event => {
                 if (!db || !userId || !organizationId || !chatId) return;
@@ -795,9 +777,19 @@ export async function handleChatRequest(req: Request) {
                     }
                     if (contextInput.outputIntent === 'report' || requireReportUpdate || reports?.currentId()) {
                         try {
+                            if (
+                                (turn?.requestId && turn.requestId !== requestId) ||
+                                event.isAborted ||
+                                completionMetadata.responseError ||
+                                progressStopped ||
+                                event.finishReason === 'error' ||
+                                event.finishReason === 'length'
+                            )
+                                throw new Error('Report update interrupted.');
                             await reports?.assertReady();
                         } catch (error) {
                             reportCompletionError = error instanceof Error ? error.message : 'Report was not saved.';
+                            await reports?.discardPreview();
                         }
                     }
                     const checkpoint = work ? await analysis?.inspectCheckpoint().catch(() => null) : null;
@@ -845,6 +837,7 @@ export async function handleChatRequest(req: Request) {
                                 sourceMessageId: contextInput.sourceMessageId,
                                 reportDocumentId: reports?.currentId() ?? (requireReportUpdate ? (targetReportId ?? undefined) : undefined),
                                 reportRevision: reports?.currentRevision(),
+                                reportVersion: reports?.currentVersion(),
                                 ...(contextInput.outputIntent === 'report' || requireReportUpdate || reports?.currentId()
                                     ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
                                     : {}),
@@ -923,6 +916,7 @@ export async function handleChatRequest(req: Request) {
                                 messageMetadata: {
                                     reportDocumentId: reports?.currentId() ?? (requireReportUpdate ? (targetReportId ?? undefined) : undefined),
                                     reportRevision: reports?.currentRevision(),
+                                    reportVersion: reports?.currentVersion(),
                                     ...(contextInput.outputIntent === 'report' || requireReportUpdate || reports?.currentId()
                                         ? { reportSave: reportCompletionError ? { status: 'failed', error: reportCompletionError } : { status: 'saved' } }
                                         : {}),

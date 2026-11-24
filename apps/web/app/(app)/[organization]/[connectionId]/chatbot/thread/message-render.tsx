@@ -70,7 +70,7 @@ type MessageRendererProps = {
 
     showRunLinks?: boolean;
     onContinue?: (messageId: string) => void;
-    onOpenReport?: (documentId: string) => void;
+    onOpenReport?: (documentId: string, revision?: number) => void;
     mode?: ChatMode;
     onExecuteAction?: CopilotActionExecutor;
 };

@@ -125,7 +125,7 @@ export function DataAgent() {
     const panel = state.panel ?? (state.document ? 'report' : 'closed');
     const navigatePanel = async (
         next: 'resources' | 'report' | 'query' | 'artifact' | 'closed',
-        target: { document?: string; queryRun?: string; querySession?: string; artifact?: string } = {},
+        target: { document?: string; revision?: number | null; queryRun?: string; querySession?: string; artifact?: string } = {},
     ) => {
         if (reportRef.current && !(await reportRef.current.requestLeave())) return false;
         await setState({
@@ -135,7 +135,7 @@ export function DataAgent() {
             artifact: null,
             resourcePage: 0,
             ...target,
-            ...(target.document ? { chat: chatId, ...(target.document !== state.document ? { revision: null } : {}) } : {}),
+            ...(target.document ? { chat: chatId, revision: target.revision ?? null } : {}),
         });
         return true;
     };
@@ -293,7 +293,7 @@ export function DataAgent() {
                                     }}
                                     onStarted={() => void setState({ chat: chatId })}
                                     reports={reports.data?.documents ?? []}
-                                    onOpenReport={id => void navigatePanel('report', { document: id })}
+                                    onOpenReport={(id, revision) => void navigatePanel('report', { document: id, revision })}
                                     scopePicker={
                                         <AgentScopePicker
                                             connections={options.data?.connections ?? emptyConnections}
@@ -395,7 +395,7 @@ function AgentConversation({
     onBusy: (busy: boolean) => void;
     onStarted: () => void;
     reports: WorkDocumentSummary[];
-    onOpenReport: (id: string) => void;
+    onOpenReport: (id: string, revision?: number) => void;
 }) {
     const t = useTranslations('WorkDocuments');
     const chatT = useTranslations('Chatbot');
