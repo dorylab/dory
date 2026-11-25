@@ -6,28 +6,13 @@ import path from 'node:path';
 import test from 'node:test';
 
 import Database from 'better-sqlite3';
-import { ossieRevision, parseKnowledgeYaml, parseOssieYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
-import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
-import { assertEvaluationRows, buildOlistOssieDocument, olistScenarios, type EvaluationRow } from '@/lib/demo/olist-evaluation';
+import { assertEvaluationRows, olistScenarios, type EvaluationRow } from '@/lib/demo/olist-evaluation';
 import { agentPrompt } from '../olist-evaluation-run';
 import { codexCalls, replayOlist, validateAgent, writeEvaluationReport, type JsonRecord, type ToolCall } from '../olist/evaluation';
 import { verifyOlistFixture } from '../olist/fixture';
 
 const prepareScript = path.resolve('scripts/olist/prepare.py');
-
-test('Olist model passes official Ossie schema, preserves bindings and has no invented refund or profit fields', () => {
-    const yaml = serializeOssieDocument(buildOlistOssieDocument('conn-olist', { min: '2016-09-04', max: '2018-10-17' }));
-    const doc = parseOssieYaml(yaml);
-    const projection = parseKnowledgeYaml(yaml, 'conn-olist', false);
-    assert.equal(doc.version, OSSIE_VERSION);
-    assert.equal(doc.datasets.length, 9);
-    assert.equal(doc.metrics?.length, 8);
-    assert.equal(doc.relationships?.length, 7);
-    assert.ok(projection.definitions.every(d => d.status === 'verified' && d.sourceConnectionId === 'conn-olist'));
-    assert.equal(ossieRevision(doc), ossieRevision(parseOssieYaml(serializeOssieDocument(doc))));
-    assert.ok(!doc.metrics?.some(m => ['refund_rate', 'net_profit', 'payment_success_rate'].includes(m.name)));
-});
 
 test('CSV oracle and SQL agree on fanout, missing items, multi-payment, moving customers and same-day delivery', async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'olist-test-'));
@@ -142,10 +127,8 @@ function measuredCalls(): ToolCall[] {
             input: { connectionId: 'conn', userQuestion: scenario.question },
             output: {
                 workId: 'run',
-                semanticContext: scenario.semanticNames.join(' '),
-                semanticModelsUsed: [
-                    { name: 'Olist Commerce Knowledge', ossieVersion: OSSIE_VERSION, modelRevision: 'revision', metricNames: scenario.semanticNames, relationshipNames: [] },
-                ],
+                semanticContext: 'Olist Commerce Knowledge',
+                semanticModelsUsed: [{ name: 'Olist Commerce Knowledge', modelRevision: 'revision', metricNames: scenario.semanticNames, relationshipNames: [] }],
             },
         },
         { tool: 'dory_search_assets', input: { workId: 'run' }, output: {} },

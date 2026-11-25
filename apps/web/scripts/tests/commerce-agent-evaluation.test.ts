@@ -6,38 +6,8 @@ import test from 'node:test';
 
 import Database from 'better-sqlite3';
 
-import { parseKnowledgeYaml, parseOssieYaml, serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
-
 import { COMMERCE_EVALUATION_COUNTS, generateCommerceAgentEvaluationSqlite } from '@/lib/demo/commerce-agent-evaluation';
-import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
-
-test('commerce evaluation Knowledge is a complete, verified Ossie 0.2.0.dev0 model', () => {
-    const connectionId = 'conn_commerce_evaluation';
-    const yaml = serializeOssieDocument(buildCommerceEvaluationOssieDocument(connectionId));
-    const document = parseOssieYaml(yaml);
-    const projection = parseKnowledgeYaml(yaml, connectionId, false);
-    const model = document;
-
-    assert.equal(document.version, '0.2.0.dev0');
-    assert.equal(model.name, 'Commerce Operations Knowledge');
-    assert.equal(model.datasets.length, 7);
-    assert.equal(model.metrics?.length, 8);
-    assert.equal(model.relationships?.length, 7);
-    assert.ok(typeof model.ai_context === 'object' && model.ai_context.examples?.includes(COMMERCE_EVALUATION_SCENARIOS[1].question));
-    assert.ok(projection.definitions.every(definition => definition.status === 'verified'));
-    assert.ok(projection.definitions.every(definition => definition.sourceConnectionId === connectionId));
-    for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
-        assert.ok(
-            scenario.expectedSemanticIds.every(id => (scenario.definitionIds as readonly string[]).includes(id)),
-            `${scenario.id} must link all required semantic definitions`,
-        );
-    }
-    const productRelationship = projection.definitions.find(definition => definition.id === 'relationship:order_items_product');
-    assert.equal(productRelationship?.from, 'order_items');
-    assert.equal(productRelationship?.to, 'products');
-    assert.deepEqual(productRelationship?.fromColumns, ['product_id']);
-    assert.deepEqual(productRelationship?.toColumns, ['product_id']);
-});
+import { COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
 
 test('commerce Agent evaluation seed is deterministic and includes the expected investigation signals', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'dory-commerce-evaluation-'));

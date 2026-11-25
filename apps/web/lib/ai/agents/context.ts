@@ -41,6 +41,7 @@ type BuildDoryAgentContextOptions = {
     locale?: Locale;
     question?: string | null;
     includeSemanticContext?: boolean;
+    knowledgeModelId?: string | null;
 };
 
 function normalizeSchemaTableRef(value: unknown): DoryAgentSchemaTableRef | null {
@@ -128,10 +129,8 @@ export async function buildDoryAgentContext(options: BuildDoryAgentContextOption
                 const resolved = await resolveSemanticModelContext(await getDBService(), {
                     organizationId: options.organizationId,
                     connectionId: options.connectionId,
-                    question: options.question,
-                    table: options.table,
-                    candidateTables: schemaContextTables,
-                    dialect: options.connectionType === 'snowflake' ? 'SNOWFLAKE' : 'ANSI_SQL',
+                    knowledgeModelId: options.knowledgeModelId,
+                    includeRules: false,
                 });
                 semanticContext = resolved.context;
                 semanticModelsUsed = resolved.models;

@@ -826,43 +826,8 @@ test('dory_create_work returns and records relevant semantic model context', asy
         db: {
             works,
             knowledge: {
-                extraction: { listRules: async () => [], evidenceFor: async () => [] },
-                listModels: async () => [
-                    {
-                        id: 'model-1',
-                        name: 'Commerce',
-                        description: null,
-                        ossieVersion: '0.2.0.dev0',
-                        modelRevision: 'revision-1',
-                        readiness: { status: 'ready' },
-                        model: {
-                            definitions: [
-                                { name: 'orders', kind: 'entity', status: 'verified' },
-                                { name: 'amount', kind: 'dimension', status: 'verified' },
-                                { name: 'revenue', kind: 'metric', status: 'verified' },
-                            ],
-                        },
-                        ossieDocument: {
-                            version: '0.2.0.dev0',
-                            name: 'commerce',
-                            datasets: [
-                                {
-                                    name: 'orders',
-                                    source: 'orders',
-                                    fields: [{ name: 'amount', expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'amount' }] } }],
-                                },
-                            ],
-                            metrics: [
-                                {
-                                    name: 'revenue',
-                                    expression: { dialects: [{ dialect: 'ANSI_SQL', expression: 'SUM(orders.amount)' }] },
-                                    ai_context: { synonyms: ['sales'] },
-                                },
-                            ],
-                            relationships: [],
-                        },
-                    },
-                ],
+                listAnalysisRuleCandidates: async () => [],
+                listModels: async () => [{ id: 'model-1', name: 'Commerce', updatedAt: new Date(0), businessContextMd: 'Revenue uses SUM(orders.amount)' }],
             },
         },
     } as unknown as WebActionServices);
@@ -874,7 +839,7 @@ test('dory_create_work returns and records relevant semantic model context', asy
         [works.knowledgeUsage[0].revision],
     );
     assert.equal(works.knowledgeUsage[0].assetKind, 'semantic_model');
-    assert.match(works.knowledgeUsage[0].revision, /^[a-f0-9]{64}$/);
+    assert.equal(works.knowledgeUsage[0].revision, new Date(0).toISOString());
     assert.ok(works.knowledgeUsage[0].assetRef.endsWith(works.knowledgeUsage[0].revision));
 });
 
@@ -1305,33 +1270,37 @@ test('non-SQL MCP facade tools record standalone Agent activity without creating
 
 test('knowledge search returns summaries while successful detail reads record immutable usage', async () => {
     const works = createWorksMock();
-    const definition = {
-        id: 'dimension:age',
-        name: 'Age',
-        kind: 'dimension' as const,
-        status: 'verified' as const,
-        sourceConnectionId: 'conn-1',
-        description: 'Customer age in whole years.',
-        expression: "date_part('year', age(current_date, birth_date))",
+    const source = {
+        id: 'source-age',
+        organizationId: 'org-1',
+        knowledgeModelId: 'model-1',
+        connectionId: 'conn-1',
+        fileName: 'Age.md',
+        format: 'markdown',
+        contentText: 'Customer age in whole years.',
+        byteSize: 28,
+        systemRole: null,
+        createdBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        folderId: null,
+        projectId: null,
+        projectName: null,
+        connectorId: null,
+        connectorProvider: null,
+        sourceUrl: null,
+        remotePath: null,
+        remoteRevision: null,
     };
+    const model = { id: 'model-1', name: 'Customer profile', updatedAt: new Date(), businessContextMd: 'Customer guide' };
     const knowledge = {
-        listModels: async () => [
-            {
-                id: 'model-1',
-                name: 'Customer profile',
-                modelRevision: 'revision-1',
-                businessContextMd: 'Use consistent customer definitions.',
-                model: { definitions: [definition] },
-            },
-        ],
-        searchKnowledgeSources: async () => [],
-        getModel: async () => ({
-            id: 'model-1',
-            name: 'Customer profile',
-            modelRevision: 'revision-1',
-            dataSources: [{ connectionId: 'conn-1' }],
-            model: { definitions: [definition] },
-        }),
+        listModels: async () => [model],
+        searchKnowledgeSources: async () => [source],
+        getModel: async () => model,
+        getKnowledgeSource: async ({ id }: { id: string }) => {
+            if (id !== source.id) throw new Error('Knowledge source not found.');
+            return source;
+        },
     };
     const ctx = createContext(
         {
@@ -1347,7 +1316,7 @@ test('knowledge search returns summaries while successful detail reads record im
         actionId: 'knowledge.searchKnowledge',
         input: { connectionId: 'conn-1', query: 'age' },
     })) as any;
-    assert.equal(standaloneSearch.data.models[0].definitions[0].name, 'Age');
+    assert.equal(standaloneSearch.data.models[0].knowledgeSources[0].fileName, 'Age.md');
     assert.equal(works.activities[0].actionId, 'knowledge.searchKnowledge');
 
     const search = (await getTool('dory_read').execute(ctx, {
@@ -1357,16 +1326,16 @@ test('knowledge search returns summaries while successful detail reads record im
         workId: work.workId,
         projection: 'mcp',
     })) as any;
-    assert.equal(search.data.models[0].definitions[0].name, 'Age');
-    assert.equal('expression' in search.data.models[0].definitions[0], false);
+    assert.equal(search.data.models[0].knowledgeSources[0].fileName, 'Age.md');
+    assert.equal('contentText' in search.data.models[0].knowledgeSources[0], false);
     assert.equal(works.knowledgeUsage.length, 0);
     assert.equal(works.events[0].actionId, 'knowledge.searchKnowledge');
 
     for (let read = 0; read < 2; read += 1) {
         await getTool('dory_read').execute(ctx, {
             operation: 'run',
-            actionId: 'knowledge.getDefinition',
-            input: { knowledgeModelId: 'model-1', definitionId: definition.id, connectionId: 'conn-1' },
+            actionId: 'knowledge.getKnowledgeSource',
+            input: { knowledgeModelId: 'model-1', id: source.id, connectionId: 'conn-1' },
             workId: work.workId,
             projection: 'mcp',
         });
@@ -1374,18 +1343,18 @@ test('knowledge search returns summaries while successful detail reads record im
     assert.equal(works.knowledgeUsage.length, 1);
     assert.equal(works.knowledgeUsage[0].useCount, 2);
     assert.deepEqual(works.knowledgeUsage[0].assetSnapshot, {
-        title: 'Age',
+        title: 'Age.md',
         knowledgeModelId: 'model-1',
         knowledgeModelName: 'Customer profile',
         deepLink: '/org-1/knowledge/model-1',
     });
-    assert.equal(works.events.filter(event => event.actionId === 'knowledge.getDefinition').length, 2);
+    assert.equal(works.events.filter(event => event.actionId === 'knowledge.getKnowledgeSource').length, 2);
 
     await assert.rejects(() =>
         getTool('dory_read').execute(ctx, {
             operation: 'run',
-            actionId: 'knowledge.getDefinition',
-            input: { knowledgeModelId: 'model-1', definitionId: 'dimension:missing', connectionId: 'conn-1' },
+            actionId: 'knowledge.getKnowledgeSource',
+            input: { knowledgeModelId: 'model-1', id: 'missing', connectionId: 'conn-1' },
             workId: work.workId,
         }),
     );
@@ -1403,7 +1372,7 @@ test('generic full knowledge lists are not exposed through dory_read', async () 
     assert.equal(actionIds.includes('knowledge.listVerifiedQueries'), false);
     assert.equal(actionIds.includes('knowledge.listKnowledgeSources'), false);
     assert.ok(actionIds.includes('knowledge.searchKnowledge'));
-    assert.ok(actionIds.includes('knowledge.getDefinition'));
+    assert.ok(!actionIds.includes('knowledge.getDefinition'));
 });
 
 test('schema Comparison MCP contracts accept saved and create-and-run paths', () => {

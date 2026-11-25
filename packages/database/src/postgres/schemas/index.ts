@@ -1,5 +1,4 @@
 import * as workDocumentsSchema from './work-documents';
-export * from './work-documents';
 import * as tabsSchema from './tabs';
 import * as authSchemaSchema from './auth-schema';
 import * as authRelationsSchema from './auth-relations';
@@ -24,7 +23,7 @@ import * as exportRunsSchema from './export-runs';
 import * as artifactsSchema from './artifacts';
 import * as findingsSchema from './findings';
 import * as knowledgeSchema from './knowledge';
-import * as knowledgeExtractionSchema from './knowledge-extraction';
+export * from './work-documents';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -50,7 +49,6 @@ export * from './export-runs';
 export * from './artifacts';
 export * from './findings';
 export * from './knowledge';
-export * from './knowledge-extraction';
 
 export const schema = {
     ...workDocumentsSchema,
@@ -78,7 +76,6 @@ export const schema = {
     ...artifactsSchema,
     ...findingsSchema,
     ...knowledgeSchema,
-    ...knowledgeExtractionSchema,
 };
 
 export type DBSchema = typeof schema;

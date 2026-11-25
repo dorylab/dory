@@ -84,7 +84,7 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     let document = makeDocument();
     const original = structuredClone(document);
     const versions = [{ revision: 1, source: 'agent', createdAt: now }];
-    let publishedDefinition: Record<string, unknown> | null = null;
+    let savedKnowledgeDocument: Record<string, unknown> | null = null;
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     await page.route('**/api/actions/execute', async route => {
         const body = route.request().postDataJSON();
@@ -96,8 +96,8 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
             return route.fulfill({
                 json: { ok: true, data: { models: [{ id: 'commerce', name: 'Commerce', dataSources: [{ connectionId: connection.connection.id, name: 'Orders' }] }] } },
             });
-        if (body.actionId === 'knowledge.createDefinition') {
-            publishedDefinition = body.input.definition;
+        if (body.actionId === 'knowledge.createKnowledgeSource') {
+            savedKnowledgeDocument = body.input;
             return route.fulfill({ json: { ok: true, data: {} } });
         }
         await route.fallback();
@@ -151,7 +151,7 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     await page.getByRole('button', { name: 'Restore this version', exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Restore this version', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Revenue analysis' })).toBeVisible();
-    const addDefinition = page.getByRole('button', { name: 'Add definition to knowledge base', exact: true });
+    const addDefinition = page.getByRole('button', { name: 'Save to knowledge base', exact: true });
     const term = page
         .getByTestId('work-markdown')
         .locator('strong')
@@ -164,13 +164,11 @@ test('Reports edit, save, restore and export the same snapshot', async ({ page, 
     await expect(addDefinition).toBeHidden();
     await term.dblclick();
     await addDefinition.click();
-    const definitionText = page.getByRole('dialog').getByRole('textbox', { name: 'Definition text' });
+    const definitionText = page.getByRole('dialog').getByRole('textbox', { name: 'Markdown content' });
     await expect(definitionText).toHaveValue('Revenue');
     await definitionText.fill('Revenue is paid orders less refunds.');
-    await page.getByRole('button', { name: 'Confirm and publish definition' }).click();
-    await expect
-        .poll(() => publishedDefinition)
-        .toMatchObject({ description: 'Revenue is paid orders less refunds.', sourceConnectionId: connection.connection.id, status: 'verified' });
+    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => savedKnowledgeDocument).toMatchObject({ contentText: 'Revenue is paid orders less refunds.', connectionId: connection.connection.id });
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => window.document.documentElement.classList.add('dark'));

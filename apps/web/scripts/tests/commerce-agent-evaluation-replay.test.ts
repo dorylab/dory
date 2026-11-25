@@ -6,7 +6,7 @@ import { COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluat
 
 import { normalizeArtifactRows, replayCommerceEvaluation, toolPayload } from '../commerce-agent-evaluation-mcp-replay';
 
-function replayFixture(corruptArtifact = false, omitMetric = false) {
+function replayFixture(corruptArtifact = false, omitGuide = false) {
     const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
     let index = -1;
     return {
@@ -20,20 +20,17 @@ function replayFixture(corruptArtifact = false, omitMetric = false) {
                 case 'dory_create_work':
                     return {
                         workId,
-                        semanticContext: scenario.expectedSemanticIds.join(' '),
+                        semanticContext: omitGuide && index === 0 ? 'unrelated' : COMMERCE_EVALUATION_KNOWLEDGE_NAME,
                         semanticModelsUsed: [
                             {
                                 id: 'model',
                                 name: COMMERCE_EVALUATION_KNOWLEDGE_NAME,
-                                ossieVersion: '0.2.0.dev0',
                                 modelRevision: 'a'.repeat(64),
-                                metricNames: omitMetric && index === 0 ? [] : scenario.expectedSemanticIds.filter(id => id.startsWith('metric:')).map(id => id.split(':')[1]),
-                                relationshipNames: scenario.expectedSemanticIds.filter(id => id.startsWith('relationship:')).map(id => id.split(':')[1]),
                             },
                         ],
                     };
                 case 'dory_search_assets':
-                    return { assets: [{ ref: 'dory://knowledge/model/definition' }] };
+                    return { assets: [{ ref: 'dory://knowledge/model/queries/query-1' }] };
                 case 'dory_run_readonly_sql':
                     return { result: scenario.expectedRows, truncated: false, artifacts: [{ artifactId: `artifact-${index}` }], workspaceUrl: `http://localhost/work/${workId}` };
                 case 'dory_artifacts':
@@ -85,7 +82,7 @@ test('replay marks corrupted persisted evidence as failed and continues remainin
     assert.deepEqual(finish?.args.findings, []);
 });
 
-test('replay rejects a missing selected metric before explicit Knowledge discovery', async () => {
+test('replay rejects a missing knowledge guide before explicit Knowledge discovery', async () => {
     const fixture = replayFixture(false, true);
     const report = await replayCommerceEvaluation(fixture.call, 'connection');
     assert.equal(report.ok, false);

@@ -4071,7 +4071,8 @@
             "Create": "Nuevo documento",
             "Guide": "Guía de uso",
             "Title": "Título del documento",
-            "Body": "Contenido Markdown"
+            "Body": "Contenido Markdown",
+            "EditNamed": "Editar {name}"
         },
         "Title": "Conocimiento",
         "Subtitle": "Proporciona a los agentes un significado empresarial coherente en todos tus datos.",
@@ -4101,11 +4102,9 @@
         "LoadingModel": "Cargando conocimiento…",
         "ModelNotFound": "No se encontró el conocimiento.",
         "Model": "Conocimiento",
-        "Definitions": "Definiciones semánticas",
         "VerifiedQueries": "Consultas verificadas",
         "Updated": "Actualizado",
         "UpdatedTime": "Actualizado {time}",
-        "DefinitionQueryCount": "{definitions, plural, one {# definición} other {# definiciones}} · {queries, plural, one {# consulta verificada} other {# consultas verificadas}}",
         "DataSourceCount": "{count, plural, one {# fuente de datos} other {# fuentes de datos}}",
         "ConnectedTo": "Conectado a",
         "EditNamedModel": "Editar {name}",
@@ -4117,65 +4116,13 @@
         "DeleteModelDescription": "Esto elimina permanentemente “{name}”, sus definiciones, consultas verificadas y fuentes de conocimiento.",
         "DeleteModel": "Eliminar conocimiento",
         "Overview": "Resumen",
-        "Readiness": {
-            "Ready": "Listo para el Agent",
-            "NotReady": "Aún no está listo para el Agent",
-            "ReadyDescription": "El Agent ya puede usar estas definiciones de negocio para entender y consultar datos. Añade consultas verificadas para mejorar la coherencia en preguntas frecuentes.",
-            "NotReadyDescription": "Vincula una fuente de datos y verifica al menos una definición de negocio antes de que el Agent pueda usar este conocimiento.",
-            "Understands": "El Agent entiende",
-            "Suggested": "Sugerido",
-            "Requirements": {
-                "DataSources": "{count, plural, one {# fuente de datos vinculada} other {# fuentes de datos vinculadas}}",
-                "Definitions": "{count, plural, one {# definición de negocio verificada} other {# definiciones de negocio verificadas}}",
-                "VerifiedQueries": "{count, plural, one {# consulta verificada} other {# consultas verificadas}}"
-            }
-        },
-        "KnowledgeFlow": {
-            "Title": "Cómo usa el Agent el conocimiento",
-            "Description": "Los distintos activos de conocimiento forman el Agent Context y se usan según sea necesario en cada ejecución.",
-            "Sources": "Knowledge Sources",
-            "SourceDescription": "Contexto y reglas de negocio",
-            "Definitions": "Definiciones",
-            "DefinitionDescription": "Semántica de negocio",
-            "Queries": "Consultas verificadas",
-            "QueryDescription": "Métodos de consulta confiables",
-            "AgentContext": "Agent Context",
-            "AskAi": "Preguntar a IA",
-            "AgentRun": "Agent Run"
-        },
-        "QueryCoverage": {
-            "Title": "Cobertura de consultas",
-            "EmptyTitle": "Aún no hay consultas verificadas",
-            "EmptyDescription": "Añade Verified Queries para preguntas frecuentes de negocio y garantiza un enfoque de consulta coherente.",
-            "CoveredTitle": "{count, plural, one {# pregunta frecuente cubierta} other {# preguntas frecuentes cubiertas}}",
-            "CoveredDescription": "El Agent puede priorizar estos enfoques de consulta revisados.",
-            "Add": "Añadir Verified Query",
-            "View": "Ver Verified Queries"
-        },
         "BusinessContext": "Contexto empresarial",
         "BusinessContextPlaceholder": "Documenta reglas empresariales, vocabulario e instrucciones para agentes en Markdown.",
         "SaveContext": "Guardar contexto",
         "ActionsForModel": "Acciones de la base de conocimiento {name}",
         "ModelActions": "Acciones del conocimiento",
-        "ViewYaml": "Ver YAML",
-        "ImportYaml": "Importar YAML",
-        "ModelYaml": "YAML de Apache Ossie {version}",
-        "ModelYamlDescription": "Los cambios se validan con Apache Ossie {version} antes de actualizar el conocimiento.",
-        "SaveYaml": "Guardar YAML",
-        "YamlSaved": "YAML guardado.",
-        "ImportYamlTitle": "Importar YAML de Apache Ossie {version}",
-        "ImportYamlDescription": "Especifica name y datasets en la raíz del documento. Las definiciones sin metadatos de conexión de Dory usan la fuente de datos seleccionada.",
-        "UploadYamlFile": "Subir archivo YAML",
-        "UploadYamlHint": "Arrastra aquí un archivo .yaml o .yml, o haz clic para elegirlo. Tamaño máximo: 10 MB.",
-        "YamlPreview": "Vista previa",
         "ReplaceFile": "Reemplazar archivo",
-        "RemoveYamlFile": "Quitar archivo YAML",
-        "UnsupportedYamlFile": "Elige un archivo .yaml o .yml.",
-        "YamlFileTooLarge": "Los archivos YAML deben tener 10 MB o menos.",
-        "EmptyYamlFile": "El archivo YAML está vacío.",
-        "YamlImported": "YAML importado. Las definiciones importadas no están verificadas.",
         "Import": "Importar",
-        "AddDefinition": "Añadir definición",
         "CreateWithAi": "Crear con IA",
         "Type": "Tipo",
         "Source": "Fuente",
@@ -4184,7 +4131,6 @@
         "Unverified": "Sin verificar",
         "VerificationStatus": "Estado de verificación",
         "ReferencedByQueries": "Referenciada por consultas",
-        "ReferencedDefinitions": "Definiciones referenciadas",
         "RelatedSources": "Fuentes relacionadas",
         "NoReferences": "No hay activos vinculados",
         "ReferenceSources": "Fuentes de referencia",
@@ -4192,28 +4138,6 @@
         "RelationTypes": {
             "provided": "Proporcionado",
             "generated": "Generado"
-        },
-        "OpenNamedDefinitionDetails": "Mostrar detalles de {name}",
-        "CloseNamedDefinitionDetails": "Ocultar detalles de {name}",
-        "CloseDefinitionDetails": "Cerrar detalles de la definición",
-        "EditNamedDefinition": "Editar {name}",
-        "EditDefinitionAction": "Editar",
-        "DefinitionQueries": {
-            "Title": "Verified Queries que usan esta definición",
-            "Description": "Conserva patrones de consulta verificados para preguntas frecuentes.",
-            "EmptyTitle": "Aún no hay elementos vinculados",
-            "ViewAction": "Ir a Verified Queries"
-        },
-        "DefinitionSources": {
-            "Title": "Knowledge Sources vinculadas",
-            "Description": "Los documentos empresariales conservan el origen y el contexto de esta Definition.",
-            "EmptyTitle": "Aún no hay elementos vinculados",
-            "AddAction": "Añadir Knowledge Source",
-            "OpenNamed": "Abrir {name}",
-            "EditAction": "Editar documentos vinculados",
-            "EditDescription": "Seleccione los documentos existentes que desea vincular. Los cambios se aplican al guardar.",
-            "Search": "Buscar documentos",
-            "NoMatches": "No hay documentos coincidentes"
         },
         "VerifiedQueryDetails": {
             "Search": "Buscar por pregunta o título",
@@ -4229,32 +4153,13 @@
             },
             "UpdatedByTime": "Actualizado por {user} · {time}",
             "UnknownUser": "Usuario desconocido",
-            "ReferencedDefinitions": "Definitions referenciadas",
-            "DefinitionsDescription": "Definiciones de negocio vinculadas a esta consulta.",
             "RelatedSources": "Knowledge Sources vinculadas",
             "SourcesDescription": "Documentos vinculados que aportan contexto o reglas a esta consulta.",
-            "NoDefinitions": "No hay ninguna Definition disponible para vincular",
             "NoKnowledgeSources": "No se ha añadido ninguna Knowledge Source",
-            "AddKnowledgeSource": "Añadir Knowledge Source",
-            "EditDefinitions": "Editar definiciones vinculadas",
-            "EditDefinitionsDescription": "Seleccione las definiciones existentes que desea vincular. Los cambios se aplican al guardar.",
-            "NoLinkedDefinitions": "Aún no hay definiciones vinculadas",
-            "SearchDefinitions": "Buscar definiciones",
-            "NoMatchingDefinitions": "No hay definiciones coincidentes"
+            "AddKnowledgeSource": "Añadir Knowledge Source"
         },
-        "NoDefinitionDetails": "No se han documentado detalles adicionales para esta definición.",
-        "DeleteNamedDefinition": "Eliminar {name}",
-        "CreateDefinitionTitle": "Crear {type}",
-        "CreateDefinitionDescription": "Añade una definición verificada a este conocimiento.",
-        "EditDefinitionTitle": "Editar definición",
-        "EditDefinitionDescription": "Actualiza esta definición y sus metadatos de negocio.",
-        "SaveDefinition": "Guardar definición",
-        "DefinitionNamePlaceholder": "Ingresos",
-        "FromDefinition": "Definición de origen",
-        "ToDefinition": "Definición de destino",
         "SourceTablePlaceholder": "Tabla de origen, p. ej. orders",
         "CalculationPlaceholder": "Cálculo, p. ej. SUM(amount)",
-        "BusinessDefinitionPlaceholder": "Definición empresarial",
         "AskAi": "Preguntar a la IA",
         "AskAiDescription": "Las sugerencias de IA son temporales hasta que las revises y añadas.",
         "AiPromptPlaceholder": "Analiza pedidos y clientes y sugiere métricas habituales.",
@@ -4276,36 +4181,6 @@
         "MarkAsVerified": "Marcar como verificado",
         "AddToKnowledge": "Añadir al conocimiento",
         "SaveAsVerifiedQuery": "Guardar como consulta verificada",
-        "Kinds": {
-            "entity": "Entidad",
-            "metric": "Métrica",
-            "measure": "Medida",
-            "dimension": "Dimensión",
-            "relationship": "Relación"
-        },
-        "DefinitionFields": {
-            "Description": "Definición de negocio",
-            "Aliases": "Alias",
-            "SourceTable": "Tabla de origen",
-            "Calculation": "Expresión de cálculo",
-            "Filters": "Filtros",
-            "TimeDimension": "Dimensión temporal",
-            "AvailableDimensions": "Dimensiones disponibles",
-            "FromColumns": "Columnas de origen (separadas por comas)",
-            "ToColumns": "Columnas de destino (separadas por comas)",
-            "Dialect": "Dialecto SQL",
-            "AiContext": "Contexto de IA",
-            "AiInstructions": "Instrucciones de IA",
-            "AiSynonyms": "Sinónimos de IA (separados por comas)",
-            "AiExamples": "Ejemplos de IA (uno por línea)"
-        },
-        "AiOperations": {
-            "GenerateDefinitions": "Generar definiciones de conocimiento",
-            "AnalyzeContext": "Analizar contexto empresarial",
-            "AnalyzeSchema": "Analizar esquema",
-            "FindRelationships": "Buscar relaciones ausentes",
-            "SuggestMetrics": "Sugerir métricas"
-        },
         "Errors": {
             "CreateModel": "No se pudo crear el conocimiento.",
             "SelectModel": "Selecciona primero un conocimiento.",
@@ -4476,66 +4351,16 @@
             "UnavailableDataSource": "Fuente de datos no disponible",
             "RuleCount": "{count} reglas de negocio"
         },
-        "Extraction": {
-            "AutomaticExtraction": "Extracción automática",
-            "Enabled": "Activada",
-            "Disabled": "Desactivada",
-            "Disable": "Desactivar",
-            "EnableAndBackfill": "Activar y extraer fuentes existentes",
-            "Retry": "Reintentar extracción",
-            "BusinessRules": "Reglas de negocio",
-            "NoRules": "Aún no hay reglas de negocio publicadas.",
-            "OpenOriginal": "Abrir original",
-            "SourceChanged": "La fuente cambió",
-            "Cancel": "Cancelar",
-            "Archive": "Desactivar",
-            "Edit": "Editar",
-            "Save": "Guardar",
-            "Loading": "Cargando…",
-            "ModelWide": "Todo el conocimiento",
-            "Field": {
-                "name": "Nombre",
-                "description": "Definición / significado de negocio",
-                "dataSource": "Fuente de datos",
-                "aliases": "Alias separados por comas",
-                "unit": "Unidad / moneda",
-                "scope": "Ámbito estadístico / exclusiones"
-            },
-            "Job": {
-                "queued": "Extracción en cola",
-                "running": "Extrayendo",
-                "completed": "Extracción completada",
-                "failed": "Error de extracción",
-                "blocked": "Se requiere configuración de IA / cuota",
-                "cancelled": "Extracción detenida"
-            },
-            "Error": {
-                "blocked": "Configura un modelo de IA en segundo plano o restablece la cuota y vuelve a intentarlo.",
-                "failed": "La extracción falló. Se conservan las fuentes y el conocimiento publicado.",
-                "quota": "Restaura la cuota de IA de la organización y vuelve a intentar.",
-                "config": "Configura un modelo de IA disponible en segundo plano y vuelve a intentar."
-            },
-            "Backfill": "Extraer fuentes existentes",
-            "ApplicationScope": "Ámbito de aplicación",
-            "ApplicableMetrics": "Métricas aplicables",
-            "SuggestedMetrics": "Métricas sugeridas",
-            "SharingEvidence": "Evidencia de uso compartido",
-            "SpecificConditions": "Cálculo y condiciones propias de la métrica",
-            "ReferencedRules": "Reglas referenciadas",
-            "RuleSemantics": "Las referencias son restricciones semánticas. Se usa la última regla publicada; no se modifican SQL, expresiones ni filtros.",
-            "OrganizationStatus": "Organización de borradores",
-            "LinkedMetricCount": "{count} métricas vinculadas",
-            "Inactive": "Inactiva",
-            "Restore": "Restaurar",
-            "NoReferencedRules": "Aún no hay reglas publicadas aplicables",
-            "RulesNotice": "Mantenga los acuerdos compartidos en un solo lugar. Las reglas de conocimiento y fuente se aplican en su ámbito; las de métricas solo a las vinculadas.",
-            "Scope": {
-                "model": "Todo el conocimiento",
-                "data_source": "Fuente de datos seleccionada",
-                "metrics": "Métricas seleccionadas"
-            },
-            "AutomaticPublished": "Publicado automáticamente por IA"
-        }
+        "QuerySources": {
+            "EmptyTitle": "Aún no hay elementos vinculados",
+            "OpenNamed": "Abrir {name}",
+            "EditAction": "Editar documentos vinculados",
+            "EditDescription": "Seleccione los documentos existentes que desea vincular. Los cambios se aplican al guardar.",
+            "Search": "Buscar documentos",
+            "NoMatches": "No hay documentos coincidentes"
+        },
+        "EditQuery": "Editar consulta",
+        "VerifiedQueryCount": "{count, plural, one {# consulta verificada} other {# consultas verificadas}}"
     },
     "AppSidebar": {
         "DataSources": "Fuentes de datos",
@@ -4872,7 +4697,8 @@
                 "knowledge_source": "Fuente de conocimiento",
                 "verified_query": "Consulta verificada",
                 "semantic_model": "Definiciones semánticas"
-            }
+            },
+            "Unavailable": "Recurso no disponible"
         },
         "Trace": {
             "Title": "Pasos del análisis",
@@ -5747,12 +5573,6 @@
         "Archived": "Archivado",
         "Archive": "Archivar",
         "Unarchive": "Desarchivar",
-        "AddDefinition": "Añadir definición a Knowledge",
-        "DefinitionReview": "Revisa el texto como definición de negocio reutilizable antes de publicarlo. Las conclusiones temporales deben permanecer en los informes.",
-        "DefinitionNeedsKnowledge": "Primero crea un Knowledge vinculado a una fuente de este informe.",
-        "DefinitionAdded": "Definición añadida a Knowledge.",
-        "DefinitionKind": "Tipo de definición",
-        "PublishDefinition": "Confirmar y publicar definición",
         "LeaveUnsaved": "Guarda los cambios antes de salir del informe.",
         "Rename": "Renombrar",
         "Cancel": "Cancelar",
@@ -6165,7 +5985,10 @@
             "LinkUrl": "URL del enlace",
             "Apply": "Aplicar",
             "Cancel": "Cancelar"
-        }
+        },
+        "DocumentNeedsKnowledge": "Primero crea un Knowledge vinculado a una fuente de este informe.",
+        "SaveKnowledgeDocument": "Guardar en la base de conocimiento",
+        "KnowledgeDocumentSaved": "Documento guardado"
     },
     "ChatComposer": {
         "Picker": {

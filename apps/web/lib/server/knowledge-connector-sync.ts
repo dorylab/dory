@@ -6,7 +6,6 @@ import { DriveGrantRevoked, readDriveSnapshot } from './google-drive';
 import { readGitHubConnectorSnapshot } from './github-connector';
 import { readLinearConnectorSnapshot, LinearApiError } from './linear-client';
 import { withLinearAccess, linearConfigured } from './linear-credentials';
-import { getKnowledgeExtractionRunner } from './knowledge-extraction-worker';
 
 const runners = new WeakMap<DBService, KnowledgeConnectorSyncRunner>();
 
@@ -55,7 +54,6 @@ export class KnowledgeConnectorSyncRunner {
                             ...snapshot,
                         });
                         await this.db.knowledge.finishConnectorSyncJob({ jobId: job.id, connectorId: connector.id, leaseToken: job.leaseToken! });
-                        getKnowledgeExtractionRunner(this.db).wake();
                     } catch (error) {
                         const message = error instanceof Error ? error.message : 'Knowledge synchronization failed.';
                         const retryAt =

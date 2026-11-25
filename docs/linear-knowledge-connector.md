@@ -94,12 +94,3 @@ recorded separately and do not count as a real Linear integration test.
 References: [API Key authentication](https://linear.app/developers/graphql),
 [pagination](https://linear.app/developers/pagination),
 [rate limits](https://linear.app/developers/rate-limiting).
-
-## Review knowledge extracted after synchronization
-
-New Linear and GitHub connectors enable automatic extraction by default. Existing
-connectors remain off after migration; an owner/admin can enable and backfill sources.
-Successful synchronization queues independent AI extraction jobs. Metrics and business
-rules become drafts with exact source evidence and require review before Agent use.
-Source changes preserve published knowledge and mark it for review. See
-[extraction and review](knowledge-extraction.md) for configuration, review and recovery.

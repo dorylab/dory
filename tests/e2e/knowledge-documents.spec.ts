@@ -38,7 +38,7 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         await route.fallback();
     });
     try {
-        await action('knowledge.update', { ...scope, aiContext: { instructions: '# Original guide', synonyms: ['orders'], examples: ['Count orders'] } });
+        await action('knowledge.update', { ...scope, businessContextMd: '# Original guide' });
         await action('knowledge.createVerifiedQuery', { ...scope, sourceConnectionId: connectionId, title, question, sql, sourceType: 'workspace' });
         const existing = await action<{ tabId: string }>('tab.create', { connectionId, content: 'SELECT 42', tabName: 'Existing ' + id });
         tabsCreated.push(existing.tabId);
@@ -53,11 +53,7 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         await guide.getByLabel('Markdown content').fill('# Updated guide');
         await guide.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(guide.getByRole('heading', { name: 'Updated guide' })).toBeVisible();
-        expect((await action<{ ossieDocument: { ai_context: unknown } }>('knowledge.get', scope)).ossieDocument.ai_context).toMatchObject({
-            instructions: '# Updated guide',
-            synonyms: ['orders'],
-            examples: ['Count orders'],
-        });
+        expect((await action<{ businessContextMd: string }>('knowledge.get', scope)).businessContextMd).toBe('# Updated guide');
 
         await page.getByRole('button', { name: 'Knowledge base actions for Docs ' + id, exact: true }).click();
         await page.getByRole('menuitem', { name: 'New document' }).click();
@@ -107,8 +103,7 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         const saveDialog = page.getByRole('dialog', { name: 'Save Query' });
         const savedTitle = 'Saved from workspace ' + id;
         await saveDialog.getByPlaceholder('Leave blank to name automatically').fill(savedTitle);
-        await expect(saveDialog.getByRole('combobox')).toHaveCount(2);
-        await saveDialog.getByRole('combobox').nth(1).click();
+        await saveDialog.getByRole('combobox', { name: 'Knowledge base', exact: true }).click();
         await page.getByRole('option', { name: 'Docs ' + id, exact: true }).click();
         const savedResponse = page.waitForResponse(
             response => response.url().endsWith('/api/actions/execute') && response.request().postDataJSON()?.actionId === 'savedQuery.create',
@@ -310,5 +305,54 @@ test('creates the first knowledge base from an empty directory', async ({ page, 
     } finally {
         if (createdId)
             await request.post('/api/actions/execute', { data: { actionId: 'knowledge.delete', input: { knowledgeModelId: createdId }, confirmationToken: 'knowledge.delete' } });
+    }
+});
+
+test('finds read-only YAML and edits a verified query without losing its source', async ({ page, request }) => {
+    await page.goto('/');
+    await openDataSources(page);
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    async function action<T>(actionId: string, input: Record<string, unknown>, confirmationToken?: string): Promise<T> {
+        const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });
+        const result = await response.json();
+        expect(result.ok, actionId + ' ' + result.message).toBe(true);
+        return result.data;
+    }
+    const { connections } = await action<{ connections: { connection: { id: string } }[] }>('connection.list', {});
+    const connectionId = connections[0]!.connection.id;
+    const { id } = await action<{ id: string }>('knowledge.create', { name: 'SQL sources ' + randomUUID(), connectionIds: [connectionId] });
+    const scope = { knowledgeModelId: id };
+    try {
+        const fileName = 'Reference-' + randomUUID() + '.yaml';
+        const source = await action<{ id: string }>('knowledge.createKnowledgeSource', { ...scope, fileName, contentText: 'orders: []' });
+        const query = await action<{ id: string }>('knowledge.createVerifiedQuery', {
+            ...scope,
+            sourceConnectionId: connectionId,
+            title: 'Orders',
+            question: 'How many orders?',
+            sql: 'SELECT 1',
+            knowledgeSourceIds: [source.id],
+        });
+        const path = '/' + organization + '/knowledge/' + id;
+        await page.goto(path + '?tab=queries&query=' + query.id);
+        await page.getByRole('button', { name: 'Edit query', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Edit query' });
+        await dialog.getByLabel('SQL', { exact: true }).fill('SELECT 2');
+        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(dialog).toBeHidden();
+        await expect(page.locator('#verified-query-details-' + query.id + ' pre')).toHaveText('SELECT 2');
+        await expect(page.getByRole('link', { name: fileName, exact: true })).toBeVisible();
+        const tree = page.getByRole('navigation', { name: 'Directory' });
+        await page.getByRole('searchbox').fill(fileName);
+        await tree.getByRole('button', { name: new RegExp(fileName) }).click();
+        await expect(page).toHaveURL(new RegExp('source=' + source.id));
+        await expect(page.getByText('orders: []', { exact: true })).toBeVisible();
+        const response = await request.post('/api/actions/execute', {
+            data: { actionId: 'knowledge.updateKnowledgeSource', input: { ...scope, id: source.id, contentText: 'new text' } },
+        });
+        expect((await response.json()).ok).toBe(false);
+        expect((await action<{ contentText: string }>('knowledge.getKnowledgeSource', { ...scope, id: source.id })).contentText).toBe('orders: []');
+    } finally {
+        await action('knowledge.delete', scope, 'knowledge.delete');
     }
 });

@@ -20,7 +20,7 @@ yarn workspace web olist:evaluation:prepare --input-dir /absolute/olist-csv --as
 yarn workspace web olist:evaluation:seed --organization-id <orgId> --user-id <userId>
 ```
 
-该命令通过现有数据库抽象创建或更新专用连接、Ossie 0.1.1 模型、3 个来源文档、2 条 Verified Queries，不运行迁移、不覆盖 Demo。用户必须属于所选组织。`manifest.json` 记录 connection、model、revision、组织和用户 ID。
+该命令通过现有数据库抽象创建或更新专用连接、Markdown 指南、3 个来源文档、2 条 Verified Queries，不运行迁移、不覆盖 Demo。用户必须属于所选组织。`manifest.json` 记录 connection、model、revision、组织和用户 ID。
 
 可选 `--token-file /absolute/private-token-file` 会创建仅限该连接、6 小时有效的验收凭据，以权限 0600 写入新文件；已有文件拒绝覆盖，凭据不会打印或写入报告。也可在 Dory 的既有 MCP 授权界面获取凭据。Web 部署必须能读取 SQLite 的绝对路径，不能拿客户端路径直接用于远程服务器。
 

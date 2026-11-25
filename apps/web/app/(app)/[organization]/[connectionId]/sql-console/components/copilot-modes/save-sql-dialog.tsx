@@ -326,7 +326,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                                             <p className="text-sm text-muted-foreground">{t('SaveSql.LoadingDomains')}</p>
                                         ) : knowledgeModels.data?.models.length ? (
                                             <Select value={knowledgeModelId} onValueChange={setKnowledgeModelId} disabled={saving}>
-                                                <SelectTrigger className="w-full">
+                                                <SelectTrigger className="w-full" aria-label={t('SaveSql.DomainLabel')}>
                                                     <SelectValue placeholder={t('SaveSql.DomainPlaceholder')} />
                                                 </SelectTrigger>
                                                 <SelectContent>

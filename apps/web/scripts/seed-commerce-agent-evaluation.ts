@@ -8,15 +8,13 @@ import nextEnv from '@next/env';
 import { getDBService } from '@dory/database';
 import { getClient } from '@dory/database/postgres/client';
 import { resetPgliteClient } from '@dory/database/postgres/client/pglite';
-import { serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
 import { organizations, organizationMembers, user } from '@dory/database/postgres/schemas';
 import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
 import { getDatabaseProvider } from '@dory/database/provider';
-import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
 import { createCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
 import { COMMERCE_EVALUATION_CONNECTION_NAME, COMMERCE_EVALUATION_KNOWLEDGE_NAME, generateCommerceAgentEvaluationSqlite } from '@/lib/demo/commerce-agent-evaluation';
-import { buildCommerceEvaluationOssieDocument, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
+import { commerceGuide, COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 nextEnv.loadEnvConfig(appRoot, true);
@@ -46,7 +44,7 @@ function resolveSqlitePath(configuredPath?: string) {
     return path.join(appRoot, 'localdata', 'commerce-agent-evaluation.sqlite');
 }
 
-function sourceSpecs(ossieYaml: string) {
+function sourceSpecs() {
     return [
         {
             fileName: 'commerce-metric-glossary.md',
@@ -81,7 +79,6 @@ function sourceSpecs(ossieYaml: string) {
                 'Investigations must validate both claims against the database.',
             ].join('\n'),
         },
-        { fileName: 'commerce-semantic-model.yaml', contentText: ossieYaml },
     ] as const;
 }
 
@@ -116,7 +113,7 @@ async function main() {
             database: 'main',
             path: sqlitePath,
             environment: 'development',
-            tags: `agent-evaluation,synthetic,commerce,ossie-${OSSIE_VERSION}`,
+            tags: `agent-evaluation,synthetic,commerce,documents`,
         },
         identities: [identity],
     };
@@ -137,18 +134,11 @@ async function main() {
               description: 'Verified commerce semantics and evaluation scenarios for Dory Agents.',
               connectionIds: [connectionId],
           });
-    const ossieYaml = serializeOssieDocument(buildCommerceEvaluationOssieDocument(connectionId));
-    model = await db.knowledge.importYaml({
-        organizationId: organization.id,
-        knowledgeModelId: model.id,
-        source: ossieYaml,
-        fallbackSourceConnectionId: connectionId,
-        preserveStatus: true,
-    });
+    await db.knowledge.updateModel({ organizationId: organization.id, knowledgeModelId: model.id, businessContextMd: commerceGuide });
 
     const sourceIds: Record<string, string> = {};
     const currentSources = await db.knowledge.listKnowledgeSources({ organizationId: organization.id, knowledgeModelId: model.id });
-    for (const spec of sourceSpecs(ossieYaml)) {
+    for (const spec of sourceSpecs()) {
         const existing = currentSources.find(source => source.fileName === spec.fileName);
         const source = existing
             ? await db.knowledge.updateKnowledgeSource({
@@ -168,18 +158,6 @@ async function main() {
               });
         sourceIds[spec.fileName] = source.id;
     }
-    for (const definition of model.model.definitions) {
-        await db.knowledge.replaceAssetSources({
-            organizationId: organization.id,
-            knowledgeModelId: model.id,
-            assetType: 'definition',
-            assetId: definition.id,
-            sourceIds: [sourceIds['commerce-metric-glossary.md']!, sourceIds['commerce-semantic-model.yaml']!],
-            relationType: 'provided',
-            createdBy: userId,
-        });
-    }
-
     const existingQueries = await db.knowledge.listVerifiedQueries({ organizationId: organization.id, knowledgeModelId: model.id });
     for (const scenario of COMMERCE_EVALUATION_SCENARIOS) {
         const input = {
@@ -190,7 +168,6 @@ async function main() {
             question: scenario.question,
             sql: scenario.sql,
             description: `Evaluation query: ${scenario.question}`,
-            definitionIds: [...scenario.definitionIds],
             knowledgeSourceIds: scenario.knowledgeSourceFiles.map(fileName => sourceIds[fileName]!),
         };
         const existing = existingQueries.find(item => item.title === scenario.title);
@@ -199,9 +176,9 @@ async function main() {
     }
 
     await mkdir(args.outputDir, { recursive: true });
-    await writeFile(path.join(args.outputDir, 'commerce-semantic-model.yaml'), ossieYaml);
-    for (const spec of sourceSpecs(ossieYaml)) await writeFile(path.join(args.outputDir, spec.fileName), spec.contentText);
+    for (const spec of sourceSpecs()) await writeFile(path.join(args.outputDir, spec.fileName), spec.contentText);
     await writeFile(path.join(args.outputDir, 'scenarios.json'), JSON.stringify(COMMERCE_EVALUATION_SCENARIOS, null, 2));
+    model = await db.knowledge.getModel({ organizationId: organization.id, knowledgeModelId: model.id });
     const manifest = {
         organizationId: organization.id,
         organizationSlug: organization.slug,
@@ -209,8 +186,7 @@ async function main() {
         sqlitePath,
         connectionId,
         knowledgeModelId: model.id,
-        ossieVersion: model.ossieVersion,
-        modelRevision: model.modelRevision,
+        modelRevision: model.updatedAt.toISOString(),
         outputDir: args.outputDir,
     };
     await writeFile(path.join(args.outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
@@ -223,8 +199,7 @@ async function main() {
                 userId,
                 connectionId,
                 knowledgeModelId: model.id,
-                ossieVersion: model.ossieVersion,
-                modelRevision: model.modelRevision,
+                modelRevision: model.updatedAt.toISOString(),
                 outputDir: args.outputDir,
                 scenarios: COMMERCE_EVALUATION_SCENARIOS.map(scenario => scenario.id),
             },

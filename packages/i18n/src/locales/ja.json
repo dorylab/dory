@@ -4075,7 +4075,8 @@
             "Create": "ドキュメントを作成",
             "Guide": "利用ガイド",
             "Title": "ドキュメント名",
-            "Body": "Markdown 本文"
+            "Body": "Markdown 本文",
+            "EditNamed": "{name}を編集"
         },
         "Title": "ナレッジ",
         "Subtitle": "データ全体で一貫したビジネス上の意味をエージェントに提供します。",
@@ -4105,11 +4106,9 @@
         "LoadingModel": "ナレッジを読み込み中…",
         "ModelNotFound": "ナレッジが見つかりません。",
         "Model": "ナレッジ",
-        "Definitions": "セマンティック定義",
         "VerifiedQueries": "検証済みクエリ",
         "Updated": "更新日時",
         "UpdatedTime": "{time}に更新",
-        "DefinitionQueryCount": "{definitions} 件の定義 · {queries} 件の検証済みクエリ",
         "DataSourceCount": "{count} 件のデータソース",
         "ConnectedTo": "接続先",
         "EditNamedModel": "{name}を編集",
@@ -4121,65 +4120,13 @@
         "DeleteModelDescription": "「{name}」とその定義、検証済みクエリ、ナレッジソースを完全に削除します。",
         "DeleteModel": "ナレッジを削除",
         "Overview": "概要",
-        "Readiness": {
-            "Ready": "Agent の準備完了",
-            "NotReady": "Agent の準備未完了",
-            "ReadyDescription": "Agent はこれらのビジネス定義を使ってデータを理解し、クエリできます。検証済みクエリを追加すると、よくある質問への一貫性がさらに高まります。",
-            "NotReadyDescription": "データソースを関連付け、少なくとも 1 件のビジネス定義を検証すると、Agent がこのナレッジを使用できます。",
-            "Understands": "Agent が理解していること",
-            "Suggested": "推奨",
-            "Requirements": {
-                "DataSources": "関連データソース {count} 件",
-                "Definitions": "検証済みビジネス定義 {count} 件",
-                "VerifiedQueries": "検証済みクエリ {count} 件"
-            }
-        },
-        "KnowledgeFlow": {
-            "Title": "Agent がナレッジを使う仕組み",
-            "Description": "異なる種類のナレッジが Agent Context を構成し、各 Run で必要に応じて使用されます。",
-            "Sources": "Knowledge Sources",
-            "SourceDescription": "ビジネス背景とルール",
-            "Definitions": "定義",
-            "DefinitionDescription": "ビジネスセマンティクス",
-            "Queries": "検証済みクエリ",
-            "QueryDescription": "信頼できるクエリ方法",
-            "AgentContext": "Agent Context",
-            "AskAi": "AI に質問",
-            "AgentRun": "Agent Run"
-        },
-        "QueryCoverage": {
-            "Title": "クエリ保証",
-            "EmptyTitle": "検証済みクエリはまだありません",
-            "EmptyDescription": "よくあるビジネス質問に Verified Query を追加すると、Agent が一貫した方法でクエリできます。",
-            "CoveredTitle": "よくある質問 {count} 件を保証",
-            "CoveredDescription": "Agent はレビュー済みのクエリ方法を優先して再利用できます。",
-            "Add": "Verified Query を追加",
-            "View": "Verified Queries を表示"
-        },
         "BusinessContext": "ビジネスコンテキスト",
         "BusinessContextPlaceholder": "ビジネスルール、用語、エージェントへの指示を Markdown で記録します。",
         "SaveContext": "コンテキストを保存",
         "ActionsForModel": "{name} のナレッジ操作",
         "ModelActions": "ナレッジの操作",
-        "ViewYaml": "YAML を表示",
-        "ImportYaml": "YAML をインポート",
-        "ModelYaml": "Apache Ossie {version} YAML",
-        "ModelYamlDescription": "変更内容は Apache Ossie {version} に対して検証されてから更新されます。",
-        "SaveYaml": "YAML を保存",
-        "YamlSaved": "YAML を保存しました。",
-        "ImportYamlTitle": "Apache Ossie {version} YAML をインポート",
-        "ImportYamlDescription": "ドキュメントのルートに name と datasets を指定してください。Dory 接続メタデータがない定義は選択したデータソースを使用します。",
-        "UploadYamlFile": "YAML ファイルをアップロード",
-        "UploadYamlHint": ".yaml または .yml ファイルをここにドロップするか、クリックして選択してください。最大 10 MB。",
-        "YamlPreview": "プレビュー",
         "ReplaceFile": "ファイルを置き換え",
-        "RemoveYamlFile": "YAML ファイルを削除",
-        "UnsupportedYamlFile": ".yaml または .yml ファイルを選択してください。",
-        "YamlFileTooLarge": "YAML ファイルは 10 MB 以下にしてください。",
-        "EmptyYamlFile": "YAML ファイルが空です。",
-        "YamlImported": "YAML をインポートしました。インポートした定義は未検証です。",
         "Import": "インポート",
-        "AddDefinition": "定義を追加",
         "CreateWithAi": "AI で作成",
         "Type": "タイプ",
         "Source": "ソース",
@@ -4188,7 +4135,6 @@
         "Unverified": "未検証",
         "VerificationStatus": "検証ステータス",
         "ReferencedByQueries": "参照しているクエリ",
-        "ReferencedDefinitions": "参照する定義",
         "RelatedSources": "関連ソース",
         "NoReferences": "リンクされたアセットはありません",
         "ReferenceSources": "参照ソース",
@@ -4196,28 +4142,6 @@
         "RelationTypes": {
             "provided": "提供",
             "generated": "生成"
-        },
-        "OpenNamedDefinitionDetails": "{name}の詳細を表示",
-        "CloseNamedDefinitionDetails": "{name}の詳細を非表示",
-        "CloseDefinitionDetails": "定義の詳細を閉じる",
-        "EditNamedDefinition": "{name}を編集",
-        "EditDefinitionAction": "編集",
-        "DefinitionQueries": {
-            "Title": "この定義を使用する Verified Queries",
-            "Description": "よくある質問向けの検証済みクエリパターンを保持します。",
-            "EmptyTitle": "関連項目はまだありません",
-            "ViewAction": "Verified Queries を開く"
-        },
-        "DefinitionSources": {
-            "Title": "関連する Knowledge Sources",
-            "Description": "ビジネス文書はこの Definition の出典と背景を残します。",
-            "EmptyTitle": "関連項目はまだありません",
-            "AddAction": "Knowledge Source を追加",
-            "OpenNamed": "{name}を開く",
-            "EditAction": "関連ドキュメントを編集",
-            "EditDescription": "関連付ける既存のドキュメントを選択します。保存後に反映されます。",
-            "Search": "ドキュメントを検索",
-            "NoMatches": "一致するドキュメントはありません"
         },
         "VerifiedQueryDetails": {
             "Search": "質問またはタイトルで検索",
@@ -4233,32 +4157,13 @@
             },
             "UpdatedByTime": "{user} が更新 · {time}",
             "UnknownUser": "不明なユーザー",
-            "ReferencedDefinitions": "参照する Definitions",
-            "DefinitionsDescription": "このクエリに関連付けられたビジネス定義。",
             "RelatedSources": "関連する Knowledge Sources",
             "SourcesDescription": "このクエリの背景やルールを提供する関連ドキュメント。",
-            "NoDefinitions": "関連付け可能な Definition はありません",
             "NoKnowledgeSources": "Knowledge Source はまだ追加されていません",
-            "AddKnowledgeSource": "Knowledge Source を追加",
-            "EditDefinitions": "関連定義を編集",
-            "EditDefinitionsDescription": "関連付ける既存の定義を選択します。保存後に反映されます。",
-            "NoLinkedDefinitions": "関連する定義はありません",
-            "SearchDefinitions": "定義を検索",
-            "NoMatchingDefinitions": "一致する定義はありません"
+            "AddKnowledgeSource": "Knowledge Source を追加"
         },
-        "NoDefinitionDetails": "この定義には追加の詳細がまだ記録されていません。",
-        "DeleteNamedDefinition": "{name}を削除",
-        "CreateDefinitionTitle": "{type}を作成",
-        "CreateDefinitionDescription": "このナレッジに検証済みの定義を追加します。",
-        "EditDefinitionTitle": "定義を編集",
-        "EditDefinitionDescription": "この定義とビジネスメタデータを更新します。",
-        "SaveDefinition": "定義を保存",
-        "DefinitionNamePlaceholder": "売上",
-        "FromDefinition": "開始側の定義",
-        "ToDefinition": "接続先の定義",
         "SourceTablePlaceholder": "ソーステーブル（例: orders）",
         "CalculationPlaceholder": "計算式（例: SUM(amount)）",
-        "BusinessDefinitionPlaceholder": "ビジネス定義",
         "AskAi": "AI に質問",
         "AskAiDescription": "AI の提案は、レビューして追加するまで一時的なものです。",
         "AiPromptPlaceholder": "注文と顧客を分析し、よく使う指標を提案してください。",
@@ -4280,36 +4185,6 @@
         "MarkAsVerified": "検証済みとしてマーク",
         "AddToKnowledge": "ナレッジに追加",
         "SaveAsVerifiedQuery": "検証済みクエリとして保存",
-        "Kinds": {
-            "entity": "エンティティ",
-            "metric": "メトリクス",
-            "measure": "メジャー",
-            "dimension": "ディメンション",
-            "relationship": "リレーション"
-        },
-        "DefinitionFields": {
-            "Description": "ビジネス定義",
-            "Aliases": "別名",
-            "SourceTable": "ソーステーブル",
-            "Calculation": "計算式",
-            "Filters": "フィルター",
-            "TimeDimension": "時間ディメンション",
-            "AvailableDimensions": "利用可能なディメンション",
-            "FromColumns": "参照元列（カンマ区切り）",
-            "ToColumns": "参照先列（カンマ区切り）",
-            "Dialect": "SQL 方言",
-            "AiContext": "AI コンテキスト",
-            "AiInstructions": "AI 指示",
-            "AiSynonyms": "AI 同義語（カンマ区切り）",
-            "AiExamples": "AI 例（1行に1件）"
-        },
-        "AiOperations": {
-            "GenerateDefinitions": "ナレッジ定義を生成",
-            "AnalyzeContext": "ビジネスコンテキストを分析",
-            "AnalyzeSchema": "スキーマを分析",
-            "FindRelationships": "不足しているリレーションを検索",
-            "SuggestMetrics": "メトリクスを提案"
-        },
         "Errors": {
             "CreateModel": "ナレッジを作成できませんでした。",
             "SelectModel": "先にナレッジを選択してください。",
@@ -4480,66 +4355,16 @@
             "UnavailableDataSource": "利用できないデータソース",
             "RuleCount": "業務ルール {count} 件"
         },
-        "Extraction": {
-            "AutomaticExtraction": "自動抽出",
-            "Enabled": "有効",
-            "Disabled": "無効",
-            "Disable": "無効にする",
-            "EnableAndBackfill": "有効化して既存資料を抽出",
-            "Retry": "抽出を再試行",
-            "BusinessRules": "業務ルール",
-            "NoRules": "公開済みの業務ルールはありません。",
-            "OpenOriginal": "原文を開く",
-            "SourceChanged": "ソースが変更されました",
-            "Cancel": "キャンセル",
-            "Archive": "無効にする",
-            "Edit": "編集",
-            "Save": "保存",
-            "Loading": "読み込み中…",
-            "ModelWide": "ナレッジ全体",
-            "Field": {
-                "name": "名前",
-                "description": "定義／業務上の意味",
-                "dataSource": "データソース",
-                "aliases": "別名（カンマ区切り）",
-                "unit": "単位／通貨",
-                "scope": "集計範囲／除外規則"
-            },
-            "Job": {
-                "queued": "抽出待ち",
-                "running": "抽出中",
-                "completed": "抽出完了",
-                "failed": "抽出失敗",
-                "blocked": "AI 設定／利用枠が必要",
-                "cancelled": "抽出停止"
-            },
-            "Error": {
-                "blocked": "バックグラウンド AI モデルまたは利用枠を設定して再試行してください。",
-                "failed": "抽出に失敗しました。原文と公開済み知識は保持されています。",
-                "quota": "組織の AI 利用枠を回復してから再試行してください。",
-                "config": "バックグラウンドで使える AI モデルを設定して再試行してください。"
-            },
-            "Backfill": "既存資料を抽出",
-            "ApplicationScope": "適用範囲",
-            "ApplicableMetrics": "適用指標",
-            "SuggestedMetrics": "関連指標の提案",
-            "SharingEvidence": "共有の根拠",
-            "SpecificConditions": "指標の計算と固有条件",
-            "ReferencedRules": "参照ルール",
-            "RuleSemantics": "ルール参照は業務上の制約です。公開済みの最新版を参照し、SQL・式・フィルターは自動変更しません。",
-            "OrganizationStatus": "ドラフト整理",
-            "LinkedMetricCount": "関連指標 {count} 件",
-            "Inactive": "無効",
-            "Restore": "復元",
-            "NoReferencedRules": "適用できる公開済みルールはありません",
-            "RulesNotice": "共有規約は一箇所で管理します。ナレッジ・データソースのルールはその範囲に適用し、指標ルールは関連指標のみに適用します。",
-            "Scope": {
-                "model": "ナレッジ全体",
-                "data_source": "指定データソース",
-                "metrics": "指定指標"
-            },
-            "AutomaticPublished": "AI 自動公開"
-        }
+        "QuerySources": {
+            "EmptyTitle": "関連項目はまだありません",
+            "OpenNamed": "{name}を開く",
+            "EditAction": "関連ドキュメントを編集",
+            "EditDescription": "関連付ける既存のドキュメントを選択します。保存後に反映されます。",
+            "Search": "ドキュメントを検索",
+            "NoMatches": "一致するドキュメントはありません"
+        },
+        "EditQuery": "クエリを編集",
+        "VerifiedQueryCount": "検証済みクエリ {count} 件"
     },
     "AppSidebar": {
         "DataSources": "データソース",
@@ -4876,7 +4701,8 @@
                 "knowledge_source": "ナレッジソース",
                 "verified_query": "検証済みクエリ",
                 "semantic_model": "セマンティック定義"
-            }
+            },
+            "Unavailable": "この項目は利用できません"
         },
         "Trace": {
             "Title": "分析手順",
@@ -5753,12 +5579,6 @@
         "Archived": "アーカイブ済み",
         "Archive": "アーカイブ",
         "Unarchive": "アーカイブを解除",
-        "AddDefinition": "定義を Knowledge に追加",
-        "DefinitionReview": "公開前に、再利用できる業務定義であることを確認してください。一時的な分析の結論はレポートに残してください。",
-        "DefinitionNeedsKnowledge": "まず、このレポートのデータソースに関連する Knowledge を作成してください。",
-        "DefinitionAdded": "定義を Knowledge に追加しました。",
-        "DefinitionKind": "定義の種類",
-        "PublishDefinition": "確認して定義を公開",
         "LeaveUnsaved": "レポートを離れる前に変更を保存してください。",
         "Rename": "名前を変更",
         "Cancel": "キャンセル",
@@ -6228,7 +6048,10 @@
             "LinkUrl": "リンク URL",
             "Apply": "適用",
             "Cancel": "キャンセル"
-        }
+        },
+        "DocumentNeedsKnowledge": "まず、このレポートのデータソースに関連する Knowledge を作成してください。",
+        "SaveKnowledgeDocument": "ナレッジベースに保存",
+        "KnowledgeDocumentSaved": "ドキュメントを保存しました"
     },
     "ChatComposer": {
         "Picker": {

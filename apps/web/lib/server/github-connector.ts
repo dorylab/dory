@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { parseDocument } from 'yaml';
-
 import { KNOWLEDGE_SOURCE_MAX_BYTES } from '@dory/database/postgres/impl/knowledge';
 import type { KnowledgeConnector } from '@dory/database/postgres/schemas';
 import { installationToken } from './github-app';
@@ -92,10 +90,6 @@ export async function readGitHubConnectorSnapshot(connector: KnowledgeConnector,
             const bytes = Buffer.from(result.content.replace(/\s/g, ''), 'base64');
             if (bytes.byteLength > KNOWLEDGE_SOURCE_MAX_BYTES) throw new Error(`${blob.path} exceeds the 10 MB knowledge-source limit.`);
             const contentText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-            if (/\.ya?ml$/i.test(blob.path)) {
-                const document = parseDocument(contentText);
-                if (document.errors.length) throw new Error(`${blob.path}: ${document.errors[0]?.message ?? 'Invalid YAML.'}`);
-            }
             return {
                 path: blob.path,
                 sha: blob.sha,

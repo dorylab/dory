@@ -8,7 +8,7 @@ const connector: KnowledgeConnector = {
     id: 'connector-1',
     organizationId: 'org-1',
     knowledgeModelId: 'model-1',
-    provider: 'github', autoExtract: false,
+    provider: 'github',
     displayName: null,
     syncedFolders: null,
     driveFolderId: null,
@@ -56,7 +56,7 @@ function mockClient() {
             });
         }
         if (url.endsWith('/blob-md')) return Response.json({ encoding: 'base64', content: Buffer.from('# Dory\n').toString('base64') });
-        if (url.endsWith('/blob-yaml')) return Response.json({ encoding: 'base64', content: Buffer.from('name: Dory\n').toString('base64') });
+        if (url.endsWith('/blob-yaml')) return Response.json({ encoding: 'base64', content: Buffer.from('name: [draft\n').toString('base64') });
         throw new Error(`Unexpected request: ${url}`);
     };
     return { requests, options: { fetch: mockFetch, tokenProvider: async () => ({ token: 'installation-token' }) } };
@@ -79,7 +79,7 @@ test('GitHub provider browses folders and recursively reads only supported docum
         snapshot.files.map(file => [file.path, file.sha, file.contentText]),
         [
             ['docs/readme.md', 'blob-md', '# Dory\n'],
-            ['docs/guides/model.yaml', 'blob-yaml', 'name: Dory\n'],
+            ['docs/guides/model.yaml', 'blob-yaml', 'name: [draft\n'],
         ],
     );
     assert.equal(

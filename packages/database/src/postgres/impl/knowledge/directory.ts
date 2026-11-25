@@ -139,7 +139,6 @@ export class KnowledgeDirectory {
                 .where(
                     and(
                         eq(knowledgeSources.organizationId, organizationId),
-                        eq(knowledgeSources.format, 'markdown'),
                         or(
                             isNotNull(knowledgeConnectorItems.connectorId),
                             sql`strpos(lower(${knowledgeSources.fileName}), ${term}) > 0`,
@@ -191,6 +190,11 @@ export class KnowledgeDirectory {
             ];
             for (const folder of directory.folders.values()) {
                 if (folder.id !== ROOT && matches(folder.name)) hits.push({ modelId, kind: 'folder', id: folder.id, name: folder.name, path: path(folder.id) });
+            }
+            for (const file of byFile.get(modelId) ?? []) {
+                if (file.format === 'markdown') continue;
+                const displayName = knowledgeSourceDisplayName(file);
+                if (matches(displayName)) hits.push({ modelId, kind: 'source', id: file.id, name: displayName, path: [name, displayName] });
             }
             for (const file of directory.documents) {
                 if (matches(file.name) || (input.includeRules && file.source?.systemRole === 'analysis_rules'))

@@ -15,18 +15,9 @@ const model = {
     name: 'Revenue knowledge',
     description: null,
     businessContextMd: '',
-    modelYaml: '',
-    model: {
-        definitions: [
-            { id: 'metric:mrr', name: 'Monthly recurring revenue', kind: 'metric', status: 'verified', sourceConnectionId: 'conn-1', description: 'Recurring revenue' },
-            { id: 'metric:draft', name: 'Draft revenue', kind: 'metric', status: 'unverified', sourceConnectionId: 'conn-1' },
-        ],
-    },
     dataSources: [{ connectionId: 'conn-1', name: 'Warehouse', type: 'postgres', engine: 'postgres' }],
     verifiedQueryCount: 1,
     knowledgeSourceCount: 1,
-    readiness: { status: 'ready', requirements: { dataSource: true, verifiedDefinition: true } },
-    agentUnderstands: [],
     createdAt: now,
     updatedAt: now,
 };
@@ -94,7 +85,6 @@ function dbMock() {
             }),
         },
         knowledge: {
-            extraction: { evidenceFor: async () => [], listRules: async () => [] },
             listModels: async () => [model],
             getModel: async () => model,
             listVerifiedQueries: async () => [
@@ -106,7 +96,6 @@ function dbMock() {
                     question: 'What is MRR?',
                     sql: 'select 1',
                     description: null,
-                    definitionIds: ['metric:mrr'],
                     sourceType: 'saved_query',
                     sourceId: 'saved-1',
                     createdBy: 'user-1',
@@ -137,7 +126,8 @@ function dbMock() {
             ],
             searchKnowledgeSources: async () => [{ id: 'source-1', fileName: 'metrics.md', format: 'markdown', connectionId: 'conn-1', excerpt: 'Recurring revenue' }],
             getKnowledgeSource: async () => ({ ...(await (dbMock() as any).knowledge.listKnowledgeSources())[0], contentText: sourceText }),
-            getGraph: async () => ({ queryDefinitionEdges: [], sourceAssetEdges: [] }),
+            listQuerySources: async () => [],
+            listSourceQueries: async () => [],
         },
         resultSets: {
             readRows: async ({ limit }: { limit: number }) => ({
@@ -158,10 +148,10 @@ test('Agent asset refs parse stable Artifact and Knowledge URIs', () => {
     assert.deepEqual(parseAgentAssetRef(knowledgeSourceAgentAssetRef('kn-1', 'source-1')), { kind: 'knowledge_source', knowledgeModelId: 'kn-1', sourceId: 'source-1' });
 });
 
-test('Agent asset search hides unverified definitions and supports connection allowlists', async () => {
+test('Agent asset search finds knowledge sources and supports connection allowlists', async () => {
     const result = await searchAgentAssets(dbMock(), { organizationId: 'org-1', query: 'revenue', allowedConnectionIds: ['conn-1'] });
     assert.ok(result.assets.some(asset => asset.kind === 'artifact'));
-    assert.ok(result.assets.some(asset => asset.ref.includes('metric:mrr')));
+    assert.ok(result.assets.some(asset => asset.kind === 'knowledge_source'));
     assert.equal(
         result.assets.some(asset => asset.ref.includes('draft')),
         false,
@@ -204,127 +194,4 @@ test('Agent asset reads chunk untrusted sources and cap Artifact previews', asyn
 
     const artifact = await readAgentAsset(dbMock(), { organizationId: 'org-1', ref: artifactAgentAssetRef('art-1'), previewRows: 500 });
     assert.equal((artifact.content as any).preview.rows.length, 200);
-});
-
-test('natural Chinese questions find verified definitions without whitespace', async () => {
-    const db = dbMock();
-    const base = await db.knowledge.listModels();
-    db.knowledge.listModels = async () => [
-        {
-            ...base[0],
-            model: {
-                definitions: [
-                    {
-                        id: 'metric:late',
-                        name: 'late_delivery_rate',
-                        kind: 'metric',
-                        status: 'verified',
-                        sourceConnectionId: 'conn-1',
-                        description: '已送达订单迟到率',
-                        aliases: ['迟到率'],
-                    },
-                ],
-            },
-        },
-    ];
-    const found = await searchAgentAssets(db, {
-        organizationId: 'org-1',
-        connectionId: 'conn-1',
-        query: '2018年8月下单的已送达订单迟到率是多少？',
-        kinds: ['knowledge_definition'],
-    });
-    assert.equal(found.assets[0]?.title, 'late_delivery_rate');
-});
-
-test('approved business rules expose evidence and staleness while respecting model and data-source scope', async () => {
-    const db = dbMock();
-    const evidence = {
-        id: 'ev-1',
-        sourceId: null,
-        originalSourceId: 'deleted-source',
-        sourceHash: 'v1',
-        sourceTitle: 'Policy',
-        sourceUrl: 'https://linear.app/test/document/policy',
-        quote: 'Reports use UTC.',
-        state: 'missing',
-    };
-    db.knowledge.extraction.listRules = async () => [
-        {
-            id: 'rule-1',
-            revision: 1,
-            status: 'active',
-            sourceState: 'outdated',
-            payload: { kind: 'business_rule', name: 'Reporting timezone', description: 'Reports use UTC.', aliases: [], sourceConnectionId: null },
-            evidence: [evidence],
-        },
-    ];
-    const found = await searchAgentAssets(db, { organizationId: 'org-1', knowledgeModelId: 'kn-1', query: 'timezone', kinds: ['business_rule'], allowedConnectionIds: ['conn-1'] });
-    assert.equal(found.assets.length, 1);
-    assert.equal(found.assets[0].sourceState, 'outdated');
-    const read = await readAgentAsset(db, { organizationId: 'org-1', ref: found.assets[0].ref, allowedConnectionIds: ['conn-1'] });
-    assert.equal(read.citation.sourceState, 'outdated');
-    assert.equal(read.citation.sourceUrl, evidence.sourceUrl);
-    assert.deepEqual(JSON.parse(JSON.stringify(read)), read);
-    const denied = await searchAgentAssets(db, { organizationId: 'org-1', query: 'timezone', kinds: ['business_rule'], allowedConnectionIds: ['conn-other'] });
-    assert.equal(denied.assets.length, 0);
-    await assert.rejects(readAgentAsset(db, { organizationId: 'org-1', ref: found.assets[0].ref, allowedConnectionIds: ['conn-other'] }));
-});
-
-test('metric reads include only effective rules and revisions change when a referenced rule is reviewed', async () => {
-    const db = dbMock() as any;
-    let ruleRevision = 1;
-    db.knowledge.extraction.listRules = async () => [
-        {
-            id: 'revenue-rule',
-            revision: ruleRevision,
-            status: 'active',
-            applicationScope: 'metrics',
-            metricIds: ['metric:mrr'],
-            metrics: [{ id: 'metric:mrr', name: 'Monthly recurring revenue', sourceConnectionId: 'conn-1' }],
-            payload: { kind: 'business_rule', name: 'Revenue exclusion', description: 'Exclude failed orders from revenue.', aliases: [], sourceConnectionId: null },
-            sourceState: 'current',
-            evidence: [],
-        },
-        {
-            id: 'other-rule',
-            revision: 1,
-            status: 'active',
-            applicationScope: 'metrics',
-            metricIds: ['metric:payments'],
-            metrics: [{ id: 'metric:payments', sourceConnectionId: 'conn-1' }],
-            payload: { kind: 'business_rule', name: 'Payment denominator', description: 'Count every attempt.', aliases: [], sourceConnectionId: null },
-            sourceState: 'current',
-            evidence: [],
-        },
-    ];
-    const read = () => readAgentAsset(db, { organizationId: 'org-1', ref: 'dory://knowledge/kn-1/definitions/metric%3Amrr', allowedConnectionIds: ['conn-1'] });
-    const first = await read();
-    assert.equal((first.content as any).effectiveRules.length, 1);
-    assert.equal((first.content as any).effectiveRules[0].id, 'revenue-rule');
-    const search = await searchAgentAssets(db, { organizationId: 'org-1', query: 'Monthly recurring revenue', kinds: ['knowledge_definition'], allowedConnectionIds: ['conn-1'] });
-    assert.equal(search.assets[0].revision, first.asset.revision);
-    ruleRevision++;
-    const second = await read();
-    assert.notEqual(first.asset.revision, second.asset.revision);
-    assert.equal((second.content as any).effectiveRules[0].revision, 2);
-});
-
-test('automatic metrics are available with explicit trust while ordinary drafts stay private', async () => {
-    const db = dbMock();
-    const originalList = db.knowledge.listModels;
-    const originalGet = db.knowledge.getModel;
-    const automaticModel = { ...model, model: { definitions: model.model.definitions.map(d => (d.id === 'metric:mrr' ? { ...d, status: 'auto_published' } : d)) } };
-    db.knowledge.listModels = async () => [automaticModel];
-    db.knowledge.getModel = async () => automaticModel;
-    try {
-        const result = await searchAgentAssets(db, { organizationId: 'org-1', query: 'revenue', kinds: ['knowledge_definition'] });
-        assert.equal(result.assets.length, 1);
-        assert.equal(result.assets[0].trustLevel, 'automatic');
-        const read = await readAgentAsset(db, { organizationId: 'org-1', ref: result.assets[0].ref });
-        assert.equal(read.asset.trustLevel, 'automatic');
-        await assert.rejects(readAgentAsset(db, { organizationId: 'org-1', ref: 'dory://knowledge/kn-1/definitions/metric%3Adraft' }));
-    } finally {
-        db.knowledge.listModels = originalList;
-        db.knowledge.getModel = originalGet;
-    }
 });

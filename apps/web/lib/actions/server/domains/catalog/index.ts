@@ -14,7 +14,7 @@ const agentAssetSummarySchema = z.object({
     connectionIds: z.array(z.string()),
     knowledgeModelId: z.string().nullable(),
     knowledgeModelName: z.string().nullable(),
-    trustLevel: z.enum(['verified', 'automatic', 'source', 'artifact']),
+    trustLevel: z.enum(['verified', 'source', 'artifact']),
     updatedAt: z.string(),
     revision: z.string(),
     deepLink: z.string(),

@@ -34,13 +34,13 @@ export function ReportSelectionPopover({ bodyRef, onAdd }: { bodyRef: RefObject<
                 sideOffset={6}
                 collisionPadding={8}
                 hideWhenDetached
-                aria-label={t('AddDefinition')}
+                aria-label={t('SaveKnowledgeDocument')}
                 className="w-auto p-1"
                 onOpenAutoFocus={event => event.preventDefault()}
                 onCloseAutoFocus={event => event.preventDefault()}
             >
                 <Button variant="ghost" size="sm" onMouseDown={event => event.preventDefault()} onClick={() => onAdd(selection.text)}>
-                    {t('AddDefinition')}
+                    {t('SaveKnowledgeDocument')}
                 </Button>
             </PopoverContent>
         </Popover>

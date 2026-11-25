@@ -16,6 +16,7 @@ import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { attachmentReadSchema, readChatAttachment } from '@/lib/server/chat-attachments';
 import { readChatEvidence, revalidateChatFindingEvidence } from '@/lib/server/chat-evidence';
+import { AGENT_ASSET_KINDS, parseAgentAssetRef } from '@/lib/server/agent-assets';
 import { recordSemanticModelUsage, resolveSemanticModelContext, type SemanticModelContextResult } from '@/lib/server/semantic-model-context';
 import { createSqlNamer } from '@/lib/server/sql-naming';
 import { assertDocumentWrite, emptyWorkContent, patchWorkDocument, saveWorkDraft } from '@/lib/server/work-documents';
@@ -51,7 +52,7 @@ const artifactReadInputSchema = z
     })
     .merge(workResolutionInputSchema);
 
-const agentAssetKindSchema = z.enum(['artifact', 'knowledge_definition', 'verified_query', 'knowledge_source', 'business_rule']);
+const agentAssetKindSchema = z.enum(AGENT_ASSET_KINDS);
 const agentAssetSearchInputSchema = z
     .object({
         query: z.string().max(240).optional(),
@@ -328,15 +329,8 @@ const actionTransportInputSchema = z
 
 type ActionTransportAccess = 'read' | 'write';
 const MCP_CLIENT_APPROVED_CONFIRMATION_TOKEN = 'mcp-client-approved';
-const TRACKED_KNOWLEDGE_ACTION_IDS = new Set([
-    'knowledge.searchKnowledge',
-    'knowledge.searchVerifiedQueries',
-    'knowledge.getDefinition',
-    'knowledge.getVerifiedQuery',
-    'knowledge.getKnowledgeSource',
-]);
+const TRACKED_KNOWLEDGE_ACTION_IDS = new Set(['knowledge.searchKnowledge', 'knowledge.searchVerifiedQueries', 'knowledge.getVerifiedQuery', 'knowledge.getKnowledgeSource']);
 const USED_KNOWLEDGE_ASSET_BY_ACTION = {
-    'knowledge.getDefinition': 'definition',
     'knowledge.getVerifiedQuery': 'verified_query',
     'knowledge.getKnowledgeSource': 'source',
 } as const;
@@ -1418,7 +1412,6 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
             semantic = await resolveSemanticModelContext(ctx.services.db, {
                 organizationId: ctx.organizationId,
                 connectionId: work.connectionId,
-                question,
             });
             if (semantic.models.length) {
                 await recordSemanticModelUsage(ctx.services.db, {
@@ -1511,7 +1504,7 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
             const assetType = USED_KNOWLEDGE_ASSET_BY_ACTION[action.id as keyof typeof USED_KNOWLEDGE_ASSET_BY_ACTION];
             const data = toRecord(result.data);
             const knowledgeModelId = getString(actionInput.knowledgeModelId) ?? getString(data.knowledgeModelId);
-            const assetId = getString(data.id) ?? getString(actionInput.definitionId) ?? getString(actionInput.id);
+            const assetId = getString(data.id) ?? getString(actionInput.id);
             const assetName = getString(data.name) ?? getString(data.title) ?? getString(data.fileName);
             const event = {
                 ...(ctx.services.agentEventId ? { eventId: ctx.services.agentEventId } : {}),
@@ -1526,8 +1519,8 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
             };
             if (work && assetType && knowledgeModelId && assetId) {
                 const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId });
-                const assetKind = assetType === 'definition' ? 'knowledge_definition' : assetType === 'source' ? 'knowledge_source' : 'verified_query';
-                const pathKind = assetType === 'definition' ? 'definitions' : assetType === 'source' ? 'sources' : 'queries';
+                const assetKind = assetType === 'source' ? 'knowledge_source' : 'verified_query';
+                const pathKind = assetType === 'source' ? 'sources' : 'queries';
                 const assetRef = `dory://knowledge/${encodeURIComponent(knowledgeModelId)}/${pathKind}/${encodeURIComponent(assetId)}`;
                 await ctx.services.db.works.recordAgentAssetUsageEvent(
                     {
@@ -1536,7 +1529,7 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
                         userId: ctx.userId,
                         assetKind,
                         assetRef,
-                        revision: model.modelRevision,
+                        revision: model.updatedAt.toISOString(),
                         assetSnapshot: {
                             title: assetName ?? assetId,
                             knowledgeModelId,
@@ -1705,7 +1698,7 @@ async function readAgentAssetFacade(ctx: ActionContext<WebActionServices>, rawIn
                     workId: work.workId,
                     organizationId: ctx.organizationId,
                     userId: ctx.userId,
-                    assetKind: requireString(asset.kind, 'asset.kind') as 'artifact' | 'knowledge_definition' | 'verified_query' | 'knowledge_source' | 'business_rule',
+                    assetKind: requireString(asset.kind, 'asset.kind') as (typeof AGENT_ASSET_KINDS)[number],
                     assetRef: requireString(asset.ref, 'asset.ref'),
                     revision: requireString(asset.revision, 'asset.revision'),
                     assetSnapshot: {
@@ -2435,6 +2428,11 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                             throw new McpFacadeError('CONNECTION_REQUIRED', 'Choose an explicit connectionId from the selected scope.');
                         ctx = { ...ctx, currentConnectionId: requested, actor: { ...ctx.actor, metadata: { ...ctx.actor.metadata, allowedConnectionIds: allowed } } };
                         if (definition.name === 'dory_search_assets' && scope.knowledgeModelId) input.knowledgeModelId = scope.knowledgeModelId;
+                        if (definition.name === 'dory_read_asset' && scope.knowledgeModelId) {
+                            const ref = parseAgentAssetRef(requireString(input.ref, 'ref'));
+                            if (ref.kind !== 'artifact' && ref.knowledgeModelId !== scope.knowledgeModelId)
+                                throw new McpFacadeError('SCOPE_MISMATCH', 'Knowledge source is outside the selected knowledge base.', { status: 403 });
+                        }
                         Object.assign(input, applyAnalysisDatabase(scope, definition.name, input));
                     }
                     if ((current.metadata?.chatTurn as { summarySaved?: boolean } | undefined)?.summarySaved && definition.name !== 'dory_finish_work') {

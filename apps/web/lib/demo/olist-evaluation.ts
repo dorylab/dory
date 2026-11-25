@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
 
-import type { KnowledgeDefinition, OssieCustomExtension, OssieDocument } from '@dory/database/postgres/schemas';
-import { OSSIE_VERSION } from '@dory/shared/types/ossie';
-
 export const OLIST_CONNECTION_NAME = 'Olist Commerce Evaluation';
 export const OLIST_KNOWLEDGE_NAME = 'Olist Commerce Knowledge';
 export type EvaluationRow = Record<string, string | number | null>;
@@ -53,94 +50,66 @@ export const OLIST_TABLES: Record<string, { fields: string; keys: string[]; desc
     },
 };
 
-function extension(connectionId: string, id: string, kind: KnowledgeDefinition['kind']): OssieCustomExtension[] {
-    return [{ vendor_name: 'COMMON', data: JSON.stringify({ dory: { id, kind, status: 'verified', sourceConnectionId: connectionId } }) }];
-}
+export function olistGuide(timeRange: { min: string; max: string }) {
+    return `# Olist Commerce Knowledge
 
-const METRICS = [
-    ['merchandise_amount', 'SUM(order_items.price_cents)', '成交商品额；仅 delivered；BRL 分，不含运费。', ['成交商品额', '成交额', 'GMV', '品类成交额']],
-    ['delivered_order_count', 'COUNT(DISTINCT orders.order_id)', '成交订单数；仅 delivered；在订单粒度计数，包含没有明细的订单。', ['订单数', '成交订单数']],
-    [
-        'merchandise_aov',
-        'SUM(order_items.price_cents) * 1.0 / NULLIF(COUNT(DISTINCT orders.order_id), 0)',
-        '商品客单价；成交商品额分除以 delivered 订单数，订单先聚合，不能把运费算入。',
-        ['客单价', 'AOV'],
-    ],
-    [
-        'repeat_purchase_rate',
-        'SUM(CASE WHEN delivered_order_count >= 2 THEN 1.0 ELSE 0.0 END) / NULLIF(COUNT(*), 0)',
-        '复购率；全数据时间范围中，有至少两笔 delivered 订单的稳定客户数 / 至少一笔的客户数。按客户首笔 delivered 订单所在州归属；同时间按 order_id 升序打破平局。',
-        ['复购率', '州客户复购'],
-    ],
-    [
-        'late_delivery_rate',
-        'AVG(CASE WHEN DATE(orders.order_delivered_customer_date) > DATE(orders.order_estimated_delivery_date) THEN 1.0 ELSE 0.0 END)',
-        '迟到率；下单在指定期、delivered、送达和预计日期均有效的订单；只比较日期，预计当天送达不算迟到。',
-        ['迟到率', '送达', '配送'],
-    ],
-    [
-        'payment_amount',
-        'SUM(payments.payment_value_cents)',
-        '支付金额；仅关联 delivered 订单，包含运费；按支付方式保留每笔支付，不是订单数或支付成功率。',
-        ['支付金额', '支付方式', '支付占比'],
-    ],
-    [
-        'recent_order_count',
-        'COUNT(orders.order_id)',
-        '最近订单数；全部状态；按明确 as-of 日期的最近7个日历日包含当日，不得用历史数据最后一天替代当前日期。',
-        ['最近', '最近7天', '订单情况'],
-    ],
-    ['latest_order_time', 'MAX(orders.order_purchase_timestamp)', '全表最新下单时间，保留原始无时区值。', ['最新数据时间', '最新订单时间']],
-] as const;
+Official Olist v2 historical commerce evaluation; BRL, source-native timestamps.
 
-export function buildOlistOssieDocument(connectionId: string, timeRange: { min: string; max: string }): OssieDocument {
-    const relationships = [
-        ['orders_customer', 'orders', 'customers', 'customer_id', 'customer_id'],
-        ['items_order', 'order_items', 'orders', 'order_id', 'order_id'],
-        ['items_product', 'order_items', 'products', 'product_id', 'product_id'],
-        ['items_seller', 'order_items', 'sellers', 'seller_id', 'seller_id'],
-        ['payments_order', 'payments', 'orders', 'order_id', 'order_id'],
-        ['reviews_order', 'reviews', 'orders', 'order_id', 'order_id'],
-        ['product_category', 'products', 'category_translation', 'product_category_name', 'product_category_name'],
-    ];
-    return {
-        version: OSSIE_VERSION,
-        name: OLIST_KNOWLEDGE_NAME,
-        description: 'Official Olist v2 historical commerce evaluation; BRL, source-native timestamps.',
-        ai_context: {
-            instructions: `数据时间 ${timeRange.min} 至 ${timeRange.max}。历史数据不能代表当前业务。金额用整数分计算、展示时除100；币种BRL。时间无时区，保持源值。成交指标只包含delivered。订单、商品明细、支付有不同粒度：先分别聚合再关联，禁止直接连接明细和支付造成放大。按指定下单日期归属，不按送达日期归属。退款率、净利润、支付成功率不可计算：缺少退款金额、成本及支付尝试/结果字段，取消率不能代替退款率。没有SQL分析时findings必须为空。`,
-            synonyms: ['电商', 'Olist', '订单', '成交', '复购', '支付', '配送'],
-        },
-        datasets: Object.entries(OLIST_TABLES).map(([name, spec]) => ({
-            name,
-            source: name,
-            primary_key: spec.keys,
-            description: spec.description,
-            custom_extensions: extension(connectionId, `entity:${name}`, 'entity'),
-            fields: spec.fields.split(' ').map(field => ({
-                name: field,
-                expression: { dialects: [{ dialect: 'ANSI_SQL', expression: `${name}.${field}` }] },
-                ...(field.includes('timestamp') || field.endsWith('_date') || field === 'order_approved_at' ? { dimension: { is_time: true } } : {}),
-                custom_extensions: extension(connectionId, `dimension:${name}:${field}`, 'dimension'),
-            })),
-        })),
-        metrics: METRICS.map(([name, expression, description, synonyms]) => ({
-            name,
-            description,
-            expression: { dialects: [{ dialect: 'ANSI_SQL', expression }] },
-            ai_context: { synonyms: [...synonyms], instructions: description },
-            custom_extensions: extension(connectionId, `metric:${name}`, 'metric'),
-        })),
-        relationships: relationships.map(([name, from, to, fromColumn, toColumn]) => ({
-            name,
-            from,
-            to,
-            from_columns: [fromColumn],
-            to_columns: [toColumn],
-            ai_context: { instructions: '从左侧多行到右侧一行；先检查关联覆盖率和粒度。' },
-            custom_extensions: extension(connectionId, `relationship:${name}`, 'relationship'),
-        })),
-    };
+## Metrics
+
+- **merchandise_amount** 成交商品额；仅 delivered；BRL 分，不含运费。 SQL: SUM(order_items.price_cents)
+
+- **delivered_order_count** 成交订单数；仅 delivered；在订单粒度计数，包含没有明细的订单。 SQL: COUNT(DISTINCT orders.order_id)
+
+- **merchandise_aov** 商品客单价；成交商品额分除以 delivered 订单数，订单先聚合，不能把运费算入。 SQL: SUM(order_items.price_cents) * 1.0 / NULLIF(COUNT(DISTINCT orders.order_id), 0)
+
+- **repeat_purchase_rate** 复购率；全数据时间范围中，有至少两笔 delivered 订单的稳定客户数 / 至少一笔的客户数。按客户首笔 delivered 订单所在州归属；同时间按 order_id 升序打破平局。 SQL: SUM(CASE WHEN delivered_order_count >= 2 THEN 1.0 ELSE 0.0 END) / NULLIF(COUNT(*), 0)
+
+- **late_delivery_rate** 迟到率；下单在指定期、delivered、送达和预计日期均有效的订单；只比较日期，预计当天送达不算迟到。 SQL: AVG(CASE WHEN DATE(orders.order_delivered_customer_date) > DATE(orders.order_estimated_delivery_date) THEN 1.0 ELSE 0.0 END)
+
+- **payment_amount** 支付金额；仅关联 delivered 订单，包含运费；按支付方式保留每笔支付，不是订单数或支付成功率。 SQL: SUM(payments.payment_value_cents)
+
+- **recent_order_count** 最近订单数；全部状态；按明确 as-of 日期的最近7个日历日包含当日，不得用历史数据最后一天替代当前日期。 SQL: COUNT(orders.order_id)
+
+- **latest_order_time** 全表最新下单时间，保留原始无时区值。 SQL: MAX(orders.order_purchase_timestamp)
+
+## Relationships
+
+- **orders_customer**  orders.customer_id → customers.customer_id
+
+- **items_order**  order_items.order_id → orders.order_id
+
+- **items_product**  order_items.product_id → products.product_id
+
+- **items_seller**  order_items.seller_id → sellers.seller_id
+
+- **payments_order**  payments.order_id → orders.order_id
+
+- **reviews_order**  reviews.order_id → orders.order_id
+
+- **product_category**  products.product_category_name → category_translation.product_category_name
+
+## Datasets
+
+- **orders** 每订单一行；成交指标仅包含 delivered。时间为原始无时区时间，禁止擅自转为 UTC。
+
+- **customers** customer_id 是订单关联标识，customer_unique_id 才是复购的稳定客户标识。
+
+- **order_items** 每订单商品行一行；一行代表一件商品。金额用 *_cents 整数分。商品价格不含运费。
+
+- **payments** 每支付记录一行；一个订单可能多笔支付。没有支付失败或尝试状态，不能计算支付成功率。
+
+- **products** 每商品一行；缺失品类记为 unknown，无翻译时保留原始品类。
+
+- **sellers** 每卖家一行。
+
+- **reviews** 原始评价全部保留，review_id 可能重复；同一订单的多条评价不能直接放大订单指标。
+
+- **category_translation** 葡萄牙语品类到英语品类映射。
+
+- **geolocation** 邮编可能重复，不可直接关联订单计算金额；首版验收不使用地理坐标。
+
+Coverage: ${timeRange.min} to ${timeRange.max}.`;
 }
 
 export function olistScenarios(asOf: string): OlistScenario[] {

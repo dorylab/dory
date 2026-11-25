@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { OSSIE_VERSION } from '@dory/shared/types/ossie';
 
 import { COMMERCE_EVALUATION_KNOWLEDGE_NAME } from '@/lib/demo/commerce-agent-evaluation';
 import { COMMERCE_EVALUATION_SCENARIOS } from '@/lib/demo/commerce-agent-evaluation-knowledge';
@@ -60,20 +59,12 @@ export async function replayCommerceEvaluation(call: CallTool, connectionId: str
             const models = Array.isArray(work.semanticModelsUsed) ? work.semanticModelsUsed.filter(isRecord) : [];
             const model = models.find(item => item.name === COMMERCE_EVALUATION_KNOWLEDGE_NAME);
             assert.ok(model, 'Expected commerce semantic model before explicit Knowledge discovery.');
-            assert.equal(model.ossieVersion, OSSIE_VERSION);
-            assert.match(requireString(model.modelRevision, 'modelRevision'), /^[a-f0-9]{64}$/);
-            for (const id of scenario.expectedSemanticIds) {
-                const name = id.slice(id.indexOf(':') + 1);
-                assert.ok(semanticContext.includes(name), `Missing ${id} for ${scenario.id}`);
-                if (id.startsWith('metric:')) assert.ok(Array.isArray(model.metricNames) && model.metricNames.includes(name), `Missing selected metric ${name}`);
-                if (id.startsWith('relationship:'))
-                    assert.ok(Array.isArray(model.relationshipNames) && model.relationshipNames.includes(name), `Missing selected relationship ${name}`);
-            }
+            assert.ok(semanticContext.includes(COMMERCE_EVALUATION_KNOWLEDGE_NAME), 'Missing commerce knowledge guide');
             const assets = await call('dory_search_assets', {
                 connectionId,
                 knowledgeModelId: model.id,
                 query: scenario.question,
-                kinds: ['knowledge_definition', 'verified_query'],
+                kinds: ['knowledge_source', 'verified_query'],
                 workId,
             });
             const asset = Array.isArray(assets.assets) ? assets.assets.filter(isRecord)[0] : undefined;
@@ -122,7 +113,6 @@ export async function replayCommerceEvaluation(call: CallTool, connectionId: str
                 status: 'passed',
                 question: scenario.question,
                 sql: scenario.sql,
-                expectedSemanticIds: scenario.expectedSemanticIds,
                 expectedRows: scenario.expectedRows,
                 actualRows: rows,
                 workId,

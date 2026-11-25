@@ -7,115 +7,12 @@ import type {
     SchemaEvidence,
 } from '@dory/shared/types/knowledge-document-draft';
 import { newEntityId } from '@dory/shared/id';
-import type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
-import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
 import { sql } from 'drizzle-orm';
-import { type AnyPgColumn, boolean, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { connections } from './connections';
 
-export { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
-
-export type KnowledgeDefinitionKind = 'entity' | 'metric' | 'measure' | 'dimension' | 'relationship';
-export type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
-export { isPublishedDefinition } from '@dory/shared/types/knowledge';
-
-export type KnowledgeAssetType = 'definition' | 'verified_query' | 'business_rule';
 export type KnowledgeSourceRelationType = 'provided' | 'generated';
-
-export type KnowledgeDefinition = {
-    id: string;
-    name: string;
-    kind: KnowledgeDefinitionKind;
-    status: KnowledgeDefinitionStatus;
-    sourceConnectionId: string;
-    description?: string;
-    aliases?: string[];
-    source?: string;
-    expression?: string;
-    filters?: string[];
-    timeDimension?: string;
-    dimensions?: string[];
-    from?: string;
-    to?: string;
-    fromColumns?: string[];
-    toColumns?: string[];
-    aiContext?: OssieAiContext;
-    dialect?: OssieDialect;
-    datatype?: OssieDataType;
-};
-
-export type KnowledgeModelDocument = { definitions: KnowledgeDefinition[] };
-
-export type OssieAiContext =
-    | string
-    | {
-          instructions?: string;
-          synonyms?: string[];
-          examples?: string[];
-          [key: string]: unknown;
-      };
-export type OssieCustomExtension = { vendor_name: string; data: string };
-export type OssieExpression = { dialects: Array<{ dialect: OssieDialect; expression: string }> };
-export type OssieField = {
-    name: string;
-    expression: OssieExpression;
-    datatype?: OssieDataType;
-    dimension?: { is_time?: boolean };
-    label?: string;
-    description?: string;
-    ai_context?: OssieAiContext;
-    custom_extensions?: OssieCustomExtension[];
-};
-export type OssieDataset = {
-    name: string;
-    source: string;
-    primary_key?: string[];
-    unique_keys?: string[][];
-    description?: string;
-    ai_context?: OssieAiContext;
-    fields?: OssieField[];
-    custom_extensions?: OssieCustomExtension[];
-};
-export type OssieMetric = {
-    name: string;
-    expression: OssieExpression;
-    datatype?: OssieDataType;
-    description?: string;
-    ai_context?: OssieAiContext;
-    custom_extensions?: OssieCustomExtension[];
-};
-export type OssieRelationship = {
-    name: string;
-    from: string;
-    to: string;
-    from_columns: string[];
-    to_columns: string[];
-    ai_context?: OssieAiContext;
-    custom_extensions?: OssieCustomExtension[];
-};
-export type OssieSemanticModel = {
-    name: string;
-    description?: string;
-    ai_context?: OssieAiContext;
-    datasets: OssieDataset[];
-    relationships?: OssieRelationship[];
-    metrics?: OssieMetric[];
-    custom_extensions?: OssieCustomExtension[];
-};
-export type OssieDocument = OssieSemanticModel & {
-    version: OssieVersion;
-};
-
-export const EMPTY_OSSIE_DOCUMENT: OssieDocument = {
-    version: OSSIE_VERSION,
-    name: 'untitled_model',
-    datasets: [{ name: 'untitled_dataset', source: '__unconfigured__' }],
-    relationships: [],
-    metrics: [],
-};
-
-export const EMPTY_OSSIE_YAML = `version: ${OSSIE_VERSION}\nname: untitled_model\ndatasets:\n  - name: untitled_dataset\n    source: __unconfigured__\nrelationships: []\nmetrics: []\n`;
 
 export const knowledgeModels = pgTable(
     'knowledge_models',
@@ -126,11 +23,7 @@ export const knowledgeModels = pgTable(
         organizationId: text('organization_id').notNull(),
         name: text('name').notNull(),
         description: text('description'),
-        publicationMode: text('publication_mode').$type<'review' | 'automatic'>().notNull().default('review'),
-        publicationEpoch: integer('publication_epoch').notNull().default(0),
         businessContextMd: text('business_context_md').notNull().default(''),
-        modelYaml: text('model_yaml').notNull().default(EMPTY_OSSIE_YAML),
-        modelJson: jsonb('model_json').$type<OssieDocument>().notNull().default(EMPTY_OSSIE_DOCUMENT),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true })
             .notNull()
@@ -207,7 +100,6 @@ export const knowledgeConnectors = pgTable(
         linearWorkspaceName: text('linear_workspace_name'),
         projectIds: jsonb('project_ids').$type<string[]>().notNull().default([]),
         configRevision: integer('config_revision').notNull().default(0),
-        autoExtract: boolean('auto_extract').notNull().default(false),
         nextSyncAt: timestamp('next_sync_at', { withTimezone: true }).notNull().defaultNow(),
         status: text('status').$type<KnowledgeConnectorStatus>().notNull().default('pending'),
         lastCommitSha: text('last_commit_sha'),
@@ -411,7 +303,6 @@ export const knowledgeVerifiedQueries = pgTable(
         question: text('question').notNull(),
         sql: text('sql').notNull(),
         description: text('description'),
-        definitionIds: jsonb('definition_ids').$type<string[]>().notNull().default([]),
         sourceType: text('source_type').notNull().default('manual'),
         sourceId: text('source_id'),
         createdBy: text('created_by'),
@@ -428,29 +319,24 @@ export const knowledgeVerifiedQueries = pgTable(
     ],
 );
 
-export const knowledgeAssetSources = pgTable(
-    'knowledge_asset_sources',
+export const knowledgeQuerySources = pgTable(
+    'knowledge_query_sources',
     {
-        knowledgeModelId: text('knowledge_model_id')
-            .notNull()
-            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
         knowledgeSourceId: text('knowledge_source_id')
             .notNull()
             .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
-        assetType: text('asset_type').$type<KnowledgeAssetType>().notNull(),
-        assetId: text('asset_id').notNull(),
+        queryId: text('query_id')
+            .notNull()
+            .references(() => knowledgeVerifiedQueries.id, { onDelete: 'cascade' }),
         relationType: text('relation_type').$type<KnowledgeSourceRelationType>().notNull(),
         createdBy: text('created_by'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
-    table => [
-        primaryKey({ name: 'pk_knowledge_asset_sources', columns: [table.knowledgeSourceId, table.assetType, table.assetId] }),
-        index('idx_knowledge_asset_sources_model_asset').on(table.knowledgeModelId, table.assetType, table.assetId),
-    ],
+    table => [primaryKey({ name: 'pk_knowledge_query_sources', columns: [table.knowledgeSourceId, table.queryId] }), index('idx_knowledge_query_sources_query').on(table.queryId)],
 );
 
 export type KnowledgeModel = typeof knowledgeModels.$inferSelect;
 export type KnowledgeSource = typeof knowledgeSources.$inferSelect;
 export type KnowledgeConnector = typeof knowledgeConnectors.$inferSelect;
 export type KnowledgeVerifiedQuery = typeof knowledgeVerifiedQueries.$inferSelect;
-export type KnowledgeAssetSource = typeof knowledgeAssetSources.$inferSelect;
+export type KnowledgeQuerySource = typeof knowledgeQuerySources.$inferSelect;

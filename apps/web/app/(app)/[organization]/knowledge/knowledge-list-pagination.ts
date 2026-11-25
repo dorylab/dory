@@ -6,7 +6,7 @@ import { parseAsInteger, useQueryStates } from 'nuqs';
 export const KNOWLEDGE_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 const DEFAULT_PAGE_SIZE = 10;
 
-type ListTab = 'definitions' | 'queries' | 'sources' | 'rules';
+type ListTab = 'queries' | 'sources';
 
 export function useKnowledgeListPagination(tab: ListTab, total: number | undefined, focus?: { id: string | null; index: number }) {
     const [{ page, knowledgePageSize }, setPagination] = useQueryStates(

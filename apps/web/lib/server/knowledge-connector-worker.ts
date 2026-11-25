@@ -4,7 +4,6 @@ import { getDBService } from '@dory/database';
 import { getKnowledgeConnectorSyncRunner } from './knowledge-connector-sync';
 import { linearConfigured } from './linear-credentials';
 import { getDocumentGenerationRunner } from './knowledge-document-generation-worker';
-import { getKnowledgeExtractionRunner } from './knowledge-extraction-worker';
 
 const workerGlobal = globalThis as typeof globalThis & { knowledgeConnectorTimer?: ReturnType<typeof setInterval> };
 
@@ -22,7 +21,6 @@ export function startKnowledgeConnectorWorker() {
             if (linearConfigured()) await db.knowledge.queueDueConnectors('linear');
             await db.knowledge.queueDueConnectors('drive');
             getKnowledgeConnectorSyncRunner(db).wake();
-            getKnowledgeExtractionRunner(db).wake();
         } catch {
             console.error('[knowledge-sync] Background scan failed; retrying next minute. Check database migrations and connector configuration.');
         } finally {

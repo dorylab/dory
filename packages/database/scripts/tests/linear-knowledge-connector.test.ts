@@ -12,7 +12,6 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Pool } from 'pg';
 
 import { PostgresKnowledgeRepository } from '../../src/postgres/impl/knowledge';
-import { createOssieDocument } from '../../src/postgres/impl/knowledge/ossie';
 import { knowledgeConnectors, knowledgeConnectorSyncJobs, knowledgeModels, knowledgeSources } from '../../src/postgres/schemas/knowledge';
 
 async function storage(legacy = false) {
@@ -57,7 +56,7 @@ async function storage(legacy = false) {
 
 async function fixture() {
     const { db, client } = await storage();
-    await db.insert(knowledgeModels).values({ id: 'model', name: 'Model', organizationId: 'org', modelJson: createOssieDocument('Model', null, 'connection') });
+    await db.insert(knowledgeModels).values({ id: 'model', name: 'Model', organizationId: 'org' });
     const repository = new PostgresKnowledgeRepository();
     await repository.init(db as unknown as PostgresDBClient);
     const credential = await repository.linear.saveCredential({
@@ -270,7 +269,7 @@ test('delayed retry survives repository restart and periodic reconciliation queu
 test('saving a shared key rebinds migrated connectors and queues all models exactly once', async () => {
     const { client, db, repository, connector, credential } = await fixture();
     try {
-        await db.insert(knowledgeModels).values({ id: 'second', name: 'Second', organizationId: 'org', modelJson: createOssieDocument('Second', null, 'connection') });
+        await db.insert(knowledgeModels).values({ id: 'second', name: 'Second', organizationId: 'org' });
         const second = await repository.createLinearConnector({
             organizationId: 'org',
             knowledgeModelId: 'second',
@@ -436,7 +435,7 @@ test('directory writes preserve source identities, enforce ownership and seriali
         await assert.rejects(directory.change(scope, { operation: 'move', kind: 'folder', id: ops, parentId: refunds }, true), /descendants/);
         await assert.rejects(directory.change(scope, { operation: 'rename', kind: 'folder', id: ops, name: 'Changed' }, false), /permission/);
         await assert.rejects(directory.list({ ...scope, organizationId: 'outside' }), /not found/);
-        await db.insert(knowledgeModels).values({ id: 'other', name: 'Other', organizationId: 'org', modelJson: createOssieDocument('Other', null, 'connection') });
+        await db.insert(knowledgeModels).values({ id: 'other', name: 'Other', organizationId: 'org' });
         const other = await directory.change({ ...scope, knowledgeModelId: 'other' }, { operation: 'create', parentId: null, name: 'Other' }, true);
         await assert.rejects(directory.change(scope, { operation: 'move', kind: 'folder', id: ops, parentId: other.id }, true), /local folder/);
         await assert.rejects(repository.updateKnowledgeSource({ ...scope, id: source.id, folderId: other.id, contentText: 'Wrong' }), /local folder/);

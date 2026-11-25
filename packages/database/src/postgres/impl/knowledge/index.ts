@@ -1,9 +1,9 @@
+import { createHash } from 'node:crypto';
 import type { CreatedDocument, DocumentTopic } from '@dory/shared/types/knowledge-document-draft';
 import { getClient } from '@dory/database/postgres/client';
 import {
     connections,
-    isPublishedDefinition,
-    knowledgeAssetSources,
+    knowledgeQuerySources,
     knowledgeConnectorItems,
     knowledgeConnectors,
     knowledgeConnectorSyncJobs,
@@ -12,48 +12,22 @@ import {
     knowledgeFolders,
     knowledgeDriveAuthorizations,
     knowledgeLinearCredentials,
-    knowledgeMetricRules,
     knowledgeModels,
     knowledgeModelSources,
     knowledgeSources,
     knowledgeVerifiedQueries,
-    OSSIE_VERSION,
     user,
-    type KnowledgeAssetType,
-    type KnowledgeDefinition,
-    type KnowledgeModelDocument,
     type KnowledgeSourceFormat,
-    type KnowledgeSourceRelationType,
-    type OssieDocument,
 } from '@dory/database/postgres/schemas';
 import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
-import { OSSIE_DATA_TYPES, OSSIE_DIALECTS } from '@dory/shared/types/ossie';
 import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
 import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
-import { parseDocument } from 'yaml';
 
-import { enqueueSourceExtraction, invalidateSourceEvidence, KnowledgeExtractionStore, knowledgeHash } from './extraction';
 import { assertDestination, KnowledgeDirectory, localDocument, lockDirectory } from './directory';
 import { KnowledgeDocumentGenerationStore } from './document-generation';
 import { LinearKnowledgeStore } from './linear';
-import { migrateLegacyOssieModels } from './migrate-ossie';
-import {
-    applyKnowledgeDefinitions,
-    createOssieDocument,
-    markOssieDefinitionsUnverified,
-    ossieBusinessContext,
-    ossieRevision,
-    parseOssieYaml,
-    projectOssieDocument,
-    serializeOssieDocument,
-    updateOssieMetadata,
-    validateOssieDocument,
-} from './ossie';
-
-export { ossieRevision, parseOssieYaml, serializeOssieDocument, validateOssieDocument } from './ossie';
-export { knowledgeHash } from './extraction';
 
 export const KNOWLEDGE_SOURCE_MAX_BYTES = 10_000_000;
 export const LINEAR_SYNC_INTERVAL_MS = 3600_000;
@@ -83,56 +57,12 @@ export type KnowledgeModelDetail = {
     name: string;
     description: string | null;
     businessContextMd: string;
-    modelYaml: string;
-    model: KnowledgeModelDocument;
-    ossieVersion: typeof OSSIE_VERSION;
-    modelRevision: string;
-    ossieDocument: OssieDocument;
     dataSources: KnowledgeModelDataSourceDetail[];
     verifiedQueryCount: number;
     knowledgeSourceCount: number;
-    readiness: KnowledgeReadiness;
-    agentUnderstands: Array<{ id: string; name: string; kind: KnowledgeDefinition['kind'] }>;
     createdAt: Date;
     updatedAt: Date;
 };
-
-export type KnowledgeReadiness = {
-    status: 'ready' | 'not_ready';
-    requirements: { dataSource: boolean; verifiedDefinition: boolean };
-};
-
-export type KnowledgeGraph = {
-    metricRuleEdges: Array<{ metricId: string; ruleId: string }>;
-    queryDefinitionEdges: Array<{ queryId: string; definitionId: string }>;
-    sourceAssetEdges: Array<{
-        sourceId: string;
-        assetType: KnowledgeAssetType;
-        assetId: string;
-        relationType: KnowledgeSourceRelationType;
-    }>;
-};
-
-export type KnowledgeSourceVerifiedQueryImport = {
-    id?: string;
-    sourceConnectionId?: string;
-    title: string;
-    question: string;
-    sql: string;
-    description?: string;
-    definitionIds: string[];
-};
-
-export function getKnowledgeReadiness(definitions: KnowledgeDefinition[], dataSourceCount: number): KnowledgeReadiness {
-    const requirements = {
-        dataSource: dataSourceCount > 0,
-        verifiedDefinition: definitions.some(definition => isPublishedDefinition(definition) && definition.kind !== 'relationship'),
-    };
-    return {
-        status: requirements.dataSource && requirements.verifiedDefinition ? 'ready' : 'not_ready',
-        requirements,
-    };
-}
 
 export function validateKnowledgeSource(fileName: string, contentText: string) {
     const normalizedName = fileName.trim();
@@ -143,100 +73,7 @@ export function validateKnowledgeSource(fileName: string, contentText: string) {
     if (!format) throw new Error('Only Markdown, YAML, and TXT files are supported.');
     const byteSize = Buffer.byteLength(contentText, 'utf8');
     if (byteSize > KNOWLEDGE_SOURCE_MAX_BYTES) throw new Error('Knowledge source files must be 10 MB or smaller.');
-    if (format === 'yaml') {
-        const document = parseDocument(contentText);
-        if (document.errors.length) throw new Error(document.errors[0]?.message ?? 'Invalid YAML.');
-    }
     return { fileName: normalizedName, format, contentText, byteSize };
-}
-
-function normalizeDefinition(value: unknown): KnowledgeDefinition {
-    const input = value as Record<string, unknown>;
-    const kind = String(input.kind ?? '');
-    if (!['entity', 'metric', 'measure', 'dimension', 'relationship'].includes(kind)) throw new Error('Unsupported knowledge definition type.');
-    const name = typeof input.name === 'string' ? input.name.trim() : '';
-    const sourceConnectionId = typeof input.sourceConnectionId === 'string' ? input.sourceConnectionId.trim() : '';
-    if (!name) throw new Error('A knowledge definition name is required.');
-    if (!sourceConnectionId) throw new Error(`A data source is required for "${name}".`);
-    const list = (key: string) =>
-        Array.isArray(input[key]) ? input[key].filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map(item => item.trim()) : undefined;
-    const optional = (key: string) => (typeof input[key] === 'string' && input[key].trim() ? input[key].trim() : undefined);
-    if (input.datatype !== undefined && !OSSIE_DATA_TYPES.some(value => value === input.datatype)) throw new Error('Unsupported Ossie data type.');
-    if (input.dialect !== undefined && !OSSIE_DIALECTS.some(value => value === input.dialect)) throw new Error('Unsupported Ossie dialect.');
-    return {
-        id: optional('id') ?? `${kind}:${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
-        name,
-        kind: kind as KnowledgeDefinition['kind'],
-        status: input.status === 'auto_published' ? 'auto_published' : input.status === 'unverified' ? 'unverified' : 'verified',
-        sourceConnectionId,
-        ...(optional('description') ? { description: optional('description') } : {}),
-        ...(list('aliases') ? { aliases: list('aliases') } : {}),
-        ...(optional('source') ? { source: optional('source') } : {}),
-        ...(optional('expression') ? { expression: optional('expression') } : {}),
-        ...(list('filters') ? { filters: list('filters') } : {}),
-        ...(optional('timeDimension') ? { timeDimension: optional('timeDimension') } : {}),
-        ...(list('dimensions') ? { dimensions: list('dimensions') } : {}),
-        ...(optional('from') ? { from: optional('from') } : {}),
-        ...(optional('to') ? { to: optional('to') } : {}),
-        ...(list('fromColumns') ? { fromColumns: list('fromColumns') } : {}),
-        ...(list('toColumns') ? { toColumns: list('toColumns') } : {}),
-        ...(input.aiContext ? { aiContext: input.aiContext as KnowledgeDefinition['aiContext'] } : {}),
-        ...(optional('dialect') ? { dialect: optional('dialect') as KnowledgeDefinition['dialect'] } : {}),
-        ...(optional('datatype') ? { datatype: optional('datatype') as KnowledgeDefinition['datatype'] } : {}),
-    };
-}
-
-export function validateKnowledgeModelDocument(value: unknown, sourceIds?: ReadonlySet<string>): KnowledgeModelDocument {
-    const raw = value as { definitions?: unknown };
-    const definitions = Array.isArray(raw?.definitions) ? raw.definitions.map(normalizeDefinition) : [];
-    const ids = new Set<string>();
-    for (const definition of definitions) {
-        if (ids.has(definition.id)) throw new Error(`Duplicate knowledge definition: ${definition.id}`);
-        if (sourceIds && !sourceIds.has(definition.sourceConnectionId)) throw new Error(`Data source for "${definition.name}" is not linked to this knowledge base.`);
-        if (definition.filters?.some(filter => /;|--|\/\*/.test(filter))) throw new Error(`Filter for "${definition.name}" must be a single expression without comments.`);
-        ids.add(definition.id);
-    }
-    const references = new Map(
-        definitions.flatMap(
-            definition =>
-                [
-                    [definition.id, definition],
-                    [definition.name, definition],
-                ] as const,
-        ),
-    );
-    for (const definition of definitions) {
-        if (definition.kind !== 'relationship') continue;
-        if (!definition.from || !definition.to || !definition.fromColumns?.length || !definition.toColumns?.length) {
-            throw new Error(`Relationship "${definition.name}" requires datasets and column mappings.`);
-        }
-        if (definition.fromColumns.length !== definition.toColumns.length) throw new Error(`Relationship "${definition.name}" must have matching column mappings.`);
-        const from = references.get(definition.from);
-        const to = references.get(definition.to);
-        const fromEntity = from ?? definitions.find(item => item.kind === 'entity' && item.name === definition.from);
-        const toEntity = to ?? definitions.find(item => item.kind === 'entity' && item.name === definition.to);
-        if (!fromEntity || !toEntity) throw new Error(`Relationship "${definition.name}" references an unknown dataset.`);
-        if (fromEntity.sourceConnectionId !== definition.sourceConnectionId || toEntity.sourceConnectionId !== definition.sourceConnectionId) {
-            throw new Error(`Relationship "${definition.name}" cannot cross data sources.`);
-        }
-    }
-    return { definitions };
-}
-
-export function serializeKnowledgeModel(model: KnowledgeModelDocument) {
-    const first = model.definitions.find(item => item.kind === 'entity') ?? model.definitions[0];
-    if (!first) throw new Error(`Apache Ossie ${OSSIE_VERSION} requires at least one dataset.`);
-    return serializeOssieDocument(applyKnowledgeDefinitions(createOssieDocument('knowledge_model', null, first.sourceConnectionId), model.definitions));
-}
-
-export function parseKnowledgeYaml(source: string, fallbackSourceConnectionId?: string, markImportedDefinitionsUnverified = true): KnowledgeModelDocument {
-    const parsed = parseOssieYaml(source);
-    const document = markImportedDefinitionsUnverified ? markOssieDefinitionsUnverified(parsed, fallbackSourceConnectionId) : parsed;
-    return validateKnowledgeModelDocument(projectOssieDocument(document, fallbackSourceConnectionId));
-}
-
-export function parseKnowledgeSourceYaml(source: string, fallbackSourceConnectionId?: string) {
-    return { definitions: parseKnowledgeYaml(source, fallbackSourceConnectionId).definitions, verifiedQueries: [] as KnowledgeSourceVerifiedQueryImport[] };
 }
 
 async function recordDocumentUse(db: Pick<PostgresDBClient, 'select' | 'update'>, knowledgeModelId: string, userId: string, sourceIds: string[]) {
@@ -271,23 +108,14 @@ export class PostgresKnowledgeRepository {
         return new KnowledgeDocumentGenerationStore(this.db);
     }
 
-    get extraction() {
-        return new KnowledgeExtractionStore(this.db);
-    }
-
     async init(db?: PostgresDBClient) {
         const client = db ?? (await getClient());
         if (!client) throw new DatabaseError('Database connection failed', 500);
         this.db = client as PostgresDBClient;
-        await migrateLegacyOssieModels(this.db);
     }
 
     private assertInited() {
         if (!this.db) throw new DatabaseError('Database connection failed', 500);
-    }
-
-    parseYamlForImport(source: string, fallbackSourceConnectionId?: string) {
-        return parseKnowledgeSourceYaml(source, fallbackSourceConnectionId);
     }
 
     private async assertConnections(organizationId: string, connectionIds: string[]) {
@@ -350,24 +178,13 @@ export class PostgresKnowledgeRepository {
             ? await this.db.select({ knowledgeModelId: knowledgeSources.knowledgeModelId }).from(knowledgeSources).where(inArray(knowledgeSources.knowledgeModelId, ids))
             : [];
         return rows.map(row => {
-            const ossieDocument = validateOssieDocument(row.modelJson);
-            const model = validateKnowledgeModelDocument(projectOssieDocument(ossieDocument));
             const modelDataSources = dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source);
             const verifiedQueryCount = verified.filter(queryRow => queryRow.knowledgeModelId === row.id).length;
-            const verifiedDefinitions = model.definitions.filter(definition => isPublishedDefinition(definition) && definition.kind !== 'relationship');
             return {
                 ...row,
-                businessContextMd: ossieBusinessContext(ossieDocument),
-                modelYaml: serializeOssieDocument(ossieDocument),
-                model,
-                ossieVersion: OSSIE_VERSION,
-                modelRevision: ossieRevision(ossieDocument),
-                ossieDocument,
                 dataSources: modelDataSources,
                 verifiedQueryCount,
                 knowledgeSourceCount: sourceRows.filter(source => source.knowledgeModelId === row.id).length,
-                readiness: getKnowledgeReadiness(model.definitions, modelDataSources.length),
-                agentUnderstands: verifiedDefinitions.slice(0, 5).map(({ id, name, kind }) => ({ id, name, kind })),
             };
         });
     }
@@ -381,7 +198,6 @@ export class PostgresKnowledgeRepository {
 
     async createModel(input: { organizationId: string; name: string; description?: string | null; connectionIds: string[] }) {
         const connectionIds = await this.assertConnections(input.organizationId, input.connectionIds);
-        const ossieDocument = createOssieDocument(input.name, input.description, connectionIds[0]!);
         const knowledgeModelId = await this.db.transaction(async tx => {
             const [model] = await tx
                 .insert(knowledgeModels)
@@ -389,8 +205,6 @@ export class PostgresKnowledgeRepository {
                     organizationId: input.organizationId,
                     name: input.name.trim(),
                     description: input.description?.trim() || null,
-                    modelJson: ossieDocument,
-                    modelYaml: serializeOssieDocument(ossieDocument),
                 })
                 .returning({ id: knowledgeModels.id });
             const knowledgeModelId = model!.id;
@@ -398,7 +212,7 @@ export class PostgresKnowledgeRepository {
             const rules = validateKnowledgeSource(
                 'RULES.md',
                 [
-                    '- 分析指标时优先使用本知识库中的定义。如果多个口径都适用且会影响结论，先向用户确认。',
+                    '- 分析指标时优先查阅本知识库 Markdown 文档中的口径。如果多个口径都适用且会影响结论，先向用户确认。',
                     '- 编写 SQL 前先查找相关的已验证查询，复用时核对数据源、时间范围和筛选条件。',
                 ].join('\n'),
             );
@@ -432,24 +246,13 @@ export class PostgresKnowledgeRepository {
         return document ?? null;
     }
 
-    async updateModel(input: {
-        organizationId: string;
-        knowledgeModelId: string;
-        name?: string;
-        description?: string | null;
-        businessContextMd?: string;
-        aiContext?: { instructions?: string; synonyms?: string[]; examples?: string[] };
-    }) {
-        const model = await this.getModel(input);
-        const ossieDocument = updateOssieMetadata(model.ossieDocument, input);
+    async updateModel(input: { organizationId: string; knowledgeModelId: string; name?: string; description?: string | null; businessContextMd?: string }) {
         await this.db
             .update(knowledgeModels)
             .set({
                 ...(input.name !== undefined ? { name: input.name.trim() } : {}),
                 ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
-                ...(input.businessContextMd !== undefined || input.aiContext !== undefined ? { businessContextMd: ossieBusinessContext(ossieDocument) } : {}),
-                modelJson: ossieDocument,
-                modelYaml: serializeOssieDocument(ossieDocument),
+                businessContextMd: input.businessContextMd,
             })
             .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
         return this.getModel(input);
@@ -460,158 +263,83 @@ export class PostgresKnowledgeRepository {
         await this.db.delete(knowledgeModels).where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
     }
 
-    async saveDefinitions(input: { organizationId: string; knowledgeModelId: string; definitions: unknown; userId?: string }) {
-        const model = await this.getModel(input);
-        const document = validateKnowledgeModelDocument({ definitions: input.definitions }, new Set(model.dataSources.map(source => source.connectionId)));
-        for (const definition of document.definitions) {
-            const original = model.model.definitions.find(d => d.id === definition.id);
-            if (definition.status === 'auto_published' && (!original || knowledgeHash(original) !== knowledgeHash(definition))) definition.status = 'verified';
-        }
-        const ossieDocument = applyKnowledgeDefinitions(model.ossieDocument, document.definitions);
-        await this.db.transaction(async tx => {
-            const [locked] = await tx
-                .select()
-                .from(knowledgeModels)
-                .where(and(eq(knowledgeModels.id, model.id), eq(knowledgeModels.organizationId, input.organizationId)))
-                .for('update');
-            if (!locked || ossieRevision(locked.modelJson) !== model.modelRevision) throw new Error('Knowledge changed; reload before saving.');
-            await tx
-                .update(knowledgeModels)
-                .set({ modelJson: ossieDocument, modelYaml: serializeOssieDocument(ossieDocument), businessContextMd: ossieBusinessContext(ossieDocument) })
-                .where(eq(knowledgeModels.id, model.id));
-            const remainingMetricIds = document.definitions.filter(d => d.kind === 'metric').map(d => d.id);
-            await tx.delete(knowledgeMetricRules).where(
+    async listQuerySources(input: { organizationId: string; knowledgeModelId: string; queryId: string }) {
+        return this.db
+            .select({ sourceId: knowledgeQuerySources.knowledgeSourceId, relationType: knowledgeQuerySources.relationType, connectionId: knowledgeSources.connectionId })
+            .from(knowledgeQuerySources)
+            .innerJoin(knowledgeSources, eq(knowledgeQuerySources.knowledgeSourceId, knowledgeSources.id))
+            .where(
                 and(
-                    eq(knowledgeMetricRules.knowledgeModelId, model.id),
-                    remainingMetricIds.length
-                        ? sql`${knowledgeMetricRules.metricId} NOT IN (${sql.join(
-                              remainingMetricIds.map(id => sql`${id}`),
-                              sql`, `,
-                          )})`
-                        : undefined,
+                    eq(knowledgeQuerySources.queryId, input.queryId),
+                    eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId),
+                    eq(knowledgeSources.organizationId, input.organizationId),
                 ),
             );
-            const definitionIds = document.definitions.map(definition => definition.id);
-            const linkedDefinitions = await tx
-                .select({ sourceId: knowledgeAssetSources.knowledgeSourceId, assetId: knowledgeAssetSources.assetId })
-                .from(knowledgeAssetSources)
-                .where(and(eq(knowledgeAssetSources.knowledgeModelId, model.id), eq(knowledgeAssetSources.assetType, 'definition')));
-            const removedIds = [...new Set(linkedDefinitions.map(link => link.assetId).filter(id => !definitionIds.includes(id)))];
-            if (removedIds.length) {
-                await tx
-                    .delete(knowledgeAssetSources)
-                    .where(
-                        and(
-                            eq(knowledgeAssetSources.knowledgeModelId, model.id),
-                            eq(knowledgeAssetSources.assetType, 'definition'),
-                            inArray(knowledgeAssetSources.assetId, removedIds),
-                        ),
-                    );
-            }
+    }
+
+    async listSourceQueries(input: { organizationId: string; knowledgeModelId: string; id: string }) {
+        return this.db
+            .select({ queryId: knowledgeQuerySources.queryId, connectionId: knowledgeVerifiedQueries.sourceConnectionId })
+            .from(knowledgeQuerySources)
+            .innerJoin(knowledgeVerifiedQueries, eq(knowledgeVerifiedQueries.id, knowledgeQuerySources.queryId))
+            .innerJoin(knowledgeSources, eq(knowledgeSources.id, knowledgeQuerySources.knowledgeSourceId))
+            .where(
+                and(
+                    eq(knowledgeQuerySources.knowledgeSourceId, input.id),
+                    eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId),
+                    eq(knowledgeSources.organizationId, input.organizationId),
+                ),
+            );
+    }
+
+    async replaceQuerySources(input: { organizationId: string; knowledgeModelId: string; queryId: string; sourceIds: string[]; createdBy?: string | null }) {
+        return this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            const [query] = await tx
+                .select({ id: knowledgeVerifiedQueries.id })
+                .from(knowledgeVerifiedQueries)
+                .where(and(eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId), eq(knowledgeVerifiedQueries.id, input.queryId)))
+                .for('update');
+            if (!query) throw new Error('Verified query not found.');
+            await this.writeQuerySources(tx, input);
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
         });
-        return this.getModel(input);
     }
 
-    async getGraph(input: { organizationId: string; knowledgeModelId: string }): Promise<KnowledgeGraph> {
-        await this.getModel(input);
-        const [queries, sourceAssetEdges, metricRuleEdges] = await Promise.all([
-            this.listVerifiedQueries(input),
-            this.db
-                .select({
-                    sourceId: knowledgeAssetSources.knowledgeSourceId,
-                    assetType: knowledgeAssetSources.assetType,
-                    assetId: knowledgeAssetSources.assetId,
-                    relationType: knowledgeAssetSources.relationType,
-                })
-                .from(knowledgeAssetSources)
-                .where(eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId)),
-            this.db
-                .select({ metricId: knowledgeMetricRules.metricId, ruleId: knowledgeMetricRules.ruleId })
-                .from(knowledgeMetricRules)
-                .where(eq(knowledgeMetricRules.knowledgeModelId, input.knowledgeModelId)),
-        ]);
-        return {
-            metricRuleEdges,
-            queryDefinitionEdges: queries.flatMap(query => query.definitionIds.map(definitionId => ({ queryId: query.id, definitionId }))),
-            sourceAssetEdges,
-        };
-    }
-
-    async replaceAssetSources(input: {
-        organizationId: string;
-        knowledgeModelId: string;
-        assetType: KnowledgeAssetType;
-        assetId: string;
-        sourceIds: string[];
-        relationType: KnowledgeSourceRelationType;
-        createdBy?: string | null;
-    }) {
-        await this.getModel(input);
+    private async writeQuerySources(
+        tx: Pick<PostgresDBClient, 'select' | 'update' | 'insert' | 'delete'>,
+        input: {
+            knowledgeModelId: string;
+            queryId: string;
+            sourceIds: string[];
+            createdBy?: string | null;
+        },
+    ) {
         const sourceIds = [...new Set(input.sourceIds)];
         if (sourceIds.length) {
-            const sources = await this.db
+            const sources = await tx
                 .select({ id: knowledgeSources.id })
                 .from(knowledgeSources)
                 .where(and(eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId), inArray(knowledgeSources.id, sourceIds)));
             if (sources.length !== sourceIds.length) throw new Error('One or more knowledge sources are unavailable.');
         }
-        await this.db
-            .delete(knowledgeAssetSources)
-            .where(
-                and(
-                    eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId),
-                    eq(knowledgeAssetSources.assetType, input.assetType),
-                    eq(knowledgeAssetSources.assetId, input.assetId),
+        const previous = await tx.select().from(knowledgeQuerySources).where(eq(knowledgeQuerySources.queryId, input.queryId));
+        await tx.delete(knowledgeQuerySources).where(eq(knowledgeQuerySources.queryId, input.queryId));
+        if (sourceIds.length) {
+            const byId = new Map(previous.map(row => [row.knowledgeSourceId, row]));
+            await tx.insert(knowledgeQuerySources).values(
+                sourceIds.map(
+                    id =>
+                        byId.get(id) ?? {
+                            knowledgeSourceId: id,
+                            queryId: input.queryId,
+                            relationType: 'provided' as const,
+                            createdBy: input.createdBy,
+                        },
                 ),
             );
-        if (sourceIds.length) {
-            await this.db.insert(knowledgeAssetSources).values(
-                sourceIds.map(sourceId => ({
-                    knowledgeModelId: input.knowledgeModelId,
-                    knowledgeSourceId: sourceId,
-                    assetType: input.assetType,
-                    assetId: input.assetId,
-                    relationType: input.relationType,
-                    createdBy: input.createdBy ?? null,
-                })),
-            );
+            if (input.createdBy) await recordDocumentUse(tx, input.knowledgeModelId, input.createdBy, sourceIds);
         }
-        if (sourceIds.length && input.createdBy) await this.recordDocumentUse(input.knowledgeModelId, input.createdBy, sourceIds);
-        await this.touchModel(input.knowledgeModelId);
-    }
-
-    async importYaml(input: { organizationId: string; knowledgeModelId: string; source: string; fallbackSourceConnectionId?: string; preserveStatus?: boolean }) {
-        const model = await this.getModel(input);
-        const parsed = parseOssieYaml(input.source);
-        const ossieDocument = input.preserveStatus ? parsed : markOssieDefinitionsUnverified(parsed, input.fallbackSourceConnectionId);
-        const projected = validateKnowledgeModelDocument(
-            projectOssieDocument(ossieDocument, input.fallbackSourceConnectionId),
-            new Set(model.dataSources.map(source => source.connectionId)),
-        );
-        const normalized = applyKnowledgeDefinitions(ossieDocument, projected.definitions);
-        await this.db
-            .update(knowledgeModels)
-            .set({
-                name: normalized.name,
-                description: normalized.description ?? null,
-                businessContextMd: ossieBusinessContext(normalized),
-                modelJson: normalized,
-                modelYaml: serializeOssieDocument(normalized),
-            })
-            .where(eq(knowledgeModels.id, model.id));
-        const metricIds = projected.definitions.filter(d => d.kind === 'metric').map(d => d.id);
-        await this.db.delete(knowledgeMetricRules).where(
-            and(
-                eq(knowledgeMetricRules.knowledgeModelId, model.id),
-                metricIds.length
-                    ? sql`${knowledgeMetricRules.metricId} NOT IN (${sql.join(
-                          metricIds.map(id => sql`${id}`),
-                          sql`, `,
-                      )})`
-                    : undefined,
-            ),
-        );
-        return this.getModel(input);
     }
 
     async addDataSource(input: { organizationId: string; knowledgeModelId: string; connectionId: string }) {
@@ -625,10 +353,6 @@ export class PostgresKnowledgeRepository {
     async removeDataSource(input: { organizationId: string; knowledgeModelId: string; connectionId: string }) {
         const model = await this.getModel(input);
         if (model.dataSources.length <= 1) throw new Error('A knowledge base must have at least one data source.');
-        if (model.model.definitions.some(item => item.sourceConnectionId === input.connectionId))
-            throw new Error('Remove or reassign definitions that use this data source first.');
-        if ((await this.extraction.listRules(input)).some(rule => rule.payload.sourceConnectionId === input.connectionId))
-            throw new Error('Reassign or deactivate business rules that use this data source first.');
         const [query] = await this.db
             .select({ id: knowledgeVerifiedQueries.id })
             .from(knowledgeVerifiedQueries)
@@ -654,13 +378,7 @@ export class PostgresKnowledgeRepository {
         const nextIds = new Set(connectionIds);
         const removedIds = model.dataSources.map(source => source.connectionId).filter(connectionId => !nextIds.has(connectionId));
 
-        const businessRules = await this.extraction.listRules(input);
         for (const connectionId of removedIds) {
-            if (model.model.definitions.some(definition => definition.sourceConnectionId === connectionId)) {
-                throw new Error('Remove or reassign definitions that use this data source first.');
-            }
-            if (businessRules.some(rule => rule.payload.sourceConnectionId === connectionId))
-                throw new Error('Reassign or deactivate business rules that use this data source first.');
             const [query] = await this.db
                 .select({ id: knowledgeVerifiedQueries.id })
                 .from(knowledgeVerifiedQueries)
@@ -1017,6 +735,7 @@ export class PostgresKnowledgeRepository {
         await this.db.transaction(async tx => {
             await lockDirectory(tx, input);
             const existing = await localDocument(tx, model.id, input.id);
+            if (existing.format !== 'markdown') throw new Error('This knowledge source is read-only.');
             if (existing.systemRole && (input.folderId || input.connectionId)) throw new Error('Analysis rules apply to the entire knowledge base and must stay in its root.');
             const value = validateKnowledgeSource(existing.fileName, input.contentText);
             if (input.folderId !== undefined) {
@@ -1195,7 +914,7 @@ export class PostgresKnowledgeRepository {
         await this.getModel(input);
         const [connector] = await this.db
             .insert(knowledgeConnectors)
-            .values({ ...input, provider: 'github', autoExtract: true, rootPath: input.rootPath.replace(/^\/+|\/+$/g, '') })
+            .values({ ...input, provider: 'github', rootPath: input.rootPath.replace(/^\/+|\/+$/g, '') })
             .returning();
         return connector!;
     }
@@ -1210,7 +929,6 @@ export class PostgresKnowledgeRepository {
                 .select({ sourceId: knowledgeConnectorItems.knowledgeSourceId })
                 .from(knowledgeConnectorItems)
                 .where(eq(knowledgeConnectorItems.connectorId, connector.id));
-            for (const item of items) await invalidateSourceEvidence(tx, item.sourceId, 'missing');
             await tx.delete(knowledgeConnectors).where(eq(knowledgeConnectors.id, connector.id));
             if (items.length)
                 await tx.delete(knowledgeSources).where(
@@ -1237,7 +955,6 @@ export class PostgresKnowledgeRepository {
                 .values({
                     ...input,
                     provider: 'linear',
-                    autoExtract: true,
                     linearWorkspaceId: credential.workspaceId,
                     linearWorkspaceName: credential.workspaceName,
                     projectIds: [...new Set(input.projectIds)],
@@ -1485,7 +1202,6 @@ export class PostgresKnowledgeRepository {
             if (input.newLocal) await tx.insert(knowledgeConnectors).values({ ...input.newLocal, id: input.connectorId, provider: 'local' });
             const [connector] = await tx.select().from(knowledgeConnectors).where(eq(knowledgeConnectors.id, input.connectorId)).for('update');
             if (!connector || connector.status === 'disabled') throw new Error('Knowledge connector is unavailable.');
-            // Serialize source invalidation with review/publication before reading evidence.
             await tx.select({ id: knowledgeModels.id }).from(knowledgeModels).where(eq(knowledgeModels.id, connector.knowledgeModelId)).for('update');
             if (input.configRevision !== undefined && connector.configRevision !== input.configRevision) throw new Error('Connector selection changed during synchronization.');
             if (input.jobId && input.leaseToken) {
@@ -1508,20 +1224,17 @@ export class PostgresKnowledgeRepository {
                 const suffix = ` · ${connector.id.slice(-8)} · ${file.path.split('/').pop()}`;
                 const fileName =
                     connector.provider === 'drive' || connector.provider === 'local'
-                        ? `managed · ${connector.id} · ${knowledgeHash(file.path)}`
+                        ? `managed · ${connector.id} · ${createHash('sha256').update(file.path).digest('hex')}`
                         : file.title
                           ? `${baseName.slice(0, Math.max(20, 240 - suffix.length))}${suffix}`
                           : `${baseName.slice(0, 240 - ` · ${connector.id.slice(-8)}`.length)} · ${connector.id.slice(-8)}`;
                 const item = byPath.get(file.path);
                 if (item) {
                     if (item.remoteSha !== file.sha) {
-                        await invalidateSourceEvidence(tx, item.knowledgeSourceId, 'outdated');
-                        const [updatedSource] = await tx
+                        await tx
                             .update(knowledgeSources)
                             .set({ contentText: file.value.contentText, byteSize: file.value.byteSize, format: file.value.format, fileName })
-                            .where(eq(knowledgeSources.id, item.knowledgeSourceId))
-                            .returning();
-                        if (updatedSource) await enqueueSourceExtraction(tx, connector, updatedSource);
+                            .where(eq(knowledgeSources.id, item.knowledgeSourceId));
                     }
                     if (
                         item.remoteSha !== file.sha ||
@@ -1569,10 +1282,8 @@ export class PostgresKnowledgeRepository {
                     remoteSha: file.sha,
                     sourceUrl: file.sourceUrl ?? null,
                 });
-                await enqueueSourceExtraction(tx, connector, source);
             }
             const removed = [...byPath.values()].map(item => item.knowledgeSourceId);
-            for (const sourceId of removed) await invalidateSourceEvidence(tx, sourceId, 'missing');
             if (removed.length) await tx.delete(knowledgeSources).where(inArray(knowledgeSources.id, removed));
             await tx
                 .update(knowledgeConnectors)
@@ -1638,7 +1349,6 @@ export class PostgresKnowledgeRepository {
         question: string;
         sql: string;
         description?: string | null;
-        definitionIds?: string[];
         knowledgeSourceIds?: string[];
         sourceType?: string | null;
         sourceId?: string | null;
@@ -1646,33 +1356,28 @@ export class PostgresKnowledgeRepository {
     }) {
         const model = await this.getModel(input);
         if (!model.dataSources.some(source => source.connectionId === input.sourceConnectionId)) throw new Error('This data source is not linked to the selected knowledge base.');
-        const definitionIds = [...new Set(input.definitionIds ?? [])];
-        if (definitionIds.some(id => !model.model.definitions.some(definition => definition.id === id))) throw new Error('One or more knowledge definitions are unavailable.');
-        const [row] = await this.db
-            .insert(knowledgeVerifiedQueries)
-            .values({
-                knowledgeModelId: input.knowledgeModelId,
-                sourceConnectionId: input.sourceConnectionId,
-                title: input.title.trim(),
-                question: input.question.trim(),
-                sql: input.sql.trim(),
-                description: input.description?.trim() || null,
-                definitionIds,
-                sourceType: input.sourceType?.trim() || 'manual',
-                sourceId: input.sourceId?.trim() || null,
-                createdBy: input.createdBy ?? null,
-                updatedBy: input.createdBy ?? null,
-            })
-            .returning();
-        await this.replaceAssetSources({
-            ...input,
-            assetType: 'verified_query',
-            assetId: row!.id,
-            sourceIds: input.knowledgeSourceIds ?? [],
-            relationType: 'provided',
+        const queryId = await this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            const [row] = await tx
+                .insert(knowledgeVerifiedQueries)
+                .values({
+                    knowledgeModelId: input.knowledgeModelId,
+                    sourceConnectionId: input.sourceConnectionId,
+                    title: input.title.trim(),
+                    question: input.question.trim(),
+                    sql: input.sql.trim(),
+                    description: input.description?.trim() || null,
+                    sourceType: input.sourceType?.trim() || 'manual',
+                    sourceId: input.sourceId?.trim() || null,
+                    createdBy: input.createdBy ?? null,
+                    updatedBy: input.createdBy ?? null,
+                })
+                .returning();
+            await this.writeQuerySources(tx, { ...input, queryId: row!.id, sourceIds: input.knowledgeSourceIds ?? [] });
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
+            return row!.id;
         });
-        await this.touchModel(input.knowledgeModelId);
-        return this.getVerifiedQuery({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: row!.id });
+        return this.getVerifiedQuery({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: queryId });
     }
 
     async updateVerifiedQuery(input: {
@@ -1683,28 +1388,27 @@ export class PostgresKnowledgeRepository {
         question: string;
         sql: string;
         description?: string | null;
-        definitionIds?: string[];
         knowledgeSourceIds?: string[];
         updatedBy?: string | null;
     }) {
-        const model = await this.getModel(input);
-        const definitionIds = [...new Set(input.definitionIds ?? [])];
-        if (definitionIds.some(id => !model.model.definitions.some(definition => definition.id === id))) throw new Error('One or more knowledge definitions are unavailable.');
-        const [row] = await this.db
-            .update(knowledgeVerifiedQueries)
-            .set({
-                title: input.title.trim(),
-                question: input.question.trim(),
-                sql: input.sql.trim(),
-                description: input.description?.trim() || null,
-                definitionIds,
-                updatedBy: input.updatedBy ?? null,
-            })
-            .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
-            .returning();
-        if (!row) throw new Error('Verified query not found.');
-        await this.replaceAssetSources({ ...input, assetType: 'verified_query', assetId: input.id, sourceIds: input.knowledgeSourceIds ?? [], relationType: 'provided' });
-        return this.getVerifiedQuery({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: row.id });
+        await this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            const [row] = await tx
+                .update(knowledgeVerifiedQueries)
+                .set({
+                    title: input.title.trim(),
+                    question: input.question.trim(),
+                    sql: input.sql.trim(),
+                    description: input.description === undefined ? undefined : input.description?.trim() || null,
+                    updatedBy: input.updatedBy ?? null,
+                })
+                .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
+                .returning();
+            if (!row) throw new Error('Verified query not found.');
+            if (input.knowledgeSourceIds) await this.writeQuerySources(tx, { ...input, queryId: input.id, sourceIds: input.knowledgeSourceIds, createdBy: input.updatedBy });
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
+        });
+        return this.getVerifiedQuery(input);
     }
 
     async getVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
@@ -1721,15 +1425,6 @@ export class PostgresKnowledgeRepository {
 
     async deleteVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         await this.getModel(input);
-        await this.db
-            .delete(knowledgeAssetSources)
-            .where(
-                and(
-                    eq(knowledgeAssetSources.knowledgeModelId, input.knowledgeModelId),
-                    eq(knowledgeAssetSources.assetType, 'verified_query'),
-                    eq(knowledgeAssetSources.assetId, input.id),
-                ),
-            );
         await this.db.delete(knowledgeVerifiedQueries).where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)));
         await this.touchModel(input.knowledgeModelId);
     }

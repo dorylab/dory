@@ -8,7 +8,6 @@ import nextEnv from '@next/env';
 import { getDBService } from '@dory/database';
 import { getClient } from '@dory/database/postgres/client';
 import { resetPgliteClient } from '@dory/database/postgres/client/pglite';
-import { serializeOssieDocument } from '@dory/database/postgres/impl/knowledge';
 import { organizationMembers, organizations } from '@dory/database/postgres/schemas';
 import { getDatabaseProvider } from '@dory/database/provider';
 import type { ConnectionPayload } from '@dory/shared/types/connections';
@@ -16,7 +15,7 @@ import { generateMcpToken, hashMcpToken } from '@dory/server-core/tokens';
 
 import { createCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
 import { verifyOlistFixture } from './olist/fixture';
-import { buildOlistOssieDocument, OLIST_CONNECTION_NAME, OLIST_KNOWLEDGE_NAME } from '@/lib/demo/olist-evaluation';
+import { olistGuide, OLIST_CONNECTION_NAME, OLIST_KNOWLEDGE_NAME } from '@/lib/demo/olist-evaluation';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 nextEnv.loadEnvConfig(root, true);
@@ -110,8 +109,7 @@ async function main() {
               description: 'Verified Olist definitions and historical data limitations.',
               connectionIds: [connectionId],
           });
-    const yaml = serializeOssieDocument(buildOlistOssieDocument(connectionId, data.timeRange));
-    const imported = await db.knowledge.importYaml({ organizationId, knowledgeModelId: model.id, source: yaml, fallbackSourceConnectionId: connectionId, preserveStatus: true });
+    await db.knowledge.updateModel({ organizationId, knowledgeModelId: model.id, businessContextMd: olistGuide(data.timeRange) });
     const sources = {
         'olist-source.md': `# Olist source\n${data.source}\nVersion: 2\nLicense: CC BY-NC-SA 4.0. Attribution: Olist. Local acceptance only, not distributed with Dory.\nSource timestamps have no declared timezone and must be preserved. Currency: BRL.\nCoverage: ${data.timeRange.min} to ${data.timeRange.max}.\n`,
         'olist-metrics.md':
@@ -151,11 +149,9 @@ async function main() {
         userId,
         connectionId,
         knowledgeModelId: model.id,
-        modelRevision: imported.modelRevision,
-        ossieVersion: imported.ossieVersion,
+        modelRevision: (await db.knowledge.getModel({ organizationId, knowledgeModelId: model.id })).updatedAt.toISOString(),
         sqlitePath: data.sqlitePath,
     };
-    await writeFile(path.join(directory, 'olist-semantic-model.yaml'), yaml);
     await writeFile(path.join(directory, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
     if (args.includes('--token-file')) {
         const tokenPath = path.resolve(value('--token-file'));

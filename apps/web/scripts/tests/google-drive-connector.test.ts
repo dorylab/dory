@@ -50,7 +50,6 @@ test('OAuth binds the grant to the user and model, verifies PKCE and queues a fi
     const { createHash } = await import('node:crypto');
     const { decrypt } = await import('@dory/web-utils/crypto');
     const { PostgresKnowledgeRepository } = await import('@dory/database/postgres/impl/knowledge');
-    const { createOssieDocument } = await import('@dory/database/postgres/impl/knowledge/ossie');
     const { knowledgeModels, knowledgeConnectors } = await import('@dory/database/postgres/schemas');
     const { beginDriveAuthorization, finishDriveAuthorization } = await import('../../lib/server/google-drive');
     const client = new PGlite();
@@ -60,7 +59,7 @@ test('OAuth binds the grant to the user and model, verifies PKCE and queues a fi
         const owner = { organizationId: 'org', knowledgeModelId: 'model', userId: 'owner' };
         const knowledge = new PostgresKnowledgeRepository();
         await knowledge.init(database as unknown as import('@dory/shared').PostgresDBClient);
-        await database.insert(knowledgeModels).values({ id: 'model', name: 'Drive', organizationId: 'org', modelJson: createOssieDocument('Drive', null, 'connection') });
+        await database.insert(knowledgeModels).values({ id: 'model', name: 'Drive', organizationId: 'org' });
         process.env.GOOGLE_DRIVE_CLIENT_ID = 'test-client';
         process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'test-secret';
         process.env.GOOGLE_DRIVE_REDIRECT_URI = 'http://localhost/api/knowledge/connectors/drive/callback';

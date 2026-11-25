@@ -20,7 +20,7 @@ import type { ReportMode } from '@/lib/work-documents/report-blocks';
 import { reportRunWorkspacePath } from '@/lib/work-documents/workspace-url';
 import type { AgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 
-import { AddDefinitionDialog } from './add-definition-dialog';
+import { AddKnowledgeDocumentDialog } from './add-knowledge-document-dialog';
 import { ReportBody } from './report-body';
 import type { ReportEditorHandle } from './report-editor';
 import type { ReportEvidenceSelection } from './report-evidence-panel';
@@ -132,7 +132,7 @@ export function WorkReport({
         setLeaveDecision(null);
     };
     const [saveError, setSaveError] = useState(false);
-    const [definition, setDefinition] = useState<{ title: string; text: string } | null>(null);
+    const [knowledgeDraft, setKnowledgeDraft] = useState<{ title: string; text: string } | null>(null);
     const reportBodyRef = useRef<HTMLDivElement>(null);
     const [evidenceSelection, setEvidenceSelection] = useState<ReportEvidenceSelection | null>(null);
     const editingActive = Boolean(editing);
@@ -222,7 +222,7 @@ export function WorkReport({
         setEditing(null);
         setDirty(false);
         setSaveError(false);
-        setDefinition(null);
+        setKnowledgeDraft(null);
         setEvidenceSelection(null);
         await setSelectedPublication(null);
         await setSelectedRevision(revision);
@@ -666,16 +666,18 @@ export function WorkReport({
                                     <ReportBody key={document.revision} content={document.content} onEvidenceGroup={openEvidenceGroup} onOpenSql={workspace ? openAt : undefined} />
                                 )}
                             </div>
-                            {!isEditing && !definition ? (
+                            {!isEditing && !knowledgeDraft ? (
                                 <ReportSelectionPopover
                                     key={`${document.id}:${document.revision}`}
                                     bodyRef={reportBodyRef}
-                                    onAdd={text => setDefinition({ title: document.title, text })}
+                                    onAdd={text => setKnowledgeDraft({ title: document.title, text })}
                                 />
                             ) : null}
                         </>
                     )}
-                    {definition ? <AddDefinitionDialog {...definition} connectionIds={document.scope.connectionIds} onClose={() => setDefinition(null)} /> : null}
+                    {knowledgeDraft ? (
+                        <AddKnowledgeDocumentDialog {...knowledgeDraft} connectionIds={document.scope.connectionIds} onClose={() => setKnowledgeDraft(null)} />
+                    ) : null}
                 </div>
             </div>
         </article>

@@ -4082,7 +4082,8 @@
             "Create": "新建文档",
             "Guide": "使用指南",
             "Title": "文档标题",
-            "Body": "Markdown 正文"
+            "Body": "Markdown 正文",
+            "EditNamed": "编辑 {name}"
         },
         "Title": "知识库",
         "Subtitle": "让 Agent 在所有数据中使用一致的业务含义。",
@@ -4112,11 +4113,9 @@
         "LoadingModel": "正在加载知识库…",
         "ModelNotFound": "找不到知识库。",
         "Model": "知识库",
-        "Definitions": "语义定义",
         "VerifiedQueries": "已验证查询",
         "Updated": "更新时间",
         "UpdatedTime": "更新于 {time}",
-        "DefinitionQueryCount": "{definitions} 个定义 · {queries} 个已验证查询",
         "DataSourceCount": "{count} 个数据源",
         "ConnectedTo": "连接到",
         "EditNamedModel": "编辑 {name}",
@@ -4128,65 +4127,13 @@
         "DeleteModelDescription": "此操作会永久删除“{name}”及其定义、已验证查询和知识来源。",
         "DeleteModel": "删除知识库",
         "Overview": "概览",
-        "Readiness": {
-            "Ready": "已为 Agent 就绪",
-            "NotReady": "尚未为 Agent 就绪",
-            "ReadyDescription": "Agent 已可以使用这些业务定义理解并查询数据。添加已验证查询可以进一步提高常见问题的查询一致性。",
-            "NotReadyDescription": "关联数据源并验证至少一个业务定义后，Agent 即可使用这些知识。",
-            "Understands": "Agent 已理解",
-            "Suggested": "建议",
-            "Requirements": {
-                "DataSources": "{count} 个已关联数据源",
-                "Definitions": "{count} 个已验证业务定义",
-                "VerifiedQueries": "{count} 个已验证查询"
-            }
-        },
-        "KnowledgeFlow": {
-            "Title": "Agent 如何使用知识",
-            "Description": "不同类型的 Knowledge 共同组成 Agent Context，并在每次运行中按需使用。",
-            "Sources": "Knowledge Sources",
-            "SourceDescription": "业务背景与规则",
-            "Definitions": "Definitions",
-            "DefinitionDescription": "业务语义",
-            "Queries": "Verified Queries",
-            "QueryDescription": "可信查询方式",
-            "AgentContext": "Agent Context",
-            "AskAi": "Ask AI",
-            "AgentRun": "Agent Run"
-        },
-        "QueryCoverage": {
-            "Title": "查询保障",
-            "EmptyTitle": "暂无已验证查询",
-            "EmptyDescription": "为高频业务问题添加 Verified Query，可确保 Agent 使用一致的查询方式。",
-            "CoveredTitle": "已保障 {count} 个常见问题",
-            "CoveredDescription": "Agent 可以优先复用这些经过审核的查询方式。",
-            "Add": "添加 Verified Query",
-            "View": "查看 Verified Queries"
-        },
         "BusinessContext": "业务上下文",
         "BusinessContextPlaceholder": "使用 Markdown 记录业务规则、词汇和 Agent 指令。",
         "SaveContext": "保存上下文",
         "ActionsForModel": "{name} 的知识库操作",
         "ModelActions": "知识库操作",
-        "ViewYaml": "查看 YAML",
-        "ImportYaml": "导入 YAML",
-        "ModelYaml": "Apache Ossie {version} YAML",
-        "ModelYamlDescription": "修改内容会先按 Apache Ossie {version} 校验，再更新知识库。",
-        "SaveYaml": "保存 YAML",
-        "YamlSaved": "YAML 已保存。",
-        "ImportYamlTitle": "导入 Apache Ossie {version} YAML",
-        "ImportYamlDescription": "在文档根节点填写 name 和 datasets。缺少 Dory 连接元数据的定义使用所选数据源，并在审阅前保持未验证。",
-        "UploadYamlFile": "上传 YAML 文件",
-        "UploadYamlHint": "将 .yaml 或 .yml 文件拖放到这里，或点击选择文件。最大 10 MB。",
-        "YamlPreview": "文件预览",
         "ReplaceFile": "替换文件",
-        "RemoveYamlFile": "移除 YAML 文件",
-        "UnsupportedYamlFile": "请选择 .yaml 或 .yml 文件。",
-        "YamlFileTooLarge": "YAML 文件不能超过 10 MB。",
-        "EmptyYamlFile": "YAML 文件内容为空。",
-        "YamlImported": "YAML 已导入。导入的定义为未验证状态。",
         "Import": "导入",
-        "AddDefinition": "添加定义",
         "CreateWithAi": "使用 AI 创建",
         "Type": "类型",
         "Source": "来源",
@@ -4195,7 +4142,6 @@
         "Unverified": "未验证",
         "VerificationStatus": "验证状态",
         "ReferencedByQueries": "被 Query 引用",
-        "ReferencedDefinitions": "引用的 Definitions",
         "RelatedSources": "关联 Sources",
         "NoReferences": "暂无关联资产",
         "ReferenceSources": "参考 Sources",
@@ -4203,28 +4149,6 @@
         "RelationTypes": {
             "provided": "提供",
             "generated": "生成"
-        },
-        "OpenNamedDefinitionDetails": "展开 {name} 的详情",
-        "CloseNamedDefinitionDetails": "收起 {name} 的详情",
-        "CloseDefinitionDetails": "关闭定义详情",
-        "EditNamedDefinition": "编辑 {name}",
-        "EditDefinitionAction": "编辑",
-        "DefinitionQueries": {
-            "Title": "使用此定义的 Verified Queries",
-            "Description": "为常见问题保留经过验证的查询方式。",
-            "EmptyTitle": "尚无关联项",
-            "ViewAction": "前往 Verified Queries"
-        },
-        "DefinitionSources": {
-            "Title": "关联的 Knowledge Sources",
-            "Description": "业务文档可保留这个 Definition 的来源与背景。",
-            "EmptyTitle": "尚无关联项",
-            "AddAction": "添加 Knowledge Source",
-            "OpenNamed": "打开 {name}",
-            "EditAction": "编辑关联文档",
-            "EditDescription": "选择要关联的已有文档，保存后生效。",
-            "Search": "搜索文档",
-            "NoMatches": "未找到匹配的文档"
         },
         "VerifiedQueryDetails": {
             "Search": "按业务问题或标题搜索",
@@ -4240,32 +4164,13 @@
             },
             "UpdatedByTime": "由 {user} 更新 · {time}",
             "UnknownUser": "未知用户",
-            "ReferencedDefinitions": "引用的 Definitions",
-            "DefinitionsDescription": "此查询关联的业务定义。",
             "RelatedSources": "关联的 Knowledge Sources",
             "SourcesDescription": "为此查询提供背景或规则的已关联文档。",
-            "NoDefinitions": "没有可关联的 Definition",
             "NoKnowledgeSources": "尚未添加 Knowledge Source",
-            "AddKnowledgeSource": "添加 Knowledge Source",
-            "EditDefinitions": "编辑关联定义",
-            "EditDefinitionsDescription": "选择要关联的已有定义，保存后生效。",
-            "NoLinkedDefinitions": "暂无关联定义",
-            "SearchDefinitions": "搜索定义",
-            "NoMatchingDefinitions": "未找到匹配的定义"
+            "AddKnowledgeSource": "添加 Knowledge Source"
         },
-        "NoDefinitionDetails": "尚未记录该定义的更多详情。",
-        "DeleteNamedDefinition": "删除 {name}",
-        "CreateDefinitionTitle": "创建{type}",
-        "CreateDefinitionDescription": "向此知识库添加一个已验证的定义。",
-        "EditDefinitionTitle": "编辑定义",
-        "EditDefinitionDescription": "更新此定义及其业务元数据。",
-        "SaveDefinition": "保存定义",
-        "DefinitionNamePlaceholder": "收入",
-        "FromDefinition": "起始定义",
-        "ToDefinition": "目标定义",
         "SourceTablePlaceholder": "来源表，例如 orders",
         "CalculationPlaceholder": "计算表达式，例如 SUM(amount)",
-        "BusinessDefinitionPlaceholder": "业务定义",
         "AskAi": "询问 AI",
         "AskAiDescription": "AI 建议经你审核并采纳后才会写入知识库。",
         "AiPromptPlaceholder": "帮我分析订单和客户，并建议常用指标。",
@@ -4287,36 +4192,6 @@
         "MarkAsVerified": "标记为已验证",
         "AddToKnowledge": "添加到知识库",
         "SaveAsVerifiedQuery": "保存为已验证查询",
-        "Kinds": {
-            "entity": "实体",
-            "metric": "指标",
-            "measure": "度量",
-            "dimension": "维度",
-            "relationship": "关系"
-        },
-        "DefinitionFields": {
-            "Description": "业务定义",
-            "Aliases": "别名",
-            "SourceTable": "来源表",
-            "Calculation": "计算表达式",
-            "Filters": "过滤条件",
-            "TimeDimension": "时间维度",
-            "AvailableDimensions": "可用维度",
-            "FromColumns": "来源列（逗号分隔）",
-            "ToColumns": "目标列（逗号分隔）",
-            "Dialect": "SQL 方言",
-            "AiContext": "AI 上下文",
-            "AiInstructions": "AI 指令",
-            "AiSynonyms": "AI 同义词（逗号分隔）",
-            "AiExamples": "AI 示例（每行一条）"
-        },
-        "AiOperations": {
-            "GenerateDefinitions": "生成知识定义",
-            "AnalyzeContext": "分析业务上下文",
-            "AnalyzeSchema": "分析 Schema",
-            "FindRelationships": "查找缺失关系",
-            "SuggestMetrics": "建议指标"
-        },
         "Errors": {
             "CreateModel": "无法创建知识库。",
             "SelectModel": "请先选择知识库。",
@@ -4487,66 +4362,16 @@
             "UnavailableDataSource": "数据源不可用",
             "RuleCount": "{count} 条业务口径"
         },
-        "Extraction": {
-            "AutomaticExtraction": "自动提取",
-            "Enabled": "已开启",
-            "Disabled": "已关闭",
-            "Disable": "关闭",
-            "EnableAndBackfill": "开启并提取已有资料",
-            "Retry": "重试提取",
-            "BusinessRules": "业务规则",
-            "NoRules": "暂无已发布的业务规则。",
-            "OpenOriginal": "打开原文",
-            "SourceChanged": "来源已变化",
-            "Cancel": "取消",
-            "Archive": "停用",
-            "Edit": "编辑",
-            "Save": "保存",
-            "Loading": "加载中…",
-            "ModelWide": "当前知识库的所有数据源",
-            "Field": {
-                "name": "名称",
-                "description": "定义／业务含义",
-                "dataSource": "数据源",
-                "aliases": "别名（逗号分隔）",
-                "unit": "单位／币种",
-                "scope": "统计范围／排除规则"
-            },
-            "Job": {
-                "queued": "等待提取",
-                "running": "正在提取",
-                "completed": "提取完成",
-                "failed": "提取失败",
-                "blocked": "需要配置 AI／恢复额度",
-                "cancelled": "提取已停止"
-            },
-            "Error": {
-                "blocked": "请配置后台可用的 AI 模型或恢复 AI 额度后重试。",
-                "failed": "提取失败，已有原文和已发布知识均已保留。",
-                "quota": "AI 额度不足，请恢复组织 AI 额度后重试。",
-                "config": "缺少后台可用的 AI 模型，请配置后重试。"
-            },
-            "Backfill": "补跑现有资料",
-            "ApplicationScope": "适用范围",
-            "ApplicableMetrics": "适用指标",
-            "SuggestedMetrics": "建议关联指标",
-            "SharingEvidence": "共享依据",
-            "SpecificConditions": "指标计算与专属条件",
-            "ReferencedRules": "引用规则",
-            "RuleSemantics": "规则引用是业务语义约束。统一使用已发布的最新版，不自动改写 SQL、表达式或过滤条件。",
-            "OrganizationStatus": "草稿整理",
-            "LinkedMetricCount": "已关联 {count} 个指标",
-            "Inactive": "已停用",
-            "Restore": "恢复",
-            "NoReferencedRules": "暂无适用的已发布规则",
-            "RulesNotice": "规则可应用于当前知识库的所有数据源、单个数据源或指定指标。每条规则只需维护一份。",
-            "Scope": {
-                "model": "当前知识库的所有数据源",
-                "data_source": "指定数据源",
-                "metrics": "指定指标"
-            },
-            "AutomaticPublished": "AI 自动发布"
-        }
+        "QuerySources": {
+            "EmptyTitle": "尚无关联项",
+            "OpenNamed": "打开 {name}",
+            "EditAction": "编辑关联文档",
+            "EditDescription": "选择要关联的已有文档，保存后生效。",
+            "Search": "搜索文档",
+            "NoMatches": "未找到匹配的文档"
+        },
+        "EditQuery": "编辑查询",
+        "VerifiedQueryCount": "{count} 个已验证查询"
     },
     "AppSidebar": {
         "DataSources": "数据源",
@@ -4883,7 +4708,8 @@
                 "knowledge_source": "知识来源",
                 "verified_query": "Verified Query",
                 "semantic_model": "语义定义"
-            }
+            },
+            "Unavailable": "资产已不可用"
         },
         "Trace": {
             "Title": "分析过程",
@@ -5760,12 +5586,6 @@
         "Archived": "已归档",
         "Archive": "归档",
         "Unarchive": "取消归档",
-        "AddDefinition": "将定义加入知识库",
-        "DefinitionReview": "请确认这是可复用的业务定义后再发布，临时分析结论应留在报告中。",
-        "DefinitionNeedsKnowledge": "请先创建一个与本报告数据源关联的知识库。",
-        "DefinitionAdded": "定义已加入知识库。",
-        "DefinitionKind": "定义类型",
-        "PublishDefinition": "确认并发布定义",
         "LeaveUnsaved": "请先保存修改，再离开报告。",
         "Rename": "重命名",
         "Cancel": "取消",
@@ -6235,7 +6055,10 @@
             "LinkUrl": "链接地址",
             "Apply": "应用",
             "Cancel": "取消"
-        }
+        },
+        "DocumentNeedsKnowledge": "请先创建一个与本报告数据源关联的知识库。",
+        "SaveKnowledgeDocument": "保存到知识库",
+        "KnowledgeDocumentSaved": "文档已保存"
     },
     "ChatComposer": {
         "Picker": {

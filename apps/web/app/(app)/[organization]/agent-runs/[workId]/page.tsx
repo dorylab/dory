@@ -253,7 +253,9 @@ export default async function AgentRunDetailPage({
                                     relationshipNames?: string[];
                                 };
                                 // Snapshots retain organization IDs; use the current route's slug for navigation.
-                                const assetHref = asset.deepLink?.startsWith('/') ? asset.deepLink.replace(/^\/[^/]+\//, `/${encodeURIComponent(organization)}/`) : null;
+                                const retired = item.assetKind === 'knowledge_definition' || item.assetKind === 'business_rule';
+                                const assetHref =
+                                    !retired && asset.deepLink?.startsWith('/') ? asset.deepLink.replace(/^\/[^/]+\//, `/${encodeURIComponent(organization)}/`) : null;
                                 const content = (
                                     <>
                                         <BrainCircuit className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -261,6 +263,7 @@ export default async function AgentRunDetailPage({
                                             <span className="block break-words text-sm font-medium">{asset.title ?? item.assetRef}</span>
                                             <span className="block break-words text-xs leading-5 text-muted-foreground">
                                                 {t(`Context.Kinds.${item.assetKind}`)}
+                                                {retired && ' · ' + t('Context.Unavailable')}
                                                 {asset.knowledgeModelName && asset.knowledgeModelName !== asset.title ? ` · ${asset.knowledgeModelName}` : ''}
                                                 {asset.ossieVersion ? ` · Ossie ${asset.ossieVersion}` : ''}
                                                 {asset.modelRevision ? ` · rev ${asset.modelRevision.slice(0, 8)}` : ''}

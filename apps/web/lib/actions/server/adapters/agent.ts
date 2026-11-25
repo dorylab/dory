@@ -6,7 +6,6 @@ import type { WebActionServices } from '../types';
 export function toAgentToolName(actionId: string) {
     const knowledgeToolNames: Record<string, string> = {
         'knowledge.searchKnowledge': 'search_knowledge',
-        'knowledge.getDefinition': 'get_knowledge_definition',
         'knowledge.searchVerifiedQueries': 'search_knowledge_verified_queries',
         'knowledge.getVerifiedQuery': 'get_knowledge_verified_query',
         'knowledge.getKnowledgeSource': 'get_knowledge_source',

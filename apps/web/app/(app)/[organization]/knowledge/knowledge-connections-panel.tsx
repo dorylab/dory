@@ -12,7 +12,6 @@ import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { DriveFolderDialog, LocalFolderDialog } from './folder-connector-dialogs';
-import { ExtractionConnectorStatus } from './knowledge-extraction-panel';
 import { GitHubConnectorDialog, SourceViewer, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 import { LinearConnectorDialog, type KnowledgeConnectorView } from './linear-connector-dialog';
 import { providers, type Provider } from './document-directory';
@@ -207,11 +206,6 @@ export function KnowledgeSourcesPanel({
                                 </>
                             )}
                         </div>
-                        {(c.provider === 'github' || c.provider === 'linear') && writable(c.provider) && (
-                            <div className="md:col-span-2">
-                                <ExtractionConnectorStatus organization={organization} knowledgeModelId={knowledgeModelId} connectorId={c.id} />
-                            </div>
-                        )}
                     </li>
                 ))}
             </ul>

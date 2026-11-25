@@ -74,6 +74,7 @@ type Destination = {
     file: string | null;
     tab?: string | null;
     query?: string | null;
+    source?: string | null;
     modelId?: string;
     manageSource?: string;
     modelAction?: ModelAction;
@@ -237,6 +238,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     file,
                     tab,
                     query,
+                    source: destination.source,
                     manageSource: destination.manageSource,
                     modelAction: destination.modelAction,
                 }),
@@ -248,7 +250,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                 file,
                 tab: tab ?? 'documents',
                 query: query ?? null,
-                source: null,
+                source: destination.source ?? null,
                 querySearch: null,
                 definition: null,
                 rule: null,
@@ -476,7 +478,8 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
             modelId: hit.modelId,
             folder: hit.kind === 'folder' && hit.id !== QUERY_FOLDER ? hit.id : null,
             file: hit.kind === 'document' ? hit.id : null,
-            tab: hit.kind === 'query' || (hit.kind === 'folder' && hit.id === QUERY_FOLDER) ? 'queries' : 'documents',
+            source: hit.kind === 'source' ? hit.id : null,
+            tab: hit.kind === 'source' ? 'sources' : hit.kind === 'query' || (hit.kind === 'folder' && hit.id === QUERY_FOLDER) ? 'queries' : 'documents',
             query: hit.kind === 'query' ? hit.id : null,
         };
         if (dirty) {
@@ -666,7 +669,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     : writable &&
                       doc.source && (
                           <>
-                              <Button variant="ghost" size="sm" aria-label={knowledge('EditNamedDefinition', { name: doc.name })} onClick={() => navigate(doc.parentId, doc, true)}>
+                              <Button variant="ghost" size="sm" aria-label={knowledge('Documents.EditNamed', { name: doc.name })} onClick={() => navigate(doc.parentId, doc, true)}>
                                   <Pencil />
                                   {knowledge('KnowledgeSources.Edit')}
                               </Button>
@@ -738,12 +741,12 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         <div data-knowledge-workspace className="grid h-full min-w-0 grid-rows-[minmax(0,1fr)] bg-background text-foreground md:grid-cols-[minmax(14rem,22%)_minmax(0,1fr)]">
             <aside className="hidden min-w-0 flex-col border-e bg-muted/20 md:flex">{sidebar()}</aside>
             <div className="flex min-w-0 flex-col">
-                <header className="flex min-h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-5">
+                <header className="flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-2 border-b px-3 py-1 sm:px-5 md:flex-nowrap md:py-0">
                     <Button className="md:hidden" variant="outline" size="sm" onClick={() => setDrawer(true)}>
                         <PanelLeft />
                         {t('Directory')}
                     </Button>
-                    <nav aria-label={t('Breadcrumb')} className="flex min-w-0 flex-1 flex-wrap items-center gap-1 py-2">
+                    <nav aria-label={t('Breadcrumb')} className="order-last flex min-w-0 basis-full flex-wrap items-center gap-1 py-2 md:order-none md:flex-1 md:basis-auto">
                         {(documentsView ? trail : [index.root]).map((folder, i) => (
                             <span key={folder.id} className="flex min-w-0 max-w-full items-center gap-1">
                                 {i > 0 && <ChevronRight size={13} className="shrink-0 text-muted-foreground" />}
@@ -777,15 +780,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                                         {knowledge('VerifiedQueries')}
                                     </button>
                                 ) : (
-                                    <span className="text-sm">
-                                        {knowledge(
-                                            workspace.section === 'definitions'
-                                                ? 'Definitions'
-                                                : workspace.section === 'rules'
-                                                  ? 'Extraction.BusinessRules'
-                                                  : 'KnowledgeSources.Tab',
-                                        )}
-                                    </span>
+                                    <span className="text-sm">{knowledge('KnowledgeSources.Tab')}</span>
                                 )}
                                 {showQueries && queryId && (
                                     <span aria-current="page" className="truncate text-sm">
@@ -847,7 +842,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                                                     </span>
                                                     <span className="text-xs text-muted-foreground">
                                                         {folder.id === QUERY_FOLDER
-                                                            ? knowledge('Readiness.Requirements.VerifiedQueries', { count: model.verifiedQueryCount })
+                                                            ? knowledge('VerifiedQueryCount', { count: model.verifiedQueryCount })
                                                             : t('FileCount', { count: index.counts.get(folder.id) ?? 0 })}
                                                     </span>
                                                 </button>

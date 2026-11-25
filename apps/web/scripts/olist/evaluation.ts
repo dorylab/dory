@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { OSSIE_VERSION } from '@dory/shared/types/ossie';
-
 import { assertEvaluationRows, OLIST_KNOWLEDGE_NAME, olistScenarios, type EvaluationLayer, type EvaluationRow, type OlistScenario } from '@/lib/demo/olist-evaluation';
 import { toolPayload } from '../commerce-agent-evaluation-mcp-replay';
 import { updateOlistReport } from './report';
@@ -33,20 +31,13 @@ export const string = (value: unknown, field: string): string => {
 };
 export type CallTool = (tool: string, input: JsonRecord) => Promise<JsonRecord>;
 
-export function assertSemanticContext(work: JsonRecord, scenario: OlistScenario, modelRevision: string) {
+export function assertSemanticContext(work: JsonRecord, modelRevision: string) {
     const models = Array.isArray(work.semanticModelsUsed) ? work.semanticModelsUsed.filter(record) : [];
     const model = models.find(item => item.name === OLIST_KNOWLEDGE_NAME);
     assert.ok(model, 'Expected Olist semantic model');
-    assert.equal(model.ossieVersion, OSSIE_VERSION);
     assert.equal(model.modelRevision, modelRevision, 'Unexpected Knowledge revision');
     const context = string(work.semanticContext, 'semanticContext');
-    for (const name of scenario.semanticNames) {
-        assert.ok(context.includes(name), `Missing semantic construct ${name}`);
-        assert.ok(
-            [...(Array.isArray(model.metricNames) ? model.metricNames : []), ...(Array.isArray(model.relationshipNames) ? model.relationshipNames : [])].includes(name),
-            `Unrecorded semantic construct ${name}`,
-        );
-    }
+    assert.ok(context.includes(OLIST_KNOWLEDGE_NAME), 'Missing Olist knowledge guide');
     return model;
 }
 
@@ -89,13 +80,13 @@ export async function replayOlist(call: CallTool, connectionId: string, modelRev
         try {
             const work = await tracked('dory_create_work', { connectionId, title: scenario.title, userQuestion: scenario.question });
             workId = string(work.workId, 'workId');
-            const model = assertSemanticContext(work, scenario, modelRevision);
+            const model = assertSemanticContext(work, modelRevision);
             layer = 'knowledge';
             const assets = await tracked('dory_search_assets', {
                 connectionId,
                 knowledgeModelId: model.id,
                 query: scenario.question,
-                kinds: ['knowledge_definition', 'knowledge_source'],
+                kinds: ['knowledge_source', 'verified_query'],
                 workId,
             });
             const asset = Array.isArray(assets.assets) ? assets.assets.find(record) : undefined;
@@ -175,7 +166,7 @@ export async function validateAgent(
     assert.equal(created.input.userQuestion, scenario.question, 'Run must preserve the original question');
     const workId = string(created.output.workId, 'workId');
     assert.equal(answer.workId, workId);
-    const model = assertSemanticContext(created.output, scenario, modelRevision);
+    const model = assertSemanticContext(created.output, modelRevision);
     const search = calls.findIndex(c => c.tool === 'dory_search_assets');
     const read = calls.findIndex(c => c.tool === 'dory_read_asset');
     const schema = calls.findIndex(c => c.tool === 'dory_explore_schema');

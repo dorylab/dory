@@ -559,7 +559,8 @@ export async function handleChatRequest(req: Request) {
             copilotEnvelope,
             locale,
             question: currentUserText,
-            includeSemanticContext: !analysisScope,
+            includeSemanticContext: Boolean(matchingScope) && agentScope?.knowledgeMode !== 'none',
+            knowledgeModelId: agentScope?.knowledgeModelId ?? rules?.modelId,
         });
         const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
         const agentInstructions = [

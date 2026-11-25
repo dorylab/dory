@@ -9,7 +9,7 @@ type DirectorySource = {
     projectName: string | null;
     folderTrail?: { id: string; name: string }[] | null;
 };
-export type NavigationHit = { modelId: string; kind: 'model' | 'folder' | 'document' | 'query'; id: string; name: string; path: string[] };
+export type NavigationHit = { modelId: string; kind: 'model' | 'folder' | 'document' | 'source' | 'query'; id: string; name: string; path: string[] };
 
 export type DirectoryData = {
     canWrite: boolean;

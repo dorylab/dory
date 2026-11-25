@@ -4078,7 +4078,8 @@
             "Create": "New document",
             "Guide": "User guide",
             "Title": "Document title",
-            "Body": "Markdown content"
+            "Body": "Markdown content",
+            "EditNamed": "Edit {name}"
         },
         "Title": "Knowledge base",
         "Subtitle": "Give agents consistent business meaning across your data.",
@@ -4108,11 +4109,9 @@
         "LoadingModel": "Loading knowledge base…",
         "ModelNotFound": "Knowledge base not found.",
         "Model": "Knowledge base",
-        "Definitions": "Semantic definitions",
         "VerifiedQueries": "Verified Queries",
         "Updated": "Updated",
         "UpdatedTime": "Updated {time}",
-        "DefinitionQueryCount": "{definitions, plural, one {# definition} other {# definitions}} · {queries, plural, one {# verified query} other {# verified queries}}",
         "DataSourceCount": "{count, plural, one {# data source} other {# data sources}}",
         "ConnectedTo": "Connected to",
         "EditNamedModel": "Edit {name}",
@@ -4124,65 +4123,13 @@
         "DeleteModelDescription": "This permanently deletes “{name}”, its definitions, verified queries, and knowledge sources.",
         "DeleteModel": "Delete knowledge base",
         "Overview": "Overview",
-        "Readiness": {
-            "Ready": "Ready for Agent",
-            "NotReady": "Not ready for Agent",
-            "ReadyDescription": "The Agent can use these business definitions to understand and query data. Add verified queries to improve consistency for common questions.",
-            "NotReadyDescription": "Connect a data source and verify at least one business definition before the Agent can use this knowledge.",
-            "Understands": "Agent understands",
-            "Suggested": "Suggested",
-            "Requirements": {
-                "DataSources": "{count, plural, one {# connected data source} other {# connected data sources}}",
-                "Definitions": "{count, plural, one {# verified business definition} other {# verified business definitions}}",
-                "VerifiedQueries": "{count, plural, one {# verified query} other {# verified queries}}"
-            }
-        },
-        "KnowledgeFlow": {
-            "Title": "How the Agent uses knowledge",
-            "Description": "Different knowledge assets form the Agent Context and are used as needed in each run.",
-            "Sources": "Knowledge Sources",
-            "SourceDescription": "Business context and rules",
-            "Definitions": "Definitions",
-            "DefinitionDescription": "Business semantics",
-            "Queries": "Verified Queries",
-            "QueryDescription": "Trusted query patterns",
-            "AgentContext": "Agent Context",
-            "AskAi": "Ask AI",
-            "AgentRun": "Agent Run"
-        },
-        "QueryCoverage": {
-            "Title": "Query coverage",
-            "EmptyTitle": "No verified queries yet",
-            "EmptyDescription": "Add Verified Queries for common business questions so the Agent uses a consistent query approach.",
-            "CoveredTitle": "{count, plural, one {# common question covered} other {# common questions covered}}",
-            "CoveredDescription": "The Agent can prioritize these reviewed query approaches.",
-            "Add": "Add Verified Query",
-            "View": "View Verified Queries"
-        },
         "BusinessContext": "Business Context",
         "BusinessContextPlaceholder": "Document business rules, vocabulary, and agent instructions in Markdown.",
         "SaveContext": "Save context",
         "ActionsForModel": "Knowledge base actions for {name}",
         "ModelActions": "Knowledge base actions",
-        "ViewYaml": "View YAML",
-        "ImportYaml": "Import YAML",
-        "ModelYaml": "Apache Ossie {version} YAML",
-        "ModelYamlDescription": "Changes are validated against Apache Ossie {version} before they update the knowledge base.",
-        "SaveYaml": "Save YAML",
-        "YamlSaved": "YAML saved.",
-        "ImportYamlTitle": "Import Apache Ossie {version} YAML",
-        "ImportYamlDescription": "Set name and datasets at the document root. Definitions without Dory connection metadata use the selected data source and remain unverified until reviewed.",
-        "UploadYamlFile": "Upload YAML file",
-        "UploadYamlHint": "Drop a .yaml or .yml file here, or click to choose one. Maximum size 10 MB.",
-        "YamlPreview": "Preview",
         "ReplaceFile": "Replace file",
-        "RemoveYamlFile": "Remove YAML file",
-        "UnsupportedYamlFile": "Choose a .yaml or .yml file.",
-        "YamlFileTooLarge": "YAML files must be 10 MB or smaller.",
-        "EmptyYamlFile": "The YAML file is empty.",
-        "YamlImported": "YAML imported. Imported definitions are unverified.",
         "Import": "Import",
-        "AddDefinition": "Add definition",
         "CreateWithAi": "Create with AI",
         "Type": "Type",
         "Source": "Source",
@@ -4191,7 +4138,6 @@
         "Unverified": "Unverified",
         "VerificationStatus": "Verification status",
         "ReferencedByQueries": "Referenced by queries",
-        "ReferencedDefinitions": "Referenced definitions",
         "RelatedSources": "Related sources",
         "NoReferences": "No linked assets",
         "ReferenceSources": "Reference sources",
@@ -4199,28 +4145,6 @@
         "RelationTypes": {
             "provided": "Provided",
             "generated": "Generated"
-        },
-        "OpenNamedDefinitionDetails": "Show details for {name}",
-        "CloseNamedDefinitionDetails": "Hide details for {name}",
-        "CloseDefinitionDetails": "Close definition details",
-        "EditNamedDefinition": "Edit {name}",
-        "EditDefinitionAction": "Edit",
-        "DefinitionQueries": {
-            "Title": "Verified Queries using this definition",
-            "Description": "Keep verified query patterns for common questions.",
-            "EmptyTitle": "No linked items yet",
-            "ViewAction": "Go to Verified Queries"
-        },
-        "DefinitionSources": {
-            "Title": "Linked Knowledge Sources",
-            "Description": "Business documents preserve this Definition's origin and context.",
-            "EmptyTitle": "No linked items yet",
-            "AddAction": "Add Knowledge Source",
-            "OpenNamed": "Open {name}",
-            "EditAction": "Edit linked documents",
-            "EditDescription": "Select existing documents to link. Changes apply when saved.",
-            "Search": "Search documents",
-            "NoMatches": "No matching documents"
         },
         "VerifiedQueryDetails": {
             "Search": "Search by question or title",
@@ -4236,32 +4160,13 @@
             },
             "UpdatedByTime": "Updated by {user} · {time}",
             "UnknownUser": "Unknown user",
-            "ReferencedDefinitions": "Referenced Definitions",
-            "DefinitionsDescription": "Business definitions linked to this query.",
             "RelatedSources": "Linked Knowledge Sources",
             "SourcesDescription": "Linked documents providing context or rules for this query.",
-            "NoDefinitions": "No Definition is available to link",
             "NoKnowledgeSources": "No Knowledge Source has been added",
-            "AddKnowledgeSource": "Add Knowledge Source",
-            "EditDefinitions": "Edit linked definitions",
-            "EditDefinitionsDescription": "Select existing definitions to link. Changes apply when saved.",
-            "NoLinkedDefinitions": "No linked definitions yet",
-            "SearchDefinitions": "Search definitions",
-            "NoMatchingDefinitions": "No matching definitions"
+            "AddKnowledgeSource": "Add Knowledge Source"
         },
-        "NoDefinitionDetails": "No additional details have been documented for this definition.",
-        "DeleteNamedDefinition": "Delete {name}",
-        "CreateDefinitionTitle": "Create {type}",
-        "CreateDefinitionDescription": "Add a verified definition to this knowledge base.",
-        "EditDefinitionTitle": "Edit definition",
-        "EditDefinitionDescription": "Update this definition and its business metadata.",
-        "SaveDefinition": "Save definition",
-        "DefinitionNamePlaceholder": "Revenue",
-        "FromDefinition": "From definition",
-        "ToDefinition": "To definition",
         "SourceTablePlaceholder": "Source table, e.g. orders",
         "CalculationPlaceholder": "Calculation, e.g. SUM(amount)",
-        "BusinessDefinitionPlaceholder": "Business definition",
         "AskAi": "Ask AI",
         "AskAiDescription": "AI suggestions are added to the knowledge base after you review and accept them.",
         "AiPromptPlaceholder": "Help me analyze orders and customers and suggest common metrics.",
@@ -4283,36 +4188,6 @@
         "MarkAsVerified": "Mark as Verified",
         "AddToKnowledge": "Add to knowledge base",
         "SaveAsVerifiedQuery": "Save as Verified Query",
-        "Kinds": {
-            "entity": "Entity",
-            "metric": "Metric",
-            "measure": "Measure",
-            "dimension": "Dimension",
-            "relationship": "Relationship"
-        },
-        "DefinitionFields": {
-            "Description": "Business definition",
-            "Aliases": "Aliases",
-            "SourceTable": "Source table",
-            "Calculation": "Calculation expression",
-            "Filters": "Filters",
-            "TimeDimension": "Time dimension",
-            "AvailableDimensions": "Available dimensions",
-            "FromColumns": "From columns (comma-separated)",
-            "ToColumns": "To columns (comma-separated)",
-            "Dialect": "SQL dialect",
-            "AiContext": "AI context",
-            "AiInstructions": "AI instructions",
-            "AiSynonyms": "AI synonyms (comma-separated)",
-            "AiExamples": "AI examples (one per line)"
-        },
-        "AiOperations": {
-            "GenerateDefinitions": "Generate knowledge definitions",
-            "AnalyzeContext": "Analyze business context",
-            "AnalyzeSchema": "Analyze schema",
-            "FindRelationships": "Find missing relationships",
-            "SuggestMetrics": "Suggest metrics"
-        },
         "Errors": {
             "CreateModel": "Could not create the knowledge base.",
             "SelectModel": "Select a knowledge base first.",
@@ -4483,66 +4358,16 @@
             "UnavailableDataSource": "Unavailable data source",
             "RuleCount": "{count} business rules"
         },
-        "Extraction": {
-            "AutomaticExtraction": "Automatic extraction",
-            "Enabled": "On",
-            "Disabled": "Off",
-            "Disable": "Turn off",
-            "EnableAndBackfill": "Enable and extract existing sources",
-            "Retry": "Retry extraction",
-            "BusinessRules": "Business rules",
-            "NoRules": "No published business rules yet.",
-            "OpenOriginal": "Open original",
-            "SourceChanged": "Source changed",
-            "Cancel": "Cancel",
-            "Archive": "Deactivate",
-            "Edit": "Edit",
-            "Save": "Save",
-            "Loading": "Loading…",
-            "ModelWide": "Entire knowledge base",
-            "Field": {
-                "name": "Name",
-                "description": "Definition / business meaning",
-                "dataSource": "Data source",
-                "aliases": "Aliases (comma separated)",
-                "unit": "Unit / currency",
-                "scope": "Statistical scope / exclusions"
-            },
-            "Job": {
-                "queued": "Extraction queued",
-                "running": "Extracting",
-                "completed": "Extraction completed",
-                "failed": "Extraction failed",
-                "blocked": "AI configuration / quota required",
-                "cancelled": "Extraction stopped"
-            },
-            "Error": {
-                "blocked": "Configure a background AI model or restore the AI quota, then retry.",
-                "failed": "Extraction failed. Existing sources and published knowledge are preserved.",
-                "quota": "Restore the organization AI quota, then retry.",
-                "config": "Configure an AI model available to background jobs, then retry."
-            },
-            "Backfill": "Extract existing sources",
-            "ApplicationScope": "Application scope",
-            "ApplicableMetrics": "Applicable metrics",
-            "SuggestedMetrics": "Suggested metrics",
-            "SharingEvidence": "Sharing evidence",
-            "SpecificConditions": "Metric calculation and specific conditions",
-            "ReferencedRules": "Referenced rules",
-            "RuleSemantics": "Rule references are semantic constraints. Metrics use the latest published rule; SQL, expressions and filters are not rewritten.",
-            "OrganizationStatus": "Draft organization",
-            "LinkedMetricCount": "{count} linked metrics",
-            "Inactive": "Inactive",
-            "Restore": "Restore",
-            "NoReferencedRules": "No published rules apply yet",
-            "RulesNotice": "Rules can apply to the entire knowledge base, one data source, or selected metrics. Maintain each rule once.",
-            "Scope": {
-                "model": "Entire knowledge base",
-                "data_source": "Selected data source",
-                "metrics": "Selected metrics"
-            },
-            "AutomaticPublished": "AI automatically published"
-        }
+        "QuerySources": {
+            "EmptyTitle": "No linked items yet",
+            "OpenNamed": "Open {name}",
+            "EditAction": "Edit linked documents",
+            "EditDescription": "Select existing documents to link. Changes apply when saved.",
+            "Search": "Search documents",
+            "NoMatches": "No matching documents"
+        },
+        "EditQuery": "Edit query",
+        "VerifiedQueryCount": "{count, plural, one {# verified query} other {# verified queries}}"
     },
     "AppSidebar": {
         "DataSources": "Data Sources",
@@ -4879,7 +4704,8 @@
                 "knowledge_source": "Knowledge Source",
                 "verified_query": "Verified Query",
                 "semantic_model": "Semantic definitions"
-            }
+            },
+            "Unavailable": "Asset unavailable"
         },
         "Trace": {
             "Title": "Analysis steps",
@@ -5756,12 +5582,6 @@
         "Archived": "Archived",
         "Archive": "Archive",
         "Unarchive": "Unarchive",
-        "AddDefinition": "Add definition to knowledge base",
-        "DefinitionReview": "Review this text as a reusable business definition before publishing. Temporary conclusions should stay in reports.",
-        "DefinitionNeedsKnowledge": "First create a knowledge base linked to one of this report’s data sources.",
-        "DefinitionAdded": "Definition added to the knowledge base.",
-        "DefinitionKind": "Definition type",
-        "PublishDefinition": "Confirm and publish definition",
         "LeaveUnsaved": "Save your changes before leaving this report.",
         "Rename": "Rename",
         "Cancel": "Cancel",
@@ -6231,7 +6051,10 @@
             "LinkUrl": "Link URL",
             "Apply": "Apply",
             "Cancel": "Cancel"
-        }
+        },
+        "DocumentNeedsKnowledge": "First create a knowledge base linked to one of this report’s data sources.",
+        "SaveKnowledgeDocument": "Save to knowledge base",
+        "KnowledgeDocumentSaved": "Document saved"
     },
     "ChatComposer": {
         "Picker": {

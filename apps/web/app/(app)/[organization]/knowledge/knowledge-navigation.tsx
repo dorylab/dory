@@ -24,6 +24,7 @@ export const modelActionParser = parseAsStringLiteral(modelActions);
 export const serializeKnowledge = createSerializer({
     tab: parseAsString,
     file: parseAsString,
+    source: parseAsString,
     folder: parseAsString,
     query: parseAsString,
     manageSource: parseAsString,

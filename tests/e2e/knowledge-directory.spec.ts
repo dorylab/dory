@@ -14,6 +14,7 @@ function knowledgeActions(request: APIRequestContext) {
 
 test('organizes nested Markdown, preserves navigation and follows a moved query source', async ({ page, request }) => {
     test.setTimeout(180_000);
+    page.setDefaultTimeout(20_000);
     await page.goto('/');
     await openDataSources(page);
     const slug = new URL(page.url()).pathname.split('/')[1]!;
@@ -151,6 +152,7 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
 
 test('creates in a targeted directory, retries only failed uploads and returns to the Markdown reader', async ({ page, request }) => {
     test.setTimeout(180_000);
+    page.setDefaultTimeout(20_000);
     await page.goto('/');
     await openDataSources(page);
     const slug = new URL(page.url()).pathname.split('/')[1]!;
