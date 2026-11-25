@@ -54,7 +54,7 @@ function IconHint({ label, children }: { label: string; children: ReactNode }) {
     return (
         <Tooltip>
             <TooltipTrigger asChild>{children}</TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
+            <TooltipContent side="bottom">{label}</TooltipContent>
         </Tooltip>
     );
 }
@@ -149,7 +149,7 @@ export function ReportToolbar(p: Props) {
                     </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
             </DropdownMenu>
-            {p.onOpenWorkspace && (
+            {p.onOpenWorkspace && !compact && (
                 <Button
                     className="h-7 min-w-0 shrink px-2 text-xs"
                     size="sm"
@@ -268,6 +268,11 @@ export function ReportToolbar(p: Props) {
                     </IconHint>
                     <DropdownMenuContent align="end">
                         <div className="report-toolbar-overflow" style={{ display: compact ? undefined : 'none' }}>
+                            {p.onOpenWorkspace && (
+                                <DropdownMenuItem disabled={p.disabled || p.unavailable || !p.workspaceAvailable} onSelect={p.onOpenWorkspace}>
+                                    {t('ConnectedWorkspace.OpenWorkspace')}
+                                </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem disabled={p.disabled} onSelect={p.onContinue}>
                                 {t('Continue')}
                             </DropdownMenuItem>

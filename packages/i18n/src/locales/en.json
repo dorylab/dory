@@ -5571,6 +5571,12 @@
         "SQL Console": "SQL Console"
     },
     "WorkDocuments": {
+        "SplitView": {
+            "Label": "Conversation and report",
+            "Chat": "Conversation",
+            "Report": "Report",
+            "Resize": "Resize conversation and report"
+        },
         "DocumentBody": "Document body",
         "DocumentMode": "Document",
         "SourceMode": "Markdown source",

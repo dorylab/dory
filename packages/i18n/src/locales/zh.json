@@ -5575,6 +5575,12 @@
         "SQL Console": "SQL 控制台"
     },
     "WorkDocuments": {
+        "SplitView": {
+            "Label": "对话与报告",
+            "Chat": "对话",
+            "Report": "报告",
+            "Resize": "调整对话与报告宽度"
+        },
         "DocumentBody": "报告正文",
         "DocumentMode": "文档",
         "SourceMode": "Markdown 源码",

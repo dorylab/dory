@@ -5568,6 +5568,12 @@
         "SQL Console": "SQL コンソール"
     },
     "WorkDocuments": {
+        "SplitView": {
+            "Label": "会話とレポート",
+            "Chat": "会話",
+            "Report": "レポート",
+            "Resize": "会話とレポートの幅を調整"
+        },
         "DocumentBody": "レポート本文",
         "DocumentMode": "ドキュメント",
         "SourceMode": "Markdown ソース",

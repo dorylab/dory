@@ -344,12 +344,18 @@ test('opening a generated draft preserves the active chat stream', async ({ page
     await expect(page.getByTestId('work-report')).toBeVisible();
     await expect(page.getByText('Preparing both sources.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeDisabled();
+    await page.getByTestId('report-toolbar').getByRole('button', { name: 'More actions', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'Export', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    document.revision = 3;
+    document.content.markdown = 'Saved while chatting';
+    await expect(page.getByTestId('work-markdown')).toHaveText('Saved while chatting');
+    await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
     await selectReportVersion(page, 1);
     await expect(page.getByTestId('work-markdown')).toHaveText('Historical snapshot content');
-    document.revision = 3;
+    document.revision = 4;
     document.content.markdown = 'Latest generated content';
-    await expect.poll(() => latestRead).toBe(3);
+    await expect.poll(() => latestRead).toBe(4);
     await expect(page.getByTestId('work-markdown')).toHaveText('Historical snapshot content');
     await expect(page.getByText('Viewing historical version v1 · Read only')).toBeVisible();
     await page.getByRole('button', { name: 'Back to current report', exact: true }).click();
@@ -476,7 +482,9 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     await toggleSource(page, 'Orders');
     await toggleSource(page, 'Advertising');
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
+    await page.getByRole('button', { name: 'Orders: Databases', exact: true }).click();
     await page.getByRole('option', { name: 'Orders: analytics', exact: true }).click();
+    await page.getByRole('button', { name: 'Advertising: Databases', exact: true }).click();
     await page.getByRole('option', { name: 'Advertising: main', exact: true }).click();
     await page.keyboard.press('Escape');
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Compare the selected databases');
@@ -493,7 +501,9 @@ test('global Agent restores per-source databases, manages sessions and adapts to
     await page.reload();
     await expect(page.getByText('Orders and advertising are ready for analysis.')).toBeVisible();
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
+    await page.getByRole('button', { name: 'Orders: Databases', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Orders: analytics' })).toHaveAttribute('aria-checked', 'true');
+    await page.getByRole('button', { name: 'Advertising: Databases', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Advertising: main' })).toHaveAttribute('aria-checked', 'true');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('option', { name: 'Orders: analytics' })).toHaveCount(0);
@@ -547,6 +557,8 @@ test('automatic databases allow send during loading failures and explicit select
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Inspect data');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
+    await expect(page.getByText('Could not load databases')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Orders: Databases', exact: true }).click();
     await expect(page.getByText('Could not load databases')).toBeVisible();
     failed = false;
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
@@ -559,6 +571,7 @@ test('automatic databases allow send during loading failures and explicit select
     await page.getByRole('textbox', { name: /Ask a question/ }).fill('Inspect data');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
+    await page.getByRole('button', { name: 'Orders: Databases', exact: true }).click();
     await expect(page.getByText('Could not load databases')).toBeVisible();
     await page.getByRole('option', { name: 'Orders: Automatic databases', exact: true }).click();
     await page.keyboard.press('Escape');
@@ -567,7 +580,8 @@ test('automatic databases allow send during loading failures and explicit select
     await expectAppHealthy(appErrors);
 });
 
-test('session resources open as a popover without resizing chat, guard unsaved reports, and fit narrow screens', async ({ page, appErrors }, testInfo) => {
+test('reports split beside chat, restore layout, guard edits, and use tabs on narrow screens', async ({ page, appErrors }, testInfo) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
     let document = makeDocument();
     let saveFails = true;
     await mockWorkbenchApis(page, { initialConnections: [connection] });
@@ -612,6 +626,11 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await page.goto(`/${organization}/work?chat=report-chat`);
     await expect(page.getByText('Updated analysis', { exact: true })).toBeVisible();
     await expect(page.getByTestId('agent-resources')).toHaveCount(0);
+    const sidebar = page.locator('[data-slot="sidebar"]');
+    const sidebarState = await sidebar.getAttribute('data-state');
+    const input = page.getByRole('textbox', { name: /Ask a question/ });
+    await input.fill('Keep this conversation draft');
+    await input.evaluate(element => element.setAttribute('data-draft-identity', 'same-input'));
     const chatWidth = (await page.getByTestId('data-agent').locator('main').boundingBox())!.width;
     await page.getByRole('button', { name: 'Work resources', exact: true }).click();
     await expect(page.getByTestId('agent-resources')).toBeVisible();
@@ -624,8 +643,43 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await expect(page.getByRole('link', { name: 'Agent Run · Payment analysis' })).toHaveCount(1);
     await expect(page.getByRole('link', { name: 'Agent Run · Payment analysis' })).toHaveAttribute('target', '_blank');
     await expect(page.getByRole('link', { name: 'View Agent Run' })).toHaveCount(0);
-    await page.getByRole('button', { name: /Revenue analysis Report/ }).click();
-    expect((await page.getByTestId('data-agent').locator('main').boundingBox())!.width).toBe(chatWidth);
+    await page
+        .getByTestId('agent-resources')
+        .getByRole('button', { name: /Revenue analysis Report/ })
+        .click();
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await expect(page.getByTestId('agent-resources')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Work resources' })).toHaveCount(0);
+    await expect(page.getByRole('complementary', { name: 'Works', exact: true })).toBeHidden();
+    await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
+    await expect(input).toHaveText('Keep this conversation draft');
+    await expect(input).toHaveAttribute('data-draft-identity', 'same-input');
+    await input.click();
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    const split = page.getByTestId('agent-report-layout');
+    const chatPane = page.locator('#work-conversation');
+    const reportPane = page.locator('#work-report-panel');
+    await expect
+        .poll(async () => {
+            const chat = (await chatPane.boundingBox())!;
+            const report = (await reportPane.boundingBox())!;
+            return chat.width / (chat.width + report.width);
+        })
+        .toBeCloseTo(0.5, 2);
+    const chatBounds = (await chatPane.boundingBox())!;
+    const reportBounds = (await reportPane.boundingBox())!;
+    expect(chatBounds.x + chatBounds.width).toBeLessThanOrEqual(reportBounds.x);
+    const handle = split.getByRole('separator');
+    const handleBounds = (await handle.boundingBox())!;
+    await page.mouse.move(handleBounds.x + handleBounds.width / 2, handleBounds.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(handleBounds.x + 100, handleBounds.y + 100, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await chatPane.boundingBox())!.width).toBeGreaterThan(chatBounds.width + 50);
+    await handle.focus();
+    await page.keyboard.press('ArrowLeft');
+    const resizedRatio = (await chatPane.boundingBox())!.width / (await split.boundingBox())!.width;
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('report-split-light.png') });
     await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Unsaved analysis');
     await page.getByRole('button', { name: 'Close resources', exact: true }).click();
@@ -639,9 +693,18 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await expect(page.getByTestId('work-report')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Work resources', exact: true })).toBeFocused();
     expect(document.title).toBe('Unsaved analysis');
+    await expect(sidebar).toHaveAttribute('data-state', sidebarState!);
+    await expect(page.getByRole('complementary', { name: 'Works', exact: true })).toBeVisible();
+    await expect(input).toHaveText('Keep this conversation draft');
+    await expect(input).toHaveAttribute('data-draft-identity', 'same-input');
+    await expect.poll(async () => Math.abs((await page.getByTestId('data-agent').locator('main').boundingBox())!.width - chatWidth)).toBeLessThan(2);
     await page.getByRole('button', { name: 'Work resources', exact: true }).click();
-    await page.getByRole('button', { name: /Unsaved analysis Report/ }).click();
+    await page
+        .getByTestId('agent-resources')
+        .getByRole('button', { name: /Unsaved analysis Report/ })
+        .click();
     await expect(page.getByRole('heading', { name: 'Unsaved analysis' })).toBeVisible();
+    await expect.poll(async () => (await chatPane.boundingBox())!.width / (await split.boundingBox())!.width).toBeCloseTo(resizedRatio, 1);
     await chooseReportMode(page, 'Edit');
     await page.getByRole('textbox', { name: 'Title', exact: true }).first().fill('Discard this');
     await page.getByRole('button', { name: 'Back to resources', exact: true }).click();
@@ -671,6 +734,33 @@ test('session resources open as a popover without resizing chat, guard unsaved r
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Work resources' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Work resources', exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Work resources', exact: true }).click();
+    await page
+        .getByTestId('agent-resources')
+        .getByRole('button', { name: /Unsaved analysis Report/ })
+        .click();
+    await expect(page.getByRole('tab', { name: 'Report', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await expect(input).toBeHidden();
+    await page.getByRole('tab', { name: 'Conversation', exact: true }).click();
+    await expect(input).toBeVisible();
+    await expect(input).toHaveText('Keep this conversation draft');
+    await input.fill('Still here after switching tabs');
+    await page.getByRole('tab', { name: 'Report', exact: true }).click();
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await page.getByTestId('report-toolbar').getByRole('button', { name: 'More actions', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'Open SQL Workspace', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    const mobileBounds = (await reportPane.boundingBox())!;
+    expect(mobileBounds.x).toBeGreaterThanOrEqual(0);
+    expect(mobileBounds.x + mobileBounds.width).toBeLessThanOrEqual(390);
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('report-tabs-dark-mobile.png') });
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await expect(input).toBeVisible();
+    await expect(input).toHaveText('Still here after switching tabs');
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await expect.poll(async () => (await chatPane.boundingBox())!.width / (await split.boundingBox())!.width).toBeCloseTo(resizedRatio, 1);
+    await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('report-split-dark.png') });
     await expectAppHealthy(appErrors);
 });
 
@@ -1106,6 +1196,84 @@ test('saved payment charts recover query rows and stay correct after reload', as
     await expectAppHealthy(appErrors);
 });
 
+test('current report links follow saves and reload while historical versions stay fixed', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [connection] });
+    const original = { ...makeDocument(), revision: 2 };
+    let latest = structuredClone(original);
+    await page.route('**/api/data-agent', route =>
+        route.fulfill({
+            json: {
+                connections: [{ id: connection.connection.id, name: 'Orders', type: 'postgres' }],
+                models: [],
+                sessions: [{ id: 'report-chat', title: 'Report conversation', scope: original.scope }],
+            },
+        }),
+    );
+    await page.route('**/api/chat/session/report-chat', route => route.fulfill({ json: { code: 0, data: { session: { id: 'report-chat', type: 'global' }, messages: [] } } }));
+    await page.route('**/api/work-documents?*', route => route.fulfill({ json: { documents: [latest] } }));
+    await page.route('**/api/work-documents/doc-report*', route => {
+        const historical = new URL(route.request().url()).searchParams.has('revision');
+        return route.fulfill({
+            json: {
+                document: historical ? original : latest,
+                versions: [...new Set([latest.revision, 2])].map(revision => ({ revision, source: 'agent', createdAt: now })),
+            },
+        });
+    });
+    await page.goto('/');
+    const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
+    await page.context().addCookies([{ name: 'sidebar_state', value: 'false', url: page.url() }]);
+    await page.goto(`/${organization}/work?chat=report-chat&document=doc-report&panel=report&revision=2`);
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await expect(page).not.toHaveURL(/revision=/);
+    const refreshReport = () =>
+        page.evaluate(organization => {
+            const channel = new BroadcastChannel(`report:${organization}:doc-report`);
+            channel.postMessage('saved');
+            channel.close();
+        }, organization);
+    latest = { ...latest, revision: 3, content: { ...latest.content, markdown: 'Saved report version three' } };
+    await refreshReport();
+    await expect(page.getByTestId('work-markdown')).toHaveText('Saved report version three');
+    await page.reload();
+    await expect(page.getByTestId('work-markdown')).toHaveText('Saved report version three');
+    await expect(page.getByTestId('agent-resources')).toHaveCount(0);
+    await selectReportVersion(page, 2);
+    await expect(page.getByText('Viewing historical version v2 · Read only')).toBeVisible();
+    latest = { ...latest, revision: 4, content: { ...latest.content, markdown: 'Saved report version four' } };
+    await refreshReport();
+    await expect(page.getByTestId('work-markdown')).toContainText('Revenue fell by 20%');
+    await expect(page.getByTestId('work-markdown')).not.toContainText('Saved report version four');
+    await page.getByRole('button', { name: 'Back to current report', exact: true }).click();
+    await expect(page.getByTestId('work-markdown')).toHaveText('Saved report version four');
+    let continuation: { documentId?: string; references?: Array<{ id: string; revision: number }> } | null = null;
+    await page.route('**/api/chat', route => {
+        continuation = route.request().postDataJSON();
+        const chunks = [
+            { type: 'start', messageId: 'continue-report' },
+            { type: 'start-step' },
+            { type: 'text-start', id: 'reply' },
+            { type: 'text-delta', id: 'reply', delta: 'Continuing with the current report.' },
+            { type: 'text-end', id: 'reply' },
+            { type: 'finish-step' },
+            { type: 'finish', finishReason: 'stop' },
+        ];
+        return route.fulfill({
+            headers: { 'content-type': 'text/event-stream', 'x-vercel-ai-ui-message-stream': 'v1' },
+            body: chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n',
+        });
+    });
+    await page.getByTestId('report-toolbar').getByRole('button', { name: 'More actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Continue analysis', exact: true }).click();
+    await expect.poll(() => continuation).toMatchObject({ documentId: 'doc-report', references: [{ id: 'doc-report', revision: 4 }] });
+    await expect(page.getByText('Continuing with the current report.', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('work-report')).toBeVisible();
+    await page.getByRole('button', { name: 'Close resources', exact: true }).click();
+    await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute('data-state', 'collapsed');
+    await expect(page.getByRole('complementary', { name: 'Works', exact: true })).toBeVisible();
+    await expectAppHealthy(appErrors);
+});
+
 test('selecting a different report clears the previous historical revision', async ({ page }) => {
     await mockWorkbenchApis(page, { initialConnections: [connection] });
     const first = { ...makeDocument(), revision: 2 };
@@ -1410,6 +1578,7 @@ test('Knowledge linkage resets databases, preserves manual additions, and limits
     await page.getByRole('option', { name: /Orders.*analytics/ }).click();
     await expect(composer.getByRole('button', { name: 'Remove 订单' })).toBeVisible();
     await databases.click();
+    await page.getByRole('button', { name: 'Orders: Databases', exact: true }).click();
     await page.getByRole('option', { name: 'Orders: main', exact: true }).click();
     await page.keyboard.press('Escape');
     await expect(composer.getByRole('button', { name: 'Remove 订单' })).toBeVisible();
@@ -1421,11 +1590,13 @@ test('Knowledge linkage resets databases, preserves manual additions, and limits
     await composer.getByRole('textbox').fill('Analyze');
     await toggleSource(page, 'Advertising');
     await databases.click();
+    await page.getByRole('button', { name: 'Orders: Databases', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('option', { name: 'Advertising: Automatic databases', exact: true })).toHaveAttribute('aria-checked', 'true');
     await page.keyboard.press('Escape');
     await page.reload();
     await databases.click();
+    await page.getByRole('button', { name: 'Orders: Databases', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('option', { name: 'Advertising: Automatic databases', exact: true })).toHaveAttribute('aria-checked', 'true');
     await page.keyboard.press('Escape');
@@ -1935,7 +2106,16 @@ test('unified Data Sources supports database multi-select, full-group selection,
     const sources = page.getByRole('button', { name: 'Data sources', exact: true });
     await sources.click();
     const search = page.getByPlaceholder('Search data sources or databases…');
+    const ordersDatabases = page.getByRole('button', { name: 'Orders: Databases', exact: true });
+    const advertisingDatabases = page.getByRole('button', { name: 'Advertising: Databases', exact: true });
+    await expect(ordersDatabases).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toHaveCount(0);
+    expect(databaseLoads).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath('data-sources-collapsed-light.png'), animations: 'disabled' });
+    await ordersDatabases.press('Enter');
     await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toBeVisible();
+    await expect(ordersDatabases).toHaveAttribute('aria-expanded', 'true');
+    expect(databaseLoads).toBe(1);
     await search.fill('MAIN');
     await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toHaveCount(0);
     // Select all includes analytics even while search hides it.
@@ -1961,8 +2141,11 @@ test('unified Data Sources supports database multi-select, full-group selection,
     names = ['main', 'analytics', 'new_database'];
     await page.reload();
     await sources.click();
+    await ordersDatabases.click();
     await expect(page.getByRole('option', { name: 'Orders: analytics', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('option', { name: 'Orders: new_database', exact: true })).toHaveAttribute('aria-checked', 'false');
+    await advertisingDatabases.click();
+    await expect(ordersDatabases).toHaveAttribute('aria-expanded', 'false');
     await expect(page.getByRole('option', { name: 'Advertising: analytics', exact: true })).toHaveAttribute('aria-checked', 'true');
     await page.evaluate(() => {
         document.documentElement.classList.add('dark');
@@ -1971,11 +2154,14 @@ test('unified Data Sources supports database multi-select, full-group selection,
     await page.setViewportSize({ width: 600, height: 850 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('data-sources-multi-dark-narrow.png'), animations: 'disabled' });
+    await ordersDatabases.click();
     await page.getByRole('button', { name: 'Orders: Select all', exact: true }).click();
     await page.getByRole('button', { name: 'Orders: Clear', exact: true }).click();
+    await advertisingDatabases.click();
     await page.getByRole('option', { name: 'Advertising: analytics', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Auto', exact: true })).toHaveAttribute('aria-checked', 'true');
     await expect(sources).toHaveText('Auto');
+    await ordersDatabases.click();
     await page.getByRole('option', { name: 'Orders: main', exact: true }).click();
     await page.getByRole('option', { name: 'Auto', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Orders: main', exact: true })).toHaveAttribute('aria-checked', 'false');
@@ -2001,9 +2187,14 @@ test('unified Data Sources enforces source limits and preserves unavailable data
     await page.getByTestId('agent-composer').getByRole('textbox').fill('Analyze');
     await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: 'Data sources', exact: true }).click();
+    await expect(page.getByText('Select up to 12 data sources', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Source 0: Databases', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Source 0: deleted', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.getByRole('button', { name: 'Source 12: Databases', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Source 12: main', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await page.getByRole('button', { name: 'Source 0: Databases', exact: true }).click();
     await page.getByRole('option', { name: 'Source 0: deleted', exact: true }).click();
+    await page.getByRole('button', { name: 'Source 12: Databases', exact: true }).click();
     await expect(page.getByRole('option', { name: 'Source 12: main', exact: true })).toHaveAttribute('aria-disabled', 'false');
     await page.getByRole('option', { name: 'Source 12: main', exact: true }).click();
     await page.keyboard.press('Escape');

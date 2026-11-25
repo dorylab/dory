@@ -142,6 +142,7 @@ export function AgentSessionSidebar({
     loading,
     chatId,
     disabled,
+    hidden = false,
     onCreate,
     onSelect,
     actions,
@@ -150,6 +151,7 @@ export function AgentSessionSidebar({
     loading: boolean;
     chatId: string;
     disabled: boolean;
+    hidden?: boolean;
     onCreate: () => void;
     onSelect: (id: string) => void;
     actions: Actions;
@@ -240,11 +242,11 @@ export function AgentSessionSidebar({
     );
     return (
         <>
-            <aside aria-label={t('Heading')} className="hidden h-full w-72 shrink-0 flex-col border-r md:flex">
+            <aside aria-label={t('Heading')} className={hidden ? 'hidden' : 'hidden h-full w-72 shrink-0 flex-col border-r md:flex'}>
                 {content}
             </aside>
-            <div className="border-b p-2 md:hidden">
-                <Popover open={mobileOpen} onOpenChange={setMobileOpen}>
+            <div className={hidden ? 'hidden' : 'border-b p-2 md:hidden'}>
+                <Popover open={mobileOpen && !hidden} onOpenChange={setMobileOpen}>
                     <PopoverTrigger asChild>
                         <Button variant="ghost">{t('Heading')}</Button>
                     </PopoverTrigger>

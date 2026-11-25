@@ -5562,6 +5562,12 @@
         "SQL Console": "Consola SQL"
     },
     "WorkDocuments": {
+        "SplitView": {
+            "Label": "Conversación e informe",
+            "Chat": "Conversación",
+            "Report": "Informe",
+            "Resize": "Ajustar conversación e informe"
+        },
         "DocumentBody": "Cuerpo del informe",
         "DocumentMode": "Documento",
         "SourceMode": "Fuente Markdown",

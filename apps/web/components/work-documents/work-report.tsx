@@ -45,10 +45,12 @@ export function WorkReport({
     busy = false,
     onEditingChange,
     presentation = 'embedded',
+    followLatest = false,
 }: {
     ref?: Ref<WorkReportHandle>;
     documentId: string;
     presentation?: 'standalone' | 'embedded';
+    followLatest?: boolean;
     onContinue?: (prompt: string, report: { id: string; title: string; revision: number; version?: number }) => void;
     busy?: boolean;
     onEditingChange?: (editing: boolean) => void;
@@ -78,6 +80,13 @@ export function WorkReport({
     const previousDocument = useRef(documentId);
     const changingDocument = previousDocument.current !== documentId;
     const latestRevision = query.data?.document.revision;
+    // A card pointing at the current version follows future saves. Historical
+    // selections remain pinned, including when the latest version later changes.
+    useEffect(() => {
+        if (followLatest && query.isFetchedAfterMount && !query.isFetching && selectedPublication === null && selectedRevision !== null && selectedRevision === latestRevision) {
+            void setSelectedRevision(null);
+        }
+    }, [followLatest, query.isFetchedAfterMount, query.isFetching, latestRevision, selectedPublication, selectedRevision, setSelectedRevision]);
     const historical = !changingDocument && (selectedPublication !== null || (selectedRevision !== null && latestRevision !== undefined && selectedRevision !== latestRevision));
     const historyQuery = useQuery({
         queryKey: [...key, selectedRevision, selectedPublication],

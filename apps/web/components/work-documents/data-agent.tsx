@@ -28,6 +28,7 @@ import { AgentComposer } from './agent-composer';
 import { AgentMessageReports } from './agent-message-reports';
 import { AgentArtifactPreview, AgentQueryPreview } from './agent-resource-preview';
 import { AgentResources } from './agent-resources';
+import { AgentReportLayout } from './agent-report-layout';
 import { AgentScopePicker, useAgentDatabases, type AgentConnection, type AgentKnowledge } from './agent-scope-picker';
 import { AgentSessionSidebar, useAgentWorkActions, WorkActionDialog, WorkMenu, WorkMetadata, WorkTitle } from './agent-session-sidebar';
 import { WorkReport, type WorkReportHandle } from './work-report';
@@ -54,6 +55,7 @@ export function DataAgent() {
         chat: parseAsString,
         document: parseAsString,
         revision: parseAsInteger,
+        publication: parseAsString,
         panel: parseAsStringLiteral(['resources', 'report', 'query', 'artifact', 'closed'] as const),
         queryRun: parseAsString,
         querySession: parseAsString,
@@ -123,13 +125,18 @@ export function DataAgent() {
     const reportRef = useRef<WorkReportHandle>(null);
     const resourcesButton = useRef<HTMLButtonElement>(null);
     const panel = state.panel ?? (state.document ? 'report' : 'closed');
+    const reportOpen = panel === 'report' && Boolean(state.document);
+    const [mobilePanel, setMobilePanel] = useState('report');
+    const resourcesOpen = panel !== 'closed' && !reportOpen;
     const navigatePanel = async (
         next: 'resources' | 'report' | 'query' | 'artifact' | 'closed',
         target: { document?: string; revision?: number | null; queryRun?: string; querySession?: string; artifact?: string } = {},
     ) => {
         if (reportRef.current && !(await reportRef.current.requestLeave())) return false;
+        if (next === 'report') setMobilePanel('report');
         await setState({
             panel: next,
+            publication: null,
             queryRun: null,
             querySession: null,
             artifact: null,
@@ -157,6 +164,7 @@ export function DataAgent() {
             chat: null,
             document: null,
             revision: null,
+            publication: null,
             panel: null,
             queryRun: null,
             querySession: null,
@@ -201,6 +209,7 @@ export function DataAgent() {
                     const status = chats.current.get(item.id)?.status;
                     return (item.id === chatId && busy) || status === 'submitted' || status === 'streaming' ? { ...item, status: 'running' as const } : item;
                 })}
+                hidden={reportOpen}
                 loading={options.isPending}
                 chatId={chatId}
                 disabled={editingReport}
@@ -216,6 +225,7 @@ export function DataAgent() {
                         chat: id,
                         document: null,
                         revision: null,
+                        publication: null,
                         panel: null,
                         queryRun: null,
                         querySession: null,
@@ -225,7 +235,13 @@ export function DataAgent() {
                     });
                 }}
             />
-            <Popover open={panel !== 'closed'} onOpenChange={open => void navigatePanel(open ? 'resources' : 'closed')}>
+            <Popover
+                open={resourcesOpen}
+                onOpenChange={open => {
+                    // Closing the resource popover must not undo selecting a report.
+                    if (open || resourcesOpen) void navigatePanel(open ? 'resources' : 'closed');
+                }}
+            >
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3" data-testid="work-header">
                         <div className="min-w-0">
@@ -246,7 +262,7 @@ export function DataAgent() {
                                     size="sm"
                                     title={t('Resources.Title')}
                                     aria-label={t('Resources.Title')}
-                                    aria-expanded={panel !== 'closed'}
+                                    aria-expanded={resourcesOpen}
                                 >
                                     <ListTree className="size-5" />
                                     <span className="hidden sm:inline">{workT('Outputs')}</span>
@@ -265,7 +281,32 @@ export function DataAgent() {
                             {currentWork ? <WorkMenu work={currentWork} actions={actions} disabled={editingReport || actions.mutation.isPending} /> : null}
                         </div>
                     </header>
-                    <div className="flex min-h-0 min-w-0 flex-1">
+                    <AgentReportLayout
+                        active={reportOpen}
+                        mobilePanel={mobilePanel}
+                        onMobilePanelChange={setMobilePanel}
+                        onBack={() => void navigatePanel('resources')}
+                        onClose={async () => {
+                            if (await navigatePanel('closed')) resourcesButton.current?.focus();
+                        }}
+                        report={
+                            state.document && reportOpen ? (
+                                <WorkReport
+                                    ref={reportRef}
+                                    key={state.document}
+                                    documentId={state.document}
+                                    busy={busy}
+                                    followLatest
+                                    onEditingChange={setEditingReport}
+                                    onContinue={(text, report) => {
+                                        void setState({ revision: null, publication: null });
+                                        setMobilePanel('chat');
+                                        setPrompt({ id: crypto.randomUUID(), text, files: [], references: [{ kind: 'report', ...report }] });
+                                    }}
+                                />
+                            ) : null
+                        }
+                    >
                         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
                             {error ? (
                                 <p role="alert" className="p-4 text-sm text-destructive">
@@ -283,7 +324,7 @@ export function DataAgent() {
                                     scope={scope}
                                     sourceNames={Object.fromEntries((options.data?.connections ?? []).map(connection => [connection.id, connection.name]))}
                                     documentId={state.document}
-                                    reportRevision={state.revision}
+                                    reportRevision={state.revision ?? openDocument.data?.document.revision ?? null}
                                     prompt={prompt}
                                     handoffDraft={handoffDraft}
                                     blocked={editingReport}
@@ -310,48 +351,38 @@ export function DataAgent() {
                                 />
                             )}
                         </main>
-                        <AgentResources
-                            key={chatId}
-                            activeDocumentId={state.document}
-                            open={panel !== 'closed'}
-                            detailVisible={panel === 'report' || panel === 'query' || panel === 'artifact'}
-                            editing={editingReport}
-                            reports={reports.data?.documents ?? []}
-                            messages={liveMessages.length ? liveMessages : (history.data?.messages ?? [])}
-                            busy={busy}
-                            loading={reports.isPending}
-                            error={reports.error}
-                            onRetry={() => void reports.refetch()}
-                            onSelect={id => void navigatePanel('report', { document: id })}
-                            onSelectQuery={(queryRun, querySession) => void navigatePanel('query', { queryRun, querySession })}
-                            onSelectArtifact={artifact => void navigatePanel('artifact', { artifact })}
-                            onBack={() => void navigatePanel('resources')}
-                            onClose={() => void navigatePanel('closed')}
-                            onRestoreFocus={() => resourcesButton.current?.focus()}
-                        >
-                            {panel === 'query' && state.queryRun && state.querySession ? (
-                                <AgentQueryPreview key={`${state.queryRun}:${state.querySession}`} workId={state.queryRun} sessionId={state.querySession} />
-                            ) : null}
-                            {panel === 'artifact' && state.artifact ? (
-                                <AgentArtifactPreview
-                                    key={state.artifact}
-                                    artifactId={state.artifact}
-                                    page={Math.max(0, state.resourcePage)}
-                                    onPageChange={resourcePage => void setState({ resourcePage })}
-                                />
-                            ) : null}
-                            {state.document && panel === 'report' ? (
-                                <WorkReport
-                                    ref={reportRef}
-                                    key={state.document}
-                                    documentId={state.document}
-                                    busy={busy}
-                                    onEditingChange={setEditingReport}
-                                    onContinue={(text, report) => setPrompt({ id: crypto.randomUUID(), text, files: [], references: [{ kind: 'report', ...report }] })}
-                                />
-                            ) : null}
-                        </AgentResources>
-                    </div>
+                    </AgentReportLayout>
+                    <AgentResources
+                        key={chatId}
+                        activeDocumentId={state.document}
+                        open={resourcesOpen}
+                        detailVisible={panel === 'query' || panel === 'artifact'}
+                        editing={editingReport}
+                        reports={reports.data?.documents ?? []}
+                        messages={liveMessages.length ? liveMessages : (history.data?.messages ?? [])}
+                        busy={busy}
+                        loading={reports.isPending}
+                        error={reports.error}
+                        onRetry={() => void reports.refetch()}
+                        onSelect={id => void navigatePanel('report', { document: id })}
+                        onSelectQuery={(queryRun, querySession) => void navigatePanel('query', { queryRun, querySession })}
+                        onSelectArtifact={artifact => void navigatePanel('artifact', { artifact })}
+                        onBack={() => void navigatePanel('resources')}
+                        onClose={() => void navigatePanel('closed')}
+                        onRestoreFocus={() => resourcesButton.current?.focus()}
+                    >
+                        {panel === 'query' && state.queryRun && state.querySession ? (
+                            <AgentQueryPreview key={`${state.queryRun}:${state.querySession}`} workId={state.queryRun} sessionId={state.querySession} />
+                        ) : null}
+                        {panel === 'artifact' && state.artifact ? (
+                            <AgentArtifactPreview
+                                key={state.artifact}
+                                artifactId={state.artifact}
+                                page={Math.max(0, state.resourcePage)}
+                                onPageChange={resourcePage => void setState({ resourcePage })}
+                            />
+                        ) : null}
+                    </AgentResources>
                 </div>
             </Popover>
             <WorkActionDialog actions={actions} disabled={editingReport} />
