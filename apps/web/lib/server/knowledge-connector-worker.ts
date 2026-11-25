@@ -3,6 +3,7 @@ import 'server-only';
 import { getDBService } from '@dory/database';
 import { getKnowledgeConnectorSyncRunner } from './knowledge-connector-sync';
 import { linearConfigured } from './linear-credentials';
+import { getDocumentGenerationRunner } from './knowledge-document-generation-worker';
 import { getKnowledgeExtractionRunner } from './knowledge-extraction-worker';
 
 const workerGlobal = globalThis as typeof globalThis & { knowledgeConnectorTimer?: ReturnType<typeof setInterval> };
@@ -15,6 +16,7 @@ export function startKnowledgeConnectorWorker() {
         scanning = true;
         try {
             const db = await getDBService();
+            getDocumentGenerationRunner(db).wake();
             await db.knowledge.recoverConnectorSyncJobs();
             await db.knowledge.clearExpiredDriveAuthorizations();
             if (linearConfigured()) await db.knowledge.queueDueConnectors('linear');

@@ -573,8 +573,7 @@ test('knowledge sources show four connection types and open provider setup', asy
     await page.goto(new URL('?tab=sources', page.url()).href);
 
     const panel = page.locator('main').last();
-    for (const name of ['Local folder', 'GitHub', 'Linear', 'Google Drive'])
-        await expect(panel.getByRole('button', { name: name + ' 0 sources' })).toBeVisible();
+    for (const name of ['Local folder', 'GitHub', 'Linear', 'Google Drive']) await expect(panel.getByRole('button', { name: name + ' 0 sources' })).toBeVisible();
     await expect(panel.getByRole('table')).toHaveCount(0);
     await expect(panel.getByRole('button', { name: /Upload|Add source|Semantic model|Business rules/ })).toHaveCount(0);
     await panel.getByRole('button', { name: /GitHub/ }).click();
@@ -783,10 +782,12 @@ test('knowledge source viewer reads Linear snapshots, local text and YAML, and h
     const modelRow = tree.getByRole('button', { name: model.name, exact: true }).locator('xpath=ancestor::li[1]');
     const labels = modelRow.locator(':scope > ul > li > div > button:not([aria-label]) > span.truncate, :scope > ul > li > button > span.truncate');
     await expect(labels).toHaveText(['Verified Queries', 'Analytics', 'Archive', 'Overview.md']);
-    const columns = await labels.evaluateAll(nodes => nodes.map(node => ({
-        icon: node.parentElement!.querySelector('svg')!.getBoundingClientRect().left,
-        label: node.getBoundingClientRect().left,
-    })));
+    const columns = await labels.evaluateAll(nodes =>
+        nodes.map(node => ({
+            icon: node.parentElement!.querySelector('svg')!.getBoundingClientRect().left,
+            label: node.getBoundingClientRect().left,
+        })),
+    );
     expect(columns.every(({ icon, label }) => icon === columns[0]!.icon && label === columns[0]!.label)).toBe(true);
     const cards = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Folders', exact: true }) });
     await expect(cards.locator('button > span[title]')).toHaveText(['Verified Queries', 'Analytics', 'Archive']);
@@ -873,7 +874,12 @@ for (const scenario of ['no sources', 'unselected source', 'selected source'] as
     });
 }
 
-test('database generation previews selected schema, handles unreadable tables and creates only after review', async ({ page }) => {
+test('database generation runs in background, survives navigation and refresh, retries unreadable tables and saves only after review', async ({ page }, testInfo) => {
+    test.setTimeout(120_000);
+    const messageErrors: string[] = [];
+    page.on('console', message => {
+        if (message.type() === 'error' && message.text().includes('MISSING_MESSAGE')) messageErrors.push(message.text());
+    });
     const source = {
         id: 'linear-file',
         fileName: 'Refund policy.md',
@@ -895,9 +901,24 @@ test('database generation previews selected schema, handles unreadable tables an
         proof: 'test-proof',
         evidence: { database: 'shop', tables: [{ name: 'orders', digest: 'a'.repeat(64) }], references: [] },
     };
+    type Task = import('../../packages/shared/src/types/knowledge-document-draft').DocumentGenerationTaskDetail;
+    const tasks = new Map<string, Task>();
     let writes = 0;
     let empty = true;
+    let rejectSubmission = true;
+    let rejectSave = true;
+    const savedBatchIds: string[] = [];
     const draftInputs: Record<string, unknown>[] = [];
+    const submittedIds: string[] = [];
+    function finish(id: string) {
+        const task = tasks.get(id)!;
+        const failed = task.input.tables.includes('restricted');
+        task.status = failed ? 'failed' : 'ready';
+        task.phase = task.status;
+        task.completedTables = task.totalTables;
+        task.error = failed ? 'TABLES_UNAVAILABLE' : null;
+        task.draft = failed ? { failedTables: ['restricted'], topics: [] } : { topics: [{ name: 'Orders', documents: [draft] }], failedTables: [] };
+    }
     await page.route('**/api/actions/execute', async route => {
         const { actionId, input } = route.request().postDataJSON();
         switch (actionId) {
@@ -912,7 +933,7 @@ test('database generation previews selected schema, handles unreadable tables an
                         : [
                               source,
                               { id: 'existing', fileName: 'Guide.md', folderId: 'orders-folder', format: 'markdown' },
-                              ...(writes ? [{ ...draft, id: 'saved', fileName: 'New guide.md', folderId: 'orders-folder', format: 'markdown' }] : []),
+                              ...(writes ? [{ ...draft, id: 'saved', fileName: 'New guide.md', folderId: 'orders-folder', format: 'markdown', updatedAt: now }] : []),
                           ],
                 });
             case 'knowledge.getKnowledgeSource':
@@ -923,23 +944,72 @@ test('database generation previews selected schema, handles unreadable tables an
                 return actionResponse(route, { databases: [{ value: 'shop', label: 'shop' }] });
             case 'schema.listTables':
                 return actionResponse(route, { tables: [{ name: 'orders' }, { name: 'restricted' }] });
-            case 'knowledge.generateDocumentDraft':
-                draftInputs.push(input);
-                return actionResponse(
-                    route,
-                    input.tables.includes('restricted') ? { failedTables: ['restricted'], topics: [] } : { topics: [{ name: 'Orders', documents: [draft] }], failedTables: [] },
-                );
-            case 'knowledge.createDocumentBatch':
+            case 'knowledge.listDocumentGenerationTasks':
+                return actionResponse(route, { tasks: [...tasks.values()].reverse().map(({ input: _input, draft: _draft, ...task }) => task) });
+            case 'knowledge.getDocumentGenerationTask':
+                return actionResponse(route, tasks.get(input.id));
+            case 'knowledge.createDocumentGenerationTask':
+            case 'knowledge.retryDocumentGenerationTask': {
+                submittedIds.push(input.id);
+                if (rejectSubmission) {
+                    rejectSubmission = false;
+                    return route.fulfill({ status: 503, json: { ok: false, message: 'Temporary submission failure' } });
+                }
+                const { id, submissionId: _submissionId, folderId, ...generationInput } = input;
+                draftInputs.push(generationInput);
+                const task: Task = {
+                    id,
+                    input: generationInput,
+                    knowledgeModelId: modelId,
+                    modelName: model.name,
+                    database: input.database,
+                    folderId,
+                    folderName: folderId ? 'Orders' : null,
+                    status: 'queued',
+                    phase: 'queued',
+                    completedTables: 0,
+                    totalTables: input.tables.length,
+                    error: null,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    documents: [],
+                    draft: null,
+                };
+                tasks.set(id, task);
+                return actionResponse(route, task);
+            }
+            case 'knowledge.createDocumentBatch': {
                 expect(input.folderId).toBeNull();
                 expect(input.topics[0].documents[0].fileName).toBe('New guide.md');
+                expect(input.batchId).toBe(input.taskId);
+                savedBatchIds.push(input.batchId);
+                if (rejectSave) {
+                    rejectSave = false;
+                    return route.fulfill({ status: 503, json: { ok: false, message: 'Temporary save failure' } });
+                }
                 writes++;
-                return actionResponse(route, { documents: [{ id: 'saved', folderId: 'orders-folder' }] });
+                const task = tasks.get(input.taskId)!;
+                task.status = 'saved';
+                task.phase = 'saved';
+                task.documents = [{ id: 'saved', folderId: 'orders-folder' }];
+                return actionResponse(route, { documents: task.documents });
+            }
             default:
                 return route.fallback();
         }
     });
-    const base = `/${await currentOrganization(page)}/knowledge/${modelId}`;
+    const organization = await currentOrganization(page);
+    const base = `/${organization}/knowledge/${modelId}`;
     const dialog = page.getByRole('dialog', { name: 'Generate from database' });
+    const list = page.getByRole('dialog', { name: 'Background tasks' });
+    async function openTask(id: string, checkCompletion = false) {
+        if (checkCompletion) await expect(page.getByText('Draft generated, ready to review', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Background tasks', exact: true }).click();
+        const link = list.locator(`a[href*="generationTask=${id}"]`);
+        await expect(link).toBeVisible();
+        await link.click();
+        await expect(dialog).toBeVisible();
+    }
     await page.goto(base);
     const emptyEntry = page.locator('section').getByRole('button', { name: 'Generate from database', exact: true });
     await emptyEntry.click();
@@ -951,6 +1021,35 @@ test('database generation previews selected schema, handles unreadable tables an
     await expect(dialog.getByLabel('Destination folder')).toHaveText('Orders');
     await dialog.getByRole('checkbox', { name: 'orders', exact: true }).check();
     await dialog.getByRole('button', { name: 'Generate draft' }).click();
+    await expect(dialog.getByText('Temporary submission failure')).toBeVisible();
+    await expect(dialog.getByRole('checkbox', { name: 'orders', exact: true })).toBeChecked();
+    await dialog.getByRole('button', { name: 'Generate draft' }).click();
+    await expect(dialog).toBeHidden();
+    expect(submittedIds[0]).toBe(submittedIds[1]);
+    const first = [...tasks.keys()][0];
+    expect(writes).toBe(0);
+    // The task remains accessible from another product page and after a full reload.
+    await page.goto(`/${organization}/work`);
+    await page.getByRole('button', { name: 'Background tasks', exact: true }).click();
+    await expect(list.getByRole('status')).toHaveText('Queued');
+    await page.keyboard.press('Escape');
+    tasks.get(first)!.status = 'running';
+    tasks.get(first)!.phase = 'reading';
+    await page.reload();
+    await page.getByRole('button', { name: 'Background tasks', exact: true }).click();
+    await expect(list.getByText('Reading schema · 0/1 tables')).toBeVisible();
+    await page.keyboard.press('Escape');
+    finish(first);
+    tasks.get(first)!.folderId = 'removed-folder';
+    tasks.get(first)!.folderName = null;
+    await openTask(first, true);
+    await expect(dialog.getByText('Start with the orders table.')).toBeVisible();
+    await expect(dialog.getByText('The destination folder was removed. Choose another folder.')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Create .* document/ })).toBeDisabled();
+    await dialog.getByLabel('Destination folder').click();
+    await page.getByRole('option', { name: model.name, exact: true }).click();
+    await expect(dialog.getByText('The destination folder was removed. Choose another folder.')).toBeHidden();
+    await page.reload();
     await expect(dialog.getByText('Start with the orders table.')).toBeVisible();
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
     expect(writes).toBe(0);
@@ -965,14 +1064,325 @@ test('database generation previews selected schema, handles unreadable tables an
     await expect(ref).not.toBeChecked();
     await ref.check();
     await dialog.getByRole('button', { name: 'Generate draft' }).click();
+    await expect(dialog).toBeHidden();
+    const second = [...tasks.keys()].at(-1)!;
+    finish(second);
+    await openTask(second);
     await dialog.getByRole('button', { name: 'Exclude failed tables' }).click();
-    await dialog.getByRole('button', { name: 'Generate draft' }).click();
+    await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    finish(second);
+    await openTask(second);
     await expect(dialog.getByText('Start with the orders table.')).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Create 0 folders and 1 document' })).toBeDisabled();
     await dialog.getByLabel('Document name').fill('New guide.md');
     expect(writes).toBe(0);
     expect(draftInputs.at(-1)).toMatchObject({ tables: ['orders'], documentIds: ['linear-file'], queryIds: [] });
     await dialog.getByRole('button', { name: 'Create 0 folders and 1 document' }).click();
+    await expect(dialog.getByText('Temporary save failure')).toBeVisible();
+    await expect(dialog.getByLabel('Document name')).toHaveValue('New guide.md');
+    await dialog.getByRole('button', { name: 'Create 0 folders and 1 document' }).click();
+    expect(savedBatchIds).toHaveLength(2);
+    expect(savedBatchIds[0]).toBe(savedBatchIds[1]);
     await expect(page).toHaveURL(/file=saved/);
+    await expect(page).not.toHaveURL(/generationTask=/);
     expect(writes).toBe(1);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await page.getByRole('button', { name: 'Background tasks', exact: true }).click();
+    await expect(list.getByText('Saved', { exact: true })).toBeVisible();
+    const bounds = await list.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+    expect(await list.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath('background-tasks-dark-mobile.png') });
+    expect(messageErrors).toEqual([]);
+});
+
+test('database generation selects filtered tables in bulk, preserves hidden selections and respects the 20 table limit', async ({ page }) => {
+    test.setTimeout(120_000);
+    let releaseTables!: () => void;
+    let releaseSubmission!: () => void;
+    let submitted: Record<string, unknown> | undefined;
+    const tableGate = new Promise<void>(resolve => {
+        releaseTables = resolve;
+    });
+    const submissionGate = new Promise<void>(resolve => {
+        releaseSubmission = resolve;
+    });
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId, input } = route.request().postDataJSON();
+        switch (actionId) {
+            case 'knowledge.get':
+                return actionResponse(route, model);
+            case 'knowledge.listDirectory':
+                return actionResponse(route, { canWrite: true, folders: [], connectors: [] });
+            case 'knowledge.listKnowledgeSources':
+                return actionResponse(route, { sources: [] });
+            case 'knowledge.queryEntries':
+                return actionResponse(route, { entries: [] });
+            case 'knowledge.listDocumentGenerationTasks':
+                return actionResponse(route, { tasks: [] });
+            case 'schema.listDatabases':
+                return actionResponse(route, {
+                    databases: [
+                        { value: 'shop', label: 'shop' },
+                        { value: 'large', label: 'large' },
+                    ],
+                });
+            case 'schema.listTables':
+                if (input.database === 'shop') {
+                    await tableGate;
+                    return actionResponse(route, { tables: ['outside', 'orders', 'order_items'].map(name => ({ name })) });
+                }
+                return actionResponse(route, { tables: [...Array.from({ length: 21 }, (_, i) => ({ name: 'order_' + String(i + 1).padStart(2, '0') })), { name: 'outside' }] });
+            case 'knowledge.createDocumentGenerationTask':
+                submitted = input;
+                await submissionGate;
+                return route.fulfill({ status: 503, json: { ok: false, message: 'Submission failed for test' } });
+            default:
+                return route.fallback();
+        }
+    });
+    try {
+        await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+        await page.getByRole('button', { name: 'Generate from database', exact: true }).first().click();
+        const dialog = page.getByRole('dialog', { name: 'Generate from database' });
+        const selectAll = dialog.getByRole('button', { name: 'Select all', exact: true });
+        const deselectAll = dialog.getByRole('button', { name: 'Deselect all', exact: true });
+        const search = dialog.getByLabel('Search tables');
+        const table = (name: string) => dialog.getByRole('checkbox', { name, exact: true });
+        const count = (selected: number) => dialog.getByRole('heading', { name: `Tables (${selected}/20)`, exact: true });
+        await expect(selectAll).toBeDisabled();
+        await expect(deselectAll).toBeDisabled();
+        releaseTables();
+        await expect(selectAll).toBeEnabled();
+        await selectAll.click();
+        await expect(count(3)).toBeVisible();
+        await expect(table('outside')).toBeChecked();
+        await expect(table('orders')).toBeChecked();
+        await expect(table('order_items')).toBeChecked();
+        await expect(selectAll).toBeDisabled();
+        await deselectAll.click();
+        await expect(count(0)).toBeVisible();
+        await table('outside').check();
+        await table('orders').check();
+        await search.fill('ORDER');
+        await selectAll.click();
+        await expect(count(3)).toBeVisible();
+        await deselectAll.click();
+        await expect(count(1)).toBeVisible();
+        await search.fill('');
+        await expect(table('outside')).toBeChecked();
+        await expect(table('orders')).not.toBeChecked();
+        await search.fill('missing');
+        await expect(selectAll).toBeDisabled();
+        await expect(deselectAll).toBeDisabled();
+        await expect(dialog.getByText('No matching tables', { exact: true })).toBeVisible();
+        await dialog.getByLabel('Database', { exact: true }).click();
+        await page.getByRole('option', { name: 'large', exact: true }).click();
+        await expect(count(0)).toBeVisible();
+        await expect(table('outside')).toBeVisible();
+        await table('outside').check();
+        await selectAll.click();
+        await expect(count(20)).toBeVisible();
+        await expect(table('outside')).toBeChecked();
+        await expect(table('order_19')).toBeChecked();
+        await expect(table('order_20')).not.toBeChecked();
+        await expect(table('order_21')).not.toBeChecked();
+        await expect(table('order_20')).toBeDisabled();
+        await expect(dialog.getByText('Up to 20 tables can be selected. Your existing choices were kept and the selection was filled to the limit.')).toBeVisible();
+        await search.fill('order_0');
+        await deselectAll.click();
+        await expect(count(11)).toBeVisible();
+        await selectAll.click();
+        await expect(count(20)).toBeVisible();
+        await search.fill('outside');
+        await table('outside').uncheck();
+        await expect(count(19)).toBeVisible();
+        await search.fill('order_2');
+        await selectAll.click();
+        await expect(count(20)).toBeVisible();
+        await expect(table('order_20')).toBeChecked();
+        await expect(table('order_21')).not.toBeChecked();
+        await search.fill('');
+        await expect(table('outside')).not.toBeChecked();
+        await expect(table('order_01')).toBeChecked();
+        await deselectAll.click();
+        await expect(count(0)).toBeVisible();
+        await search.fill('order_21');
+        await selectAll.click();
+        await search.fill('order_2');
+        await expect(selectAll).toBeEnabled();
+        await expect(deselectAll).toBeEnabled();
+        await dialog.getByRole('button', { name: 'Generate draft', exact: true }).click();
+        await expect.poll(() => submitted).toMatchObject({ tables: ['order_21'] });
+        await expect(selectAll).toBeDisabled();
+        await expect(deselectAll).toBeDisabled();
+        releaseSubmission();
+        await expect(dialog.getByText('Submission failed for test')).toBeVisible();
+        await expect(table('order_21')).toBeChecked();
+        await expect(count(1)).toBeVisible();
+        await page.setViewportSize({ width: 375, height: 812 });
+        const bounds = await dialog.boundingBox();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(375);
+        expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    } finally {
+        releaseTables();
+        releaseSubmission();
+    }
+});
+
+test('knowledge folder names toggle expansion and clickable controls use pointer cursors', async ({ page }) => {
+    test.setTimeout(120_000);
+    const source = { id: 'detail-doc', fileName: 'Details.md', folderId: 'details', format: 'markdown', updatedAt: now };
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId } = route.request().postDataJSON();
+        switch (actionId) {
+            case 'knowledge.get':
+                return actionResponse(route, model);
+            case 'knowledge.listDirectory':
+                return actionResponse(route, {
+                    canWrite: true,
+                    folders: [
+                        { id: 'parent', name: 'Parent', parentId: null },
+                        { id: 'details', name: 'Operating details', parentId: 'parent' },
+                    ],
+                    connectors: [],
+                });
+            case 'knowledge.listKnowledgeSources':
+                return actionResponse(route, { sources: [source] });
+            case 'knowledge.getKnowledgeSource':
+                return actionResponse(route, { ...source, contentText: '# Detail guide' });
+            case 'knowledge.queryEntries':
+                return actionResponse(route, { entries: [{ id: 'example-query', title: 'Example query', question: 'Example question' }] });
+            case 'knowledge.listDocumentGenerationTasks':
+                return actionResponse(route, { tasks: [] });
+            default:
+                return route.fallback();
+        }
+    });
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}?file=${source.id}`);
+    const tree = page.getByRole('navigation', { name: 'Directory', exact: true });
+    const folder = tree.getByRole('button', { name: 'Operating details 1', exact: true });
+    const leaf = tree.getByRole('button', { name: 'Details.md', exact: true });
+    await expect(leaf).toBeVisible();
+    await expect(folder).toHaveAttribute('aria-expanded', 'true');
+    await expect(folder).toHaveCSS('cursor', 'pointer');
+    await expect(leaf).toHaveCSS('cursor', 'pointer');
+    await folder.click();
+    await expect(page).toHaveURL(/folder=details/);
+    await expect(page).not.toHaveURL(/file=detail-doc/);
+    await expect(folder).toHaveAttribute('aria-expanded', 'false');
+    await expect(leaf).toBeHidden();
+    await folder.click();
+    await expect(folder).toHaveAttribute('aria-expanded', 'true');
+    await expect(leaf).toBeVisible();
+    await folder.press('Enter');
+    await expect(leaf).toBeHidden();
+    const expand = tree.getByRole('button', { name: 'Expand Operating details', exact: true });
+    await expect(expand).toHaveCSS('cursor', 'pointer');
+    await expand.click();
+    await expect(leaf).toBeVisible();
+    await folder.press('Space');
+    await expect(leaf).toBeHidden();
+    await tree.getByRole('button', { name: 'Actions for Operating details', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'New folder', exact: true })).toHaveCSS('cursor', 'pointer');
+    await page.keyboard.press('Escape');
+    await expect(folder).toHaveAttribute('aria-expanded', 'false');
+    await tree.getByRole('button', { name: 'Parent 1', exact: true }).click();
+    await expect(folder).toBeHidden();
+    await tree.getByRole('button', { name: 'Parent 1', exact: true }).click();
+    await expect(folder).toBeVisible();
+    await expect(folder).toHaveAttribute('aria-expanded', 'false');
+    await folder.click();
+    await leaf.click();
+    await expect(page.getByRole('heading', { name: 'Detail guide', exact: true })).toBeVisible();
+    const queries = tree.getByRole('button', { name: 'Verified Queries', exact: true });
+    await queries.click();
+    await expect(queries).toHaveAttribute('aria-expanded', 'true');
+    await expect(tree.getByRole('button', { name: 'Example query', exact: true })).toBeVisible();
+    await queries.click();
+    await expect(queries).toHaveAttribute('aria-expanded', 'false');
+    await expect(tree.getByRole('button', { name: 'Example query', exact: true })).toBeHidden();
+    const root = tree.getByRole('button', { name: model.name, exact: true });
+    await root.click();
+    await expect(root).toHaveAttribute('aria-expanded', 'false');
+    await expect(folder).toBeHidden();
+    await root.click();
+    await expect(root).toHaveAttribute('aria-expanded', 'true');
+    await expect(folder).toBeVisible();
+});
+
+test('background task entry is visible only for queued, running or reviewable tasks', async ({ page }) => {
+    test.setTimeout(120_000);
+    type Task = import('../../packages/shared/src/types/knowledge-document-draft').DocumentGenerationTask;
+    const task: Task = {
+        id: 'bf38ce89-61e7-49d4-a5b9-df2ef79fc80a',
+        knowledgeModelId: modelId,
+        modelName: model.name,
+        database: 'shop',
+        folderId: null,
+        folderName: null,
+        status: 'queued',
+        phase: 'queued',
+        completedTables: 0,
+        totalTables: 1,
+        error: null,
+        createdAt: now,
+        updatedAt: now,
+        documents: [],
+    };
+    let tasks: Task[] = [];
+    let listRequests = 0;
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId } = route.request().postDataJSON();
+        switch (actionId) {
+            case 'knowledge.get':
+                return actionResponse(route, model);
+            case 'knowledge.listDirectory':
+                return actionResponse(route, { canWrite: true, folders: [], connectors: [] });
+            case 'knowledge.listKnowledgeSources':
+                return actionResponse(route, { sources: [] });
+            case 'knowledge.listDocumentGenerationTasks':
+                listRequests++;
+                return actionResponse(route, { tasks });
+            default:
+                return route.fallback();
+        }
+    });
+    await page.goto(`/${await currentOrganization(page)}/knowledge/${modelId}`);
+    const entry = page.getByRole('button', { name: 'Background tasks', exact: true });
+    const list = page.getByRole('dialog', { name: 'Background tasks', exact: true });
+    await expect.poll(() => listRequests).toBeGreaterThan(0);
+    await expect(entry).toBeHidden();
+    tasks = [task];
+    await page.reload();
+    await expect(entry).toBeVisible();
+    await entry.click();
+    await expect(list.getByText('Queued', { exact: true })).toBeVisible();
+    await entry.click();
+    await expect(list).toBeHidden();
+    task.status = 'ready';
+    task.phase = 'ready';
+    await expect(entry).toContainText('Tasks · 1 to review');
+    task.status = 'saved';
+    task.phase = 'saved';
+    task.documents = [{ id: 'saved-doc', folderId: 'saved-folder' }];
+    await entry.click();
+    await expect(entry).toBeHidden();
+    await expect(list).toBeHidden();
+    tasks = [{ ...task, id: '24e8c7d8-4b3e-4d67-bbf9-88dcf22cfbe6', status: 'failed', phase: 'failed', error: 'GENERATION_FAILED' }, task];
+    await page.reload();
+    await expect(entry).toBeHidden();
+    tasks = [{ ...task, status: 'running', phase: 'reading', documents: [] }];
+    await page.reload();
+    await expect(entry).toBeVisible();
+    await entry.click();
+    await expect(list.getByText('Reading schema · 0/1 tables', { exact: true })).toBeVisible();
+    tasks = [{ ...task, status: 'failed', phase: 'failed', error: 'GENERATION_FAILED' }];
+    await expect(entry).toBeHidden();
+    await expect(list).toBeHidden();
+    await expect(page.getByText('Document generation failed', { exact: true })).toBeVisible();
 });

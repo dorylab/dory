@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useEffectEvent, useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { IconFileTypeSql } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, FilePlus2, FileText, LibraryBig, FolderInput, Settings, FolderPlus, MoreHorizontal, PanelLeft, Pencil, Pin, Plus, Trash2, Upload } from 'lucide-react';
@@ -15,6 +15,8 @@ import { providers, type Provider } from './document-directory';
 import { toast } from 'sonner';
 
 import { FileTreeName } from '@/components/ai-elements/file-tree';
+import type { DocumentGenerationTaskDetail } from '@dory/shared/types/knowledge-document-draft';
+import { documentTaskKey, generationTaskParser } from '@/lib/client/document-generation-tasks';
 import { executeActionClient } from '@/lib/actions/client';
 import {
     AlertDialog,
@@ -67,8 +69,18 @@ type Props = {
     sourcesPending: boolean;
     sourcesError?: string;
 };
-type Destination = { folder: string | null; file: string | null; tab?: string | null; query?: string | null; modelId?: string; manageSource?: string; modelAction?: ModelAction };
+type Destination = {
+    folder: string | null;
+    file: string | null;
+    tab?: string | null;
+    query?: string | null;
+    modelId?: string;
+    manageSource?: string;
+    modelAction?: ModelAction;
+    folderExpanded?: boolean;
+};
 const locationParsers = {
+    generationTask: generationTaskParser,
     folder: parseAsString,
     file: parseAsString,
     tab: parseAsString,
@@ -95,7 +107,21 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     const router = useRouter();
     const [localAction, setSourceAction] = useState<{ provider?: Provider; connectorId?: string } | null>(null);
     const index = useMemo(() => buildDocumentDirectory(guide, data, sources, rootName), [data, sources, guide, rootName]);
-    const [{ folder: location, file, query: queryId, manageSource, modelAction }, setLocation] = useQueryStates(locationParsers, { history: 'push' });
+    const [{ folder: location, file, query: queryId, manageSource, modelAction, generationTask }, setLocation] = useQueryStates(locationParsers, { history: 'push' });
+    const taskText = useTranslations('Knowledge.Tasks');
+    const generation = useQuery({
+        queryKey: documentTaskKey(organization, generationTask ?? ''),
+        enabled: Boolean(generationTask),
+        queryFn: ({ signal }) =>
+            executeActionClient<DocumentGenerationTaskDetail>('knowledge.getDocumentGenerationTask', { id: generationTask }, { organizationId: organization, signal }),
+        refetchInterval: query => (query.state.data?.status === 'queued' || query.state.data?.status === 'running' ? 2000 : false),
+        retry: false,
+    });
+    const generationDetail = generation.data?.knowledgeModelId === modelId ? generation.data : undefined;
+    const closeGeneration = () => {
+        setGenerationOpenedAt(null);
+        if (generationTask) void setLocation({ generationTask: null }, { history: 'replace' });
+    };
     const sourceAction = localAction ?? (manageSource ? { connectorId: manageSource } : null);
     const closeSourceAction = () => {
         setSourceAction(null);
@@ -148,6 +174,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         return folders[0]?.id === ROOT ? folders : [index.root, ...folders];
     }, [index, current.id]);
     const [expanded, setExpanded] = useState<Set<string>>(() => new Set([ROOT]));
+    const collapsedFolders = useRef(new Set<string>());
     const showQueries = workspace.section === 'queries';
     function currentTreeEntry(): Pick<NavigationHit, 'kind' | 'id'> | null {
         if (documentsView || historyChanged) {
@@ -162,7 +189,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     const isCurrent = (kind: NavigationHit['kind'], id: string) => treeEntry?.kind === kind && treeEntry.id === id;
     const [queriesExpanded, setQueriesExpanded] = useState(showQueries);
     useEffect(() => {
-        if (showQueries) setQueriesExpanded(true);
+        if (showQueries && !collapsedFolders.current.has(QUERY_FOLDER)) setQueriesExpanded(true);
     }, [showQueries]);
     const queryEntries = useQuery({
         queryKey: ['knowledge-model', modelId, 'query-entries'],
@@ -181,7 +208,8 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     const [drag, setDrag] = useState<Entry | null>(null);
     const [over, setOver] = useState<string | null>(null);
     useEffect(() => {
-        setExpanded(previous => (trail.every(folder => previous.has(folder.id)) ? previous : new Set([...previous, ...trail.map(folder => folder.id)])));
+        const automatic = trail.filter(folder => !collapsedFolders.current.has(folder.id));
+        setExpanded(previous => (automatic.every(folder => previous.has(folder.id)) ? previous : new Set([...previous, ...automatic.map(folder => folder.id)])));
     }, [trail, visibleId]);
 
     const change = useMutation({
@@ -214,13 +242,31 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                 }),
             );
         } else {
-            void setLocation({ folder, file, tab: tab ?? 'documents', query: query ?? null, source: null, querySearch: null, definition: null, rule: null, manageSource: null });
+            void setLocation({
+                generationTask: null,
+                folder,
+                file,
+                tab: tab ?? 'documents',
+                query: query ?? null,
+                source: null,
+                querySearch: null,
+                definition: null,
+                rule: null,
+                manageSource: null,
+            });
         }
-        setExpanded(previous => new Set([...previous, ...index.trail(destination.folder ?? ROOT).map(folder => folder.id)]));
+        const ancestors = index.trail(destination.folder ?? ROOT).map(folder => folder.id);
+        for (const id of ancestors) collapsedFolders.current.delete(id);
+        if (destination.folder && destination.folderExpanded === false) collapsedFolders.current.add(destination.folder);
+        setExpanded(previous => {
+            const next = new Set([...previous, ...ancestors]);
+            if (destination.folder && destination.folderExpanded === false) next.delete(destination.folder);
+            return next;
+        });
         setDrawer(false);
     }
-    function navigate(id: string, doc?: DirectoryDocument, edit = false) {
-        const destination = { folder: id, file: doc?.id ?? null };
+    function navigate(id: string, doc?: DirectoryDocument, edit = false, folderExpanded?: boolean) {
+        const destination = { folder: id, file: doc?.id ?? null, folderExpanded };
         if (dirty && destination.file === editingId) {
             setDrawer(false);
         } else if (dirty) {
@@ -382,22 +428,13 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     <TreeDisclosure
                         open={isOpen}
                         label={t(isOpen ? 'Collapse' : 'Expand', { name: folder.name })}
-                        onToggle={
-                            hasChildren
-                                ? () =>
-                                      setExpanded(previous => {
-                                          const next = new Set(previous);
-                                          if (isOpen) next.delete(folder.id);
-                                          else next.add(folder.id);
-                                          return next;
-                                      })
-                                : undefined
-                        }
+                        onToggle={hasChildren ? () => setFolderOpen(folder.id, !isOpen) : undefined}
                     />
                     <button
                         aria-current={isCurrent('folder', folder.id) ? 'page' : undefined}
-                        className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-start"
-                        onClick={() => navigate(folder.id)}
+                        aria-expanded={hasChildren ? isOpen : undefined}
+                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-1.5 text-start"
+                        onClick={() => navigate(folder.id, undefined, false, hasChildren ? !isOpen : undefined)}
                     >
                         <DirectoryFolderIcon folder={folder} open={isOpen} className="size-4 shrink-0 text-muted-foreground" />
                         <FileTreeName title={folder.name}>{folder.name}</FileTreeName>
@@ -447,8 +484,20 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
             setPending(destination);
         } else openDestination(destination);
     }
-    function selectQueries(id?: string) {
-        setQueriesExpanded(true);
+    function setFolderOpen(id: string, open: boolean) {
+        if (open) collapsedFolders.current.delete(id);
+        else collapsedFolders.current.add(id);
+        if (id === QUERY_FOLDER) setQueriesExpanded(open);
+        else
+            setExpanded(previous => {
+                const next = new Set(previous);
+                if (open) next.add(id);
+                else next.delete(id);
+                return next;
+            });
+    }
+    function selectQueries(id?: string, open = true) {
+        setFolderOpen(QUERY_FOLDER, open);
         const dest = { folder: null, file: null, tab: 'queries', query: id ?? null };
         if (dirty) {
             setDrawer(false);
@@ -519,12 +568,13 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     <TreeDisclosure
                         open={queriesExpanded}
                         label={t(queriesExpanded ? 'Collapse' : 'Expand', { name: folder.name })}
-                        onToggle={() => setQueriesExpanded(!queriesExpanded)}
+                        onToggle={() => setFolderOpen(QUERY_FOLDER, !queriesExpanded)}
                     />
                     <button
                         aria-current={isCurrent('folder', QUERY_FOLDER) ? 'page' : undefined}
                         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-start text-sm"
-                        onClick={() => selectQueries()}
+                        aria-expanded={queriesExpanded}
+                        onClick={() => selectQueries(undefined, !queriesExpanded)}
                     >
                         <DirectoryFolderIcon folder={folder} className="size-4 shrink-0" />
                         <FileTreeName>{folder.name}</FileTreeName>
@@ -685,7 +735,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         </Button>
     );
     return (
-        <div className="grid h-full min-w-0 grid-rows-[minmax(0,1fr)] bg-background text-foreground md:grid-cols-[minmax(14rem,22%)_minmax(0,1fr)]">
+        <div data-knowledge-workspace className="grid h-full min-w-0 grid-rows-[minmax(0,1fr)] bg-background text-foreground md:grid-cols-[minmax(14rem,22%)_minmax(0,1fr)]">
             <aside className="hidden min-w-0 flex-col border-e bg-muted/20 md:flex">{sidebar()}</aside>
             <div className="flex min-w-0 flex-col">
                 <header className="flex min-h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-5">
@@ -828,9 +878,11 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     )}
                 </div>
             </div>
-            {generationOpenedAt !== null && (
+            {(generationOpenedAt !== null || (generationTask && generationDetail && ['ready', 'failed'].includes(generationDetail.status))) && directory && (
                 <GenerateDocumentsDialog
-                    opened={generationOpenedAt}
+                    key={generationTask ?? generationOpenedAt}
+                    task={generationTask ? generationDetail : undefined}
+                    opened={generationTask && generationDetail ? new Date(generationDetail.createdAt).getTime() : (generationOpenedAt ?? Date.now())}
                     model={model}
                     organization={organization}
                     sources={sources}
@@ -838,19 +890,49 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     targets={[...index.folders.values()].filter(f => !f.managed).map(f => ({ id: f.id, label: f.id === ROOT ? model.name : path(f.id) }))}
                     target={documentsView && !current.managed ? current.id : ROOT}
                     currentId={documentsView ? selected?.source?.id : undefined}
-                    close={() => setGenerationOpenedAt(null)}
+                    close={closeGeneration}
                     created={async (docs, parent, landing) => {
                         await Promise.all([
                             client.invalidateQueries({ queryKey: ['knowledge-model', modelId] }),
                             client.invalidateQueries({ queryKey: ['knowledge-directory-search', organization] }),
                         ]);
-                        setGenerationOpenedAt(null);
+                        closeGeneration();
                         setExpanded(prev => new Set([...prev, ...index.trail(parent).map(f => f.id), ...docs.map(doc => doc.folderId)]));
                         const destination = { folder: landing.folderId, file: landing.id };
                         if (dirty) setPending(destination);
                         else openDestination(destination);
                     }}
                 />
+            )}
+            {generationTask && (!generationDetail || !['ready', 'failed'].includes(generationDetail.status)) && (
+                <Dialog
+                    open
+                    onOpenChange={open => {
+                        if (!open) closeGeneration();
+                    }}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{taskText('Title')}</DialogTitle>
+                            <DialogDescription>{taskText('Details')}</DialogDescription>
+                        </DialogHeader>
+                        {generation.error ? (
+                            <p role="alert">{generation.error.message}</p>
+                        ) : (
+                            <p role="status">
+                                {generationDetail ? taskText('Phase.' + generationDetail.phase) : generation.isPending ? taskText('Loading') : taskText('Unavailable')}
+                            </p>
+                        )}
+                        <DialogFooter>
+                            {generation.error && (
+                                <Button variant="outline" onClick={() => generation.refetch()}>
+                                    {taskText('Retry')}
+                                </Button>
+                            )}
+                            <Button onClick={closeGeneration}>{common('close')}</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             )}
             <AlertDialog open={Boolean(pending || pendingCreate || pendingPath || historyChanged)} onOpenChange={open => !open && keepEditing()}>
                 <AlertDialogContent>

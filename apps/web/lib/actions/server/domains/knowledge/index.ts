@@ -11,6 +11,7 @@ import { assertLinearAdmin, assertLinearAvailable } from '@/lib/server/linear-cr
 
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace, writeWorkspace } from '../../policies';
+import { documentGenerationTaskActions } from './document-generation-tasks';
 import { documentGenerationActions } from './document-generation';
 import { extractionKnowledgeActions } from './extraction';
 import { folderConnectorActions } from './folder-connectors';
@@ -999,6 +1000,7 @@ export const knowledgeDeleteConnectorAction = defineWebAction({
 
 export const knowledgeActions = [
     ...documentGenerationActions,
+    ...documentGenerationTaskActions,
     ...extractionKnowledgeActions,
     ...linearKnowledgeActions,
     ...folderConnectorActions,

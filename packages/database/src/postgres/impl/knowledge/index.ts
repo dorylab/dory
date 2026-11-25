@@ -8,6 +8,7 @@ import {
     knowledgeConnectors,
     knowledgeConnectorSyncJobs,
     knowledgeDocumentBatches,
+    knowledgeDocumentGenerationTasks,
     knowledgeFolders,
     knowledgeDriveAuthorizations,
     knowledgeLinearCredentials,
@@ -35,6 +36,7 @@ import { parseDocument } from 'yaml';
 
 import { enqueueSourceExtraction, invalidateSourceEvidence, KnowledgeExtractionStore, knowledgeHash } from './extraction';
 import { assertDestination, KnowledgeDirectory, localDocument, lockDirectory } from './directory';
+import { KnowledgeDocumentGenerationStore } from './document-generation';
 import { LinearKnowledgeStore } from './linear';
 import { migrateLegacyOssieModels } from './migrate-ossie';
 import {
@@ -263,6 +265,10 @@ export class PostgresKnowledgeRepository {
 
     get linear() {
         return new LinearKnowledgeStore(this.db);
+    }
+
+    get documentGeneration() {
+        return new KnowledgeDocumentGenerationStore(this.db);
     }
 
     get extraction() {
@@ -865,6 +871,7 @@ export class PostgresKnowledgeRepository {
         connectionId: string;
         folderId: string | null;
         batchId: string;
+        taskId?: string;
         createdBy: string;
         elapsedMs: number;
         topics: DocumentTopic[];
@@ -873,6 +880,22 @@ export class PostgresKnowledgeRepository {
         return this.db.transaction(async tx => {
             await lockDirectory(tx, input);
             const { knowledgeModelId, organizationId, connectionId, createdBy } = input;
+            if (input.taskId) {
+                const [task] = await tx
+                    .select()
+                    .from(knowledgeDocumentGenerationTasks)
+                    .where(
+                        and(
+                            eq(knowledgeDocumentGenerationTasks.id, input.taskId),
+                            eq(knowledgeDocumentGenerationTasks.organizationId, organizationId),
+                            eq(knowledgeDocumentGenerationTasks.createdBy, createdBy),
+                            eq(knowledgeDocumentGenerationTasks.knowledgeModelId, knowledgeModelId),
+                        ),
+                    )
+                    .for('update');
+                if (!task || task.id !== input.batchId || task.input.connectionId !== connectionId || !['ready', 'saved'].includes(task.status))
+                    throw new Error('Invalid document generation task.');
+            }
             const [existing] = await tx.select().from(knowledgeDocumentBatches).where(eq(knowledgeDocumentBatches.id, input.batchId));
             if (existing) {
                 if (existing.knowledgeModelId !== knowledgeModelId || existing.createdBy !== createdBy) throw new Error('Invalid batch.');
@@ -923,6 +946,17 @@ export class PostgresKnowledgeRepository {
                 }
             }
             if (!documents.length) throw new Error('Select a document.');
+            if (input.taskId)
+                await tx
+                    .update(knowledgeDocumentGenerationTasks)
+                    .set({
+                        status: 'saved',
+                        phase: 'saved',
+                        documents,
+                        folderId: input.folderId,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(knowledgeDocumentGenerationTasks.id, input.taskId));
             const citations = input.topics.flatMap(topic => topic.documents.flatMap(doc => doc.evidence.references.filter(ref => ref.kind === 'document').map(ref => ref.id)));
             if (citations.length) await recordDocumentUse(tx, knowledgeModelId, createdBy, citations);
             const elapsedMs = Math.min(2147483647, input.elapsedMs + Math.max(0, Date.now() - started));

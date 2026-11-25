@@ -1,4 +1,11 @@
-import type { CreatedDocument, SchemaEvidence } from '@dory/shared/types/knowledge-document-draft';
+import type {
+    CreatedDocument,
+    DocumentDraft,
+    DocumentGenerationInput,
+    DocumentGenerationPhase,
+    DocumentGenerationStatus,
+    SchemaEvidence,
+} from '@dory/shared/types/knowledge-document-draft';
 import { newEntityId } from '@dory/shared/id';
 import type { KnowledgeDefinitionStatus } from '@dory/shared/types/knowledge';
 import { OSSIE_VERSION, type OssieDataType, type OssieDialect, type OssieVersion } from '@dory/shared/types/ossie';
@@ -260,6 +267,38 @@ export const knowledgeDocumentBatches = pgTable('knowledge_document_batches', {
     firstPeerUseAt: timestamp('first_peer_use_at', { withTimezone: true }),
     documents: jsonb('documents').$type<CreatedDocument[]>().notNull().default([]),
 });
+
+export const knowledgeDocumentGenerationTasks = pgTable(
+    'knowledge_document_generation_tasks',
+    {
+        id: text('id').primaryKey(),
+        organizationId: text('organization_id').notNull(),
+        knowledgeModelId: text('knowledge_model_id')
+            .notNull()
+            .references(() => knowledgeModels.id, { onDelete: 'cascade' }),
+        createdBy: text('created_by').notNull(),
+        input: jsonb('input').$type<DocumentGenerationInput>().notNull(),
+        folderId: text('folder_id'),
+        status: text('status').$type<DocumentGenerationStatus>().notNull().default('queued'),
+        phase: text('phase').$type<DocumentGenerationPhase>().notNull().default('queued'),
+        completedTables: integer('completed_tables').notNull().default(0),
+        totalTables: integer('total_tables').notNull(),
+        draft: jsonb('draft').$type<DocumentDraft>(),
+        error: text('error'),
+        executionContext: text('execution_context'),
+        submissionId: text('submission_id').notNull(),
+        attempts: integer('attempts').notNull().default(0),
+        leaseToken: text('lease_token'),
+        leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+        documents: jsonb('documents').$type<CreatedDocument[]>().notNull().default([]),
+    },
+    table => [
+        index('idx_document_generation_owner').on(table.organizationId, table.createdBy, table.createdAt),
+        index('idx_document_generation_queue').on(table.status, table.createdAt),
+    ],
+);
 
 export const knowledgeSources = pgTable(
     'knowledge_sources',

@@ -36,7 +36,7 @@ export const treeRowClassName =
 export function TreeDisclosure({ open, label, onToggle }: { open: boolean; label: string; onToggle?: () => void }) {
     if (!onToggle) return <span className="w-6 shrink-0" aria-hidden="true" />;
     return (
-        <button className="grid size-6 shrink-0 place-items-center rounded hover:bg-background" aria-expanded={open} aria-label={label} onClick={onToggle}>
+        <button className="grid size-6 shrink-0 cursor-pointer place-items-center rounded hover:bg-background" aria-expanded={open} aria-label={label} onClick={onToggle}>
             {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
     );
@@ -116,7 +116,19 @@ function ExpandedModel({
                                         })
                                     }
                                 />
-                                <button className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-sm" onClick={() => hit('folder', folder.id, folder.name)}>
+                                <button
+                                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-1.5 text-sm"
+                                    aria-expanded={open}
+                                    onClick={() => {
+                                        setExpanded(previous => {
+                                            const next = new Set(previous);
+                                            if (open) next.delete(folder.id);
+                                            else next.add(folder.id);
+                                            return next;
+                                        });
+                                        hit('folder', folder.id, folder.name);
+                                    }}
+                                >
                                     <DirectoryFolderIcon folder={folder} className="size-4 shrink-0" />
                                     <FileTreeName>{folder.name}</FileTreeName>
                                 </button>
@@ -257,8 +269,17 @@ export function KnowledgeNavigation({
                                             </button>
                                             <button
                                                 aria-current={selectedModelId === model.id ? 'page' : undefined}
-                                                className="flex min-w-0 flex-1 items-center gap-2 py-2 text-start text-sm font-medium"
-                                                onClick={() => select(hit)}
+                                                aria-expanded={open}
+                                                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-2 text-start text-sm font-medium"
+                                                onClick={() => {
+                                                    select(hit);
+                                                    setExpandedModels(previous => {
+                                                        const next = new Set(previous);
+                                                        if (open) next.delete(model.id);
+                                                        else next.add(model.id);
+                                                        return next;
+                                                    });
+                                                }}
                                             >
                                                 <LibraryBig size={16} className="shrink-0" />
                                                 <FileTreeName>{model.name}</FileTreeName>

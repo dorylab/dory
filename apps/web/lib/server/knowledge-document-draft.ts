@@ -2,6 +2,26 @@ import { createHash } from 'node:crypto';
 import type { SchemaGraphResult, SchemaGraphTableReference, TableColumnInfo } from '@dory/drivers/types';
 import type { DocumentTopic } from '@dory/shared/types/knowledge-document-draft';
 import { z } from 'zod';
+import { safeParseJson } from '../ai/json-guard';
+
+export type DocumentDraftFailure = 'invalid_json' | 'invalid_structure' | 'unknown_table' | 'unsupported_citation' | 'missing_tables' | 'truncated_output';
+export class DocumentDraftValidationError extends Error {
+    constructor(
+        public readonly code: DocumentDraftFailure,
+        message: string,
+    ) {
+        super(message);
+        this.name = 'DocumentDraftValidationError';
+    }
+}
+export const documentDraftFailureKeys = {
+    invalid_json: 'InvalidDraftFormat',
+    invalid_structure: 'InvalidDraftStructure',
+    unknown_table: 'InvalidDraftTables',
+    missing_tables: 'InvalidDraftTables',
+    unsupported_citation: 'InvalidDraftReferences',
+    truncated_output: 'DraftTruncated',
+} as const satisfies Record<DocumentDraftFailure, string>;
 
 export type Reference = { kind: 'document' | 'query'; id: string; title: string; text: string };
 export type TableFacts = { name: string; comment: string | null; columns: TableColumnInfo[]; foreignKeys: string[] | null };
@@ -90,13 +110,31 @@ export function renderDraft(
     references: Reference[],
     label: (key: string) => string,
 ): DocumentTopic[] {
-    const plan = outline.parse(JSON.parse(text));
+    let decoded: unknown;
+    try {
+        decoded = safeParseJson(text);
+    } catch {
+        throw new DocumentDraftValidationError('invalid_json', 'Return a single valid JSON object with a topics array. Do not append extra JSON objects or explanatory text.');
+    }
+    const result = outline.safeParse(decoded);
+    if (!result.success) {
+        const issues = result.error.issues
+            .slice(0, 6)
+            .map(issue => issue.path.join('.') + ': ' + issue.message)
+            .join('; ');
+        throw new DocumentDraftValidationError('invalid_structure', 'The draft structure is invalid. Correct these fields: ' + issues);
+    }
+    const plan = result.data;
     const covered = new Set<number>();
     const topics = plan.topics.map(topic => ({
         name: topic.name,
         documents: topic.documents.map(doc => {
             const refs = [...new Set(doc.tables)].map(i => {
-                if (!tables[i]) throw new Error('Unknown table reference.');
+                if (!tables[i])
+                    throw new DocumentDraftValidationError(
+                        'unknown_table',
+                        `Unknown table reference ${i}. Use only the supplied zero-based table indexes 0 through ${tables.length - 1}.`,
+                    );
                 covered.add(i);
                 return tables[i];
             });
@@ -104,7 +142,18 @@ export function renderDraft(
             const used = new Set<number>();
             for (const citation of doc.citations) {
                 const ref = references[citation.reference];
-                if (!ref || !ref.text.includes(citation.quote)) throw new Error('Unsupported citation.');
+                if (!ref)
+                    throw new DocumentDraftValidationError(
+                        'unsupported_citation',
+                        references.length
+                            ? `Unsupported citation. Reference ${citation.reference} does not exist. Use only indexes from the references array, never table indexes.`
+                            : 'Unsupported citation. No document or query references were selected. Every citations array must be empty. Schema metadata is not a document/query reference.',
+                    );
+                if (!ref.text.includes(citation.quote))
+                    throw new DocumentDraftValidationError(
+                        'unsupported_citation',
+                        `Unsupported citation. The quote must be an exact substring of references[${citation.reference}].text. Do not paraphrase or invent quotes.`,
+                    );
                 used.add(citation.reference);
                 const target = ref.kind === 'query' ? '?tab=queries&query=' : '?tab=documents&file=';
                 content.push(
@@ -152,6 +201,9 @@ export function renderDraft(
             };
         }),
     }));
-    if (covered.size !== tables.length) throw new Error('The draft omitted selected tables.');
+    if (covered.size !== tables.length) {
+        const missing = tables.flatMap((_, index) => (covered.has(index) ? [] : [index]));
+        throw new DocumentDraftValidationError('missing_tables', 'The draft omitted selected tables. Include these zero-based table indexes: ' + missing.join(', ') + '.');
+    }
     return topics;
 }

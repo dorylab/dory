@@ -337,6 +337,13 @@
             "when": 1795478400000,
             "tag": "0048_report_version_history",
             "breakpoints": true
+        },
+        {
+            "idx": 48,
+            "version": "7",
+            "when": 1795564800000,
+            "tag": "0049_knowledge_document_generation_tasks",
+            "breakpoints": true
         }
     ]
 }

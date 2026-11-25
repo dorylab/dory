@@ -1,5 +1,6 @@
 'use client';
 
+import { DocumentTasks } from '@/components/background-tasks/document-tasks';
 import type { User } from 'better-auth';
 import { SidebarInset, SidebarProvider } from '@/registry/new-york-v4/ui/sidebar';
 import { SettingsProvider } from '../../components/settings/settings';
@@ -39,6 +40,7 @@ export function OrganizationAppShell({
                 billingManagementAvailable={billingManagementAvailable}
                 desktopBillingHandoff={desktopBillingHandoff}
             >
+                <DocumentTasks key={organizationId + initialUser?.id} organizationId={organizationId} userId={initialUser?.id ?? ''} />
                 <ResultSetCleanupTrigger organizationId={organizationId} />
                 <div className="flex h-screen min-h-0 flex-col overflow-hidden">
                     <SidebarProvider

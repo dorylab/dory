@@ -778,3 +778,19 @@ body {
 .report-canvas [data-canvas-block] figure { margin-block: 0; }
 .report-canvas [data-canvas-block] .work-table-scroll { margin-block: .75rem; }
 .report-canvas [data-canvas-block] th, .report-canvas [data-canvas-block] td { padding: .375rem .5rem; }
+
+/* Knowledge controls, including menus and dialogs rendered through portals. */
+body:has([data-knowledge-workspace]) :is(
+    button,
+    a[href],
+    summary,
+    [role='button'],
+    [role='menuitem'],
+    [role='menuitemcheckbox'],
+    [role='menuitemradio'],
+    [role='option'],
+    input[type='checkbox'],
+    label:has(input[type='checkbox']:not(:disabled))
+):not(:disabled):not([data-disabled]):not([aria-disabled='true']) {
+    cursor: pointer;
+}

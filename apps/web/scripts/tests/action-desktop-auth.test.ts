@@ -95,6 +95,14 @@ test('desktop auth metadata marks local workspace actions', () => {
     assert.equal(action('comparison.run.create').desktopAuth, 'local-workspace');
     assert.equal(action('comparison.run.get').desktopAuth, 'local-workspace');
     assert.equal(action('comparison.run.aiReview').desktopAuth, 'local-workspace');
+    for (const id of [
+        'knowledge.createDocumentGenerationTask',
+        'knowledge.retryDocumentGenerationTask',
+        'knowledge.listDocumentGenerationTasks',
+        'knowledge.getDocumentGenerationTask',
+    ] as const) {
+        assert.equal(action(id).desktopAuth, 'local-workspace');
+    }
 });
 
 test('web action context does not import desktop snapshot auth', () => {

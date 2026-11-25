@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { newTokenId } from '@dory/shared/id';
-import type { CreatedDocument, DocumentDraft, SignedDraftFile } from '@dory/shared/types/knowledge-document-draft';
+import type { CreatedDocument, DocumentGenerationTaskDetail, DocumentGenerationTask, SignedDraftFile } from '@dory/shared/types/knowledge-document-draft';
 import type { DatabaseMeta, DatabaseObjectRow } from '@dory/drivers/types';
 import { FileText, Folder } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
+import { toast } from 'sonner';
+import { documentTaskKey, documentTasksKey } from '@/lib/client/document-generation-tasks';
 import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -16,10 +18,13 @@ import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { MarkdownViewer, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 import { knowledgeSourceDisplayName } from './knowledge-source-display';
 import type { KnowledgeModelView } from './knowledge-page.client';
-import { storedFolderId, type DirectoryData } from './document-directory';
+import { ROOT, storedFolderId, type DirectoryData } from './document-directory';
+
+const MAX_TABLES = 20;
 
 type DraftFile = SignedDraftFile & { key: number; topic: number; selected: boolean };
 type Props = {
+    task?: DocumentGenerationTaskDetail;
     model: KnowledgeModelView;
     organization: string;
     sources: KnowledgeSourceSummary[];
@@ -51,23 +56,28 @@ function valid(name: string) {
     return Boolean(name.trim()) && name.trim() !== '.' && name.trim() !== '..' && !/[/\\\0]/.test(name) && name.trim().length <= 240;
 }
 
-export function GenerateDocumentsDialog({ model, organization, sources, currentId, folders, targets, target, opened, close, created }: Props) {
+export function GenerateDocumentsDialog({ task, model, organization, sources, currentId, folders, targets, target, opened, close, created }: Props) {
     const t = useTranslations('Knowledge.Generation');
     const locale = useLocale();
+    const tasks = useTranslations('Knowledge.Tasks');
+    const submission = useRef<{ fingerprint: string; id: string } | null>(null);
     const client = useQueryClient();
-    const [connectionId, setConnection] = useState(model.dataSources[0]?.connectionId ?? '');
-    const [db, setDb] = useState('');
-    const [parent, setParent] = useState(target);
+    const [connectionId, setConnection] = useState(task?.input.connectionId ?? model.dataSources[0]?.connectionId ?? '');
+    const [db, setDb] = useState(task?.input.database ?? '');
+    const [parent, setParent] = useState(task ? (task.folderId ?? ROOT) : target);
     const [search, setSearch] = useState('');
-    const [chosen, setChosen] = useState<string[]>([]);
-    const [goal, setGoal] = useState('');
-    const [docIds, setDocIds] = useState<string[]>([]);
-    const [queryIds, setQueryIds] = useState<string[]>([]);
-    const [failed, setFailed] = useState<string[]>([]);
-    const [topics, setTopics] = useState<string[]>([]);
-    const [files, setFiles] = useState<DraftFile[]>([]);
+    const [chosen, setChosen] = useState<string[]>(task?.input.tables ?? []);
+    const [selectionLimited, setSelectionLimited] = useState(false);
+    const [goal, setGoal] = useState(task?.input.prompt ?? '');
+    const [docIds, setDocIds] = useState<string[]>(task?.input.documentIds ?? []);
+    const [queryIds, setQueryIds] = useState<string[]>(task?.input.queryIds ?? []);
+    const [failed, setFailed] = useState<string[]>(task?.draft?.failedTables ?? []);
+    const [topics, setTopics] = useState<string[]>(task?.draft?.topics.map(topic => topic.name) ?? []);
+    const [files, setFiles] = useState<DraftFile[]>(
+        () => task?.draft?.topics.flatMap((topic, i) => topic.documents.map(doc => ({ ...doc, topic: i, selected: true }))).map((doc, key) => ({ ...doc, key })) ?? [],
+    );
     const [active, setActive] = useState(0);
-    const [batchId, setBatch] = useState('');
+    const [batchId, setBatch] = useState(task?.status === 'ready' ? task.id : '');
     const opts = { organizationId: organization, currentConnectionId: connectionId };
     const scope = { knowledgeModelId: model.id, connectionId };
     const databases = useQuery({
@@ -81,25 +91,34 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
         enabled: Boolean(database),
         queryFn: ({ signal }) => executeActionClient<{ tables: DatabaseObjectRow[] }>('schema.listTables', { connectionId, database }, { ...opts, signal }),
     });
+    const visibleTables = tables.data?.tables.filter(row => row.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())) ?? [];
+    const visibleNames = new Set(visibleTables.map(row => row.name));
+    const allVisibleSelected = visibleTables.every(row => chosen.includes(row.name));
+    const anyVisibleSelected = visibleTables.some(row => chosen.includes(row.name));
     const queries = useQuery({
         queryKey: ['knowledge-model', model.id, 'query-entries'],
         queryFn: ({ signal }) =>
             executeActionClient<{ entries: { id: string; title: string }[] }>('knowledge.queryEntries', { knowledgeModelId: model.id }, { organizationId: organization, signal }),
     });
     const generate = useMutation({
-        mutationFn: () =>
-            executeActionClient<DocumentDraft>(
-                'knowledge.generateDocumentDraft',
-                { ...scope, database, tables: chosen, prompt: goal, documentIds: docIds, queryIds, locale },
+        mutationFn: () => {
+            const input = { ...scope, database, tables: chosen, prompt: goal, documentIds: docIds, queryIds, locale, folderId: storedFolderId(parent) };
+            const fingerprint = JSON.stringify(input);
+            if (submission.current?.fingerprint !== fingerprint) submission.current = { fingerprint, id: newTokenId() };
+            return executeActionClient<DocumentGenerationTaskDetail>(
+                task?.status === 'failed' ? 'knowledge.retryDocumentGenerationTask' : 'knowledge.createDocumentGenerationTask',
+                { ...input, submissionId: submission.current.id, id: task?.status === 'failed' ? task.id : submission.current.id },
                 opts,
-            ),
-        onSuccess: draft => {
-            setFailed(draft.failedTables);
-            if (draft.failedTables.length) return;
-            setTopics(draft.topics.map(topic => topic.name));
-            setFiles(draft.topics.flatMap((topic, i) => topic.documents.map(doc => ({ ...doc, topic: i, selected: true }))).map((doc, key) => ({ ...doc, key })));
-            setActive(0);
-            setBatch(newTokenId());
+            );
+        },
+        onSuccess: result => {
+            client.setQueryData(documentTaskKey(organization, result.id), result);
+            client.setQueriesData<{ tasks: DocumentGenerationTask[] }>({ queryKey: documentTasksKey(organization) }, previous =>
+                previous ? { tasks: [result, ...previous.tasks.filter(item => item.id !== result.id)] } : previous,
+            );
+            void client.invalidateQueries({ queryKey: documentTasksKey(organization) });
+            toast.success(tasks('Submitted'), { id: 'document-task-' + result.id });
+            close();
         },
     });
     const selected = files.filter(f => f.selected);
@@ -116,7 +135,8 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
         );
     };
     const badName = (doc: DraftFile) => !valid(topics[doc.topic]) || !valid(doc.fileName) || !/^.+\.(md|markdown)$/i.test(doc.fileName.trim());
-    const invalid = selected.some(f => badName(f) || collision(f));
+    const validParent = targets.some(folder => folder.id === parent);
+    const invalid = !validParent || selected.some(f => badName(f) || collision(f));
     const save = useMutation({
         mutationFn: () =>
             executeActionClient<{ documents: CreatedDocument[] }>(
@@ -124,6 +144,7 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
                 {
                     ...scope,
                     batchId,
+                    taskId: task?.id === batchId ? task.id : undefined,
                     folderId: storedFolderId(parent),
                     topics: selectedTopics.map(topic => ({
                         ...topic,
@@ -134,10 +155,12 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
                 opts,
             ),
         onError: () => client.invalidateQueries({ queryKey: ['knowledge-model', model.id] }),
-        onSuccess: result => {
+        onSuccess: async result => {
             const order = selectedTopics.flatMap(topic => topic.documents);
             const first = order.findIndex(doc => doc.key === selected[0].key);
-            return created(result.documents, parent, result.documents[first] ?? result.documents[0]);
+            await created(result.documents, parent, result.documents[first] ?? result.documents[0]);
+            void client.invalidateQueries({ queryKey: documentTasksKey(organization) });
+            void client.invalidateQueries({ queryKey: documentTaskKey(organization, batchId) });
         },
     });
     const preview = Boolean(batchId);
@@ -150,14 +173,26 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
         setChosen([]);
         setFailed([]);
         setSearch('');
+        setSelectionLimited(false);
         generate.reset();
+    }
+    function selectAllTables() {
+        const next = [...new Set([...chosen, ...visibleNames])];
+        setChosen(next.slice(0, MAX_TABLES));
+        setSelectionLimited(next.length > MAX_TABLES);
+        setFailed([]);
+    }
+    function deselectAllTables() {
+        setChosen(previous => previous.filter(name => !visibleNames.has(name)));
+        setSelectionLimited(false);
+        setFailed([]);
     }
     const references = [...sources].sort((a, b) => Number(b.id === currentId) - Number(a.id === currentId));
     return (
         <Dialog
             open
             onOpenChange={open => {
-                if (!open && !save.isPending) close();
+                if (!open && !busy) close();
             }}
         >
             <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-5xl">
@@ -165,10 +200,20 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
                     <DialogTitle>{t('Title')}</DialogTitle>
                     <DialogDescription>{t(preview ? 'Preview' : 'Scope')}</DialogDescription>
                 </DialogHeader>
+                {!validParent && (
+                    <p role="alert" className="text-sm text-destructive">
+                        {tasks('MissingDestination')}
+                    </p>
+                )}
                 <div className="min-h-0 overflow-y-auto">
                     <fieldset disabled={busy} className="min-w-0">
                         {!preview ? (
                             <div className="space-y-4 pe-1">
+                                {task?.error && task.error !== 'TABLES_UNAVAILABLE' && (
+                                    <p role="alert" className="text-sm text-destructive">
+                                        {['AUTH_REQUIRED', 'ACCESS_DENIED', 'GENERATION_FAILED', 'INTERRUPTED'].includes(task.error) ? tasks('Errors.' + task.error) : task.error}
+                                    </p>
+                                )}
                                 {!model.dataSources.length && <p role="status">{t('NoSource')}</p>}
                                 <div className="grid gap-3 sm:grid-cols-3">
                                     <Picker
@@ -209,29 +254,61 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
                                     </Picker>
                                 </div>
                                 <section className="space-y-2">
-                                    <h3 className="text-sm font-semibold">{t('Tables', { count: chosen.length })}</h3>
-                                    <Input aria-label={t('Search')} placeholder={t('Search')} value={search} onChange={e => setSearch(e.target.value)} />
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <h3 className="text-sm font-semibold">{t('Tables', { count: chosen.length })}</h3>
+                                        <div className="flex items-center gap-1">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={busy || databases.isFetching || tables.isFetching || !visibleTables.length || allVisibleSelected}
+                                                onClick={selectAllTables}
+                                            >
+                                                {t('SelectAll')}
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                disabled={busy || databases.isFetching || tables.isFetching || !anyVisibleSelected}
+                                                onClick={deselectAllTables}
+                                            >
+                                                {t('DeselectAll')}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <Input
+                                        aria-label={t('Search')}
+                                        placeholder={t('Search')}
+                                        value={search}
+                                        onChange={e => {
+                                            setSearch(e.target.value);
+                                            setSelectionLimited(false);
+                                        }}
+                                    />
+                                    {selectionLimited && (
+                                        <p role="status" className="text-xs text-muted-foreground">
+                                            {t('TableSelectionLimit', { limit: MAX_TABLES })}
+                                        </p>
+                                    )}
                                     <div className="grid max-h-48 gap-1 overflow-auto rounded-md border p-2 sm:grid-cols-2">
-                                        {tables.data?.tables
-                                            .filter(row => row.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
-                                            .map(row => (
-                                                <label key={row.name} className="flex items-center gap-2 break-all text-sm">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={chosen.includes(row.name)}
-                                                        disabled={chosen.length >= 20 && !chosen.includes(row.name)}
-                                                        onChange={() => {
-                                                            setChosen(toggle(chosen, row.name));
-                                                            setFailed([]);
-                                                        }}
-                                                    />
-                                                    {row.name}
-                                                </label>
-                                            ))}
+                                        {visibleTables.map(row => (
+                                            <label key={row.name} className="flex items-center gap-2 break-all text-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={chosen.includes(row.name)}
+                                                    disabled={chosen.length >= MAX_TABLES && !chosen.includes(row.name)}
+                                                    onChange={() => {
+                                                        setChosen(toggle(chosen, row.name));
+                                                        setFailed([]);
+                                                        setSelectionLimited(false);
+                                                    }}
+                                                />
+                                                {row.name}
+                                            </label>
+                                        ))}
                                         {(databases.isFetching || tables.isFetching) && <span role="status">{t('Loading')}</span>}
-                                        {tables.data && !tables.data.tables.some(row => row.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())) && (
-                                            <span>{t('NoTables')}</span>
-                                        )}
+                                        {tables.data && !visibleTables.length && <span>{t('NoTables')}</span>}
                                     </div>
                                     {[databases, tables].map(
                                         (q, i) =>
@@ -308,6 +385,15 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
                             </div>
                         ) : (
                             <div className="grid min-h-64 gap-4 md:grid-cols-[minmax(13rem,1fr)_2fr]">
+                                <div className="md:col-span-2">
+                                    <Picker label={t('Destination')} value={parent} change={setParent}>
+                                        {targets.map(folder => (
+                                            <SelectItem key={folder.id} value={folder.id}>
+                                                {folder.label}
+                                            </SelectItem>
+                                        ))}
+                                    </Picker>
+                                </div>
                                 <div className="max-h-[58vh] space-y-3 overflow-auto border-e pe-3">
                                     {topics.map((name, i) => (
                                         <section key={i}>
@@ -390,7 +476,7 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
                     </p>
                 )}
                 <DialogFooter>
-                    <Button variant="outline" disabled={save.isPending} onClick={close}>
+                    <Button variant="outline" disabled={busy} onClick={close}>
                         {t('Cancel')}
                     </Button>
                     {preview ? (
@@ -415,8 +501,8 @@ export function GenerateDocumentsDialog({ model, organization, sources, currentI
                             </Button>
                         </>
                     ) : (
-                        <Button disabled={busy || !database || !chosen.length} onClick={() => generate.mutate()}>
-                            {t(generate.isPending ? 'Generating' : failed.length ? 'Retry' : 'Generate')}
+                        <Button disabled={busy || !validParent || !database || !chosen.length} onClick={() => generate.mutate()}>
+                            {generate.isPending ? tasks('Submitting') : t(task?.status === 'failed' ? 'Retry' : 'Generate')}
                         </Button>
                     )}
                 </DialogFooter>

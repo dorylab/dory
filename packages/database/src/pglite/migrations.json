@@ -752,5 +752,15 @@
     "bps": true,
     "folderMillis": 1795478400000,
     "hash": "218b2985d145c6cdb6a8b39825629a5be020ee97789056e9c19e8498ef898196"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"knowledge_document_generation_tasks\" (\n    \"id\" text PRIMARY KEY,\n    \"organization_id\" text NOT NULL,\n    \"knowledge_model_id\" text NOT NULL REFERENCES \"knowledge_models\" (\"id\") ON DELETE CASCADE,\n    \"created_by\" text NOT NULL,\n    \"input\" jsonb NOT NULL,\n    \"folder_id\" text,\n    \"status\" text NOT NULL DEFAULT 'queued',\n    \"phase\" text NOT NULL DEFAULT 'queued',\n    \"completed_tables\" integer NOT NULL DEFAULT 0,\n    \"total_tables\" integer NOT NULL,\n    \"draft\" jsonb,\n    \"error\" text,\n    \"execution_context\" text,\n    \"submission_id\" text NOT NULL,\n    \"attempts\" integer NOT NULL DEFAULT 0,\n    \"lease_token\" text,\n    \"lease_expires_at\" timestamptz,\n    \"created_at\" timestamptz NOT NULL DEFAULT now(),\n    \"updated_at\" timestamptz NOT NULL DEFAULT now(),\n    \"documents\" jsonb NOT NULL DEFAULT '[]'::jsonb\n);\n",
+      "\nCREATE INDEX \"idx_document_generation_owner\" ON \"knowledge_document_generation_tasks\" (\"organization_id\", \"created_by\", \"created_at\");\n",
+      "\nCREATE INDEX \"idx_document_generation_queue\" ON \"knowledge_document_generation_tasks\" (\"status\", \"created_at\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1795564800000,
+    "hash": "916a5474385215bda4ddd85272c2220137acc05affb882012bda8e7ddccdb526"
   }
 ]
