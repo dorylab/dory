@@ -1,14 +1,10 @@
-import { openDataSources } from './helpers/navigation';
 import { expect, type Page, type Route } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
-import { createWorkbenchConnection, mockWorkbenchApis } from './helpers/workbench';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const seededConnection = createWorkbenchConnection();
 
 const json = async (route: Route, body: unknown, status = 200) => {
     await route.fulfill({
@@ -63,13 +59,7 @@ function createMockFolder(id: string, name: string, position: number): MockFolde
     return { id, name, position, createdAt: now, updatedAt: now };
 }
 
-function createMockQuery(
-    id: string,
-    title: string,
-    sqlText: string,
-    folderId: string | null,
-    position: number,
-): MockQuery {
+function createMockQuery(id: string, title: string, sqlText: string, folderId: string | null, position: number): MockQuery {
     const now = new Date().toISOString();
     return {
         id,
@@ -115,8 +105,7 @@ function createMockAuditItem(id: string, sqlText: string, status: MockAuditItem[
 }
 
 /**
- * Layer folder-specific mock routes on top of mockWorkbenchApis.
- * Must be called AFTER mockWorkbenchApis so our routes take priority.
+ * Keep the folder and query actions stateful across refreshes of the sidebar.
  */
 async function mockFolderApis(
     page: Page,
@@ -131,134 +120,53 @@ async function mockFolderApis(
     const history: MockAuditItem[] = [...(options.initialHistory ?? [])];
     let folderCounter = folders.length;
 
-    // Remove the catch-all saved-queries handler from mockWorkbenchApis,
-    // then register our stateful handlers using function matchers for precise URL matching.
-    await page.unroute('**/api/sql-console/saved-queries');
-    await page.unroute('**/api/sql-console/saved-query-folders');
-    await page.unroute('**/api/sql-console/saved-query-folders/reorder');
-    await page.unroute('**/api/sql-console/saved-queries/reorder');
-    await page.unroute('**/api/query-audit').catch(() => undefined);
-
-    // Reorder routes
-    await page.route('**/api/sql-console/saved-queries/reorder', async route => {
-        await json(route, { code: 0, message: 'success', data: { reordered: true } });
-    });
-    await page.route('**/api/sql-console/saved-query-folders/reorder', async route => {
-        await json(route, { code: 0, message: 'success', data: { reordered: true } });
-    });
-
-    await page.route(url => url.pathname.endsWith('/api/sql-console/saved-queries'), async route => {
-        const req = route.request();
-        if (req.method() === 'GET') {
-            const active = queries.filter(q => !q.archivedAt);
-            await json(route, { code: 0, message: 'success', data: active });
-            return;
-        }
-        if (req.method() === 'PATCH') {
-            const url = new URL(req.url());
-            const id = url.searchParams.get('id');
-            const body = req.postDataJSON() as Partial<MockQuery>;
-            const idx = queries.findIndex(q => q.id === id);
-            if (idx >= 0) {
-                queries[idx] = { ...queries[idx], ...body, updatedAt: new Date().toISOString() };
-                await json(route, { code: 0, message: 'success', data: queries[idx] });
-            } else {
-                await json(route, { code: 1, message: 'not found' }, 404);
+    await page.route('**/api/actions/execute', async route => {
+        const { actionId, input } = route.request().postDataJSON();
+        const send = (data: unknown) => json(route, { ok: true, data });
+        switch (actionId) {
+            case 'savedQuery.list':
+                return send({ savedQueries: queries });
+            case 'savedQuery.listFolders':
+                return send(folders);
+            case 'savedQuery.createFolder': {
+                const folder = createMockFolder('new-' + ++folderCounter, input.name, folderCounter * 1000);
+                folders.push(folder);
+                return send(folder);
             }
-            return;
-        }
-        if (req.method() === 'DELETE') {
-            const url = new URL(req.url());
-            const id = url.searchParams.get('id');
-            const idx = queries.findIndex(q => q.id === id);
-            if (idx >= 0) queries.splice(idx, 1);
-            await json(route, { code: 0, message: 'success', data: { deleted: [id] } });
-            return;
-        }
-        await route.fallback();
-    });
-
-    // Override saved-query-folders
-    await page.route(url => url.pathname.endsWith('/api/sql-console/saved-query-folders'), async route => {
-        const req = route.request();
-        if (req.method() === 'GET') {
-            await json(route, { code: 0, message: 'success', data: [...folders] });
-            return;
-        }
-        if (req.method() === 'POST') {
-            const body = req.postDataJSON() as { name: string };
-            folderCounter++;
-            const folder = createMockFolder(`folder-${folderCounter}`, body.name, folderCounter * 1000);
-            folders.push(folder);
-            await json(route, { code: 0, message: 'success', data: folder }, 201);
-            return;
-        }
-        if (req.method() === 'PATCH') {
-            const url = new URL(req.url());
-            const id = url.searchParams.get('id');
-            const body = req.postDataJSON() as { name?: string };
-            const idx = folders.findIndex(f => f.id === id);
-            if (idx >= 0) {
-                if (body.name) folders[idx].name = body.name;
-                folders[idx].updatedAt = new Date().toISOString();
-                await json(route, { code: 0, message: 'success', data: folders[idx] });
-            } else {
-                await json(route, { code: 1, message: 'not found' }, 404);
+            case 'savedQuery.updateFolder': {
+                const folder = folders.find(item => item.id === input.id);
+                if (folder) Object.assign(folder, input.patch);
+                return send(folder);
             }
-            return;
-        }
-        if (req.method() === 'DELETE') {
-            const url = new URL(req.url());
-            const id = url.searchParams.get('id');
-            const idx = folders.findIndex(f => f.id === id);
-            if (idx >= 0) {
-                folders.splice(idx, 1);
-                for (const q of queries) {
-                    if (q.folderId === id) q.folderId = null;
-                }
+            case 'savedQuery.deleteFolder': {
+                const index = folders.findIndex(item => item.id === input.id);
+                if (index >= 0) folders.splice(index, 1);
+                for (const query of queries) if (query.folderId === input.id) query.folderId = null;
+                return send({ deleted: [input.id] });
             }
-            await json(route, { code: 0, message: 'success', data: { deleted: [id] } });
-            return;
+            case 'savedQuery.update': {
+                const query = queries.find(item => item.id === input.id);
+                if (query) Object.assign(query, input.patch);
+                return send(query);
+            }
+            case 'query.auditSearch':
+                return send({ items: history });
+            default:
+                return route.fallback();
         }
-        await route.fallback();
     });
-
-    await page.route(url => url.pathname.endsWith('/api/query-audit'), async route => {
-        await json(route, {
-            code: 0,
-            message: 'success',
-            data: {
-                items: history,
-                total: history.length,
-                nextCursor: null,
-            },
-        });
-    });
-
-    return { folders, queries };
+    return { queries, folders };
 }
 
-// ---------------------------------------------------------------------------
 // Open sidebar helper
 // ---------------------------------------------------------------------------
 
 async function openSavedQueriesSidebar(page: Page) {
     await page.goto('/');
-    await openDataSources(page);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0];
-    expect(organization).toBeTruthy();
-
-    const connectionCard = page.getByTestId('connection-card').filter({ hasText: seededConnection.connection.name }).first();
-    await expect(connectionCard).toBeVisible();
-    await connectionCard.click({ position: { x: 24, y: 24 } });
-    const consoleUrl = `/${organization}/${seededConnection.connection.id}/sql-console`;
-    try {
-        await expect(page).toHaveURL(new RegExp(`/[^/]+/${seededConnection.connection.id}/sql-console$`), { timeout: 5000 });
-    } catch {
-        await page.goto(consoleUrl);
-        await expect(page).toHaveURL(new RegExp(`/[^/]+/${seededConnection.connection.id}/sql-console$`), { timeout: 15000 });
-    }
-
+    const response = await page.request.post('/api/actions/execute', { data: { actionId: 'connection.list', input: {} } });
+    const { data } = await response.json();
+    await page.goto('/' + organization + '/' + data.connections[0].connection.id + '/sql-console');
     const tab = page.getByRole('tab', { name: /^Queries$/i });
     await expect(tab).toBeVisible();
     await tab.click({ force: true });
@@ -283,21 +191,15 @@ async function openSavedQueriesSidebar(page: Page) {
 
 test.describe('Saved Query Folders', () => {
     test('displays folders and queries grouped correctly', async ({ page, appErrors }) => {
-        await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
         await mockFolderApis(page, {
-            initialFolders: [
-                createMockFolder('folder-1', 'Analytics', 1000),
-                createMockFolder('folder-2', 'Debug', 2000),
-            ],
+            initialFolders: [createMockFolder('folder-1', 'Analytics', 1000), createMockFolder('folder-2', 'Debug', 2000)],
             initialQueries: [
                 createMockQuery('q1', 'revenue_by_day', 'SELECT * FROM revenue', 'folder-1', 1000),
                 createMockQuery('q2', 'revenue_by_month', 'SELECT * FROM revenue_monthly', 'folder-1', 2000),
                 createMockQuery('q3', 'join_test', 'SELECT * FROM joins', 'folder-2', 1000),
                 createMockQuery('q4', 'Actor count', 'SELECT count(*) FROM actors', null, 1000),
             ],
-            initialHistory: [
-                createMockAuditItem('audit-1', 'SELECT * FROM audit_history'),
-            ],
+            initialHistory: [createMockAuditItem('audit-1', 'SELECT * FROM audit_history')],
         });
 
         await openSavedQueriesSidebar(page);
@@ -326,11 +228,8 @@ test.describe('Saved Query Folders', () => {
     });
 
     test('can create a new folder', async ({ page, appErrors }) => {
-        await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
         await mockFolderApis(page, {
-            initialQueries: [
-                createMockQuery('q1', 'my query', 'SELECT 1', null, 1000),
-            ],
+            initialQueries: [createMockQuery('q1', 'my query', 'SELECT 1', null, 1000)],
         });
 
         await openSavedQueriesSidebar(page);
@@ -351,12 +250,9 @@ test.describe('Saved Query Folders', () => {
     });
 
     test('can expand and collapse a folder', async ({ page, appErrors }) => {
-        await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
         await mockFolderApis(page, {
             initialFolders: [createMockFolder('folder-1', 'Analytics', 1000)],
-            initialQueries: [
-                createMockQuery('q1', 'revenue_by_day', 'SELECT * FROM revenue', 'folder-1', 1000),
-            ],
+            initialQueries: [createMockQuery('q1', 'revenue_by_day', 'SELECT * FROM revenue', 'folder-1', 1000)],
         });
 
         await openSavedQueriesSidebar(page);
@@ -376,7 +272,6 @@ test.describe('Saved Query Folders', () => {
     });
 
     test('search shows flat results ignoring folders', async ({ page, appErrors }) => {
-        await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
         await mockFolderApis(page, {
             initialFolders: [createMockFolder('folder-1', 'Analytics', 1000)],
             initialQueries: [
@@ -398,7 +293,6 @@ test.describe('Saved Query Folders', () => {
     });
 
     test('can rename a folder', async ({ page, appErrors }) => {
-        await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
         await mockFolderApis(page, {
             initialFolders: [createMockFolder('folder-1', 'Old Name', 1000)],
             initialQueries: [],
@@ -425,12 +319,9 @@ test.describe('Saved Query Folders', () => {
     });
 
     test('can move a query to a folder via menu', async ({ page, appErrors }) => {
-        await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
         const { queries } = await mockFolderApis(page, {
             initialFolders: [createMockFolder('folder-1', 'Analytics', 1000)],
-            initialQueries: [
-                createMockQuery('q1', 'Actor count', 'SELECT count(*) FROM actors', null, 1000),
-            ],
+            initialQueries: [createMockQuery('q1', 'Actor count', 'SELECT count(*) FROM actors', null, 1000)],
         });
 
         await openSavedQueriesSidebar(page);
@@ -453,12 +344,9 @@ test.describe('Saved Query Folders', () => {
     });
 
     test('delete folder moves queries to root', async ({ page, appErrors }) => {
-        await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
         const { queries, folders } = await mockFolderApis(page, {
             initialFolders: [createMockFolder('folder-1', 'ToDelete', 1000)],
-            initialQueries: [
-                createMockQuery('q1', 'inside_query', 'SELECT 1', 'folder-1', 1000),
-            ],
+            initialQueries: [createMockQuery('q1', 'inside_query', 'SELECT 1', 'folder-1', 1000)],
         });
 
         await openSavedQueriesSidebar(page);

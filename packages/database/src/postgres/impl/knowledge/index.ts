@@ -16,14 +16,19 @@ import {
     knowledgeModelSources,
     knowledgeSources,
     knowledgeVerifiedQueries,
+    knowledgeQueryMemberships,
+    savedQueries,
+    savedQueryCollections,
+    querySaveRequests,
     user,
     type KnowledgeSourceFormat,
 } from '@dory/database/postgres/schemas';
+import { PostgresSavedQueriesRepository, updateQueryBody, type QueryDatabase } from '../sql-console/save-queries';
 import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
-import { and, asc, desc, eq, getTableColumns, ilike, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, getViewSelectedFields, exists, ilike, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import { assertDestination, KnowledgeDirectory, localDocument, lockDirectory } from './directory';
 import { KnowledgeDocumentGenerationStore } from './document-generation';
@@ -198,28 +203,30 @@ export class PostgresKnowledgeRepository {
 
     async createModel(input: { organizationId: string; name: string; description?: string | null; connectionIds: string[] }) {
         const connectionIds = await this.assertConnections(input.organizationId, input.connectionIds);
-        const knowledgeModelId = await this.db.transaction(async tx => {
-            const [model] = await tx
-                .insert(knowledgeModels)
-                .values({
-                    organizationId: input.organizationId,
-                    name: input.name.trim(),
-                    description: input.description?.trim() || null,
-                })
-                .returning({ id: knowledgeModels.id });
-            const knowledgeModelId = model!.id;
-            await tx.insert(knowledgeModelSources).values(connectionIds.map(connectionId => ({ knowledgeModelId, connectionId })));
-            const rules = validateKnowledgeSource(
-                'RULES.md',
-                [
-                    '- 分析指标时优先查阅本知识库 Markdown 文档中的口径。如果多个口径都适用且会影响结论，先向用户确认。',
-                    '- 编写 SQL 前先查找相关的已验证查询，复用时核对数据源、时间范围和筛选条件。',
-                ].join('\n'),
-            );
-            await tx.insert(knowledgeSources).values({ organizationId: input.organizationId, knowledgeModelId, systemRole: 'analysis_rules', ...rules });
-            return knowledgeModelId;
-        });
+        const knowledgeModelId = await this.db.transaction(tx => this.insertModel(tx, input, connectionIds));
         return this.getModel({ organizationId: input.organizationId, knowledgeModelId });
+    }
+
+    private async insertModel(tx: QueryDatabase, input: { organizationId: string; name: string; description?: string | null }, connectionIds: string[]) {
+        const [model] = await tx
+            .insert(knowledgeModels)
+            .values({
+                organizationId: input.organizationId,
+                name: input.name.trim(),
+                description: input.description?.trim() || null,
+            })
+            .returning({ id: knowledgeModels.id });
+        const knowledgeModelId = model!.id;
+        await tx.insert(knowledgeModelSources).values(connectionIds.map(connectionId => ({ knowledgeModelId, connectionId })));
+        const rules = validateKnowledgeSource(
+            'RULES.md',
+            [
+                '- 分析指标时优先查阅本知识库 Markdown 文档中的口径。如果多个口径都适用且会影响结论，先向用户确认。',
+                '- 编写 SQL 前先查找相关的已验证查询，复用时核对数据源、时间范围和筛选条件。',
+            ].join('\n'),
+        );
+        await tx.insert(knowledgeSources).values({ organizationId: input.organizationId, knowledgeModelId, systemRole: 'analysis_rules', ...rules });
+        return knowledgeModelId;
     }
 
     async listAnalysisRuleCandidates(organizationId: string, connectionIds: string[]) {
@@ -281,7 +288,10 @@ export class PostgresKnowledgeRepository {
         return this.db
             .select({ queryId: knowledgeQuerySources.queryId, connectionId: knowledgeVerifiedQueries.sourceConnectionId })
             .from(knowledgeQuerySources)
-            .innerJoin(knowledgeVerifiedQueries, eq(knowledgeVerifiedQueries.id, knowledgeQuerySources.queryId))
+            .innerJoin(
+                knowledgeVerifiedQueries,
+                and(eq(knowledgeVerifiedQueries.id, knowledgeQuerySources.queryId), eq(knowledgeVerifiedQueries.knowledgeModelId, knowledgeQuerySources.knowledgeModelId)),
+            )
             .innerJoin(knowledgeSources, eq(knowledgeSources.id, knowledgeQuerySources.knowledgeSourceId))
             .where(
                 and(
@@ -323,8 +333,11 @@ export class PostgresKnowledgeRepository {
                 .where(and(eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId), inArray(knowledgeSources.id, sourceIds)));
             if (sources.length !== sourceIds.length) throw new Error('One or more knowledge sources are unavailable.');
         }
-        const previous = await tx.select().from(knowledgeQuerySources).where(eq(knowledgeQuerySources.queryId, input.queryId));
-        await tx.delete(knowledgeQuerySources).where(eq(knowledgeQuerySources.queryId, input.queryId));
+        const previous = await tx
+            .select()
+            .from(knowledgeQuerySources)
+            .where(and(eq(knowledgeQuerySources.queryId, input.queryId), eq(knowledgeQuerySources.knowledgeModelId, input.knowledgeModelId)));
+        await tx.delete(knowledgeQuerySources).where(and(eq(knowledgeQuerySources.queryId, input.queryId), eq(knowledgeQuerySources.knowledgeModelId, input.knowledgeModelId)));
         if (sourceIds.length) {
             const byId = new Map(previous.map(row => [row.knowledgeSourceId, row]));
             await tx.insert(knowledgeQuerySources).values(
@@ -332,6 +345,7 @@ export class PostgresKnowledgeRepository {
                     id =>
                         byId.get(id) ?? {
                             knowledgeSourceId: id,
+                            knowledgeModelId: input.knowledgeModelId,
                             queryId: input.queryId,
                             relationType: 'provided' as const,
                             createdBy: input.createdBy,
@@ -1334,7 +1348,7 @@ export class PostgresKnowledgeRepository {
                 )!,
             );
         return this.db
-            .select({ ...getTableColumns(knowledgeVerifiedQueries), updatedByName: user.name })
+            .select({ ...getViewSelectedFields(knowledgeVerifiedQueries), updatedByName: user.name })
             .from(knowledgeVerifiedQueries)
             .leftJoin(user, eq(user.id, sql`COALESCE(${knowledgeVerifiedQueries.updatedBy}, ${knowledgeVerifiedQueries.createdBy})`))
             .where(and(...conditions))
@@ -1354,38 +1368,384 @@ export class PostgresKnowledgeRepository {
         sourceId?: string | null;
         createdBy?: string | null;
     }) {
-        const model = await this.getModel(input);
-        if (!model.dataSources.some(source => source.connectionId === input.sourceConnectionId)) throw new Error('This data source is not linked to the selected knowledge base.');
-        const queryId = await this.db.transaction(async tx => {
+        return this.saveQuery({ ...input, userId: input.createdBy ?? null });
+    }
+
+    async updateSharedBody(input: {
+        organizationId: string;
+        knowledgeModelId: string;
+        id: string;
+        revision: number;
+        title: string;
+        sqlText: string;
+        description?: string | null;
+        userId: string;
+    }) {
+        return this.db.transaction(async tx => {
             await lockDirectory(tx, input);
-            const [row] = await tx
-                .insert(knowledgeVerifiedQueries)
-                .values({
-                    knowledgeModelId: input.knowledgeModelId,
-                    sourceConnectionId: input.sourceConnectionId,
-                    title: input.title.trim(),
-                    question: input.question.trim(),
-                    sql: input.sql.trim(),
-                    description: input.description?.trim() || null,
-                    sourceType: input.sourceType?.trim() || 'manual',
-                    sourceId: input.sourceId?.trim() || null,
-                    createdBy: input.createdBy ?? null,
-                    updatedBy: input.createdBy ?? null,
-                })
-                .returning();
-            await this.writeQuerySources(tx, { ...input, queryId: row!.id, sourceIds: input.knowledgeSourceIds ?? [] });
-            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
-            return row!.id;
+            const [membership] = await tx
+                .select()
+                .from(knowledgeQueryMemberships)
+                .where(and(eq(knowledgeQueryMemberships.knowledgeModelId, input.knowledgeModelId), eq(knowledgeQueryMemberships.id, input.id)));
+            if (!membership) throw new Error('Verified query not found.');
+            const row = await updateQueryBody(tx, { ...input, id: membership.savedQueryId });
+            await tx
+                .update(knowledgeQueryMemberships)
+                .set({ updatedBy: input.userId })
+                .where(and(eq(knowledgeQueryMemberships.knowledgeModelId, input.knowledgeModelId), eq(knowledgeQueryMemberships.id, input.id)));
+            return { id: row.id, revision: row.revision };
         });
-        return this.getVerifiedQuery({ organizationId: input.organizationId, knowledgeModelId: input.knowledgeModelId, id: queryId });
+    }
+
+    async queryOptions(input: { organizationId: string; connectionId: string; userId: string }) {
+        return this.db
+            .select({ id: savedQueries.id, title: savedQueries.title })
+            .from(savedQueries)
+            .where(
+                and(
+                    eq(savedQueries.organizationId, input.organizationId),
+                    eq(savedQueries.connectionId, input.connectionId),
+                    or(
+                        exists(
+                            this.db
+                                .select({ id: savedQueryCollections.queryId })
+                                .from(savedQueryCollections)
+                                .where(
+                                    and(
+                                        eq(savedQueryCollections.queryId, savedQueries.id),
+                                        eq(savedQueryCollections.userId, input.userId),
+                                        isNull(savedQueryCollections.archivedAt),
+                                    ),
+                                ),
+                        ),
+                        exists(
+                            this.db.select({ id: knowledgeQueryMemberships.id }).from(knowledgeQueryMemberships).where(eq(knowledgeQueryMemberships.savedQueryId, savedQueries.id)),
+                        ),
+                    ),
+                ),
+            )
+            .orderBy(asc(savedQueries.title), asc(savedQueries.id));
+    }
+
+    private async editableSavedQuery(db: QueryDatabase, input: { organizationId: string; connectionId: string; userId: string; id: string }) {
+        const [query] = await db
+            .select({
+                id: savedQueries.id,
+                collected: sql<boolean>`exists (${db
+                    .select({ id: savedQueryCollections.queryId })
+                    .from(savedQueryCollections)
+                    .where(
+                        and(eq(savedQueryCollections.queryId, savedQueries.id), eq(savedQueryCollections.userId, input.userId), isNull(savedQueryCollections.archivedAt)),
+                    )})`.mapWith(Boolean),
+                shared: sql<boolean>`exists (${db
+                    .select({ id: knowledgeQueryMemberships.id })
+                    .from(knowledgeQueryMemberships)
+                    .where(eq(knowledgeQueryMemberships.savedQueryId, savedQueries.id))})`.mapWith(Boolean),
+            })
+            .from(savedQueries)
+            .where(and(eq(savedQueries.id, input.id), eq(savedQueries.organizationId, input.organizationId), eq(savedQueries.connectionId, input.connectionId)))
+            .limit(1);
+        if (!query || (!query.collected && !query.shared)) throw new DatabaseError('Saved query unavailable.', 404);
+        return query;
+    }
+
+    async listQueryMembershipOptions(input: { organizationId: string; connectionId: string; userId: string; id: string }) {
+        const query = await this.editableSavedQuery(this.db, input);
+        const models = await this.db
+            .select({ id: knowledgeModels.id, name: knowledgeModels.name, membershipId: knowledgeQueryMemberships.id })
+            .from(knowledgeModels)
+            .leftJoin(knowledgeModelSources, and(eq(knowledgeModelSources.knowledgeModelId, knowledgeModels.id), eq(knowledgeModelSources.connectionId, input.connectionId)))
+            .leftJoin(knowledgeQueryMemberships, and(eq(knowledgeQueryMemberships.knowledgeModelId, knowledgeModels.id), eq(knowledgeQueryMemberships.savedQueryId, input.id)))
+            .where(and(eq(knowledgeModels.organizationId, input.organizationId), or(isNotNull(knowledgeModelSources.connectionId), isNotNull(knowledgeQueryMemberships.id))))
+            .orderBy(desc(isNotNull(knowledgeQueryMemberships.id)), asc(knowledgeModels.name), asc(knowledgeModels.id));
+        return { collected: query.collected, models: models.map(({ id, name, membershipId }) => ({ id, name, included: membershipId !== null })) };
+    }
+
+    async editSavedQuery(input: {
+        organizationId: string;
+        connectionId: string;
+        userId: string;
+        id: string;
+        revision: number;
+        title: string;
+        sqlText: string;
+        description: string | null;
+        addModelIds: string[];
+        removeModelIds: string[];
+        newModelName?: string;
+    }) {
+        const added = [...new Set(input.addModelIds)];
+        const removed = [...new Set(input.removeModelIds)];
+        if (added.some(id => removed.includes(id))) throw new DatabaseError('A knowledge base cannot be both added and removed.', 400);
+        return this.db.transaction(async tx => {
+            if (input.newModelName) {
+                const [connection] = await tx
+                    .select({ id: connections.id })
+                    .from(connections)
+                    .where(and(eq(connections.id, input.connectionId), eq(connections.organizationId, input.organizationId), isNull(connections.deletedAt)))
+                    .for('share');
+                if (!connection) throw new DatabaseError('Data source unavailable.', 404);
+            }
+            // Other knowledge writes lock the knowledge base before the shared query.
+            const changed = [...added, ...removed].sort();
+            for (const knowledgeModelId of changed) {
+                await lockDirectory(tx, { organizationId: input.organizationId, knowledgeModelId });
+            }
+            if (added.length) {
+                const linked = await tx
+                    .select({ id: knowledgeModelSources.knowledgeModelId })
+                    .from(knowledgeModelSources)
+                    .where(and(inArray(knowledgeModelSources.knowledgeModelId, added), eq(knowledgeModelSources.connectionId, input.connectionId)))
+                    .for('share');
+                if (linked.length !== added.length) throw new DatabaseError('This data source is not linked to a selected knowledge base.', 400);
+            }
+            if (input.newModelName) {
+                const modelId = await this.insertModel(tx, { organizationId: input.organizationId, name: input.newModelName }, [input.connectionId]);
+                added.push(modelId);
+                changed.push(modelId);
+            }
+            const [locked] = await tx
+                .select({ id: savedQueries.id })
+                .from(savedQueries)
+                .where(and(eq(savedQueries.id, input.id), eq(savedQueries.organizationId, input.organizationId), eq(savedQueries.connectionId, input.connectionId)))
+                .for('update');
+            if (!locked) throw new DatabaseError('Saved query unavailable.', 404);
+            const query = await this.editableSavedQuery(tx, input);
+            const row = await updateQueryBody(tx, input);
+            if (added.length) {
+                await tx
+                    .insert(knowledgeQueryMemberships)
+                    .values(
+                        added.map(knowledgeModelId => ({
+                            id: row.id,
+                            savedQueryId: row.id,
+                            knowledgeModelId,
+                            sourceConnectionId: input.connectionId,
+                            question: '',
+                            sourceType: 'workspace',
+                            createdBy: input.userId,
+                            updatedBy: input.userId,
+                        })),
+                    )
+                    .onConflictDoNothing({ target: [knowledgeQueryMemberships.knowledgeModelId, knowledgeQueryMemberships.savedQueryId] });
+            }
+            if (removed.length) {
+                if (!query.collected) {
+                    const [remaining] = await tx
+                        .select({ id: knowledgeQueryMemberships.id })
+                        .from(knowledgeQueryMemberships)
+                        .where(and(eq(knowledgeQueryMemberships.savedQueryId, row.id), notInArray(knowledgeQueryMemberships.knowledgeModelId, removed)))
+                        .limit(1);
+                    if (!remaining) {
+                        const personal = new PostgresSavedQueriesRepository();
+                        await personal.init(tx);
+                        await personal.collectShared(input);
+                    }
+                }
+                await tx
+                    .delete(knowledgeQueryMemberships)
+                    .where(and(eq(knowledgeQueryMemberships.savedQueryId, row.id), inArray(knowledgeQueryMemberships.knowledgeModelId, removed)));
+            }
+            if (changed.length) await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(inArray(knowledgeModels.id, changed));
+            return { id: row.id, revision: row.revision };
+        });
+    }
+
+    async listConnectionQueries(input: { organizationId: string; connectionId: string }) {
+        return this.db
+            .selectDistinctOn([savedQueries.id], {
+                id: savedQueries.id,
+                title: savedQueries.title,
+                sqlText: savedQueries.sqlText,
+                description: savedQueries.description,
+                revision: savedQueries.revision,
+                knowledgeModelId: knowledgeQueryMemberships.knowledgeModelId,
+                queryId: knowledgeQueryMemberships.id,
+            })
+            .from(savedQueries)
+            .innerJoin(knowledgeQueryMemberships, eq(knowledgeQueryMemberships.savedQueryId, savedQueries.id))
+            .where(and(eq(savedQueries.organizationId, input.organizationId), eq(savedQueries.connectionId, input.connectionId)))
+            .orderBy(savedQueries.id, knowledgeQueryMemberships.knowledgeModelId);
+    }
+
+    async saveQuery(input: {
+        organizationId: string;
+        userId: string | null;
+        sourceConnectionId: string;
+        knowledgeModelId?: string;
+        knowledgeModelIds?: string[];
+        newModelName?: string;
+        existingQueryId?: string;
+        requestId?: string;
+        title?: string;
+        sql?: string;
+        description?: string | null;
+        question?: string;
+        edit?: { revision: number; title: string; sqlText: string; description: string | null };
+        sourceType?: string | null;
+        sourceId?: string | null;
+        knowledgeSourceIds?: string[];
+        collect?: boolean;
+        folderId?: string | null;
+    }) {
+        const selectedModelIds = [...new Set(input.knowledgeModelIds ?? (input.knowledgeModelId ? [input.knowledgeModelId] : []))].sort();
+        const newModelName = input.newModelName?.trim();
+        if ((input.knowledgeModelId && input.knowledgeModelIds) || Boolean(selectedModelIds.length) === Boolean(newModelName)) {
+            throw new Error('Choose existing knowledge bases or enter a new name.');
+        }
+        if (selectedModelIds.length > 1 && (input.existingQueryId || input.knowledgeSourceIds?.length)) {
+            throw new Error('Multiple knowledge bases can be selected when saving a new query without source documents.');
+        }
+        if (input.existingQueryId && (input.sql !== undefined || input.title !== undefined)) throw new Error('Edit shared SQL separately from adding it to a knowledge base.');
+        if (input.edit && !input.existingQueryId) throw new Error('Select an existing query to edit.');
+        const result = await this.db.transaction(async tx => {
+            const { organizationId, userId, sourceConnectionId: connectionId } = input;
+            const fingerprint = createHash('sha256')
+                .update(
+                    JSON.stringify(
+                        Object.entries({ ...input, knowledgeModelIds: input.knowledgeModelIds ? selectedModelIds : undefined })
+                            .filter(([, value]) => value !== undefined)
+                            .sort(([a], [b]) => a.localeCompare(b)),
+                    ),
+                )
+                .digest('hex');
+            const request = input.requestId && userId ? { organizationId, userId, requestId: input.requestId } : null;
+            if (request) {
+                const [reserved] = await tx
+                    .insert(querySaveRequests)
+                    .values({ ...request, fingerprint })
+                    .onConflictDoNothing()
+                    .returning();
+                if (!reserved) {
+                    const [previous] = await tx
+                        .select()
+                        .from(querySaveRequests)
+                        .where(
+                            and(
+                                eq(querySaveRequests.organizationId, organizationId),
+                                eq(querySaveRequests.userId, request.userId),
+                                eq(querySaveRequests.requestId, request.requestId),
+                            ),
+                        );
+                    if (previous?.fingerprint !== fingerprint || !previous.queryId || !previous.knowledgeModelId)
+                        throw new DatabaseError('Save request already used. Reopen the dialog to save a different query.', 409);
+                    return { id: previous.queryId, knowledgeModelId: previous.knowledgeModelId };
+                }
+            }
+            const [connection] = await tx
+                .select({ id: connections.id })
+                .from(connections)
+                .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId)))
+                .for('share');
+            if (!connection) throw new Error('Data source unavailable.');
+            const modelIds = newModelName ? [await this.insertModel(tx, { organizationId, name: newModelName }, [connectionId])] : selectedModelIds;
+            for (const knowledgeModelId of modelIds) {
+                await lockDirectory(tx, { organizationId, knowledgeModelId });
+            }
+            const linked = await tx
+                .select({ id: knowledgeModelSources.knowledgeModelId })
+                .from(knowledgeModelSources)
+                .where(and(inArray(knowledgeModelSources.knowledgeModelId, modelIds), eq(knowledgeModelSources.connectionId, connectionId)))
+                .for('share');
+            if (linked.length !== modelIds.length) throw new Error('This data source is not linked to a selected knowledge base.');
+            const knowledgeModelId = modelIds[0]!;
+            let id = input.existingQueryId;
+            if (id) {
+                const [query] = await tx
+                    .select()
+                    .from(savedQueries)
+                    .where(and(eq(savedQueries.id, id), eq(savedQueries.organizationId, organizationId), eq(savedQueries.connectionId, connectionId)))
+                    .for('update');
+                const [personal] = userId
+                    ? await tx
+                          .select({ id: savedQueryCollections.queryId })
+                          .from(savedQueryCollections)
+                          .where(and(eq(savedQueryCollections.queryId, id), eq(savedQueryCollections.userId, userId), isNull(savedQueryCollections.archivedAt)))
+                    : [];
+                const [shared] = await tx
+                    .select({ id: knowledgeQueryMemberships.id })
+                    .from(knowledgeQueryMemberships)
+                    .where(eq(knowledgeQueryMemberships.savedQueryId, id))
+                    .limit(1);
+                if (!query || (!personal && !shared)) throw new Error('Saved query unavailable.');
+                if (input.edit) {
+                    await updateQueryBody(tx, { ...input.edit, organizationId, id });
+                } else if (query.namingSource === 'pending' || query.namingSource === 'rule')
+                    await tx.update(savedQueries).set({ namingSource: 'manual', namingRequestId: null }).where(eq(savedQueries.id, id));
+            } else {
+                if (!input.sql?.trim() || !input.title?.trim()) throw new Error('Enter a title and SQL.');
+                id = 'kvq_' + newEntityId();
+                if (input.collect && userId) {
+                    const repo = new PostgresSavedQueriesRepository();
+                    await repo.init(tx);
+                    await repo.create({
+                        id,
+                        organizationId,
+                        userId,
+                        connectionId,
+                        title: input.title.trim(),
+                        sqlText: input.sql.trim(),
+                        description: input.description,
+                        folderId: input.folderId,
+                    });
+                } else {
+                    await tx
+                        .insert(savedQueries)
+                        .values({ id, organizationId, connectionId, title: input.title.trim(), sqlText: input.sql.trim(), description: input.description?.trim() || null });
+                }
+            }
+            const savedQueryId = id;
+            const memberships = await tx
+                .insert(knowledgeQueryMemberships)
+                .values(
+                    modelIds.map(modelId => ({
+                        id: savedQueryId,
+                        savedQueryId,
+                        knowledgeModelId: modelId,
+                        sourceConnectionId: connectionId,
+                        question: input.question?.trim() ?? '',
+                        sourceType: input.sourceType ?? 'manual',
+                        sourceId: input.sourceId,
+                        createdBy: userId,
+                        updatedBy: userId,
+                    })),
+                )
+                .onConflictDoNothing({ target: [knowledgeQueryMemberships.knowledgeModelId, knowledgeQueryMemberships.savedQueryId] })
+                .returning();
+            if (!memberships.length) {
+                const [existing] = await tx
+                    .select()
+                    .from(knowledgeQueryMemberships)
+                    .where(and(eq(knowledgeQueryMemberships.knowledgeModelId, knowledgeModelId), eq(knowledgeQueryMemberships.savedQueryId, id)));
+                id = existing!.id;
+            } else if (input.knowledgeSourceIds?.length) {
+                await this.writeQuerySources(tx, { knowledgeModelId, queryId: id, sourceIds: input.knowledgeSourceIds, createdBy: userId });
+            }
+            if (input.existingQueryId && input.collect && userId) {
+                const personal = new PostgresSavedQueriesRepository();
+                await personal.init(tx);
+                await personal.collectShared({ organizationId, userId, connectionId, id: input.existingQueryId, folderId: input.folderId });
+            }
+            if (request)
+                await tx
+                    .update(querySaveRequests)
+                    .set({ queryId: id, knowledgeModelId })
+                    .where(
+                        and(eq(querySaveRequests.organizationId, organizationId), eq(querySaveRequests.userId, request.userId), eq(querySaveRequests.requestId, request.requestId)),
+                    );
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(inArray(knowledgeModels.id, modelIds));
+            return { id, knowledgeModelId };
+        });
+        return this.getVerifiedQuery({ organizationId: input.organizationId, ...result });
     }
 
     async updateVerifiedQuery(input: {
+        revision?: number;
         organizationId: string;
         knowledgeModelId: string;
         id: string;
         title: string;
-        question: string;
+        question?: string;
         sql: string;
         description?: string | null;
         knowledgeSourceIds?: string[];
@@ -1393,18 +1753,28 @@ export class PostgresKnowledgeRepository {
     }) {
         await this.db.transaction(async tx => {
             await lockDirectory(tx, input);
-            const [row] = await tx
-                .update(knowledgeVerifiedQueries)
-                .set({
-                    title: input.title.trim(),
-                    question: input.question.trim(),
-                    sql: input.sql.trim(),
-                    description: input.description === undefined ? undefined : input.description?.trim() || null,
-                    updatedBy: input.updatedBy ?? null,
-                })
-                .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
-                .returning();
-            if (!row) throw new Error('Verified query not found.');
+            const [membership] = await tx
+                .select()
+                .from(knowledgeQueryMemberships)
+                .where(and(eq(knowledgeQueryMemberships.id, input.id), eq(knowledgeQueryMemberships.knowledgeModelId, input.knowledgeModelId)));
+            if (!membership) throw new Error('Verified query not found.');
+            const [asset] = await tx
+                .select()
+                .from(savedQueries)
+                .where(and(eq(savedQueries.id, membership.savedQueryId), eq(savedQueries.organizationId, input.organizationId)))
+                .for('update');
+            if (!asset) throw new Error('Verified query not found.');
+            if (input.revision !== undefined && input.revision !== asset.revision) throw new DatabaseError('Query changed. Reload before saving.', 409);
+            const title = input.title.trim();
+            const sqlText = input.sql.trim();
+            const description = input.description === undefined ? asset.description : (input.description?.trim() ?? null);
+            if (title !== asset.title || sqlText !== asset.sqlText || description !== asset.description) {
+                await updateQueryBody(tx, { organizationId: input.organizationId, id: asset.id, title, sqlText, description, revision: asset.revision });
+            }
+            await tx
+                .update(knowledgeQueryMemberships)
+                .set({ question: input.question?.trim(), updatedBy: input.updatedBy })
+                .where(and(eq(knowledgeQueryMemberships.id, input.id), eq(knowledgeQueryMemberships.knowledgeModelId, input.knowledgeModelId)));
             if (input.knowledgeSourceIds) await this.writeQuerySources(tx, { ...input, queryId: input.id, sourceIds: input.knowledgeSourceIds, createdBy: input.updatedBy });
             await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
         });
@@ -1414,7 +1784,7 @@ export class PostgresKnowledgeRepository {
     async getVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         await this.getModel(input);
         const [row] = await this.db
-            .select({ ...getTableColumns(knowledgeVerifiedQueries), updatedByName: user.name })
+            .select({ ...getViewSelectedFields(knowledgeVerifiedQueries), updatedByName: user.name })
             .from(knowledgeVerifiedQueries)
             .leftJoin(user, eq(user.id, sql`COALESCE(${knowledgeVerifiedQueries.updatedBy}, ${knowledgeVerifiedQueries.createdBy})`))
             .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
@@ -1424,8 +1794,12 @@ export class PostgresKnowledgeRepository {
     }
 
     async deleteVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
-        await this.getModel(input);
-        await this.db.delete(knowledgeVerifiedQueries).where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)));
-        await this.touchModel(input.knowledgeModelId);
+        await this.db.transaction(async tx => {
+            await lockDirectory(tx, input);
+            await tx
+                .delete(knowledgeQueryMemberships)
+                .where(and(eq(knowledgeQueryMemberships.id, input.id), eq(knowledgeQueryMemberships.knowledgeModelId, input.knowledgeModelId)));
+            await tx.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, input.knowledgeModelId));
+        });
     }
 }

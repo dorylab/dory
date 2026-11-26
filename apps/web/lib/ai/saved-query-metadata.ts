@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 export const savedQueryMetadataSchema = z.object({
     description: z.string().trim().min(1).max(4000),
-    useWhen: z.string().trim().min(1).max(4000),
 });
 
 function stripJsonFence(value: string) {

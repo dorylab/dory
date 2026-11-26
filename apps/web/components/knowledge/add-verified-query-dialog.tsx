@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { newEntityId } from '@dory/shared/id';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
+import { refreshQueryLibraries } from '@/lib/knowledge-query-cache';
 import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -21,51 +23,79 @@ export function AddVerifiedQueryDialog({
     sql,
     sourceType,
     sourceId,
+    model,
     initialTitle = '',
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    connectionId: string | null | undefined;
-    sql: string | null | undefined;
+    model?: { id: string; dataSources: { connectionId: string; name: string }[] };
+    connectionId?: string | null;
+    sql?: string | null;
     sourceType: string;
     sourceId?: string | null;
     initialTitle?: string;
 }) {
     const t = useTranslations('Knowledge');
+    const client = useQueryClient();
+    const requestId = useRef('');
+    const [selectedConnection, setConnection] = useState('');
+    const [existing, setExisting] = useState('');
+    const [draft, setDraft] = useState('');
+    const targetConnection = model ? selectedConnection : connectionId;
+    const candidates = useQuery({
+        queryKey: ['knowledge-query-options', targetConnection],
+        enabled: open && Boolean(model && targetConnection),
+        queryFn: () =>
+            executeActionClient<{ queries: { id: string; title: string }[] }>(
+                'knowledge.queryOptions',
+                { connectionId: targetConnection },
+                { currentConnectionId: targetConnection },
+            ),
+    });
     const [knowledgeModelId, setKnowledgeModelId] = useState('');
     const [newModelName, setNewModelName] = useState('');
     const [title, setTitle] = useState(initialTitle);
-    const [question, setQuestion] = useState('');
+    const [description, setDescription] = useState('');
     const models = useQuery({
         queryKey: ['knowledge-model-options', connectionId],
-        enabled: open && Boolean(connectionId),
+        enabled: open && !model && Boolean(connectionId),
         queryFn: () => executeActionClient<{ models: KnowledgeModelOption[] }>('knowledge.list', { connectionId }, { currentConnectionId: connectionId ?? null }),
     });
     useEffect(() => {
         if (!open) return;
+        requestId.current = newEntityId();
+        setConnection(model?.dataSources[0]?.connectionId ?? '');
+        setExisting('');
+        setDraft('');
         setTitle(initialTitle);
-        setQuestion('');
+        setDescription('');
         setNewModelName('');
         setKnowledgeModelId('');
-    }, [open, initialTitle]);
+    }, [open, initialTitle, model?.id]);
     useEffect(() => {
         if (!knowledgeModelId && models.data?.models[0]) setKnowledgeModelId(models.data.models[0].id);
     }, [models.data, knowledgeModelId]);
     const save = useMutation({
         mutationFn: async () => {
-            let targetModelId = knowledgeModelId;
-            if (!targetModelId) {
-                if (!connectionId || !newModelName.trim()) throw new Error(t('Errors.ChooseOrCreateModel'));
-                const model = await executeActionClient<KnowledgeModelOption>('knowledge.create', { name: newModelName, connectionIds: [connectionId] });
-                targetModelId = model.id;
-            }
             return executeActionClient(
-                'knowledge.createVerifiedQuery',
-                { knowledgeModelId: targetModelId, sourceConnectionId: connectionId, title, question, sql, sourceType, sourceId },
-                { currentConnectionId: connectionId ?? null },
+                'knowledge.saveQuery',
+                {
+                    requestId: requestId.current,
+                    knowledgeModelId: model?.id || knowledgeModelId || undefined,
+                    newModelName: model || knowledgeModelId ? undefined : newModelName,
+                    sourceConnectionId: targetConnection,
+                    existingQueryId: existing || undefined,
+                    title: existing ? undefined : title,
+                    description: existing ? undefined : description.trim() || null,
+                    sql: existing ? undefined : model ? draft : sql,
+                    sourceType,
+                    sourceId,
+                },
+                { currentConnectionId: targetConnection },
             );
         },
-        onSuccess: () => {
+        onSuccess: async () => {
+            await refreshQueryLibraries(client);
             toast.success(t('VerifiedQueryAdded'));
             onOpenChange(false);
         },
@@ -80,7 +110,43 @@ export function AddVerifiedQueryDialog({
                     <DialogDescription>{t('AddVerifiedQueryDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
-                    {hasModels ? (
+                    {model ? (
+                        <>
+                            <Select
+                                value={selectedConnection}
+                                onValueChange={value => {
+                                    setConnection(value);
+                                    setExisting('');
+                                }}
+                            >
+                                <SelectTrigger aria-label={t('QueryConnection')}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {model.dataSources.map(source => (
+                                        <SelectItem key={source.connectionId} value={source.connectionId}>
+                                            {source.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Select value={existing || '__new'} onValueChange={v => setExisting(v === '__new' ? '' : v)}>
+                                <SelectTrigger aria-label={t('SelectSavedQuery')}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__new">{t('NewSql')}</SelectItem>
+                                    {candidates.data?.queries.map(query => (
+                                        <SelectItem key={query.id} value={query.id}>
+                                            {query.title}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {candidates.isError && <p role="alert">{candidates.error.message}</p>}
+                            {!existing && <Textarea aria-label="SQL" value={draft} onChange={event => setDraft(event.target.value)} />}
+                        </>
+                    ) : hasModels ? (
                         <Select value={knowledgeModelId} onValueChange={setKnowledgeModelId}>
                             <SelectTrigger className="w-full">
                                 <SelectValue />
@@ -96,9 +162,11 @@ export function AddVerifiedQueryDialog({
                     ) : (
                         <Input value={newModelName} onChange={event => setNewModelName(event.target.value)} placeholder={t('NewModelName')} />
                     )}
-                    <Input value={title} onChange={event => setTitle(event.target.value)} placeholder={t('VerifiedQueryTitlePlaceholder')} />
-                    <Textarea value={question} onChange={event => setQuestion(event.target.value)} placeholder={t('VerifiedQueryQuestionPlaceholder')} />
-                    <Textarea className="min-h-40 font-mono" value={sql ?? ''} readOnly />
+                    {!existing && <Input value={title} onChange={event => setTitle(event.target.value)} placeholder={t('VerifiedQueryTitlePlaceholder')} />}
+                    {!existing && (
+                        <Textarea aria-label={t('VerifiedQueryDescription')} value={description} onChange={event => setDescription(event.target.value)} maxLength={4000} />
+                    )}
+                    {!model && <Textarea className="min-h-40 font-mono" value={sql ?? ''} readOnly />}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -106,7 +174,12 @@ export function AddVerifiedQueryDialog({
                     </Button>
                     <Button
                         onClick={() => save.mutate()}
-                        disabled={!connectionId || !sql?.trim() || !title.trim() || !question.trim() || (!knowledgeModelId && !newModelName.trim()) || save.isPending}
+                        disabled={
+                            !targetConnection ||
+                            (!existing && (!(model ? draft : sql)?.trim() || !title.trim())) ||
+                            (!model && !knowledgeModelId && !newModelName.trim()) ||
+                            save.isPending
+                        }
                     >
                         {save.isPending ? t('Saving') : t('AddVerifiedQuery')}
                     </Button>

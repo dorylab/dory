@@ -10,6 +10,7 @@ export const anonymousOwnershipMigrations: AnonymousOwnershipMigration[] = [
 ];
 
 export const anonymousOwnershipNoMigratePolicies: AnonymousOwnershipTablePolicy[] = [
+    { table: 'querySaveRequests', strategy: 'no-migrate', reason: 'Save retries are scoped to the original actor and organization.' },
     {
         table: 'account',
         strategy: 'no-migrate',

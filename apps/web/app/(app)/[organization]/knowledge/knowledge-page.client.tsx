@@ -1,4 +1,6 @@
 'use client';
+import { AddVerifiedQueryDialog } from '@/components/knowledge/add-verified-query-dialog';
+import { EditSavedQueryDialog } from '@/components/knowledge/edit-saved-query-dialog';
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -55,6 +57,8 @@ export type KnowledgeModelView = {
     updatedAt: string;
 };
 type VerifiedQuery = {
+    savedQueryId: string;
+    revision: number;
     id: string;
     knowledgeModelId: string;
     sourceConnectionId: string;
@@ -71,62 +75,6 @@ type VerifiedQuery = {
     updatedAt: string;
 };
 type QuerySource = { sourceId: string; relationType: 'provided' | 'generated' };
-function EditQueryDialog({ query, organization, onClose }: { query: VerifiedQuery; organization: string; onClose: () => void }) {
-    const t = useTranslations('Knowledge');
-    const common = useTranslations('Common');
-    const client = useQueryClient();
-    const [title, setTitle] = useState(query.title);
-    const [question, setQuestion] = useState(query.question);
-    const [sql, setSql] = useState(query.sql);
-    const save = useMutation({
-        mutationFn: () =>
-            executeActionClient(
-                'knowledge.updateVerifiedQuery',
-                {
-                    knowledgeModelId: query.knowledgeModelId,
-                    id: query.id,
-                    title,
-                    question,
-                    sql,
-                },
-                { organizationId: organization },
-            ),
-        onSuccess: async () => {
-            await Promise.all([
-                client.invalidateQueries({ queryKey: modelKey(query.knowledgeModelId) }),
-                client.invalidateQueries({ queryKey: ['knowledge-directory-search', organization] }),
-            ]);
-            onClose();
-        },
-        onError: error => toast.error(error.message),
-    });
-    return (
-        <Dialog
-            open
-            onOpenChange={open => {
-                if (!open && !save.isPending) onClose();
-            }}
-        >
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{t('EditQuery')}</DialogTitle>
-                </DialogHeader>
-                <Input aria-label={t('VerifiedQueryTitlePlaceholder')} value={title} maxLength={240} onChange={event => setTitle(event.target.value)} />
-                <Textarea aria-label={t('VerifiedQueryQuestionPlaceholder')} value={question} maxLength={4000} onChange={event => setQuestion(event.target.value)} />
-                <Textarea aria-label="SQL" className="min-h-40 font-mono" value={sql} maxLength={100000} onChange={event => setSql(event.target.value)} />
-                <DialogFooter>
-                    <Button variant="outline" disabled={save.isPending} onClick={onClose}>
-                        {common('cancel')}
-                    </Button>
-                    <Button disabled={save.isPending || !title.trim() || !question.trim() || !sql.trim()} onClick={() => save.mutate()}>
-                        {common('save')}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 function QuerySourceEditor({
     organization,
     knowledgeModelId,
@@ -556,6 +504,7 @@ function KnowledgeLanding({ organizationSlug, navigation }: { organizationSlug: 
 function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }: { organizationSlug: string; knowledgeModelId: string; navigation: NavigationIndex }) {
     const organization = useOrganizationId();
     const t = useTranslations('Knowledge');
+    const tQueries = useTranslations('SqlConsole.SavedQueries');
     const common = useTranslations('Common');
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -565,6 +514,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
         if (navigation.models.some(m => m.id === knowledgeModelId)) localStorage.setItem('knowledge.last.' + organization + '.' + navigation.userId, knowledgeModelId);
     }, [navigation.models, organization, knowledgeModelId, navigation.userId]);
     const [editingModel, setEditingModel] = useState<KnowledgeModelView | null>(null);
+    const [addingQuery, setAddingQuery] = useState(false);
     const [editingQuery, setEditingQuery] = useState<VerifiedQuery | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [activeTab, setActiveTab] = useQueryState('tab', parseAsString.withDefault('documents'));
@@ -587,7 +537,9 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
     });
     const [search, setSearch] = useQueryState('querySearch', parseAsString.withDefault(''));
     const needle = search.trim().toLocaleLowerCase();
-    const filteredQueries = queries.data?.queries.filter(item => !needle || [item.question, item.title].some(text => text.toLocaleLowerCase().includes(needle)));
+    const filteredQueries = queries.data?.queries.filter(
+        item => !needle || [item.description ?? item.question, item.title].some(text => text.toLocaleLowerCase().includes(needle)),
+    );
     const queryPagination = useKnowledgeListPagination('queries', filteredQueries?.length, {
         id: selectedQueryId,
         index: filteredQueries?.findIndex(query => query.id === selectedQueryId) ?? -1,
@@ -650,7 +602,8 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
 
         return (
             <div id={panelId} className="p-5">
-                <h3 className="mb-2 font-semibold">{item.question}</h3>
+                <h3 className="mb-2 font-semibold">{item.title}</h3>
+                {(item.description ?? item.question) && <p className="mb-3 whitespace-pre-wrap text-sm">{item.description ?? item.question}</p>}
                 <div className="mb-3 space-y-1 text-sm text-muted-foreground">
                     <p>
                         {t('VerifiedQueryDetails.DataSource', {
@@ -674,7 +627,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                     </Button>
                     {navigation.canWrite && (
                         <Button variant="outline" onClick={() => setEditingQuery(item)}>
-                            {t('EditQuery')}
+                            {tQueries('EditSql')}
                         </Button>
                     )}
                     {!connections.isPending && !accessible ? <span className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.Unavailable')}</span> : null}
@@ -739,6 +692,11 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                     {section === 'sources' && <KnowledgeSourcesPanel organization={organization} knowledgeModelId={knowledgeModelId} />}
                     {section === 'queries' && (
                         <div className="space-y-3">
+                            {!selectedQueryId && navigation.canWrite && model && (
+                                <Button size="sm" variant="outline" onClick={() => setAddingQuery(true)}>
+                                    {t('AddVerifiedQuery')}
+                                </Button>
+                            )}
                             {!selectedQueryId && (
                                 <Input
                                     type="search"
@@ -763,8 +721,8 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                                     <table className="w-full table-fixed text-sm">
                                         <thead className="bg-muted/50 text-left text-muted-foreground">
                                             <tr>
-                                                <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Question')}</th>
                                                 <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Query')}</th>
+                                                <th className="p-3 font-medium">{t('VerifiedQueryDescription')}</th>
                                                 <th className="p-3 font-medium">{t('VerifiedQueryDetails.Columns.Updated')}</th>
                                                 <th className="w-12" />
                                             </tr>
@@ -779,15 +737,15 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                                                                 <button
                                                                     type="button"
                                                                     className="flex w-full items-center gap-2 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                                                                    aria-label={item.question || item.title}
+                                                                    aria-label={item.title}
                                                                     onClick={() => void setSelectedQueryId(item.id)}
                                                                 >
                                                                     <IconFileTypeSql className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                                                                    <span className="truncate">{item.question || item.title}</span>
+                                                                    <span className="truncate">{item.title}</span>
                                                                 </button>
                                                             </td>
                                                             <td className="max-w-sm p-3 text-muted-foreground">
-                                                                <span className="block truncate">{item.title}</span>
+                                                                <span className="block truncate">{item.description ?? item.question}</span>
                                                             </td>
                                                             <td className="break-words p-3 text-xs text-muted-foreground">
                                                                 <span className="flex items-center gap-1.5">
@@ -856,7 +814,26 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                         void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
                     }}
                 />
-                {editingQuery && <EditQueryDialog query={editingQuery} organization={organization} onClose={() => setEditingQuery(null)} />}
+                {addingQuery && model && <AddVerifiedQueryDialog open onOpenChange={setAddingQuery} model={model} sourceType="manual" />}
+                {editingQuery && (
+                    <EditSavedQueryDialog
+                        query={{
+                            id: editingQuery.savedQueryId,
+                            queryId: editingQuery.id,
+                            knowledgeModelId: editingQuery.knowledgeModelId,
+                            title: editingQuery.title,
+                            description: editingQuery.description ?? editingQuery.question,
+                            sqlText: editingQuery.sql,
+                            revision: editingQuery.revision,
+                        }}
+                        connectionId={editingQuery.sourceConnectionId}
+                        organizationId={organization}
+                        onSaved={async removedModelIds => {
+                            if (selectedQueryId === editingQuery.id && removedModelIds.includes(knowledgeModelId)) await setSelectedQueryId(null);
+                        }}
+                        onClose={() => setEditingQuery(null)}
+                    />
+                )}
                 <DeleteKnowledgeModelDialog
                     modelName={deleteDialogOpen ? model.name : null}
                     isPending={deleteModel.isPending}

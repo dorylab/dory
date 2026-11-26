@@ -1,8 +1,8 @@
-import { and, eq, isNull, exists } from 'drizzle-orm';
+import { and, sql, eq, isNull, exists } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
 import type { NamingSource } from '@dory/shared/utils/sql-name';
 import { getClient } from '@dory/database/postgres/client';
-import { artifacts, resultSets, savedQueries, tabs } from '@dory/database/postgres/schemas';
+import { artifacts, resultSets, savedQueries, savedQueryCollections, tabs } from '@dory/database/postgres/schemas';
 
 export type SqlNamingTarget =
     | { type: 'tab'; id: string; userId: string; connectionId: string; workId?: string | null }
@@ -41,16 +41,27 @@ export class PostgresSqlNamingRepository {
         if (target.type === 'savedQuery') {
             const [row] = await this.db
                 .update(savedQueries)
-                .set({ ...update, title: input.title })
+                .set({ ...update, title: input.title, revision: sql`${savedQueries.revision}+1` })
                 .where(
                     and(
                         eq(savedQueries.id, target.id),
                         eq(savedQueries.organizationId, target.organizationId),
-                        eq(savedQueries.userId, target.userId),
+
                         eq(savedQueries.sqlText, input.sql),
                         eq(savedQueries.namingSource, 'rule'),
                         isNull(savedQueries.namingRequestId),
-                        isNull(savedQueries.archivedAt),
+                        exists(
+                            this.db
+                                .select({ id: savedQueryCollections.queryId })
+                                .from(savedQueryCollections)
+                                .where(
+                                    and(
+                                        eq(savedQueryCollections.queryId, savedQueries.id),
+                                        eq(savedQueryCollections.userId, target.userId),
+                                        isNull(savedQueryCollections.archivedAt),
+                                    ),
+                                ),
+                        ),
                     ),
                 )
                 .returning({ id: savedQueries.id });
@@ -97,16 +108,27 @@ export class PostgresSqlNamingRepository {
         } else if (target.type === 'savedQuery') {
             await this.db
                 .update(savedQueries)
-                .set({ ...update, title: input.title })
+                .set({ ...update, title: input.title, revision: sql`${savedQueries.revision}+1` })
                 .where(
                     and(
                         eq(savedQueries.id, target.id),
                         eq(savedQueries.organizationId, target.organizationId),
-                        eq(savedQueries.userId, target.userId),
+
                         eq(savedQueries.namingSource, 'pending'),
                         eq(savedQueries.namingRequestId, input.requestId),
                         eq(savedQueries.sqlText, input.sql),
-                        isNull(savedQueries.archivedAt),
+                        exists(
+                            this.db
+                                .select({ id: savedQueryCollections.queryId })
+                                .from(savedQueryCollections)
+                                .where(
+                                    and(
+                                        eq(savedQueryCollections.queryId, savedQueries.id),
+                                        eq(savedQueryCollections.userId, target.userId),
+                                        isNull(savedQueryCollections.archivedAt),
+                                    ),
+                                ),
+                        ),
                     ),
                 );
         } else {

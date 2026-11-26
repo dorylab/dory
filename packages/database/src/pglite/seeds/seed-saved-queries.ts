@@ -1,6 +1,6 @@
 import { newEntityId } from '@dory/shared/id';
 import { getPgliteClient } from '@dory/database/postgres/client/pglite';
-import { savedQueries, organizations, user } from '@dory/database/postgres/schemas';
+import { savedQueries, savedQueryCollections, organizations, user } from '@dory/database/postgres/schemas';
 import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
 
 const TOTAL = 500;
@@ -55,7 +55,10 @@ async function main() {
             };
         });
 
-        await db.insert(savedQueries).values(rows);
+        await db.transaction(async tx => {
+            await tx.insert(savedQueries).values(rows);
+            await tx.insert(savedQueryCollections).values(rows.map(row => ({ queryId: row.id, userId, context: row.context })));
+        });
     }
 
     console.log(`Inserted ${TOTAL} saved queries for organization ${organizationId}.`);

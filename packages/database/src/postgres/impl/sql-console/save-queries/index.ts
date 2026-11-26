@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, isNull, max, or } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, max, sql } from 'drizzle-orm';
 
-import { savedQueries, savedQueryFolders } from '@dory/database/postgres/schemas';
+import { savedQueries, savedQueryCollections as favorites, knowledgeQueryMemberships, savedQueryFolders, type SavedQuery } from '@dory/database/postgres/schemas';
 import { getClient } from '@dory/database/postgres/client';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
@@ -11,9 +11,15 @@ import { translateDatabase } from '@dory/database/i18n';
 // mid-point insertions before a rebalance is needed (1000→500→250→…→1).
 // With a max of 50 queries per scope this is more than sufficient.
 const POSITION_GAP = 1000;
-const MAX_QUERIES_PER_SCOPE = 50;
+export type QueryDatabase = Pick<PostgresDBClient, 'select' | 'insert' | 'update' | 'delete' | 'execute' | 'transaction'>;
+const { queryId: collectionId, ...collectionFields } = getTableColumns(favorites);
+const fields = { ...getTableColumns(savedQueries), ...collectionFields };
+export type PersonalScope = { organizationId: string; userId: string; connectionId: string };
+function scope(input: PersonalScope) {
+    return and(eq(savedQueries.organizationId, input.organizationId), eq(savedQueries.connectionId, input.connectionId), eq(favorites.userId, input.userId));
+}
 
-export type SavedQueryRecord = typeof savedQueries.$inferSelect;
+export type SavedQueryRecord = SavedQuery;
 
 export type SavedQueryCreateInput = {
     id?: string;
@@ -40,6 +46,7 @@ export type SavedQueryUpdateInput = {
     archivedAt?: string | Date | null;
     folderId?: string | null;
     position?: number | null;
+    revision?: number;
 };
 
 export type SavedQueryListParams = {
@@ -50,281 +57,219 @@ export type SavedQueryListParams = {
     connectionId: string;
 };
 
+export async function updateQueryBody(
+    db: QueryDatabase,
+    input: { organizationId: string; id: string; title?: string | null; description?: string | null; sqlText?: string | null; revision?: number },
+) {
+    const [row] = await db
+        .update(savedQueries)
+        .set({
+            title: input.title ?? undefined,
+            description: input.description,
+            sqlText: input.sqlText ?? undefined,
+            ...(input.title !== undefined || input.sqlText !== undefined ? { namingSource: 'manual' as const, namingRequestId: null } : {}),
+            updatedAt: new Date(),
+            revision: sql`${savedQueries.revision}+1`,
+        })
+        .where(
+            and(
+                eq(savedQueries.id, input.id),
+                eq(savedQueries.organizationId, input.organizationId),
+                input.revision === undefined ? undefined : eq(savedQueries.revision, input.revision),
+            ),
+        )
+        .returning();
+    if (!row) throw new DatabaseError('Query changed. Reload before saving.', 409);
+    return row;
+}
+
 export class PostgresSavedQueriesRepository {
-    private db!: PostgresDBClient;
+    private db!: QueryDatabase;
 
-    private normalizeConnectionId(value: string) {
-        return value.trim();
+    async init(db?: QueryDatabase) {
+        const client = db ?? (await getClient());
+        if (!client) throw new DatabaseError(translateDatabase('Database.Errors.ConnectionFailed'), 500);
+        this.db = client;
     }
 
-    private buildConnectionScopeCondition(connectionId: string) {
-        const normalized = this.normalizeConnectionId(connectionId);
-        return or(eq(savedQueries.connectionId, normalized), isNull(savedQueries.connectionId));
-    }
-
-    private async assertFolderAccess(params: { organizationId: string; userId: string; folderId: string; connectionId: string }): Promise<void> {
-        const [folder] = await this.db
+    private async assertFolder(db: QueryDatabase, input: PersonalScope, id: string) {
+        const [row] = await db
             .select({ id: savedQueryFolders.id })
             .from(savedQueryFolders)
             .where(
                 and(
-                    eq(savedQueryFolders.id, params.folderId),
-                    eq(savedQueryFolders.organizationId, params.organizationId),
-                    eq(savedQueryFolders.userId, params.userId),
-                    eq(savedQueryFolders.connectionId, this.normalizeConnectionId(params.connectionId)),
+                    eq(savedQueryFolders.id, id),
+                    eq(savedQueryFolders.organizationId, input.organizationId),
+                    eq(savedQueryFolders.connectionId, input.connectionId),
+                    eq(savedQueryFolders.userId, input.userId),
                 ),
             )
-            .limit(1);
-
-        if (!folder) {
-            throw new DatabaseError(translateDatabase('Database.Errors.FolderNotFound'), 404);
-        }
+            .for('share');
+        if (!row) throw new DatabaseError(translateDatabase('Database.Errors.FolderNotFound'), 404);
     }
 
-    async init() {
-        try {
-            this.db = (await getClient()) as PostgresDBClient;
-            if (!this.db) {
-                throw new DatabaseError(translateDatabase('Database.Errors.ConnectionFailed'), 500);
-            }
-        } catch (e) {
-            console.error(translateDatabase('Database.Logs.InitFailed'), e);
-            throw new DatabaseError(translateDatabase('Database.Errors.InitFailed'), 500);
-        }
-    }
-
-    private assertInited() {
-        if (!this.db) throw new DatabaseError(translateDatabase('Database.Errors.NotInitialized'), 500);
-    }
-
-    async create(input: SavedQueryCreateInput): Promise<SavedQueryRecord> {
-        this.assertInited();
-
-        const now = new Date();
+    async create(input: SavedQueryCreateInput) {
         const id = input.id ?? newEntityId();
-        const normalizedConnectionId = this.normalizeConnectionId(input.connectionId);
-
-        if (input.folderId) {
-            await this.assertFolderAccess({
-                organizationId: input.organizationId,
-                userId: input.userId,
-                folderId: input.folderId,
-                connectionId: normalizedConnectionId,
-            });
-        }
-
-        // Get max position for this connection's current scope (root or folder).
-        const [maxRow] = await this.db
-            .select({ maxPos: max(savedQueries.position) })
-            .from(savedQueries)
-            .where(
-                and(
-                    eq(savedQueries.organizationId, input.organizationId),
-                    eq(savedQueries.userId, input.userId),
-                    isNull(savedQueries.archivedAt),
-                    this.buildConnectionScopeCondition(normalizedConnectionId),
-                    input.folderId ? eq(savedQueries.folderId, input.folderId) : isNull(savedQueries.folderId),
-                ),
-            );
-
-        const position = (maxRow?.maxPos ?? 0) + POSITION_GAP;
-
-        const [row] = await this.db
-            .insert(savedQueries)
-            .values({
-                id,
-                organizationId: input.organizationId,
-                userId: input.userId,
-                title: input.title,
-                namingSource: input.autoName ? 'rule' : 'manual',
-                description: input.description ?? null,
-                sqlText: input.sqlText,
-                context: (input.context ?? {}) as any,
-                tags: (input.tags ?? []) as any,
-                workId: input.workId ?? null,
-                connectionId: normalizedConnectionId,
-                folderId: input.folderId ?? null,
-                position,
-                createdAt: now,
-                updatedAt: now,
-                archivedAt: null,
-            })
-            .returning();
-
-        if (!row) throw new DatabaseError(translateDatabase('Database.Errors.SaveQueryFailed'), 500);
-        return row as SavedQueryRecord;
-    }
-
-    async getById(params: { organizationId: string; userId: string; id: string; includeArchived?: boolean; connectionId: string }): Promise<SavedQueryRecord | null> {
-        this.assertInited();
-
-        const conds = [eq(savedQueries.id, params.id), eq(savedQueries.organizationId, params.organizationId), eq(savedQueries.userId, params.userId)];
-        if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
-        const connectionCond = this.buildConnectionScopeCondition(params.connectionId);
-        if (connectionCond) {
-            conds.push(connectionCond);
-        }
-
-        const [row] = await this.db
-            .select()
-            .from(savedQueries)
-            .where(and(...conds))
-            .limit(1);
-
-        return (row as SavedQueryRecord | undefined) ?? null;
-    }
-
-    async listAll(params: { organizationId: string; userId: string }): Promise<SavedQueryRecord[]> {
-        this.assertInited();
-
-        const rows = await this.db
-            .select()
-            .from(savedQueries)
-            .where(and(eq(savedQueries.organizationId, params.organizationId), eq(savedQueries.userId, params.userId), isNull(savedQueries.archivedAt)))
-            .orderBy(asc(savedQueries.position), desc(savedQueries.updatedAt));
-
-        return rows as SavedQueryRecord[];
-    }
-
-    async list(params: SavedQueryListParams): Promise<SavedQueryRecord[]> {
-        this.assertInited();
-
-        const conds = [eq(savedQueries.organizationId, params.organizationId), eq(savedQueries.userId, params.userId)];
-        if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
-        const connectionCond = this.buildConnectionScopeCondition(params.connectionId);
-        if (connectionCond) {
-            conds.push(connectionCond);
-        }
-
-        let query = this.db
-            .select()
-            .from(savedQueries)
-            .where(and(...conds))
-            .orderBy(asc(savedQueries.position), desc(savedQueries.updatedAt));
-
-        if (params.limit && params.limit > 0) {
-            query = (query as any).limit(params.limit);
-        }
-
-        const rows = await query;
-        return rows as SavedQueryRecord[];
-    }
-
-    async update(params: { organizationId: string; userId: string; id: string; patch: SavedQueryUpdateInput; connectionId: string }): Promise<SavedQueryRecord> {
-        this.assertInited();
-
-        const data = params.patch;
-        const updatePayload: Record<string, any> = {};
-        let hasChanges = false;
-
-        const assign = (key: string, value: any) => {
-            updatePayload[key] = value ?? null;
-            hasChanges = true;
-        };
-
-        if (data.title !== undefined) {
-            assign('title', data.title);
-            assign('namingSource', 'manual');
-            assign('namingRequestId', null);
-        }
-        if (data.sqlText !== undefined) {
-            // Cancel any in-flight name without scheduling another generation.
-            assign('namingSource', 'manual');
-            assign('namingRequestId', null);
-        }
-        if (data.description !== undefined) assign('description', data.description);
-        if (data.sqlText !== undefined) assign('sqlText', data.sqlText);
-        if (data.context !== undefined) assign('context', data.context ?? {});
-        if (data.tags !== undefined) assign('tags', data.tags ?? []);
-        if (data.workId !== undefined) assign('workId', data.workId);
-        if (data.archivedAt !== undefined) {
-            assign('archivedAt', data.archivedAt ? new Date(data.archivedAt) : null);
-        }
-        if (data.folderId !== undefined) {
-            if (data.folderId) {
-                await this.assertFolderAccess({
-                    organizationId: params.organizationId,
-                    userId: params.userId,
-                    folderId: data.folderId,
-                    connectionId: params.connectionId,
+        return this.db.transaction(async tx => {
+            if (input.folderId) await this.assertFolder(tx, input, input.folderId);
+            const [inserted] = await tx
+                .insert(savedQueries)
+                .values({
+                    id,
+                    organizationId: input.organizationId,
+                    connectionId: input.connectionId,
+                    title: input.title,
+                    description: input.description,
+                    sqlText: input.sqlText,
+                    namingSource: input.autoName ? 'rule' : 'manual',
+                })
+                .onConflictDoNothing()
+                .returning();
+            if (inserted) {
+                const [last] = await tx
+                    .select({ position: max(favorites.position) })
+                    .from(favorites)
+                    .innerJoin(savedQueries, eq(savedQueries.id, collectionId))
+                    .where(and(scope(input), isNull(favorites.archivedAt), input.folderId ? eq(favorites.folderId, input.folderId) : isNull(favorites.folderId)));
+                await tx.insert(favorites).values({
+                    queryId: id,
+                    userId: input.userId,
+                    folderId: input.folderId,
+                    position: (last?.position ?? 0) + POSITION_GAP,
+                    context: input.context ?? {},
+                    tags: input.tags ?? [],
+                    workId: input.workId,
                 });
             }
-            assign('folderId', data.folderId);
-        }
-        if (data.position !== undefined) assign('position', data.position ?? 0);
+            const [row] = await tx
+                .select(fields)
+                .from(favorites)
+                .innerJoin(savedQueries, eq(savedQueries.id, collectionId))
+                .where(and(scope(input), eq(collectionId, id)));
+            if (!row || (!inserted && (row.sqlText !== input.sqlText || row.archivedAt))) throw new DatabaseError('Query ID is already in use.', 409);
+            return row;
+        });
+    }
 
-        if (hasChanges) {
-            await this.db
-                .update(savedQueries)
-                .set({ ...updatePayload, updatedAt: new Date() } as any)
-                .where(
-                    and(
-                        eq(savedQueries.id, params.id),
-                        eq(savedQueries.organizationId, params.organizationId),
-                        eq(savedQueries.userId, params.userId),
-                        this.buildConnectionScopeCondition(params.connectionId),
-                    ),
-                );
-        }
+    async collectShared(input: PersonalScope & { id: string; folderId?: string | null }) {
+        return this.db.transaction(async tx => {
+            const [asset] = await tx
+                .select({ id: savedQueries.id })
+                .from(savedQueries)
+                .innerJoin(knowledgeQueryMemberships, eq(knowledgeQueryMemberships.savedQueryId, savedQueries.id))
+                .where(and(eq(savedQueries.id, input.id), eq(savedQueries.connectionId, input.connectionId), eq(savedQueries.organizationId, input.organizationId)))
+                .limit(1)
+                .for('update', { of: savedQueries });
+            if (!asset) throw new DatabaseError('Shared query not found.', 404);
+            if (input.folderId) await this.assertFolder(tx, input, input.folderId);
+            const [last] = await tx
+                .select({ position: max(favorites.position) })
+                .from(favorites)
+                .innerJoin(savedQueries, eq(savedQueries.id, collectionId))
+                .where(and(scope(input), isNull(favorites.archivedAt), input.folderId ? eq(favorites.folderId, input.folderId) : isNull(favorites.folderId)));
+            await tx
+                .insert(favorites)
+                .values({ queryId: input.id, userId: input.userId, folderId: input.folderId, position: (last?.position ?? 0) + POSITION_GAP })
+                .onConflictDoUpdate({ target: [favorites.queryId, favorites.userId], set: { archivedAt: null } });
+            return { id: input.id };
+        });
+    }
 
+    async getById(input: PersonalScope & { id: string; includeArchived?: boolean }) {
         const [row] = await this.db
-            .select()
-            .from(savedQueries)
-            .where(
-                and(
-                    eq(savedQueries.id, params.id),
-                    eq(savedQueries.organizationId, params.organizationId),
-                    eq(savedQueries.userId, params.userId),
-                    this.buildConnectionScopeCondition(params.connectionId),
-                ),
-            )
-            .limit(1);
-
-        if (!row) throw new DatabaseError(translateDatabase('Database.Errors.SavedQueryNotFound'), 404);
-        return row as SavedQueryRecord;
+            .select(fields)
+            .from(favorites)
+            .innerJoin(savedQueries, eq(savedQueries.id, collectionId))
+            .where(and(scope(input), eq(collectionId, input.id), input.includeArchived ? undefined : isNull(favorites.archivedAt)));
+        return row ?? null;
     }
 
-    async delete(params: { organizationId: string; userId: string; id: string; connectionId: string }): Promise<void> {
-        this.assertInited();
-
-        await this.db
-            .update(savedQueries)
-            .set({ archivedAt: new Date(), updatedAt: new Date() } as any)
-            .where(
-                and(
-                    eq(savedQueries.id, params.id),
-                    eq(savedQueries.organizationId, params.organizationId),
-                    eq(savedQueries.userId, params.userId),
-                    this.buildConnectionScopeCondition(params.connectionId),
-                ),
-            );
+    async listAll(input: Pick<PersonalScope, 'userId' | 'organizationId'>) {
+        return this.db
+            .select(fields)
+            .from(favorites)
+            .innerJoin(savedQueries, eq(savedQueries.id, collectionId))
+            .where(and(eq(savedQueries.organizationId, input.organizationId), eq(favorites.userId, input.userId), isNull(favorites.archivedAt)))
+            .orderBy(asc(favorites.position), desc(savedQueries.updatedAt));
     }
 
-    async reorder(params: { organizationId: string; userId: string; folderId: string | null; orderedIds: string[]; connectionId: string }): Promise<void> {
-        this.assertInited();
+    async list(input: SavedQueryListParams) {
+        return this.db
+            .select(fields)
+            .from(favorites)
+            .innerJoin(savedQueries, eq(savedQueries.id, collectionId))
+            .where(and(scope(input), input.includeArchived ? undefined : isNull(favorites.archivedAt)))
+            .orderBy(asc(favorites.position), desc(savedQueries.updatedAt))
+            .limit(input.limit ?? 2147483647);
+    }
 
-        if (params.folderId) {
-            await this.assertFolderAccess({
-                organizationId: params.organizationId,
-                userId: params.userId,
-                folderId: params.folderId,
-                connectionId: params.connectionId,
-            });
-        }
+    async update(input: PersonalScope & { id: string; patch: SavedQueryUpdateInput; allowSharedEdit?: boolean }) {
+        const { patch } = input;
+        return this.db.transaction(async tx => {
+            const condition = and(scope(input), eq(savedQueries.id, input.id));
+            const [current] = await tx.select(fields).from(savedQueries).innerJoin(favorites, eq(collectionId, savedQueries.id)).where(condition).for('update');
+            if (!current) throw new DatabaseError(translateDatabase('Database.Errors.SavedQueryNotFound'), 404);
+            if (patch.title !== undefined || patch.description !== undefined || patch.sqlText !== undefined) {
+                const [membership] = await tx
+                    .select({ id: knowledgeQueryMemberships.id })
+                    .from(knowledgeQueryMemberships)
+                    .where(eq(knowledgeQueryMemberships.savedQueryId, input.id))
+                    .limit(1);
+                if (membership && !input.allowSharedEdit) throw new DatabaseError('Knowledge write access is required to edit a shared query.', 403);
+                await updateQueryBody(tx, { ...patch, id: input.id, organizationId: input.organizationId });
+            }
+            const { context, tags, workId, folderId, position, archivedAt } = patch;
+            if ([context, tags, workId, folderId, position, archivedAt].some(value => value !== undefined)) {
+                if (folderId) await this.assertFolder(tx, input, folderId);
+                await tx
+                    .update(favorites)
+                    .set({
+                        context: context === null ? {} : context,
+                        tags: tags === null ? [] : tags,
+                        workId,
+                        folderId,
+                        position: position === null ? 0 : position,
+                        archivedAt: archivedAt == null ? archivedAt : new Date(archivedAt),
+                    })
+                    .where(and(eq(collectionId, input.id), eq(favorites.userId, input.userId)));
+            }
+            const [row] = await tx.select(fields).from(savedQueries).innerJoin(favorites, eq(collectionId, savedQueries.id)).where(condition);
+            return row!;
+        });
+    }
 
-        for (let i = 0; i < params.orderedIds.length; i++) {
-            await this.db
-                .update(savedQueries)
-                .set({ position: (i + 1) * POSITION_GAP, updatedAt: new Date() } as any)
-                .where(
-                    and(
-                        eq(savedQueries.id, params.orderedIds[i]),
-                        eq(savedQueries.organizationId, params.organizationId),
-                        eq(savedQueries.userId, params.userId),
-                        this.buildConnectionScopeCondition(params.connectionId),
-                        params.folderId === null ? isNull(savedQueries.folderId) : eq(savedQueries.folderId, params.folderId),
-                    ),
-                );
-        }
+    async delete(input: PersonalScope & { id: string }) {
+        await this.db.transaction(async tx => {
+            const [row] = await tx
+                .select({ id: savedQueries.id })
+                .from(savedQueries)
+                .innerJoin(favorites, eq(collectionId, savedQueries.id))
+                .where(and(scope(input), eq(savedQueries.id, input.id)))
+                .for('update');
+            if (row) await tx.delete(favorites).where(and(eq(collectionId, input.id), eq(favorites.userId, input.userId)));
+        });
+    }
+
+    async reorder(input: PersonalScope & { folderId: string | null; orderedIds: string[] }) {
+        await this.db.transaction(async tx => {
+            if (input.folderId) await this.assertFolder(tx, input, input.folderId);
+            const allowed = tx
+                .select({ id: savedQueries.id })
+                .from(savedQueries)
+                .where(and(eq(savedQueries.organizationId, input.organizationId), eq(savedQueries.connectionId, input.connectionId)));
+            for (const [index, id] of input.orderedIds.entries()) {
+                await tx
+                    .update(favorites)
+                    .set({ position: (index + 1) * POSITION_GAP })
+                    .where(
+                        and(
+                            eq(collectionId, id),
+                            eq(favorites.userId, input.userId),
+                            inArray(collectionId, allowed),
+                            input.folderId ? eq(favorites.folderId, input.folderId) : isNull(favorites.folderId),
+                        ),
+                    );
+            }
+        });
     }
 }

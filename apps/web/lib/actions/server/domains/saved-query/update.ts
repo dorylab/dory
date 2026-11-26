@@ -1,3 +1,4 @@
+import { hasActionScope } from '@dory/actions';
 import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
 import { resolveConnectionId } from '../../operation-context';
@@ -25,6 +26,7 @@ export const savedQueryUpdateAction = defineWebAction({
             userId: ctx.userId,
             id: input.id,
             connectionId: resolveConnectionId(ctx, input),
+            allowSharedEdit: ctx.actor.type === 'user' && hasActionScope(ctx.actor.scopes, 'knowledge:write'),
             patch: input.patch as any,
         }),
 });

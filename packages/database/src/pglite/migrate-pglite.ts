@@ -51,6 +51,11 @@ export async function migratePgliteDB() {
     try {
         await runDrizzleMigrate(db);
     } catch (err) {
+        // Rebuilding from a partial recovery snapshot would discard knowledge memberships.
+        // Preserve the original database when the unified-query migration rolls back.
+        const queryMigration = migrations.find(m => m.sql.some(statement => statement.includes('CREATE TABLE saved_query_collections')));
+        const failedQuery = err instanceof Error && 'query' in err ? err.query : null;
+        if (typeof failedQuery === 'string' && queryMigration?.sql.some(statement => statement.trim() === failedQuery.trim())) throw err;
         console.warn(translateDatabase('Database.Errors.PgliteMigrationFailed'), {
             error: err,
             message: err instanceof Error ? err.message : String(err),

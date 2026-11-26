@@ -27,6 +27,7 @@ test('anonymous delete cleanup covers all anonymous workspace business tables', 
             'organizationMembers',
             'organizations',
             'queryAudit',
+            'querySaveRequests',
             'savedQueries',
             'savedQueryFolders',
             'syncOperations',
@@ -57,5 +58,5 @@ test('anonymous delete cleanup deletes organizations after dependent resources',
 });
 
 test('anonymous merge cleanup removes organization-scoped no-migrate tables before deleting the source organization', () => {
-    assert.deepEqual([...anonymousMergeCleanupTableCoverage.organizationScoped].sort(), ['aiUsageEvents', 'aiUsageTraces', 'invitation', 'queryAudit']);
+    assert.deepEqual([...anonymousMergeCleanupTableCoverage.organizationScoped].sort(), ['aiUsageEvents', 'aiUsageTraces', 'invitation', 'queryAudit', 'querySaveRequests']);
 });

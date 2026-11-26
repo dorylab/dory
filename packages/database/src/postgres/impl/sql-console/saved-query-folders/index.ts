@@ -1,7 +1,7 @@
 import { and, asc, count, eq, max } from 'drizzle-orm';
 
 import { savedQueryFolders } from '@dory/database/postgres/schemas';
-import { savedQueries } from '@dory/database/postgres/schemas';
+import { savedQueryCollections } from '@dory/database/postgres/schemas';
 import { getClient } from '@dory/database/postgres/client';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
@@ -203,30 +203,24 @@ export class PostgresSavedQueryFoldersRepository {
     async delete(params: { id: string; organizationId: string; userId: string; connectionId: string }): Promise<void> {
         this.assertInited();
 
-        // Move queries in this folder back to root level
-        await this.db
-            .update(savedQueries)
-            .set({ folderId: null, updatedAt: new Date() } as any)
-            .where(
-                and(
-                    eq(savedQueries.folderId, params.id),
-                    eq(savedQueries.organizationId, params.organizationId),
-                    eq(savedQueries.userId, params.userId),
-                    eq(savedQueries.connectionId, params.connectionId),
-                ),
-            );
-
-        // Delete the folder
-        await this.db
-            .delete(savedQueryFolders)
-            .where(
-                and(
-                    eq(savedQueryFolders.id, params.id),
-                    eq(savedQueryFolders.organizationId, params.organizationId),
-                    eq(savedQueryFolders.userId, params.userId),
-                    eq(savedQueryFolders.connectionId, params.connectionId),
-                ),
-            );
+        await this.db.transaction(async tx => {
+            const [folder] = await tx
+                .delete(savedQueryFolders)
+                .where(
+                    and(
+                        eq(savedQueryFolders.id, params.id),
+                        eq(savedQueryFolders.organizationId, params.organizationId),
+                        eq(savedQueryFolders.userId, params.userId),
+                        eq(savedQueryFolders.connectionId, params.connectionId),
+                    ),
+                )
+                .returning({ id: savedQueryFolders.id });
+            if (folder)
+                await tx
+                    .update(savedQueryCollections)
+                    .set({ folderId: null })
+                    .where(and(eq(savedQueryCollections.userId, params.userId), eq(savedQueryCollections.folderId, params.id)));
+        });
     }
 
     async reorder(params: { organizationId: string; userId: string; connectionId: string; orderedIds: string[] }): Promise<void> {

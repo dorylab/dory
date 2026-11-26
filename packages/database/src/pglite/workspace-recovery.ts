@@ -18,6 +18,7 @@ import {
     organizationMembers,
     organizations,
     savedQueries,
+    savedQueryCollections,
     savedQueryFolders,
     session,
     tabs,
@@ -324,19 +325,30 @@ const RECOVERY_TABLES: RecoveryTableSpec[] = [
         columns: [
             { target: 'id', required: true },
             { target: 'organizationId', sources: ['organization_id', 'team_id'], required: true },
-            { target: 'userId', sources: ['user_id'], required: true },
             { target: 'title', required: true },
             { target: 'description' },
-            { target: 'sqlText', sources: ['sql_text'], required: true },
-            { target: 'connectionId', sources: ['connection_id'], required: true },
+            { target: 'sqlText', required: true },
+            { target: 'connectionId', required: true },
+            { target: 'revision' },
+            { target: 'namingSource' },
+            { target: 'namingRequestId' },
+            { target: 'createdAt', required: true },
+            { target: 'updatedAt', required: true },
+        ],
+    },
+    {
+        key: 'saved_query_collections',
+        sourceTables: ['saved_query_collections', 'saved_queries'],
+        targetTable: savedQueryCollections,
+        columns: [
+            { target: 'queryId', sources: ['query_id', 'id'], required: true },
+            { target: 'userId', required: true },
+            { target: 'folderId' },
+            { target: 'position' },
             { target: 'context' },
             { target: 'tags' },
-            { target: 'folderId', sources: ['folder_id'] },
-            { target: 'position' },
-            { target: 'workId', sources: ['work_id'] },
-            { target: 'createdAt', sources: ['created_at'], required: true },
-            { target: 'updatedAt', sources: ['updated_at'], required: true },
-            { target: 'archivedAt', sources: ['archived_at'] },
+            { target: 'workId' },
+            { target: 'archivedAt' },
         ],
     },
     {
@@ -710,6 +722,15 @@ export async function importWorkspaceRecoverySnapshot(targetDb: PostgresDBClient
     for (const spec of RECOVERY_TABLES) {
         const tableSnapshot = snapshot.tables.find(table => table.key === spec.key);
 
+        if (spec.key === 'saved_query_collections' && !tableSnapshot) {
+            // Recovery snapshots exported before 0051 kept personal metadata beside the SQL.
+            const legacy = snapshot.tables.find(table => table.key === 'saved_queries');
+            const collections = (legacy?.rows ?? [])
+                .filter(row => row.userId)
+                .map(({ id, userId, folderId, position, context, tags, workId, archivedAt }) => ({ queryId: id, userId, folderId, position, context, tags, workId, archivedAt }));
+            await insertRows(targetDb, savedQueryCollections, collections, spec.key);
+            continue;
+        }
         if (!tableSnapshot || tableSnapshot.rows.length === 0) {
             continue;
         }

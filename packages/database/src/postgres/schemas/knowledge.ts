@@ -8,8 +8,9 @@ import type {
 } from '@dory/shared/types/knowledge-document-draft';
 import { newEntityId } from '@dory/shared/id';
 import { sql } from 'drizzle-orm';
-import { type AnyPgColumn, check, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, check, index, integer, jsonb, pgTable, pgView, foreignKey, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
+import { savedQueries } from './saved-queries';
 import { connections } from './connections';
 
 export type KnowledgeSourceRelationType = 'provided' | 'generated';
@@ -287,11 +288,11 @@ export const knowledgeConnectorSyncJobs = pgTable(
     ],
 );
 
-export const knowledgeVerifiedQueries = pgTable(
-    'knowledge_verified_queries',
+export const knowledgeQueryMemberships = pgTable(
+    'knowledge_query_memberships',
     {
         id: text('id')
-            .primaryKey()
+            .notNull()
             .$defaultFn(() => `kvq_${newEntityId()}`),
         knowledgeModelId: text('knowledge_model_id')
             .notNull()
@@ -299,10 +300,10 @@ export const knowledgeVerifiedQueries = pgTable(
         sourceConnectionId: text('source_connection_id')
             .notNull()
             .references(() => connections.id, { onDelete: 'cascade' }),
-        title: text('title').notNull(),
+        savedQueryId: text('saved_query_id')
+            .notNull()
+            .references(() => savedQueries.id, { onDelete: 'cascade' }),
         question: text('question').notNull(),
-        sql: text('sql').notNull(),
-        description: text('description'),
         sourceType: text('source_type').notNull().default('manual'),
         sourceId: text('source_id'),
         createdBy: text('created_by'),
@@ -314,10 +315,29 @@ export const knowledgeVerifiedQueries = pgTable(
             .$onUpdateFn(() => new Date()),
     },
     table => [
-        index('idx_knowledge_verified_queries_model_updated').on(table.knowledgeModelId, table.updatedAt),
-        index('idx_knowledge_verified_queries_connection').on(table.sourceConnectionId),
+        primaryKey({ columns: [table.knowledgeModelId, table.id] }),
+        uniqueIndex('uq_memberships_model_query').on(table.knowledgeModelId, table.savedQueryId),
+        index('idx_memberships_saved_query').on(table.savedQueryId),
     ],
 );
+
+export const knowledgeVerifiedQueries = pgView('knowledge_verified_query_details', {
+    id: text('id').notNull(),
+    savedQueryId: text('saved_query_id').notNull(),
+    knowledgeModelId: text('knowledge_model_id').notNull(),
+    sourceConnectionId: text('source_connection_id').notNull(),
+    title: text('title').notNull(),
+    question: text('question').notNull(),
+    sql: text('sql').notNull(),
+    description: text('description'),
+    revision: integer('revision').notNull(),
+    sourceType: text('source_type').notNull(),
+    sourceId: text('source_id'),
+    createdBy: text('created_by'),
+    updatedBy: text('updated_by'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+}).existing();
 
 export const knowledgeQuerySources = pgTable(
     'knowledge_query_sources',
@@ -325,14 +345,19 @@ export const knowledgeQuerySources = pgTable(
         knowledgeSourceId: text('knowledge_source_id')
             .notNull()
             .references(() => knowledgeSources.id, { onDelete: 'cascade' }),
-        queryId: text('query_id')
-            .notNull()
-            .references(() => knowledgeVerifiedQueries.id, { onDelete: 'cascade' }),
+        knowledgeModelId: text('knowledge_model_id').notNull(),
+        queryId: text('query_id').notNull(),
         relationType: text('relation_type').$type<KnowledgeSourceRelationType>().notNull(),
         createdBy: text('created_by'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
-    table => [primaryKey({ name: 'pk_knowledge_query_sources', columns: [table.knowledgeSourceId, table.queryId] }), index('idx_knowledge_query_sources_query').on(table.queryId)],
+    table => [
+        foreignKey({ columns: [table.knowledgeModelId, table.queryId], foreignColumns: [knowledgeQueryMemberships.knowledgeModelId, knowledgeQueryMemberships.id] }).onDelete(
+            'cascade',
+        ),
+        primaryKey({ name: 'pk_knowledge_query_sources', columns: [table.knowledgeSourceId, table.queryId] }),
+        index('idx_knowledge_query_sources_query').on(table.queryId),
+    ],
 );
 
 export type KnowledgeModel = typeof knowledgeModels.$inferSelect;

@@ -17,6 +17,7 @@
         "./postgres/client/pglite": "./src/postgres/client/pglite.ts",
         "./postgres/schemas": "./src/postgres/schemas/index.ts",
         "./postgres/schemas/*": "./src/postgres/schemas/*.ts",
+        "./postgres/impl/organization/anonymous-resource-merge": "./src/postgres/impl/organization/anonymous-resource-merge.ts",
         "./postgres/impl/*": "./src/postgres/impl/*/index.ts",
         "./postgres/migrate": "./src/postgres/migrate.ts",
         "./pglite/*": "./src/pglite/*.ts"

@@ -11,6 +11,7 @@ import { readWorkspace, writeWorkspace } from '../../policies';
 import { documentGenerationTaskActions } from './document-generation-tasks';
 import { documentGenerationActions } from './document-generation';
 import { folderConnectorActions } from './folder-connectors';
+import { unifiedQueryActions } from './unified-queries';
 import { linearKnowledgeActions } from './linear';
 import {
     knowledgeConnectorSchema,
@@ -405,9 +406,10 @@ export const knowledgeUpdateVerifiedQueryAction = defineWebAction({
     risk: 'write',
     requiresConfirmation: false,
     inputSchema: modelIdInput.extend({
+        revision: z.number().int().positive().optional(),
         id: z.string().min(1),
         title: z.string().min(1).max(240),
-        question: z.string().min(1).max(4000),
+        question: z.string().min(1).max(4000).optional(),
         sql: z.string().min(1).max(100_000),
         description: z.string().max(4000).nullable().optional(),
         knowledgeSourceIds: z.array(z.string()).max(100).optional(),
@@ -742,6 +744,7 @@ export const knowledgeDeleteConnectorAction = defineWebAction({
 });
 
 export const knowledgeActions = [
+    ...unifiedQueryActions,
     ...documentGenerationActions,
     ...documentGenerationTaskActions,
     ...linearKnowledgeActions,

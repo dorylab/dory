@@ -10,6 +10,7 @@ export const anonymousDeleteCleanupTableCoverage = {
         'chatMessages',
         'chatSessionState',
         'chatSessions',
+        'querySaveRequests',
         'savedQueries',
         'savedQueryFolders',
         'queryAudit',
@@ -24,7 +25,7 @@ export const anonymousDeleteCleanupTableCoverage = {
 } as const;
 
 export const anonymousMergeCleanupTableCoverage = {
-    organizationScoped: ['queryAudit', 'aiUsageEvents', 'aiUsageTraces', 'invitation'],
+    organizationScoped: ['queryAudit', 'aiUsageEvents', 'aiUsageTraces', 'invitation', 'querySaveRequests'],
 } as const;
 
 type DeleteAnonymousUserResult = {
@@ -40,6 +41,7 @@ export async function cleanupNonMigratedAnonymousOrganizations(
         return;
     }
 
+    await tx.delete(schema.querySaveRequests).where(inArray(schema.querySaveRequests.organizationId, organizationIds));
     await tx.delete(schema.queryAudit).where(inArray(schema.queryAudit.organizationId, organizationIds));
     await tx.delete(schema.aiUsageEvents).where(inArray(schema.aiUsageEvents.organizationId, organizationIds));
     await tx.delete(schema.aiUsageTraces).where(inArray(schema.aiUsageTraces.organizationId, organizationIds));

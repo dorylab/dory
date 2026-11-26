@@ -37,7 +37,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { AuditItem } from '@dory/shared/types/audit';
 import type { NamingMetadata } from '@dory/shared/utils/sql-name';
 import { cn } from '@dory/web-utils';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAtom, useAtomValue } from 'jotai';
 import { FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -53,11 +53,13 @@ import { useRouteConnectionId } from '../../hooks/useRouteConnectionId';
 import { isQueryHistoryResultRestorable } from '../../query-history-result-restore';
 import { QUERY_HISTORY_UPDATED_EVENT, savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
 import { CreateFolderDialog } from './create-folder-dialog';
+import { EditSavedQueryDialog, type EditableQuery } from '@/components/knowledge/edit-saved-query-dialog';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
 import { FolderItem, type FolderData } from './folder-item';
 import { MoveToFolderDialog } from './move-to-folder-dialog';
 
 export type SavedQueryItem = NamingMetadata & {
+    revision?: number;
     id: string;
     title: string;
     description?: string | null;
@@ -231,6 +233,23 @@ export function SavedQueriesSidebar({ onSelect, connectionId: requestedConnectio
     const [hoverBlockOnceId, setHoverBlockOnceId] = useState<string | null>(null);
     const [queryViewByConnection, setQueryViewByConnection] = useAtom(savedQueriesViewByConnectionAtom);
     const queryView = connectionId ? (queryViewByConnection[connectionId] ?? 'my-queries') : 'my-queries';
+    const [editingQuery, setEditingQuery] = useState<EditableQuery | null>(null);
+    const collect = useMutation({
+        mutationFn: (id: string) => executeActionClient('knowledge.collectQuery', { id, connectionId }, { currentConnectionId: connectionId }),
+        onSuccess: () => {
+            window.dispatchEvent(new CustomEvent('saved-queries-updated'));
+        },
+    });
+    const shared = useQuery({
+        queryKey: ['knowledge-connection-queries', connectionId],
+        enabled: Boolean(connectionId) && queryView === 'knowledge-queries',
+        queryFn: () =>
+            executeActionClient<{ queries: (SavedQueryItem & { knowledgeModelId: string; queryId: string })[] }>(
+                'knowledge.listConnectionQueries',
+                { connectionId },
+                { currentConnectionId: connectionId },
+            ),
+    });
     const isMyQueriesView = queryView === 'my-queries';
     const [historyItems, setHistoryItems] = useState<QueryHistoryItem[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -611,7 +630,7 @@ export function SavedQueriesSidebar({ onSelect, connectionId: requestedConnectio
         }
         setRenameSaving(true);
         try {
-            await commitPatch(renameTarget.id, { title: next });
+            await commitPatch(renameTarget.id, { title: next, revision: renameTarget.revision });
             setRenameOpen(false);
         } finally {
             setRenameSaving(false);
@@ -975,6 +994,7 @@ export function SavedQueriesSidebar({ onSelect, connectionId: requestedConnectio
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent side="right" align="start" sideOffset={8} className="min-w-32 z-50">
+                                <DropdownMenuItem onClick={() => setEditingQuery(item)}>{t('SavedQueries.EditSql')}</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openRename(item)}>{t('SavedQueries.Rename')}</DropdownMenuItem>
                                 {folders.length > 0 && (
                                     <DropdownMenuSub>
@@ -1043,11 +1063,47 @@ export function SavedQueriesSidebar({ onSelect, connectionId: requestedConnectio
                     </SelectTrigger>
                     <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
                         <SelectItem value="my-queries">{t('SavedQueries.MyQueries')}</SelectItem>
+                        <SelectItem value="knowledge-queries">{t('SavedQueries.KnowledgeQueries')}</SelectItem>
                         <SelectItem value="query-history">{t('SavedQueries.QueryHistory')}</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
-            {isMyQueriesView ? (
+            {queryView === 'knowledge-queries' ? (
+                <div className="overflow-y-auto">
+                    {shared.isError ? (
+                        <p role="alert">{shared.error.message}</p>
+                    ) : shared.isPending ? (
+                        <p>{t('SavedQueries.Loading')}</p>
+                    ) : shared.data.queries.length ? (
+                        shared.data.queries.map(query => (
+                            <div key={query.id} className="flex items-center">
+                                <Button variant="ghost" className="min-w-0 flex-1 justify-start" onClick={() => onSelect?.({ ...query, connectionId })}>
+                                    <span className="truncate">{query.title}</span>
+                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" aria-label={t('SavedQueries.MoreActions')}>
+                                            <MoreHorizontal />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem onClick={() => setEditingQuery(query)}>{t('SavedQueries.EditSql')}</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => collect.mutate(query.id)}>{t('SavedQueries.Collect')}</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+                        ))
+                    ) : (
+                        <p className="p-2 text-sm text-muted-foreground">{t('SavedQueries.NoKnowledgeQueries')}</p>
+                    )}
+                    {collect.isError && <p role="alert">{collect.error.message}</p>}
+                    {collect.isSuccess && (
+                        <p role="status" className="text-sm text-muted-foreground">
+                            {t('SavedQueries.Collected')}
+                        </p>
+                    )}
+                </div>
+            ) : isMyQueriesView ? (
                 <>
                     <div className="flex w-full min-w-0 max-w-full items-center gap-1.5 px-1">
                         <Input
@@ -1300,6 +1356,7 @@ export function SavedQueriesSidebar({ onSelect, connectionId: requestedConnectio
                 </DialogContent>
             </Dialog>
 
+            {editingQuery && connectionId && <EditSavedQueryDialog query={editingQuery} connectionId={connectionId} onClose={() => setEditingQuery(null)} />}
             {/* Rename folder dialog */}
             <Dialog open={renameFolderOpen} onOpenChange={setRenameFolderOpen}>
                 <DialogContent>

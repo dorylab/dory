@@ -13,6 +13,7 @@ function toSavedQueryPayload(record: any) {
     return {
         id: record.id,
         title: record.title,
+        revision: record.revision,
         namingSource: record.namingSource,
         namingRequestId: record.namingRequestId,
         description: record.description ?? null,

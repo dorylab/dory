@@ -39,6 +39,8 @@ export const knowledgeModelOutputSchema = z.object({
 
 export const knowledgeSourceRelationTypeSchema = z.enum(['provided', 'generated']);
 export const knowledgeVerifiedQuerySchema = z.object({
+    savedQueryId: z.string(),
+    revision: z.number(),
     id: z.string(),
     knowledgeModelId: z.string(),
     sourceConnectionId: z.string(),

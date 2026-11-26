@@ -22,6 +22,8 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         name: 'Docs ' + id,
         connectionIds: [connectionId],
     });
+    const secondBaseName = 'Reference ' + id;
+    const secondBase = await action<{ id: string }>('knowledge.create', { name: secondBaseName, connectionIds: [connectionId] });
     const scope = { knowledgeModelId };
     const tabsCreated: string[] = [];
     const sql = 'SELECT 17 AS knowledge_document_test /* ' + id + ' */';
@@ -32,8 +34,7 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
 
     const access = Promise.withResolvers<void>();
     await page.route('**/api/actions/execute', async route => {
-        if (route.request().postDataJSON()?.actionId === 'ai.savedQueryMetadata')
-            return route.fulfill({ json: { ok: true, data: { description: 'Test query', useWhen: 'Verify saved query navigation' } } });
+        if (route.request().postDataJSON()?.actionId === 'ai.savedQueryMetadata') return route.fulfill({ json: { ok: true, data: { description: 'Test query' } } });
         if (route.request().postDataJSON()?.actionId === 'knowledge.listDirectory') await access.promise;
         await route.fallback();
     });
@@ -67,11 +68,11 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         await preview.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(preview.getByRole('heading', { name: 'Use UTC' })).toBeVisible();
         await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: 'Verified Queries', exact: true }).click();
-        const filter = page.getByRole('searchbox', { name: 'Search by question or title' });
+        const filter = page.getByRole('searchbox', { name: 'Search by title or description' });
         await filter.fill('missing');
         await expect(page.getByText('No matching queries.')).toBeVisible();
         await filter.fill(title);
-        await page.getByRole('button', { name: question, exact: true }).click();
+        await page.getByRole('main').getByRole('table').getByRole('button', { name: title, exact: true }).click();
         await expect(page.locator('pre').getByText(sql)).toBeVisible();
         const created = page.waitForResponse(response => response.url().endsWith('/api/actions/execute') && response.request().postDataJSON()?.actionId === 'tab.create');
         const executions: string[] = [];
@@ -103,14 +104,27 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         const saveDialog = page.getByRole('dialog', { name: 'Save Query' });
         const savedTitle = 'Saved from workspace ' + id;
         await saveDialog.getByPlaceholder('Leave blank to name automatically').fill(savedTitle);
-        await saveDialog.getByRole('combobox', { name: 'Knowledge base', exact: true }).click();
-        await page.getByRole('option', { name: 'Docs ' + id, exact: true }).click();
+        const addToKnowledge = saveDialog.getByRole('checkbox', { name: 'Add to knowledge base', exact: true });
+        await expect(addToKnowledge).not.toBeChecked();
+        await addToKnowledge.check();
+        await expect(saveDialog.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Test query');
+        await expect(saveDialog.getByText('Use when', { exact: true })).toHaveCount(0);
+        const knowledgeBases = saveDialog.getByRole('group', { name: 'Knowledge bases', exact: true });
+        await expect(knowledgeBases.getByRole('checkbox', { name: 'Docs ' + id, exact: true })).not.toBeChecked();
+        await expect(saveDialog.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+        await knowledgeBases.getByRole('checkbox', { name: 'Docs ' + id, exact: true }).check();
+        await knowledgeBases.getByRole('checkbox', { name: secondBaseName, exact: true }).check();
         const savedResponse = page.waitForResponse(
-            response => response.url().endsWith('/api/actions/execute') && response.request().postDataJSON()?.actionId === 'savedQuery.create',
+            response => response.url().endsWith('/api/actions/execute') && response.request().postDataJSON()?.actionId === 'knowledge.saveQuery',
         );
         await saveDialog.getByRole('button', { name: 'Save', exact: true }).click();
         savedQueryId = (await (await savedResponse).json()).data.id;
         await expect(saveDialog).toBeHidden();
+        expect((await action<{ savedQuery: { id: string; sqlText: string } }>('savedQuery.get', { id: savedQueryId, connectionId })).savedQuery.sqlText).toBe(sql);
+        for (const modelId of [knowledgeModelId, secondBase.id]) {
+            const membership = await action<{ savedQueryId: string }>('knowledge.getVerifiedQuery', { knowledgeModelId: modelId, id: savedQueryId });
+            expect(membership.savedQueryId).toBe(savedQueryId);
+        }
         await page.goto(detailUrl + '?tab=queries');
         await page.getByRole('navigation', { name: 'Directory' }).getByRole('button', { name: savedTitle, exact: true }).click();
         await expect(page.locator('pre')).toHaveText(sql);
@@ -119,6 +133,7 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         if (savedQueryId) await action('savedQuery.delete', { connectionId, id: savedQueryId });
         for (const tabId of tabsCreated) await action('tab.delete', { connectionId, tabId });
         await action('knowledge.delete', scope, 'knowledge.delete');
+        await action('knowledge.delete', { knowledgeModelId: secondBase.id }, 'knowledge.delete');
     }
 });
 
@@ -264,7 +279,8 @@ test('switches knowledge bases, protects edits and resolves global search result
         await expect(page).toHaveURL(new RegExp('query=' + query.id));
         await expect(page.locator('pre')).toHaveText('SELECT 1');
         await page.reload();
-        await expect(page.getByRole('heading', { name: 'Which orders?' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: term + ' query', exact: true })).toBeVisible();
+        await expect(page.getByText('Which orders?', { exact: true })).toBeVisible();
         const firstPage = await action('knowledge.searchDirectory', { query: term, limit: 1 });
         const secondPage = await action('knowledge.searchDirectory', { query: term, limit: 1, offset: 1 });
         expect(firstPage.total).toBe(5);
@@ -320,7 +336,10 @@ test('finds read-only YAML and edits a verified query without losing its source'
     }
     const { connections } = await action<{ connections: { connection: { id: string } }[] }>('connection.list', {});
     const connectionId = connections[0]!.connection.id;
-    const { id } = await action<{ id: string }>('knowledge.create', { name: 'SQL sources ' + randomUUID(), connectionIds: [connectionId] });
+    const name = 'SQL sources ' + randomUUID();
+    const nextName = name + ' shared';
+    const { id } = await action<{ id: string }>('knowledge.create', { name, connectionIds: [connectionId] });
+    const nextBase = await action<{ id: string }>('knowledge.create', { name: nextName, connectionIds: [connectionId] });
     const scope = { knowledgeModelId: id };
     try {
         const fileName = 'Reference-' + randomUUID() + '.yaml';
@@ -335,9 +354,15 @@ test('finds read-only YAML and edits a verified query without losing its source'
         });
         const path = '/' + organization + '/knowledge/' + id;
         await page.goto(path + '?tab=queries&query=' + query.id);
-        await page.getByRole('button', { name: 'Edit query', exact: true }).click();
-        const dialog = page.getByRole('dialog', { name: 'Edit query' });
-        await dialog.getByLabel('SQL', { exact: true }).fill('SELECT 2');
+        await page.getByRole('button', { name: 'Edit SQL', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: 'Edit SQL' });
+        const currentMembership = dialog.getByRole('checkbox', { name, exact: true });
+        const nextMembership = dialog.getByRole('checkbox', { name: nextName, exact: true });
+        await expect(currentMembership).toBeChecked();
+        await expect(nextMembership).not.toBeChecked();
+        await expect(dialog.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('How many orders?');
+        await nextMembership.check();
+        await dialog.getByRole('textbox', { name: 'SQL', exact: true }).fill('SELECT 2');
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(dialog).toBeHidden();
         await expect(page.locator('#verified-query-details-' + query.id + ' pre')).toHaveText('SELECT 2');
@@ -352,7 +377,88 @@ test('finds read-only YAML and edits a verified query without losing its source'
         });
         expect((await response.json()).ok).toBe(false);
         expect((await action<{ contentText: string }>('knowledge.getKnowledgeSource', { ...scope, id: source.id })).contentText).toBe('orders: []');
+        await page.goto(path + '?tab=queries&query=' + query.id);
+        await page.getByRole('button', { name: 'Edit SQL', exact: true }).click();
+        await expect(currentMembership).toBeChecked();
+        await expect(nextMembership).toBeChecked();
+        await currentMembership.uncheck();
+        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(dialog).toBeHidden();
+        await expect.poll(() => new URL(page.url()).searchParams.get('query')).toBeNull();
+        const { queries } = await action<{ queries: { id: string }[] }>('knowledge.listVerifiedQueries', scope);
+        expect(queries).toEqual([]);
+        expect(await action('knowledge.getVerifiedQuery', { knowledgeModelId: nextBase.id, id: query.id })).toMatchObject({ savedQueryId: query.id, sql: 'SELECT 2' });
     } finally {
         await action('knowledge.delete', scope, 'knowledge.delete');
+        await action('knowledge.delete', { knowledgeModelId: nextBase.id }, 'knowledge.delete');
+    }
+});
+
+test('collects existing SQL into a knowledge base and edits the same query from the data source', async ({ page, request }) => {
+    test.setTimeout(120000);
+    page.setDefaultTimeout(15000);
+    await page.goto('/');
+    await openDataSources(page);
+    const organization = new URL(page.url()).pathname.split('/')[1];
+    async function action<T>(actionId: string, input: Record<string, unknown>, confirmationToken?: string): Promise<T> {
+        const response = await request.post('/api/actions/execute', { data: { actionId, input, confirmationToken } });
+        const body = await response.json();
+        expect(body.ok, actionId + ' ' + body.message).toBe(true);
+        return body.data;
+    }
+    const { connections } = await action<{ connections: { connection: { id: string } }[] }>('connection.list', {});
+    const connectionId = connections[0].connection.id;
+    const name = 'Shared ' + randomUUID();
+    const query = await action<{ id: string }>('savedQuery.create', { connectionId, title: name, sqlText: 'SELECT 65' });
+    const model = await action<{ id: string }>('knowledge.create', { name, connectionIds: [connectionId] });
+    const scope = { knowledgeModelId: model.id };
+    const secondName = name + ' next';
+    const second = await action<{ id: string }>('knowledge.create', { name: secondName, connectionIds: [connectionId] });
+    try {
+        await page.goto('/' + organization + '/knowledge/' + model.id + '?tab=queries');
+        await page.getByRole('button', { name: 'Add Verified Query', exact: true }).click();
+        const dialog = page.getByRole('dialog');
+        await dialog.getByRole('combobox', { name: 'Choose a saved query' }).click();
+        await page.getByRole('option', { name, exact: true }).click();
+        await dialog.getByRole('button', { name: 'Add Verified Query' }).click();
+        await expect(dialog).toBeHidden();
+        const membership = await action<{ id: string; savedQueryId: string }>('knowledge.getVerifiedQuery', { ...scope, id: query.id });
+        expect(membership.savedQueryId).toBe(query.id);
+        await page.goto('/' + organization + '/' + connectionId + '/sql-console');
+        await page.getByRole('tab', { name: 'Queries', exact: true }).click();
+        await page.getByRole('combobox').filter({ hasText: 'My Queries' }).click();
+        await page.getByRole('option', { name: 'In knowledge bases' }).click();
+        const row = page.getByRole('button', { name, exact: true });
+        await row.locator('..').getByRole('button', { name: 'More actions' }).click();
+        await page.getByRole('menuitem', { name: 'Edit SQL' }).click();
+        await expect(dialog.getByRole('checkbox', { name, exact: true })).toBeChecked();
+        await expect(dialog.getByRole('checkbox', { name: secondName, exact: true })).not.toBeChecked();
+        await dialog.getByRole('textbox', { name: 'SQL', exact: true }).fill('SELECT 66');
+        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(dialog).toBeHidden();
+        expect((await action<{ sql: string }>('knowledge.getVerifiedQuery', { ...scope, id: query.id })).sql).toBe('SELECT 66');
+        expect((await action<{ savedQuery: { sqlText: string } }>('savedQuery.get', { connectionId, id: query.id })).savedQuery.sqlText).toBe('SELECT 66');
+        await page.getByRole('combobox').filter({ hasText: 'In knowledge bases' }).click();
+        await page.getByRole('option', { name: 'My Queries' }).click();
+        const personalRow = page.getByRole('button', { name: new RegExp(name) });
+        await personalRow.locator('..').getByRole('button', { name: 'More actions' }).click();
+        await page.getByRole('menuitem', { name: 'Edit SQL' }).click();
+        await dialog.getByRole('textbox', { name: 'Description', exact: true }).fill('Updated during sharing');
+        await dialog.getByRole('textbox', { name: 'SQL', exact: true }).fill('SELECT 67');
+        await dialog.getByRole('checkbox', { name, exact: true }).uncheck();
+        await dialog.getByRole('checkbox', { name: secondName, exact: true }).check();
+        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(dialog).toBeHidden();
+        const { queries } = await action<{ queries: { id: string }[] }>('knowledge.listVerifiedQueries', scope);
+        expect(queries).toEqual([]);
+        expect(await action('knowledge.getVerifiedQuery', { knowledgeModelId: second.id, id: query.id })).toMatchObject({
+            savedQueryId: query.id,
+            sql: 'SELECT 67',
+            description: 'Updated during sharing',
+        });
+    } finally {
+        await action('knowledge.delete', scope, 'knowledge.delete');
+        await action('knowledge.delete', { knowledgeModelId: second.id }, 'knowledge.delete');
+        await action('savedQuery.delete', { connectionId, id: query.id });
     }
 });

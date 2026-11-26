@@ -151,11 +151,19 @@ export class KnowledgeDirectory {
                     knowledgeModelId: knowledgeVerifiedQueries.knowledgeModelId,
                     id: knowledgeVerifiedQueries.id,
                     title: knowledgeVerifiedQueries.title,
-                    question: knowledgeVerifiedQueries.question,
                 })
                 .from(knowledgeVerifiedQueries)
                 .innerJoin(knowledgeModels, eq(knowledgeVerifiedQueries.knowledgeModelId, knowledgeModels.id))
-                .where(and(owned, or(sql`strpos(lower(${knowledgeVerifiedQueries.title}), ${term}) > 0`, sql`strpos(lower(${knowledgeVerifiedQueries.question}), ${term}) > 0`))),
+                .where(
+                    and(
+                        owned,
+                        or(
+                            sql`strpos(lower(${knowledgeVerifiedQueries.title}), ${term}) > 0`,
+                            sql`strpos(lower(${knowledgeVerifiedQueries.description}), ${term}) > 0`,
+                            sql`strpos(lower(${knowledgeVerifiedQueries.question}), ${term}) > 0`,
+                        ),
+                    ),
+                ),
         ]);
         const hits: NavigationHit[] = [];
         const matches = (name: string) => name.toLocaleLowerCase().includes(term);
