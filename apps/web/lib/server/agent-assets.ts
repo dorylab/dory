@@ -2,9 +2,9 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import type { DBService } from '@dory/database';
+import { knowledgeSearchTokens, matchKnowledge } from '@dory/shared/utils/knowledge-search';
 
 import { allowsKnowledge, resolveKnowledgeAccess, type KnowledgeAccess } from './knowledge-access';
-import { knowledgeSearchTokens } from './knowledge-search-tokens';
 
 export const AGENT_ASSET_KINDS = ['artifact', 'verified_query', 'knowledge_source'] as const;
 export type AgentAssetKind = (typeof AGENT_ASSET_KINDS)[number];
@@ -144,27 +144,13 @@ function isConnectionAllowed(connectionIds: string[], allowedConnectionIds?: str
     return connectionIds.some(connectionId => allowed.has(connectionId));
 }
 
-function scoreAsset(query: string, title: string, aliases: string[], secondary: string) {
-    if (!query) return 1;
-    const needle = query.toLocaleLowerCase();
-    const normalizedTitle = title.toLocaleLowerCase();
-    if (normalizedTitle === needle) return 100;
-    if (normalizedTitle.startsWith(needle)) return 80;
-    if (normalizedTitle.includes(needle)) return 60;
-    if (aliases.some(alias => alias.toLocaleLowerCase() === needle)) return 50;
-    if (aliases.some(alias => alias.toLocaleLowerCase().includes(needle))) return 40;
-    if (secondary.toLocaleLowerCase().includes(needle)) return 20;
-    const phrases = knowledgeSearchTokens(query).filter(term => term !== needle);
-    const haystack = [normalizedTitle, ...aliases.map(alias => alias.toLocaleLowerCase()), secondary.toLocaleLowerCase()].join(' ');
-    return phrases.reduce((score, phrase) => Math.max(score, haystack.includes(phrase) ? Math.min(19, 4 + phrase.length) : 0), 0);
-}
-
 function unavailable(): never {
     throw Object.assign(new Error('Agent asset is unavailable.'), { code: 'AGENT_ASSET_NOT_FOUND', status: 404 });
 }
 
 export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsInput) {
     const query = input.query?.trim() ?? '';
+    const terms = knowledgeSearchTokens(query);
     const kinds = new Set(input.kinds?.length ? input.kinds : AGENT_ASSET_KINDS);
     const access = input.knowledgeAccess ?? resolveKnowledgeAccess({}, input.allowedConnectionIds ?? null);
     const candidates: RankedAsset[] = [];
@@ -186,7 +172,11 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
         const connectionIds = artifact.connectionId ? [artifact.connectionId] : [];
         if (input.connectionId && !connectionIds.includes(input.connectionId)) continue;
         if (!isConnectionAllowed(connectionIds, input.allowedConnectionIds)) continue;
-        const score = scoreAsset(query, artifact.title, [], [artifact.connectionName, artifact.runTitle, artifact.comparisonName, artifact.sourceType].filter(Boolean).join(' '));
+        const score = matchKnowledge(
+            terms,
+            artifact.title,
+            [artifact.connectionName, artifact.runTitle, artifact.comparisonName, artifact.sourceType].filter(Boolean).join(' '),
+        ).score;
         if (!score) continue;
         candidates.push({
             ref: artifactAgentAssetRef(artifact.id),
@@ -219,7 +209,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                 const rulesRef = model.analysisRulesSourceId ? knowledgeSourceAgentAssetRef(model.id, model.analysisRulesSourceId) : null;
                 if (kinds.has('knowledge_source') && model.businessContextMd?.trim()) {
                     const guide = guideSummary(input, model, access);
-                    const score = scoreAsset(query, guide.title, [model.name], model.businessContextMd);
+                    const score = matchKnowledge(terms, guide.title, model.name + ' ' + model.businessContextMd).score;
                     if (score) candidates.push({ ...guide, rulesRef, score });
                 }
                 const [queries, sources, sourceMatches] = await Promise.all([
@@ -238,6 +228,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                               knowledgeModelId: model.id,
                               connectionId: input.connectionId ?? undefined,
                               query,
+                              limit: null, // Apply pagination after ranking across all authorized bases.
                           })
                         : Promise.resolve([]),
                 ]);
@@ -246,7 +237,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                 for (const verifiedQuery of queries) {
                     const connectionIds = [verifiedQuery.sourceConnectionId];
                     if (!allowsKnowledge(access, model.id, connectionIds)) continue;
-                    const score = scoreAsset(query, verifiedQuery.title, [], [verifiedQuery.question, verifiedQuery.description].filter(Boolean).join(' '));
+                    const score = matchKnowledge(terms, verifiedQuery.title, [verifiedQuery.question, verifiedQuery.description].filter(Boolean).join(' ')).score;
                     if (!score) continue;
                     candidates.push({
                         ref: verifiedQueryAgentAssetRef(model.id, verifiedQuery.id),
@@ -274,7 +265,7 @@ export async function searchAgentAssets(db: DBService, input: SearchAgentAssetsI
                     if (!allowsKnowledge(access, model.id, connectionIds)) continue;
                     const excerpt = sourceExcerptById.get(source.id);
                     const readablePath = source.connectorProvider === 'linear' ? null : source.remotePath;
-                    const score = scoreAsset(query, source.fileName, [readablePath ?? ''], [source.format, source.connectorProvider, excerpt].filter(Boolean).join(' '));
+                    const score = matchKnowledge(terms, source.fileName, [readablePath, source.format, source.connectorProvider, excerpt].filter(Boolean).join(' ')).score;
                     if (!score) continue;
                     candidates.push({
                         ref: knowledgeSourceAgentAssetRef(model.id, source.id),

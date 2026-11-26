@@ -26,6 +26,7 @@ import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Pool } from 'pg';
+import { z } from 'zod';
 
 const require = createRequire(import.meta.url);
 const serverOnlyPath = require.resolve('server-only');
@@ -1276,7 +1277,7 @@ test('Chat and external MCP use the same Knowledge scope independently of the SQ
         assert.match(String(external.semanticContext), /Advertising/);
         assert.doesNotMatch(String(external.semanticContext), /"name":"Orders"/);
         const ref = 'dory://knowledge/' + ads.id + '/sources/' + ads.analysisRulesSourceId;
-        const sdk = createChatAnalysis({
+        const sdkOptions = {
             db: f.db,
             ...scope,
             chatId: 'kb',
@@ -1288,7 +1289,16 @@ test('Chat and external MCP use the same Knowledge scope independently of the SQ
             signal: new AbortController().signal,
             access: ctx.access,
             resolveWork: async () => chat,
-        });
+        } satisfies Parameters<typeof createChatAnalysis>[0];
+        const sdk = createChatAnalysis(sdkOptions);
+        const disabled = createChatAnalysis({ ...sdkOptions, analysisScope: { ...manual, knowledgeMode: 'none' } });
+        const readSchema = disabled.tools.read_asset!.inputSchema;
+        const searchSchema = disabled.tools.search_assets!.inputSchema;
+        assert.ok(readSchema instanceof z.ZodObject && searchSchema instanceof z.ZodObject);
+        assert.ok(readSchema.safeParse({ ref: 'dory://artifacts/result' }).success);
+        assert.ok(!readSchema.safeParse({ ref }).success);
+        assert.ok(searchSchema.safeParse({ kinds: ['artifact'] }).success);
+        assert.ok(!searchSchema.safeParse({ kinds: ['verified_query'] }).success);
         const sdkRead = (await sdk.tools.read_asset!.execute!({ ref }, call('sdk-cross-connection'))) as { citation: { ref: string } };
         assert.equal(sdkRead.citation.ref, ref);
         for (const identity of [{ workId: chat.workId, requestId: 'kb-chat' }, { externalSessionId: 'kb-mcp' }]) {

@@ -419,6 +419,7 @@ export async function handleChatRequest(req: Request) {
             ? await resolveSemanticModelContext(db, {
                   organizationId,
                   scope: knowledgeScope,
+                  question: currentUserText,
                   allowedConnectionIds:
                       ambientAccess && !ambientAccess.permissions.connection.read ? [] : analysisScope?.connectionMode === 'auto' ? analysisScope.connectionIds : undefined,
                   review: progressCheckpoints,
@@ -584,13 +585,15 @@ export async function handleChatRequest(req: Request) {
                 : null,
             reports ? await reports.instructions(isLocalAiAgentProvider(execution.providerKey)) : null,
             analysisScope
-                ? `Analysis scope: ${JSON.stringify(analysisScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
+                ? `Analysis scope: ${JSON.stringify(analysisScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} For empty lookups verify entity identifiers and filter casing in the current source. Ground every amount in returned rows. For coverage questions inspect the source’s coverage metadata and distinguish period ends from filing dates. Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
                 : null,
             currentTurnExecutionInstruction,
             analysisScope?.knowledgeMode !== 'none'
                 ? 'Search Knowledge when the user explicitly requests it, or when a business metric, rule, filter or join requires a definition that is not already established by reliable in-scope context. Read relevant search results before using them. For formatting, adding a chart to an existing report, or other work adequately supported by the existing report and evidence, do not search merely because Knowledge is enabled. If Knowledge is needed but unavailable or inconclusive, explain the limitation and ask for clarification when the definition is material; never invent it.'
                 : null,
-            analysisScope?.knowledgeMode === 'none' ? 'Knowledge is disabled. Do not search, read or use Knowledge assets.' : null,
+            analysisScope?.knowledgeMode === 'none'
+                ? 'Knowledge documents and verified queries are disabled. Selected database connections remain available. Resolve identifiers, amounts and dates through the selected database tools. If a lookup fails, report exactly what could be verified. Never fill a missing database result from memory or public sources.'
+                : null,
             analysis
                 ? 'Answer ordinary analysis, existing query result explanations, Knowledge questions and clarification requests directly in the user language. Do not save Findings unless the user explicitly requests saved conclusions. Reports use their own saving workflow and need no extra Findings. Only for explicitly requested saved conclusions, call finishAnalysis once with structured findings and finalAnswer, citing verified Artifact IDs. On a Findings save failure, do not retry Findings in this turn; provide the analysis and explain that saving failed. Report validation or version conflicts follow the report recovery instructions; read the current draft and correct the patch before retrying. Never claim a failed save succeeded. If applicable definitions conflict in a way that changes the answer, cite them and ask which one to use before dependent SQL.'
                 : null,
@@ -755,6 +758,7 @@ export async function handleChatRequest(req: Request) {
 
         const agent = buildDoryChatAgent({
             hasAttachments,
+            firstReadRef: !hasAttachments && !body.documentId && !contextInput.references.length && modelHistoryMessages.length === 1 ? knowledge?.firstReadRef : undefined,
             model,
             tools,
             instructions: agentInstructions,

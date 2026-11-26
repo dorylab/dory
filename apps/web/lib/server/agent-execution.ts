@@ -383,6 +383,8 @@ const readonlySqlOutputSchema = z
                     resultSetId: z.string(),
                     title: z.string(),
                     rowCount: z.number(),
+                    namingSource: z.enum(['default', 'rule', 'pending', 'ai', 'manual']).optional(),
+                    namingRequestId: z.string().nullable().optional(),
                 }),
             )
             .optional(),
@@ -1450,6 +1452,7 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
             semantic = await resolveSemanticModelContext(ctx.services.db, {
                 organizationId: ctx.organizationId,
                 scope: workKnowledgeScope(work),
+                question,
                 allowedConnectionIds: authorized,
             });
             if (semantic.models.length) {

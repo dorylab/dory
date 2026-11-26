@@ -27,8 +27,9 @@ import { PostgresSavedQueriesRepository, updateQueryBody, type QueryDatabase } f
 import type { PostgresDBClient } from '@dory/shared';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
+import { knowledgeSearchTokens, matchKnowledge } from '@dory/shared/utils/knowledge-search';
 import { knowledgeSourceDisplayName } from '@dory/shared/utils/knowledge-source-name';
-import { and, asc, desc, eq, getTableColumns, getViewSelectedFields, exists, ilike, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, getViewSelectedFields, exists, inArray, isNotNull, isNull, lt, lte, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import { assertDestination, KnowledgeDirectory, localDocument, lockDirectory } from './directory';
 import { KnowledgeDocumentGenerationStore } from './document-generation';
@@ -467,7 +468,7 @@ export class PostgresKnowledgeRepository {
         return rows.map(source => ({ ...source, fileName: knowledgeSourceDisplayName(source) }));
     }
 
-    async searchKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId?: string; query: string }) {
+    async searchKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId?: string; query: string; limit?: number | null }) {
         const model = await this.getModel(input);
         if (input.connectionId && !model.dataSources.some(source => source.connectionId === input.connectionId))
             throw new Error('This data source is not linked to the selected knowledge base.');
@@ -488,20 +489,25 @@ export class PostgresKnowledgeRepository {
             .leftJoin(knowledgeConnectors, eq(knowledgeConnectors.id, knowledgeConnectorItems.connectorId))
             .where(and(...conditions))
             .orderBy(desc(knowledgeSources.updatedAt));
-        const needle = input.query.trim().toLowerCase();
+        const terms = knowledgeSearchTokens(input.query);
         return rows
             .map(source => {
-                const displayName = knowledgeSourceDisplayName(source);
-                const haystack = `${displayName}\n${source.contentText}`.toLowerCase();
-                const matchIndex = haystack.indexOf(needle);
-                if (matchIndex < 0) return null;
-                const contentIndex = source.contentText.toLowerCase().indexOf(needle);
-                const start = Math.max(0, contentIndex < 0 ? 0 : contentIndex - 240);
-                const excerpt = source.contentText.slice(start, start + 800).trim();
-                return { id: source.id, fileName: displayName, format: source.format, connectionId: source.connectionId, sourceUrl: source.sourceUrl, excerpt };
+                const fileName = knowledgeSourceDisplayName(source);
+                const { score, offset } = matchKnowledge(terms, fileName, source.contentText);
+                const start = Math.max(0, offset - 180);
+                return {
+                    id: source.id,
+                    fileName,
+                    format: source.format,
+                    connectionId: source.connectionId,
+                    sourceUrl: source.sourceUrl,
+                    excerpt: source.contentText.slice(start, start + 800).trim(),
+                    score,
+                };
             })
-            .filter((source): source is NonNullable<typeof source> => Boolean(source))
-            .slice(0, 10);
+            .filter(source => source.score > 0)
+            .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
+            .slice(0, input.limit === null ? undefined : (input.limit ?? 10));
     }
 
     async getKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string }) {
@@ -1351,14 +1357,12 @@ export class PostgresKnowledgeRepository {
         await this.getModel(input);
         const conditions = [eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)];
         if (input.connectionId) conditions.push(eq(knowledgeVerifiedQueries.sourceConnectionId, input.connectionId));
-        if (input.query?.trim())
-            conditions.push(
-                or(
-                    ilike(knowledgeVerifiedQueries.title, `%${input.query.trim()}%`),
-                    ilike(knowledgeVerifiedQueries.question, `%${input.query.trim()}%`),
-                    ilike(knowledgeVerifiedQueries.description, `%${input.query.trim()}%`),
-                )!,
-            );
+        const terms = knowledgeSearchTokens(input.query ?? '');
+        if (terms.length) {
+            const patterns = terms.map(term => sql`${'%' + term.replace(/[\\%_]/g, '\\$&') + '%'}`);
+            const text = sql`concat_ws(' ', ${knowledgeVerifiedQueries.title}, ${knowledgeVerifiedQueries.question}, ${knowledgeVerifiedQueries.description})`;
+            conditions.push(sql`${text} ilike any(array[${sql.join(patterns, sql`, `)}]::text[])`);
+        }
         return this.db
             .select({ ...getViewSelectedFields(knowledgeVerifiedQueries), updatedByName: user.name })
             .from(knowledgeVerifiedQueries)

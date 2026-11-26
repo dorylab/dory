@@ -1448,6 +1448,10 @@ test('registered MCP schema does not require SQL success fields for error output
         assert.equal(required.includes('result'), false);
         assert.equal(required.includes('columns'), false);
         assert.equal(required.includes('rowCount'), false);
+        const artifactSchema = (readonlyTool.outputSchema.properties as any).artifacts.items;
+        assert.ok(artifactSchema.properties.namingSource);
+        assert.ok(artifactSchema.properties.namingRequestId);
+        assert.deepEqual(artifactSchema.required.sort(), ['artifactId', 'resultSetId', 'rowCount', 'title']);
         assert.ok((readonlyTool.outputSchema.properties as any)?.error, 'Expected error envelope in SQL output schema.');
     } finally {
         await client.close().catch(() => undefined);

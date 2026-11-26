@@ -15,6 +15,7 @@ type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     model: LanguageModel;
     tools: TOOLS;
     hasAttachments?: boolean;
+    firstReadRef?: string;
     instructions: string;
     temperature?: number;
     maxSteps?: number;
@@ -127,6 +128,14 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
             const reportInstruction = reportPending
                 ? `\nThe requested report is ${reportStatus === 'missing' ? 'not created: call createWorkReport to save its draft' : 'still a draft: gather any necessary verified evidence, readWorkReport and updateWorkReport with status: ready'}. Report tools are available; the server manages execution stages. Do not substitute a Markdown chat response for saving the report. Do not confuse the previous ready report with a successful update in this turn.`
                 : '';
+
+            if (stepNumber === 0 && options.firstReadRef && 'read_asset' in options.tools && !reportPending) {
+                return {
+                    toolChoice: 'required' as const,
+                    activeTools: ['read_asset'] as (keyof TOOLS & string)[],
+                    instructions: options.instructions + '\nRead the selected Knowledge reference now: ' + options.firstReadRef,
+                };
+            }
 
             const queryCompleted = steps
                 .at(-1)

@@ -220,3 +220,24 @@ test('manual Knowledge reads preserve SQL scope, guides paginate and disabled Kn
     await assert.rejects(readAgentAsset(db, { ...disabled, ref: guide.ref }));
     assert.equal((await readAgentAsset(db, { ...disabled, ref: 'dory://artifacts/art-1' })).asset.kind, 'artifact');
 });
+
+test('question context suggests scoped Knowledge refs and does not count candidates as reads', async () => {
+    const { resolveSemanticModelContext } = await import('@/lib/server/semantic-model-context');
+    const db = dbMock();
+    db.knowledge.listAnalysisRuleCandidates = async () => [];
+    const sources = await db.knowledge.listKnowledgeSources();
+    db.knowledge.listKnowledgeSources = async () => [sources[0], { ...sources[0], id: 'other', connectionId: 'private' }];
+    db.knowledge.searchKnowledgeSources = async () => ['source-1', 'other'].map(id => ({ id, excerpt: '净利润以调整后口径为准' }));
+    const input = { organizationId: 'org-1', question: '上个财年的净利润是多少？', scope: { connectionIds: ['conn-1'] } };
+    const result = await resolveSemanticModelContext(db, input);
+    assert.match(result.context!, /kn-1\/sources\/source-1/);
+    assert.doesNotMatch(result.context!, /\/sources\/other/);
+    assert.deepEqual(result.models, []);
+    const none = await resolveSemanticModelContext(db, { ...input, scope: { ...input.scope, knowledgeMode: 'none' } });
+    assert.equal(none.context, null);
+    const page = await searchAgentAssets(db, { organizationId: input.organizationId, query: input.question, limit: 1 });
+    assert.ok(page.nextCursor);
+    const next = await searchAgentAssets(db, { organizationId: input.organizationId, query: input.question, limit: 1, cursor: page.nextCursor });
+    assert.ok(next.assets.length);
+    assert.notEqual(page.assets[0]?.ref, next.assets[0]?.ref);
+});

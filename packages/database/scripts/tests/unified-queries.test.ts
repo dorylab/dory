@@ -50,10 +50,10 @@ test('0051 preserves legacy IDs and private folders, then saves, shares, edits a
             INSERT INTO saved_queries(id,organization_id,user_id,title,sql_text,connection_id,position,folder_id,context,tags)
                 VALUES('private','org','alice','Example','SELECT 42','conn',700,'folder','{"schema":"orders"}','{tag}');
             INSERT INTO knowledge_verified_queries(id,knowledge_model_id,source_connection_id,title,question,sql,source_type,source_id)
-                VALUES('kvq_explicit','kb','conn','Example','A?','SELECT 42','saved_query','private'),
+                VALUES('kvq_explicit','kb','conn','Example','百度净利润','SELECT 42','saved_query','private'),
                 ('kvq_copy','kb','conn','Example','B?','SELECT 42','workspace',NULL);
             INSERT INTO knowledge_sources(id,organization_id,knowledge_model_id,file_name,format,content_text,byte_size)
-                VALUES('doc','org','kb','notes.md','markdown','notes',5);
+                VALUES('doc','org','kb','notes.md','markdown',repeat('x', 1000) || '调整后净利润',1018);
             INSERT INTO knowledge_query_sources(knowledge_source_id,query_id,relation_type) VALUES('doc','kvq_explicit','provided');
         `);
         await f.exec('BEGIN;\n' + migrations[index]!.sql.join('\n') + '\nCOMMIT;');
@@ -64,6 +64,14 @@ test('0051 preserves legacy IDs and private folders, then saves, shares, edits a
         const scope = { organizationId: 'org', knowledgeModelId: 'kb' };
         const alice = { organizationId: 'org', connectionId: 'conn', userId: 'alice' };
         const bob = { ...alice, userId: 'bob' };
+        const question = '百度 2023 财年的净利润是多少？';
+        assert.deepEqual(
+            (await kb.listVerifiedQueries({ ...scope, query: question })).map(row => row.id),
+            ['kvq_explicit'],
+        );
+        const matches = await kb.searchKnowledgeSources({ ...scope, query: question });
+        assert.equal(matches[0]?.id, 'doc');
+        assert.match(matches[0]!.excerpt, /调整后净利润/);
         const old = await saved.getById({ ...alice, id: 'private' });
         assert.equal(old?.folderId, 'folder');
         assert.equal(old?.position, 700);
