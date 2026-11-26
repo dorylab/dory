@@ -4754,6 +4754,7 @@
                 "searchedKnowledge": "Searched Knowledge",
                 "knowledgeNotFound": "No matching Knowledge",
                 "readKnowledge": "Read Knowledge source",
+                "loadedKnowledgeRules": "Loaded analysis rules",
                 "loadedSemanticContext": "Loaded business definitions",
                 "builtChart": "Built chart"
             }

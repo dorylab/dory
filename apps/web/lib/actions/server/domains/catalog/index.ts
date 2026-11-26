@@ -1,5 +1,8 @@
+import { hasActionScope, type ActionContext } from '@dory/actions';
+import type { WebActionServices } from '../../types';
 import { z } from 'zod';
 
+import { actorConnectionIds } from '@/lib/server/knowledge-access';
 import { AGENT_ASSET_KINDS, readAgentAsset, searchAgentAssets } from '@/lib/server/agent-assets';
 
 import { defineWebAction } from '../../define-web-action';
@@ -14,6 +17,7 @@ const agentAssetSummarySchema = z.object({
     connectionIds: z.array(z.string()),
     knowledgeModelId: z.string().nullable(),
     knowledgeModelName: z.string().nullable(),
+    rulesRef: z.string().nullable().optional(),
     trustLevel: z.enum(['verified', 'source', 'artifact']),
     updatedAt: z.string(),
     revision: z.string(),
@@ -22,9 +26,9 @@ const agentAssetSummarySchema = z.object({
     sourceState: z.enum(['current', 'outdated']).optional(),
 });
 
-function allowedConnectionIds(metadata: Record<string, unknown> | null | undefined) {
-    const value = metadata?.allowedConnectionIds;
-    return Array.isArray(value) && value.every(item => typeof item === 'string') ? value : null;
+function catalogAccess(ctx: ActionContext<WebActionServices>) {
+    if (!hasActionScope(ctx.actor.scopes, 'knowledge:read', { 'knowledge:read': ['read'] })) return { disabled: true, connectionIds: [] };
+    return ctx.services.knowledgeAccess;
 }
 
 export const catalogSearchAction = defineWebAction({
@@ -42,10 +46,9 @@ export const catalogSearchAction = defineWebAction({
     }),
     outputSchema: z.object({ assets: z.array(agentAssetSummarySchema), nextCursor: z.string().nullable(), total: z.number().int().nonnegative() }),
     permissions: readWorkspace,
-    scopes: ['assets:read', 'knowledge:read'],
+    scopes: ['assets:read'],
     scopeAliases: {
         'assets:read': ['read', 'query:read'],
-        'knowledge:read': ['read'],
     },
     actors: ['agent', 'mcp', 'automation'],
     mcp: {
@@ -59,7 +62,8 @@ export const catalogSearchAction = defineWebAction({
             organizationId: ctx.organizationId,
             ...input,
             workspaceOrigin: ctx.services.workspaceOrigin ?? ctx.services.requestOrigin,
-            allowedConnectionIds: allowedConnectionIds(ctx.actor.metadata),
+            allowedConnectionIds: actorConnectionIds(ctx.actor.metadata),
+            knowledgeAccess: catalogAccess(ctx),
         }),
 });
 
@@ -88,10 +92,9 @@ export const catalogReadAction = defineWebAction({
         }),
     }),
     permissions: readWorkspace,
-    scopes: ['assets:read', 'knowledge:read'],
+    scopes: ['assets:read'],
     scopeAliases: {
         'assets:read': ['read', 'query:read'],
-        'knowledge:read': ['read'],
     },
     actors: ['agent', 'mcp', 'automation'],
     mcp: {
@@ -110,7 +113,8 @@ export const catalogReadAction = defineWebAction({
             organizationId: ctx.organizationId,
             ...input,
             workspaceOrigin: ctx.services.workspaceOrigin ?? ctx.services.requestOrigin,
-            allowedConnectionIds: allowedConnectionIds(ctx.actor.metadata),
+            allowedConnectionIds: actorConnectionIds(ctx.actor.metadata),
+            knowledgeAccess: catalogAccess(ctx),
         });
     },
 });

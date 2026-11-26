@@ -85,7 +85,6 @@ export function AgentScopePicker({
     const t = useTranslations('WorkDocuments.ScopePicker');
     const [open, setOpen] = useState<string | null>(null);
     const [search, setSearch] = useState('');
-    const [knowledgeError, setKnowledgeError] = useState('');
     const automatic = scope.connectionMode === 'auto' || !scope.connectionIds.length;
     const selectedIds = automatic ? [] : scope.connectionIds;
     const selectedDatabases = selectedIds.flatMap(id => getAnalysisDatabases(scope, id) ?? []);
@@ -137,7 +136,6 @@ export function AgentScopePicker({
                             <CommandGroup>
                                 <CommandItem
                                     onSelect={() => {
-                                        setKnowledgeError('');
                                         onChange({ ...scope, knowledgeMode: 'auto', knowledgeModelId: null });
                                         setOpen(null);
                                     }}
@@ -148,7 +146,6 @@ export function AgentScopePicker({
                                 <CommandItem
                                     aria-checked={scope.knowledgeMode === 'none'}
                                     onSelect={() => {
-                                        setKnowledgeError('');
                                         onChange({ ...scope, knowledgeMode: 'none', knowledgeModelId: null });
                                         setOpen(null);
                                     }}
@@ -163,24 +160,7 @@ export function AgentScopePicker({
                                         value={model.id}
                                         keywords={[model.name]}
                                         onSelect={() => {
-                                            const ids = [...new Set(model.connectionIds)];
-                                            if (ids.length > 12) {
-                                                setKnowledgeError(t('SourceLimit'));
-                                                return;
-                                            }
-                                            if (ids.some(id => !connections.some(connection => connection.id === id))) {
-                                                setKnowledgeError(t('KnowledgeSourcesUnavailable'));
-                                                return;
-                                            }
-                                            setKnowledgeError('');
-                                            onChange({
-                                                ...scope,
-                                                knowledgeMode: 'manual',
-                                                knowledgeModelId: model.id,
-                                                connectionMode: ids.length ? 'manual' : 'auto',
-                                                connectionIds: ids,
-                                                databasesByConnection: {},
-                                            });
+                                            onChange({ ...scope, knowledgeMode: 'manual', knowledgeModelId: model.id });
                                             setOpen(null);
                                         }}
                                     >
@@ -190,11 +170,6 @@ export function AgentScopePicker({
                                 ))}
                             </CommandGroup>
                         </CommandList>
-                        {knowledgeError && (
-                            <p role="alert" className="border-t px-3 py-2 text-xs text-destructive">
-                                {knowledgeError}
-                            </p>
-                        )}
                     </Command>
                 </PopoverContent>
             </Popover>

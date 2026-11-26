@@ -1,8 +1,10 @@
+import type { KnowledgeAccess } from '@/lib/server/knowledge-access';
 import type { NextRequest } from 'next/server';
 import type { DBService } from '@dory/database';
 
 export type WebActionServices = {
     db: DBService;
+    knowledgeAccess?: KnowledgeAccess;
     agentEventId?: string;
     agentToolCallId?: string;
     agentActivitySource?: 'automatic' | 'tool';

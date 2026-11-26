@@ -110,6 +110,7 @@ type AgentRunEventTitleKey =
     | 'knowledgeNotFound'
     | 'readKnowledge'
     | 'loadedSemanticContext'
+    | 'loadedKnowledgeRules'
     | 'builtChart'
     | 'created'
     | 'finished'
@@ -153,6 +154,8 @@ export const defaultAgentRunTextFormatter: AgentRunTextFormatter = {
                 return 'No matching Knowledge';
             case 'readKnowledge':
                 return 'Read Knowledge source';
+            case 'loadedKnowledgeRules':
+                return 'Loaded analysis rules';
             case 'loadedSemanticContext':
                 return 'Loaded business definitions';
             case 'builtChart':
@@ -380,6 +383,8 @@ export function getAgentActivityTitleKey(toolName: string | null | undefined): A
         case 'read_asset':
         case 'dory_read_asset':
             return 'readKnowledge';
+        case 'knowledge_rules_loaded':
+            return 'loadedKnowledgeRules';
         case 'semantic_model_context':
             return 'loadedSemanticContext';
         case 'chartBuilder':
@@ -403,7 +408,7 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike, fo
     const tabName = resolvedTabId ? tabs.get(resolvedTabId) : null;
     const actorName = stringValue(event.outputSummary?.actorName) ?? stringValue(event.inputSummary?.actorName);
 
-    const activityKey = getAgentActivityTitleKey(event.toolName);
+    const activityKey = event.outputSummary?.rulesLoaded === true ? 'loadedKnowledgeRules' : getAgentActivityTitleKey(event.toolName);
     if (activityKey)
         return formatter.eventTitle(
             activityKey === 'searchedKnowledge' && event.status === 'success' && event.outputSummary?.resultCount === 0 ? 'knowledgeNotFound' : activityKey,

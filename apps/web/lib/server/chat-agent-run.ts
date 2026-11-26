@@ -17,6 +17,7 @@ export function createChatAgentRunLifecycle(options: {
     title?: string | null;
     signal: AbortSignal;
     requireSummary?: boolean;
+    reviewDefinitions?: boolean;
     progressCheckpoints?: boolean;
     reportCreationKey?: string;
     reportReadOnly?: boolean;
@@ -24,6 +25,7 @@ export function createChatAgentRunLifecycle(options: {
     outputIntent?: 'answer' | 'report';
     reportTarget?: { documentId: string; chartType?: string; requireChart?: boolean };
     analysisScope?: AnalysisScope;
+    knowledgeScope?: import('./knowledge-access').KnowledgeScope;
 }) {
     let workPromise: ReturnType<typeof options.works.startChatTurn> | undefined;
     let finishPromise: Promise<void> | undefined;
@@ -65,11 +67,13 @@ export function createChatAgentRunLifecycle(options: {
                 externalSessionId: `chat:${options.chatId}`,
                 title: options.title ?? 'Chat Agent Run',
                 metadata: {
+                    reviewDefinitions: options.reviewDefinitions,
                     reportCreationKey: options.reportCreationKey,
                     reportReadOnly: options.reportReadOnly,
                     reportRequirements: options.reportRequirements,
                     outputIntent: options.outputIntent,
                     reportTarget: options.reportTarget,
+                    knowledgeScope: options.knowledgeScope,
                     chatId: options.chatId,
                     source: 'internal_chat',
                     progressCheckpoints: options.progressCheckpoints,

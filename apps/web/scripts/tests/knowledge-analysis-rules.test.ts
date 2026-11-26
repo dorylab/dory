@@ -1,39 +1,51 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
-import { resolveKnowledgeAnalysisRules } from '../../lib/server/knowledge-analysis-rules';
+const require = createRequire(import.meta.url);
+const serverOnlyPath = require.resolve('server-only');
+require.cache[serverOnlyPath] = { id: serverOnlyPath, filename: serverOnlyPath, loaded: true, exports: {} } as NodeJS.Module;
 
-test('analysis loads the current shared rules once per turn and asks before choosing among matching bases', async () => {
-    const candidates = [
-        { modelId: 'shared', name: 'Shared', connectionId: 'one', sourceId: 'rules' },
-        { modelId: 'shared', name: 'Shared', connectionId: 'two', sourceId: 'rules' },
-    ];
+const { resolveSemanticModelContext } = await import('@/lib/server/semantic-model-context');
+
+test('load all applicable rules once; defer oversized and newly discovered bases', async () => {
     const reads: string[] = [];
-    let body = 'Version one';
-    const store = {
-        async listAnalysisRuleCandidates(org: string, ids: string[]) {
-            assert.equal(org, 'org');
-            return candidates.filter(row => ids.includes(row.connectionId));
+    const db = {
+        knowledge: {
+            listAnalysisRuleCandidates: async (_org: string, ids: string[] | null, modelId?: string) =>
+                ['shared', 'other', 'long', 'legacy', 'excluded']
+                    .filter(id => !modelId || modelId === id)
+                    .flatMap(id =>
+                        (id === 'excluded' ? ['third'] : ['one', 'two'])
+                            .filter(connectionId => !ids || ids.includes(connectionId))
+                            .map(connectionId => ({ modelId: id, name: id, sourceId: id === 'legacy' ? null : 'rules', connectionId })),
+                    ),
+            getAnalysisRules: async (_org: string, id: string) => {
+                reads.push(id);
+                return { id: 'rules', contentText: id === 'long' ? 'x'.repeat(20001) : id + ' definition' };
+            },
         },
-        async getAnalysisRules(org: string, id: string) {
-            assert.equal(org, 'org');
-            reads.push(id);
-            return id === 'shared' ? { id: 'rules', contentText: body } : null;
-        },
-    };
-    const scope = { connectionIds: ['one', 'two'] };
-    assert.match((await resolveKnowledgeAnalysisRules(store, 'org', scope))!.instruction, /Version one/);
-    assert.deepEqual(reads, ['shared']);
-    body = 'Version two';
-    candidates.push({ modelId: 'other', name: 'Other', connectionId: 'one', sourceId: 'different' });
-    const ambiguous = await resolveKnowledgeAnalysisRules(store, 'org', scope);
-    assert.equal(ambiguous?.modelId, null);
-    assert.match(ambiguous!.instruction, /ask the user to select/);
-    assert.match(ambiguous!.instruction, /dory:\/\/knowledge\/shared\/sources\/rules/);
-    assert.deepEqual(reads, ['shared']);
-    assert.match((await resolveKnowledgeAnalysisRules(store, 'org', { ...scope, knowledgeMode: 'manual', knowledgeModelId: 'shared' }))!.instruction, /Version two/);
-    assert.equal(await resolveKnowledgeAnalysisRules(store, 'org', { ...scope, knowledgeMode: 'none' }), null);
-    assert.equal(await resolveKnowledgeAnalysisRules(store, 'org', { connectionIds: ['unrelated'] }), null);
-    assert.equal(await resolveKnowledgeAnalysisRules(store, 'org', { ...scope, knowledgeModelId: 'legacy' }), null);
-    assert.deepEqual(reads, ['shared', 'shared', 'legacy']);
+    } as unknown as import('@dory/database').DBService;
+    const result = await resolveSemanticModelContext(db, { organizationId: 'org', scope: { connectionIds: ['one', 'two'] } });
+    assert.deepEqual(reads, ['shared', 'other', 'long']);
+    assert.deepEqual(
+        result.models.map(item => item.id),
+        ['shared', 'other'],
+    );
+    assert.match(result.context!, /shared definition/);
+    assert.match(result.context!, /other definition/);
+    assert.match(result.context!, /readBeforeAnalysis":true/);
+    assert.doesNotMatch(result.context!, /xxx|excluded/);
+    reads.length = 0;
+    for (const scope of [{}, { knowledgeMode: 'none' as const, connectionIds: ['one'] }]) {
+        const lazy = await resolveSemanticModelContext(db, { organizationId: 'org', scope });
+        assert.deepEqual(lazy.models, []);
+    }
+    assert.deepEqual(reads, []);
+    const isolated = await resolveSemanticModelContext(db, {
+        organizationId: 'org',
+        scope: { knowledgeMode: 'manual', knowledgeModelId: 'excluded', connectionIds: ['one'] },
+        allowedConnectionIds: ['one', 'two'],
+    });
+    assert.deepEqual(isolated.models, []);
 });

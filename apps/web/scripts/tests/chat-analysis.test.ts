@@ -13,6 +13,7 @@ import { PostgresResultSetsRepository } from '@dory/database/postgres/impl/resul
 import { PostgresSqlNamingRepository } from '@dory/database/postgres/impl/sql-naming';
 import { PostgresChatRepository } from '@dory/database/postgres/impl/chat';
 import { PostgresTabStateRepository } from '@dory/database/postgres/impl/sql-console/tabs/tab-states';
+import { PostgresKnowledgeRepository } from '@dory/database/postgres/impl/knowledge';
 import { PostgresWorksRepository } from '@dory/database/postgres/impl/works';
 import * as schema from '@dory/database/postgres/schemas';
 import type { PostgresDBClient } from '@dory/shared';
@@ -78,7 +79,9 @@ async function fixture(progressCheckpoints = false) {
     Object.defineProperty(resultSets, 'db', { value: database });
     const sqlNaming = new PostgresSqlNamingRepository();
     Object.defineProperty(sqlNaming, 'db', { value: database });
-    const db = { works, chat, tabState, artifacts, resultSets, sqlNaming } as DBService;
+    const knowledge = new PostgresKnowledgeRepository();
+    await knowledge.init(database as unknown as PostgresDBClient);
+    const db = { knowledge, works, chat, tabState, artifacts, resultSets, sqlNaming } as DBService;
     await database.insert(schema.user).values({ id: 'user', name: 'User', email: 'user@example.test' });
     await chat.createGlobalSession({ ...scope, id: 'chat', connectionId: 'connection' });
     const start = (requestId: string, connectionIds?: string[], databasesByConnection?: Record<string, string | string[]>) =>
@@ -94,13 +97,7 @@ async function fixture(progressCheckpoints = false) {
                 ...(connectionIds ? { analysisScope: { connectionIds, ...(databasesByConnection ? { databasesByConnection } : {}) } } : {}),
             },
         });
-    const makeAnalysis = (
-        requestId: string,
-        signal = new AbortController().signal,
-        connectionIds?: string[],
-        databasesByConnection?: Record<string, string | string[]>,
-        knowledgeMode?: 'none',
-    ) => {
+    const makeAnalysis = (requestId: string, signal = new AbortController().signal, connectionIds?: string[], databasesByConnection?: Record<string, string | string[]>) => {
         // Match the request-local lifecycle: resolving an old Run must not restart its turn.
         let work: ReturnType<typeof start> | undefined;
         return createChatAnalysis({
@@ -110,12 +107,11 @@ async function fixture(progressCheckpoints = false) {
             chatId: 'chat',
             requestId,
             connectionId: connectionIds ? null : 'connection',
-            ...(connectionIds || knowledgeMode
+            ...(connectionIds
                 ? {
                       analysisScope: {
                           connectionIds: connectionIds ?? ['connection'],
                           ...(databasesByConnection ? { databasesByConnection } : {}),
-                          ...(knowledgeMode ? { knowledgeMode } : {}),
                       },
                   }
                 : {}),
@@ -155,8 +151,8 @@ async function fixture(progressCheckpoints = false) {
 }
 
 const asset = {
-    ref: 'dory://knowledge/model/definitions/net-revenue',
-    kind: 'knowledge_definition' as const,
+    ref: 'dory://knowledge/model/sources/net-revenue',
+    kind: 'knowledge_source' as const,
     title: 'Net revenue',
     summary: 'Revenue after refunds',
     connectionIds: ['connection'],
@@ -356,6 +352,33 @@ test('built-in analysis closes the Knowledge → SQL → chart → Findings loop
     }
 });
 
+test('a pending definition blocks SQL and stale replies cannot unlock the next turn', async () => {
+    const f = await fixture();
+    try {
+        const requestId = 'definition-check';
+        const work = await f.works.startChatTurn({
+            ...scope,
+            requestId,
+            externalSessionId: 'chat:chat',
+            connectionId: null,
+            metadata: { source: 'internal_chat', reviewDefinitions: true, analysisScope: { connectionIds: ['connection'] } },
+        });
+        const owner = { ...scope, requestId, workId: work.workId };
+        const analysis = f.makeAnalysis(requestId, undefined, ['connection']);
+        const execute = () => analysis.tools.sqlRunner.execute!({ connectionId: 'connection', database: 'main', sql: 'select 1' }, call('sql')) as Promise<unknown>;
+        await assert.rejects(execute, /Resolve the business definition/);
+        const review = { question: 'active customers?', options: ['logins', 'orders'] };
+        await f.works.setChatDefinitionReview({ ...owner, review, awaitingChoice: true });
+        await assert.rejects(execute, /Resolve the business definition/);
+        const next = await f.start('definition-choice', ['connection']);
+        assert.equal(next.workId, work.workId);
+        assert.deepEqual(next.metadata?.definitionReview, review);
+        await assert.rejects(f.works.setChatDefinitionReview({ ...owner, review: null, awaitingChoice: false }), /no longer active/);
+    } finally {
+        await f.close();
+    }
+});
+
 test('missing Knowledge, failed SQL, invalid evidence, cancellation and stale turns remain honest', async t => {
     const f = await fixture();
     try {
@@ -363,8 +386,6 @@ test('missing Knowledge, failed SQL, invalid evidence, cancellation and stale tu
         const work = await f.start('errors');
         const analysis = f.makeAnalysis('errors');
         assert.match(JSON.stringify(await analysis.tools.search_assets!.execute!({ query: 'unknown metric' }, call('empty-search'))), /"assets":\[\]/);
-        const disabled = f.makeAnalysis('errors', undefined, undefined, undefined, 'none');
-        await assert.rejects(disabled.tools.search_assets!.execute!({ query: 'revenue' }, call('disabled-search')) as Promise<unknown>, /Knowledge is disabled/);
         t.mock.method(queryReadOnlyExecuteAction, 'handler', async () => {
             throw new Error('Only read-only SQL is allowed');
         });
@@ -1218,6 +1239,86 @@ test('MCP automatically admits stages and progress mistakes do not stop real too
             ?.state as import('@dory/shared/types/chat-checkpoints').ChatCheckpoints;
         assert.equal(state.stopped, undefined);
         assert.equal(state.actions.length, 5);
+    } finally {
+        await f.close();
+    }
+});
+
+test('Chat and external MCP use the same Knowledge scope independently of the SQL connection', async () => {
+    const f = await fixture();
+    try {
+        for (const id of ['orders', 'ads'])
+            await f.database.insert(schema.connections).values({ id, organizationId: scope.organizationId, name: id, type: 'sqlite', engine: 'sqlite' });
+        const create = (name: string, connectionId: string) => f.db.knowledge.createModel({ organizationId: scope.organizationId, name, connectionIds: [connectionId] });
+        const orders = await create('Orders', 'orders');
+        const ads = await create('Advertising', 'ads');
+        const manual = { knowledgeMode: 'manual' as const, knowledgeModelId: ads.id, connectionIds: ['orders'], databasesByConnection: { orders: ['main'] } };
+        const ctx = {
+            ...scope,
+            locale: 'en' as const,
+            runtime: 'desktop' as const,
+            currentConnectionId: null,
+            actor: { type: 'mcp' as const, id: 'token', scopes: ['read'] },
+            access: { source: 'local' as const, ...scope, organization: { id: 'org' }, isMember: true, role: 'owner' as const, permissions: getOrganizationPermissionMap('owner') },
+            services: { db: f.db, requestOrigin: 'https://dory.test' },
+        };
+        const invoke = (name: string, input: Record<string, unknown>, actor = ctx.actor) =>
+            getAgentExecutionTools()
+                .find(tool => tool.name === name)!
+                .execute({ ...ctx, actor }, input) as Promise<Record<string, unknown>>;
+        const chat = await f.works.startChatTurn({ ...scope, requestId: 'kb-chat', externalSessionId: 'chat:kb', metadata: { source: 'internal_chat', analysisScope: manual } });
+        const external = await invoke('dory_create_work', {
+            connectionId: 'orders',
+            knowledgeModelId: ads.id,
+            userQuestion: 'Which definitions apply?',
+            externalSessionId: 'kb-mcp',
+        });
+        assert.match(String(external.semanticContext), /Advertising/);
+        assert.doesNotMatch(String(external.semanticContext), /"name":"Orders"/);
+        const ref = 'dory://knowledge/' + ads.id + '/sources/' + ads.analysisRulesSourceId;
+        const sdk = createChatAnalysis({
+            db: f.db,
+            ...scope,
+            chatId: 'kb',
+            requestId: 'kb-chat',
+            connectionId: null,
+            analysisScope: manual,
+            locale: 'en',
+            requestOrigin: 'https://dory.test',
+            signal: new AbortController().signal,
+            access: ctx.access,
+            resolveWork: async () => chat,
+        });
+        const sdkRead = (await sdk.tools.read_asset!.execute!({ ref }, call('sdk-cross-connection'))) as { citation: { ref: string } };
+        assert.equal(sdkRead.citation.ref, ref);
+        for (const identity of [{ workId: chat.workId, requestId: 'kb-chat' }, { externalSessionId: 'kb-mcp' }]) {
+            const page = await invoke('dory_search_assets', { ...identity, kinds: ['knowledge_source'], query: 'RULES.md' });
+            assert.deepEqual(
+                (page.assets as Array<{ ref: string }>).map(hit => hit.ref),
+                [ref],
+            );
+            const read = await invoke('dory_read_asset', { ...identity, ref });
+            assert.equal((read.citation as { ref: string }).ref, ref);
+            await assert.rejects(invoke('dory_read_asset', { ...identity, ref: 'dory://knowledge/' + orders.id + '/sources/' + orders.analysisRulesSourceId }));
+        }
+        await invoke('dory_create_work', { workId: external.workId, knowledgeMode: 'none' });
+        assert.deepEqual((await invoke('dory_search_assets', { workId: external.workId, kinds: ['knowledge_source'] })).assets, []);
+        await assert.rejects(
+            invoke('dory_read', {
+                workId: external.workId,
+                operation: 'run',
+                actionId: 'knowledge.getKnowledgeSource',
+                input: { knowledgeModelId: ads.id, id: ads.analysisRulesSourceId },
+            }),
+        );
+        const discover = await invoke('dory_search_assets', { kinds: ['knowledge_source'], query: 'RULES.md' });
+        assert.equal((discover.assets as unknown[]).length, 2);
+        const assetsOnly = { ...ctx.actor, scopes: ['assets:read'] };
+        assert.deepEqual((await invoke('dory_search_assets', { kinds: ['knowledge_source'] }, assetsOnly)).assets, []);
+        await assert.rejects(invoke('dory_read_asset', { ref }, assetsOnly));
+        assert.equal((await invoke('dory_create_work', { connectionId: 'ads', userQuestion: 'Show the rules' }, assetsOnly)).semanticContext, null);
+        const stored = await f.works.getById({ ...scope, workId: external.workId as string });
+        assert.equal(stored?.connectionId, 'orders');
     } finally {
         await f.close();
     }

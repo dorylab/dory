@@ -4758,6 +4758,7 @@
                 "searchedKnowledge": "检索知识",
                 "knowledgeNotFound": "未找到相关知识",
                 "readKnowledge": "阅读知识来源",
+                "loadedKnowledgeRules": "已加载分析规则",
                 "loadedSemanticContext": "已加载业务口径",
                 "builtChart": "生成图表"
             }

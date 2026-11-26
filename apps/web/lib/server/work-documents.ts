@@ -34,8 +34,7 @@ export async function validateAnalysisScope(db: DBService, owner: Owner, raw: un
     if (knowledgeMode === 'manual' && !scope.knowledgeModelId) throw new DatabaseError('Select a knowledge base.', 400);
     if (knowledgeMode === 'manual' && scope.knowledgeModelId) {
         const model = await db.knowledge.getModel({ organizationId: owner.organizationId, knowledgeModelId: scope.knowledgeModelId });
-        if (connectionMode === 'manual' && !model.dataSources.some(source => connectionIds.includes(source.connectionId)))
-            throw new DatabaseError('Select a data source linked to this Knowledge.', 400);
+        if (!model.dataSources.some(source => allowed.has(source.connectionId))) throw new DatabaseError('Knowledge base unavailable.', 403);
     }
     return { ...scope, connectionMode, knowledgeMode, connectionIds, knowledgeModelId: knowledgeMode === 'manual' ? scope.knowledgeModelId : null };
 }

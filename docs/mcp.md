@@ -254,6 +254,10 @@ Pure discovery and knowledge tasks can start directly with their read tool and d
 
 Use `dory_search_assets` when an Agent needs business definitions, reviewed SQL, source documentation, or a previous Artifact. The search works without a known asset ID or connection, and can optionally be narrowed by `connectionId`, `knowledgeModelId`, or asset kind.
 
+When creating a Run, set `knowledgeMode` to `auto` (default), `manual` with a `knowledgeModelId`, or `none`. Reusing the Run preserves the choice until explicitly changed. Selecting a knowledge base preserves the Run's SQL connection. In automatic mode, a Run with a connection can consult all accessible linked bases. Without a connection, search across accessible bases. Disabling Knowledge still allows Artifact reads.
+
+The `semanticContext` returned by `dory_create_work` includes applicable analysis rules. Read any rules marked for pagination before analysis. For bases discovered by search, follow the result's `rulesRef` before using the source. Compatible definitions can be combined. Ask the user to choose when applicable definitions would change the answer. Guides can also be searched and paged using `dory://knowledge/{knowledgeModelId}/guide`.
+
 Search results are summaries. Call `dory_read_asset` with the returned `dory://` reference before using the content. The read response includes a revision and citation deep link that should be retained in the Agent's answer.
 
 ```json

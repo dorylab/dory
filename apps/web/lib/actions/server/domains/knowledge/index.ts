@@ -1,3 +1,7 @@
+import type { ActionContext } from '@dory/actions';
+import type { WebActionServices } from '../../types';
+import { knowledgeSourceAgentAssetRef } from '@/lib/server/agent-assets';
+import { actorConnectionIds, allowsKnowledge, resolveKnowledgeAccess } from '@/lib/server/knowledge-access';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { z } from 'zod';
 
@@ -25,6 +29,19 @@ import {
 const modelIdInput = z.object({ knowledgeModelId: z.string().min(1) });
 const readActors = ['user', 'agent', 'mcp', 'automation'] as const;
 const workspaceUiReadActors = ['user', 'automation'] as const;
+
+function knowledgeAccess(ctx: ActionContext<WebActionServices>) {
+    return ctx.services.knowledgeAccess ?? resolveKnowledgeAccess({}, actorConnectionIds(ctx.actor.metadata));
+}
+
+async function assertKnowledgeDetail(ctx: ActionContext<WebActionServices>, modelId: string, sourceConnectionId: string | null) {
+    if (ctx.actor.type === 'user') return;
+    const access = knowledgeAccess(ctx);
+    const ids = sourceConnectionId
+        ? [sourceConnectionId]
+        : (await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: modelId })).dataSources.map(source => source.connectionId);
+    if (!allowsKnowledge(access, modelId, ids)) throw new Error('Knowledge asset unavailable.');
+}
 
 export const knowledgeListAction = defineWebAction({
     id: 'knowledge.list',
@@ -285,6 +302,7 @@ export const knowledgeGetKnowledgeSourceAction = defineWebAction({
     },
     handler: async (ctx, input) => {
         const source = await ctx.services.db.knowledge.getKnowledgeSource({ organizationId: ctx.organizationId, ...input });
+        await assertKnowledgeDetail(ctx, input.knowledgeModelId, source.connectionId);
         if (input.viewed && source.generationBatchId && source.createdBy !== ctx.userId && ctx.actor.type === 'user')
             await ctx.services.db.knowledge.recordDocumentUse(input.knowledgeModelId, ctx.userId, [input.id]);
         return source;
@@ -373,7 +391,11 @@ export const knowledgeGetVerifiedQueryAction = defineWebAction({
         title: 'Get verified query',
         description: 'Read one selected verified query, including its reviewed SQL.',
     },
-    handler: (ctx, input) => ctx.services.db.knowledge.getVerifiedQuery({ organizationId: ctx.organizationId, ...input }),
+    handler: async (ctx, input) => {
+        const query = await ctx.services.db.knowledge.getVerifiedQuery({ organizationId: ctx.organizationId, ...input });
+        await assertKnowledgeDetail(ctx, input.knowledgeModelId, query.sourceConnectionId);
+        return query;
+    },
 });
 
 export const knowledgeCreateVerifiedQueryAction = defineWebAction({
@@ -482,6 +504,7 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
             z.object({
                 knowledgeModelId: z.string(),
                 knowledgeModelName: z.string(),
+                rulesRef: z.string().nullable(),
                 businessContext: z.string(),
                 knowledgeSources: z.array(
                     z.object({
@@ -506,19 +529,22 @@ export const knowledgeSearchKnowledgeAction = defineWebAction({
     handler: async (ctx, input) => {
         const models = await ctx.services.db.knowledge.listModels({ organizationId: ctx.organizationId, connectionId: input.connectionId });
         const results = await Promise.all(
-            models.map(async model => ({
-                knowledgeModelId: model.id,
-                knowledgeModelName: model.name,
-                businessContext: model.businessContextMd,
-                knowledgeSources: (
-                    await ctx.services.db.knowledge.searchKnowledgeSources({
-                        organizationId: ctx.organizationId,
-                        knowledgeModelId: model.id,
-                        connectionId: input.connectionId,
-                        query: input.query,
-                    })
-                ).map(({ id, fileName, format, connectionId, sourceUrl }) => ({ id, fileName, format, connectionId, sourceUrl })),
-            })),
+            models
+                .filter(model => allowsKnowledge(knowledgeAccess(ctx), model.id, [input.connectionId]))
+                .map(async model => ({
+                    knowledgeModelId: model.id,
+                    knowledgeModelName: model.name,
+                    rulesRef: model.analysisRulesSourceId ? knowledgeSourceAgentAssetRef(model.id, model.analysisRulesSourceId) : null,
+                    businessContext: model.businessContextMd.slice(0, 500),
+                    knowledgeSources: (
+                        await ctx.services.db.knowledge.searchKnowledgeSources({
+                            organizationId: ctx.organizationId,
+                            knowledgeModelId: model.id,
+                            connectionId: input.connectionId,
+                            query: input.query,
+                        })
+                    ).map(({ id, fileName, format, connectionId, sourceUrl }) => ({ id, fileName, format, connectionId, sourceUrl })),
+                })),
         );
         return { models: results.filter(model => model.businessContext || model.knowledgeSources.length) };
     },
@@ -536,6 +562,7 @@ export const knowledgeSearchVerifiedQueriesAction = defineWebAction({
                 id: z.string(),
                 knowledgeModelId: z.string(),
                 knowledgeModelName: z.string(),
+                rulesRef: z.string().nullable(),
                 sourceConnectionId: z.string(),
                 title: z.string(),
                 question: z.string(),
@@ -554,24 +581,27 @@ export const knowledgeSearchVerifiedQueriesAction = defineWebAction({
     handler: async (ctx, input) => {
         const models = await ctx.services.db.knowledge.listModels({ organizationId: ctx.organizationId, connectionId: input.connectionId });
         const groups = await Promise.all(
-            models.map(async model =>
-                (
-                    await ctx.services.db.knowledge.listVerifiedQueries({
-                        organizationId: ctx.organizationId,
-                        knowledgeModelId: model.id,
-                        connectionId: input.connectionId,
-                        query: input.query,
-                    })
-                ).map(query => ({
-                    id: query.id,
-                    knowledgeModelId: query.knowledgeModelId,
-                    knowledgeModelName: model.name,
-                    sourceConnectionId: query.sourceConnectionId,
-                    title: query.title,
-                    question: query.question,
-                    description: query.description,
-                })),
-            ),
+            models
+                .filter(model => allowsKnowledge(knowledgeAccess(ctx), model.id, [input.connectionId]))
+                .map(async model =>
+                    (
+                        await ctx.services.db.knowledge.listVerifiedQueries({
+                            organizationId: ctx.organizationId,
+                            knowledgeModelId: model.id,
+                            connectionId: input.connectionId,
+                            query: input.query,
+                        })
+                    ).map(query => ({
+                        id: query.id,
+                        knowledgeModelId: query.knowledgeModelId,
+                        knowledgeModelName: model.name,
+                        rulesRef: model.analysisRulesSourceId ? knowledgeSourceAgentAssetRef(model.id, model.analysisRulesSourceId) : null,
+                        sourceConnectionId: query.sourceConnectionId,
+                        title: query.title,
+                        question: query.question,
+                        description: query.description,
+                    })),
+                ),
         );
         return { queries: groups.flat().slice(0, 20) };
     },

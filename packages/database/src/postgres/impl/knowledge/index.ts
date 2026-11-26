@@ -63,6 +63,7 @@ export type KnowledgeModelDetail = {
     description: string | null;
     businessContextMd: string;
     dataSources: KnowledgeModelDataSourceDetail[];
+    analysisRulesSourceId?: string | null;
     verifiedQueryCount: number;
     knowledgeSourceCount: number;
     createdAt: Date;
@@ -180,7 +181,10 @@ export class PostgresKnowledgeRepository {
                   .where(inArray(knowledgeVerifiedQueries.knowledgeModelId, ids))
             : [];
         const sourceRows = ids.length
-            ? await this.db.select({ knowledgeModelId: knowledgeSources.knowledgeModelId }).from(knowledgeSources).where(inArray(knowledgeSources.knowledgeModelId, ids))
+            ? await this.db
+                  .select({ knowledgeModelId: knowledgeSources.knowledgeModelId, id: knowledgeSources.id, role: knowledgeSources.systemRole })
+                  .from(knowledgeSources)
+                  .where(inArray(knowledgeSources.knowledgeModelId, ids))
             : [];
         return rows.map(row => {
             const modelDataSources = dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source);
@@ -188,6 +192,7 @@ export class PostgresKnowledgeRepository {
             return {
                 ...row,
                 dataSources: modelDataSources,
+                analysisRulesSourceId: sourceRows.find(source => source.knowledgeModelId === row.id && source.role === 'analysis_rules')?.id ?? null,
                 verifiedQueryCount,
                 knowledgeSourceCount: sourceRows.filter(source => source.knowledgeModelId === row.id).length,
             };
@@ -229,14 +234,21 @@ export class PostgresKnowledgeRepository {
         return knowledgeModelId;
     }
 
-    async listAnalysisRuleCandidates(organizationId: string, connectionIds: string[]) {
-        if (!connectionIds.length) return [];
+    async listAnalysisRuleCandidates(organizationId: string, connectionIds: string[] | null, modelId?: string | null) {
+        if (connectionIds?.length === 0 || (!modelId && !connectionIds)) return [];
         return this.db
             .select({ modelId: knowledgeModels.id, name: knowledgeModels.name, connectionId: knowledgeModelSources.connectionId, sourceId: knowledgeSources.id })
             .from(knowledgeModels)
             .innerJoin(knowledgeModelSources, eq(knowledgeModelSources.knowledgeModelId, knowledgeModels.id))
             .leftJoin(knowledgeSources, and(eq(knowledgeSources.knowledgeModelId, knowledgeModels.id), eq(knowledgeSources.systemRole, 'analysis_rules')))
-            .where(and(eq(knowledgeModels.organizationId, organizationId), inArray(knowledgeModelSources.connectionId, connectionIds)));
+            .where(
+                and(
+                    eq(knowledgeModels.organizationId, organizationId),
+                    modelId ? eq(knowledgeModels.id, modelId) : undefined,
+                    connectionIds ? inArray(knowledgeModelSources.connectionId, connectionIds) : undefined,
+                ),
+            )
+            .orderBy(knowledgeModels.id, knowledgeModelSources.connectionId);
     }
 
     async getAnalysisRules(organizationId: string, knowledgeModelId: string): Promise<{ id: string; contentText: string } | null> {

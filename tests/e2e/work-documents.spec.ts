@@ -2087,7 +2087,7 @@ test('unified Data Sources supports database multi-select, full-group selection,
                     { id: 'conn-1', name: 'Orders', type: 'postgres' },
                     { id: 'ads', name: 'Advertising', type: 'postgres' },
                 ],
-                models: [],
+                models: [{ id: 'ads-knowledge', name: 'Advertising definitions', connectionIds: ['ads'] }],
                 sessions: [],
             },
         }),
@@ -2132,6 +2132,14 @@ test('unified Data Sources supports database multi-select, full-group selection,
     await search.fill('');
     await page.screenshot({ path: testInfo.outputPath('data-sources-multi-light.png'), animations: 'disabled' });
     await page.keyboard.press('Escape');
+    const knowledge = picker.getByRole('button', { name: 'Knowledge base', exact: true });
+    const before = new URL(page.url()).searchParams;
+    await knowledge.click();
+    await page.getByRole('option', { name: 'Advertising definitions' }).click();
+    await expect(knowledge).toHaveText('Advertising definitions');
+    const after = new URL(page.url()).searchParams;
+    expect(after.get('sources')).toBe(before.get('sources'));
+    expect(after.get('databases')).toBe(before.get('databases'));
     const question = page.getByTestId('agent-composer').getByRole('textbox');
     await question.fill('@Orders');
     await expect(page.getByRole('option')).toHaveCount(3);

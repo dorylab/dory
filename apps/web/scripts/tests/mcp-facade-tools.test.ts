@@ -324,9 +324,11 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
             'dory_analyze_database_changes',
             'dory_artifacts',
             'dory_compare_schema',
+            'dory_create_report',
             'dory_create_work',
             'dory_explore_schema',
             'dory_finish_work',
+            'dory_get_report',
             'dory_get_schema_graph',
             'dory_list_connections',
             'dory_publish_progress',
@@ -338,6 +340,7 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
             'dory_saved_queries',
             'dory_search_assets',
             'dory_search_attachment',
+            'dory_update_report',
             'dory_workspace_tabs',
             'dory_write',
         ],
@@ -822,15 +825,18 @@ test('dory_create_work returns a workspace URL', async () => {
 
 test('dory_create_work returns and records relevant semantic model context', async () => {
     const works = createWorksMock();
-    const ctx = createContext({
-        db: {
-            works,
-            knowledge: {
-                listAnalysisRuleCandidates: async () => [],
-                listModels: async () => [{ id: 'model-1', name: 'Commerce', updatedAt: new Date(0), businessContextMd: 'Revenue uses SUM(orders.amount)' }],
+    const ctx = createContext(
+        {
+            db: {
+                works,
+                knowledge: {
+                    getAnalysisRules: async () => ({ id: 'rules', contentText: 'Revenue uses SUM(orders.amount)' }),
+                    listAnalysisRuleCandidates: async () => [{ modelId: 'model-1', name: 'Commerce', sourceId: 'rules', connectionId: 'conn-1' }],
+                },
             },
-        },
-    } as unknown as WebActionServices);
+        } as unknown as WebActionServices,
+        ['read'],
+    );
 
     const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', userQuestion: 'Show sales' })) as any;
     assert.match(output.semanticContext, /SUM\(orders\.amount\)/);
@@ -838,23 +844,26 @@ test('dory_create_work returns and records relevant semantic model context', asy
         output.semanticModelsUsed.map((item: any) => item.modelRevision),
         [works.knowledgeUsage[0].revision],
     );
-    assert.equal(works.knowledgeUsage[0].assetKind, 'semantic_model');
-    assert.equal(works.knowledgeUsage[0].revision, new Date(0).toISOString());
-    assert.ok(works.knowledgeUsage[0].assetRef.endsWith(works.knowledgeUsage[0].revision));
+    assert.equal(works.knowledgeUsage[0].assetKind, 'knowledge_source');
+    assert.match(works.knowledgeUsage[0].revision, /^[a-f0-9]{64}$/);
+    assert.equal(works.knowledgeUsage[0].assetRef, 'dory://knowledge/model-1/sources/rules');
 });
 
 test('dory_create_work fails open when semantic context resolution fails', async () => {
     const works = createWorksMock();
-    const ctx = createContext({
-        db: {
-            works,
-            knowledge: { listModels: async () => Promise.reject(new Error('semantic resolver unavailable')) },
-        },
-    } as unknown as WebActionServices);
+    const ctx = createContext(
+        {
+            db: {
+                works,
+                knowledge: { listAnalysisRuleCandidates: async () => Promise.reject(new Error('semantic resolver unavailable')) },
+            },
+        } as unknown as WebActionServices,
+        ['read'],
+    );
 
     const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', userQuestion: 'Show revenue' })) as any;
     assert.equal(output.workId, 'work-1');
-    assert.equal(output.semanticContext, null);
+    assert.match(output.semanticContext, /could not be loaded/);
     assert.deepEqual(output.semanticModelsUsed, []);
     assert.equal(
         works.events.some(event => event.errorCode === 'SEMANTIC_CONTEXT_FAILED'),
@@ -1346,7 +1355,7 @@ test('knowledge search returns summaries while successful detail reads record im
         title: 'Age.md',
         knowledgeModelId: 'model-1',
         knowledgeModelName: 'Customer profile',
-        deepLink: '/org-1/knowledge/model-1',
+        deepLink: '/org-1/knowledge/model-1?tab=documents&file=source-age',
     });
     assert.equal(works.events.filter(event => event.actionId === 'knowledge.getKnowledgeSource').length, 2);
 

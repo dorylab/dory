@@ -39,8 +39,8 @@ export function mergeChatToolActivities<T extends ChatMessageTool>(events: Agent
     for (const [eventId, event] of uniqueEvents) {
         const toolName = canonicalChatToolName(event.toolName ?? '');
         const callId = typeof event.inputSummary?.toolCallId === 'string' ? event.inputSummary.toolCallId : null;
-        const semantic = toolName === 'semantic_model_context';
-        const id = semantic ? 'semantic-model-context' : callId ? `call:${callId}` : `event:${eventId}`;
+        const semantic = toolName === 'semantic_model_context' || toolName === 'knowledge_rules_loaded';
+        const id = semantic ? (toolName === 'knowledge_rules_loaded' ? toolName : 'semantic-model-context') : callId ? `call:${callId}` : `event:${eventId}`;
         const existing = rows.get(id);
         if (existing) existing.events.push(event);
         else rows.set(id, { id, toolName, events: [event], ...(callId && messages.has(callId) ? { message: messages.get(callId) } : {}) });
@@ -59,7 +59,7 @@ export function mergeChatToolActivities<T extends ChatMessageTool>(events: Agent
 
 export function chatToolActivityState(activity: ChatToolActivity, messageState?: ChatToolState): ChatToolState {
     if (messageState && ['output-available', 'output-error', 'output-denied'].includes(messageState)) return messageState;
-    if (activity.toolName === 'semantic_model_context') {
+    if (activity.toolName === 'semantic_model_context' || activity.toolName === 'knowledge_rules_loaded') {
         if (activity.events.some(event => event.status === 'error' || event.status === 'failed')) return 'output-error';
         if (activity.events.length && activity.events.every(event => event.status === 'success' || event.status === 'completed')) return 'output-available';
     } else {

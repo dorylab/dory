@@ -1,11 +1,10 @@
 import 'server-only';
 
-import { getDBService } from '@dory/database';
 import type { Locale } from '@dory/i18n/routing';
 import type { ConnectionType } from '@dory/shared/types/connections';
 
 import { buildDialectSqlPrompt, buildSchemaContext, buildSchemaContextForTables, CHART_BUILDER_GUIDE, getDefaultSchemaSampleLimits, SYSTEM_PROMPT } from '@/lib/ai/prompts';
-import { resolveSemanticModelContext, type SemanticModelUsage } from '@/lib/server/semantic-model-context';
+import type { SemanticModelUsage, SemanticModelContextResult } from '@/lib/server/semantic-model-context';
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
 
@@ -40,8 +39,7 @@ type BuildDoryAgentContextOptions = {
     copilotEnvelope?: CopilotEnvelopeV1 | null;
     locale?: Locale;
     question?: string | null;
-    includeSemanticContext?: boolean;
-    knowledgeModelId?: string | null;
+    knowledge?: SemanticModelContextResult;
 };
 
 function normalizeSchemaTableRef(value: unknown): DoryAgentSchemaTableRef | null {
@@ -95,8 +93,8 @@ function collectSchemaContextTables(candidateTables?: DoryAgentSchemaTableRef[] 
 export async function buildDoryAgentContext(options: BuildDoryAgentContextOptions): Promise<DoryAgentContext> {
     const schemaContextTables = collectSchemaContextTables(options.candidateTables, options.copilotEnvelope);
     let schemaContext: string | null = null;
-    let semanticContext: string | null = null;
-    let semanticModelsUsed: SemanticModelUsage[] = [];
+    const semanticContext = options.knowledge?.context ?? null;
+    const semanticModelsUsed = options.knowledge?.models ?? [];
 
     if (options.userId && options.organizationId && options.connectionId) {
         const defaults = getDefaultSchemaSampleLimits();
@@ -123,21 +121,6 @@ export async function buildDoryAgentContext(options: BuildDoryAgentContextOption
             tableSampleLimit: defaults.table,
             columnSampleLimit: defaults.column,
         });
-
-        if (options.includeSemanticContext !== false) {
-            try {
-                const resolved = await resolveSemanticModelContext(await getDBService(), {
-                    organizationId: options.organizationId,
-                    connectionId: options.connectionId,
-                    knowledgeModelId: options.knowledgeModelId,
-                    includeRules: false,
-                });
-                semanticContext = resolved.context;
-                semanticModelsUsed = resolved.models;
-            } catch (error) {
-                console.error('[chat] failed to build semantic model context', error);
-            }
-        }
     }
 
     const schemaSection = schemaContext

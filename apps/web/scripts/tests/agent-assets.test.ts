@@ -195,3 +195,28 @@ test('Agent asset reads chunk untrusted sources and cap Artifact previews', asyn
     const artifact = await readAgentAsset(dbMock(), { organizationId: 'org-1', ref: artifactAgentAssetRef('art-1'), previewRows: 500 });
     assert.equal((artifact.content as any).preview.rows.length, 200);
 });
+
+test('manual Knowledge reads preserve SQL scope, guides paginate and disabled Knowledge retains Artifacts', async () => {
+    const db = dbMock();
+    const source = { ...model, analysisRulesSourceId: 'rules', businessContextMd: 'x'.repeat(3000) + ' yearly renewal definition' };
+    db.knowledge.listModels = async () => [source];
+    db.knowledge.getModel = async () => source;
+    const manual = { organizationId: 'org-1', allowedConnectionIds: ['other'], knowledgeAccess: { disabled: false, modelId: 'kn-1', connectionIds: ['conn-1'] } };
+    const hits = await searchAgentAssets(db, { ...manual, query: 'yearly renewal' });
+    const guide = hits.assets.find(asset => asset.ref.endsWith('/guide'))!;
+    assert.equal(guide.rulesRef, 'dory://knowledge/kn-1/sources/rules');
+    const page = await readAgentAsset(db, { ...manual, ref: guide.ref, maxChars: 3000 });
+    assert.ok('nextCursor' in page.content && page.content.nextCursor);
+    const next = await readAgentAsset(db, { ...manual, ref: guide.ref, contentCursor: page.content.nextCursor! });
+    assert.ok('text' in next.content);
+    assert.match(next.content.text, /yearly renewal/);
+    assert.equal(next.citation.revision, guide.revision);
+    await assert.rejects(readAgentAsset(db, { ...manual, ref: 'dory://knowledge/other/guide' }));
+    const disabled = { organizationId: 'org-1', knowledgeAccess: { disabled: true, connectionIds: null } };
+    assert.deepEqual(
+        (await searchAgentAssets(db, disabled)).assets.map(asset => asset.kind),
+        ['artifact'],
+    );
+    await assert.rejects(readAgentAsset(db, { ...disabled, ref: guide.ref }));
+    assert.equal((await readAgentAsset(db, { ...disabled, ref: 'dory://artifacts/art-1' })).asset.kind, 'artifact');
+});

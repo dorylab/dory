@@ -4751,6 +4751,7 @@
                 "searchedKnowledge": "ナレッジを検索",
                 "knowledgeNotFound": "関連するナレッジがありません",
                 "readKnowledge": "ナレッジソースを確認",
+                "loadedKnowledgeRules": "分析ルールを読み込み",
                 "loadedSemanticContext": "業務定義を読み込み",
                 "builtChart": "グラフを作成"
             }

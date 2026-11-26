@@ -52,6 +52,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
     const templates = [
         ['dory-artifact', 'dory://artifacts/{artifactId}', 'Dory Artifact'],
         ['dory-knowledge-definition', 'dory://knowledge/{knowledgeModelId}/definitions/{definitionId}', 'Dory Knowledge definition'],
+        ['dory-knowledge-guide', 'dory://knowledge/{knowledgeModelId}/guide', 'Dory Knowledge guide'],
         ['dory-verified-query', 'dory://knowledge/{knowledgeModelId}/queries/{queryId}', 'Dory verified query'],
         ['dory-knowledge-source', 'dory://knowledge/{knowledgeModelId}/sources/{sourceId}', 'Dory Knowledge source'],
     ] as const;

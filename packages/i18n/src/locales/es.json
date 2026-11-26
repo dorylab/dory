@@ -4747,6 +4747,7 @@
                 "searchedKnowledge": "Conocimiento consultado",
                 "knowledgeNotFound": "Sin conocimiento coincidente",
                 "readKnowledge": "Fuente de conocimiento leída",
+                "loadedKnowledgeRules": "Reglas de análisis cargadas",
                 "loadedSemanticContext": "Definiciones de negocio cargadas",
                 "builtChart": "Gráfico creado"
             }

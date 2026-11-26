@@ -432,6 +432,7 @@ export class PostgresWorksRepository {
         const chatTurn = {
             requestId: input.requestId,
             startedAt: now.toISOString(),
+            definitionReviewStatus: input.metadata?.reviewDefinitions ? 'checking' : undefined,
             reportCreationKey: input.metadata?.reportCreationKey,
             outputIntent: input.metadata?.outputIntent,
             reportTarget: input.metadata?.reportTarget,
@@ -445,7 +446,7 @@ export class PostgresWorksRepository {
             .set({
                 status: 'active',
                 ...(input.metadata?.analysisScope ? { connectionId: null } : work.metadata?.analysisScope ? { connectionId: input.connectionId ?? null } : {}),
-                metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ chatTurn, analysisScope: input.metadata?.analysisScope ?? null })}::jsonb`,
+                metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ chatTurn, knowledgeScope: input.metadata?.knowledgeScope ?? null, analysisScope: input.metadata?.analysisScope ?? null })}::jsonb`,
                 updatedAt: now,
                 lastActiveAt: now,
             })
@@ -453,6 +454,33 @@ export class PostgresWorksRepository {
             .returning();
         if (!row) throw new DatabaseError('Chat Agent Run is no longer available', 409);
         return row as WorkRecord;
+    }
+
+    async setChatDefinitionReview(input: {
+        organizationId: string;
+        userId: string;
+        workId: string;
+        requestId: string;
+        review: Record<string, unknown> | null;
+        awaitingChoice: boolean;
+    }) {
+        const [row] = await this.db
+            .update(works)
+            .set({
+                metadata: sql`jsonb_set(${works.metadata} || ${JSON.stringify({ definitionReview: input.review })}::jsonb, '{chatTurn,definitionReviewStatus}', ${JSON.stringify(input.awaitingChoice ? 'awaiting_choice' : 'ready')}::jsonb)`,
+            })
+            .where(
+                and(
+                    eq(works.workId, input.workId),
+                    eq(works.organizationId, input.organizationId),
+                    eq(works.userId, input.userId),
+                    eq(works.status, 'active'),
+                    isNull(works.archivedAt),
+                    sql`${works.metadata}->'chatTurn'->>'requestId' = ${input.requestId}`,
+                ),
+            )
+            .returning({ workId: works.workId });
+        if (!row) throw new DatabaseError('This analysis turn is no longer active', 409);
     }
 
     /** Reserve exactly one summary attempt per chat turn, before validation or side effects. */
@@ -666,6 +694,15 @@ export class PostgresWorksRepository {
             patch.title = requestedTitle;
         }
 
+        const selection = input.metadata?.knowledgeScope;
+        if (selection && row.metadata?.source !== 'internal_chat') {
+            const [updated] = await this.db
+                .update(works)
+                .set({ ...patch, metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || ${JSON.stringify({ knowledgeScope: selection })}::jsonb` })
+                .where(eq(works.workId, row.workId))
+                .returning();
+            return updated as WorkRecord;
+        }
         await this.db.update(works).set(patch).where(eq(works.workId, row.workId));
         return { ...row, ...patch } as WorkRecord;
     }

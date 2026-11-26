@@ -16,7 +16,8 @@ import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { attachmentReadSchema, readChatAttachment } from '@/lib/server/chat-attachments';
 import { readChatEvidence, revalidateChatFindingEvidence } from '@/lib/server/chat-evidence';
-import { AGENT_ASSET_KINDS, parseAgentAssetRef } from '@/lib/server/agent-assets';
+import { AGENT_ASSET_KINDS, assetRevision, knowledgeSourceAgentAssetRef, verifiedQueryAgentAssetRef } from '@/lib/server/agent-assets';
+import { actorConnectionIds, allowsKnowledge, resolveKnowledgeAccess, runKnowledgeScope, type KnowledgeScope } from './knowledge-access';
 import { recordSemanticModelUsage, resolveSemanticModelContext, type SemanticModelContextResult } from '@/lib/server/semantic-model-context';
 import { createSqlNamer } from '@/lib/server/sql-naming';
 import { assertDocumentWrite, emptyWorkContent, patchWorkDocument, saveWorkDraft } from '@/lib/server/work-documents';
@@ -210,6 +211,8 @@ const createWorkInputSchema = z
             .describe(
                 'Existing Run to continue, including a Run created by Chat or another Agent. Takes precedence over externalSessionId; an invalid ID fails without creating a Run.',
             ),
+        knowledgeMode: z.enum(['auto', 'manual', 'none']).optional(),
+        knowledgeModelId: z.string().min(1).optional(),
         connectionId: z.string().min(1).optional(),
         externalSessionId: z
             .string()
@@ -398,6 +401,7 @@ const readonlySqlOutputSchema = z
 const unknownObjectOutputSchema = z.object({}).passthrough();
 
 type ResolvedMcpWork = {
+    knowledgeScope?: KnowledgeScope;
     workId: string;
     workspaceUrl: string;
     connectionId: string | null;
@@ -708,10 +712,21 @@ function withOptionalWork(data: unknown, work: ResolvedMcpWork | null) {
 }
 
 function externalWorkMetadata(metadata: Record<string, unknown> | null | undefined) {
-    if (metadata && (Object.hasOwn(metadata, 'chatTurn') || metadata.source === 'internal_chat')) {
+    if (metadata && (['chatTurn', 'analysisScope', 'knowledgeScope'].some(key => Object.hasOwn(metadata, key)) || metadata.source === 'internal_chat')) {
         throw new McpFacadeError('RESERVED_METADATA', 'Chat turn state and evidence registration are managed by the server.', { status: 403 });
     }
     return metadata ?? null;
+}
+
+function workKnowledgeScope(work: { metadata?: Record<string, unknown> | null; connectionId?: string | null }): KnowledgeScope {
+    const saved = work.metadata?.knowledgeScope as KnowledgeScope | undefined;
+    if (work.metadata?.source === 'internal_chat') return saved ?? runKnowledgeScope(work.metadata.analysisScope as AnalysisScope | undefined, work.connectionId);
+    return { connectionIds: work.connectionId ? [work.connectionId] : undefined, knowledgeMode: saved?.knowledgeMode, knowledgeModelId: saved?.knowledgeModelId };
+}
+
+function withWorkKnowledge(ctx: ActionContext<WebActionServices>, work: ResolvedMcpWork | null) {
+    if (ctx.services.knowledgeAccess || !work) return ctx;
+    return { ...ctx, services: { ...ctx.services, knowledgeAccess: resolveKnowledgeAccess(work.knowledgeScope ?? {}, actorConnectionIds(ctx.actor.metadata)) } };
 }
 
 async function resolveMcpWork(
@@ -757,6 +772,7 @@ async function resolveMcpWork(
     }
 
     return {
+        knowledgeScope: workKnowledgeScope(work),
         workId: work.workId,
         connectionId: work.connectionId ?? input.connectionId ?? null,
         externalSessionId: work.externalSessionId ?? input.externalSessionId ?? null,
@@ -1381,6 +1397,28 @@ async function savedQueriesFacade(ctx: ActionContext<WebActionServices>, rawInpu
 async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
     const input = createWorkInputSchema.parse(rawInput);
     const title = normalizeWorkTitle(input) ?? DEFAULT_WORK_TITLE;
+    const mode = input.knowledgeMode ?? (input.knowledgeModelId ? 'manual' : undefined);
+    const requestedScope = mode ? { knowledgeMode: mode, knowledgeModelId: input.knowledgeModelId } : undefined;
+    const canReadKnowledge =
+        ctx.access.isMember &&
+        ctx.access.permissions.workspace.read &&
+        hasActionScope(ctx.actor.scopes, 'knowledge:read', { 'knowledge:read': ['read'] }) &&
+        hasActionScope(ctx.actor.scopes, 'assets:read', { 'assets:read': ['read', 'query:read'] });
+    const authorized = actorConnectionIds(ctx.actor.metadata);
+    if (mode === 'manual') {
+        if (!input.knowledgeModelId) throw new McpFacadeError('INVALID_INPUT', 'Select a knowledge base.');
+        if (!canReadKnowledge) throw new McpFacadeError('FORBIDDEN', 'Knowledge read access required.', { status: 403 });
+        const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId: input.knowledgeModelId });
+        if (
+            !allowsKnowledge(
+                resolveKnowledgeAccess({ knowledgeMode: mode, knowledgeModelId: input.knowledgeModelId }, authorized),
+                model.id,
+                model.dataSources.map(source => source.connectionId),
+            )
+        )
+            throw new McpFacadeError('FORBIDDEN', 'Knowledge base unavailable.', { status: 403 });
+    } else if (input.knowledgeModelId) throw new McpFacadeError('INVALID_INPUT', 'A knowledge base requires manual mode.');
+    const metadata = externalWorkMetadata(input.metadata);
     const work = await ctx.services.db.works.create({
         organizationId: ctx.organizationId,
         userId: ctx.userId,
@@ -1390,7 +1428,7 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         connectionId: input.connectionId ?? null,
         externalSessionId: input.externalSessionId ?? null,
         title,
-        metadata: externalWorkMetadata(input.metadata),
+        metadata: requestedScope ? { ...metadata, knowledgeScope: requestedScope } : metadata,
     });
     const workspaceUrl = buildWorkspaceUrl(ctx, work);
     await ctx.services.db.works.recordEvent({
@@ -1407,11 +1445,12 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     });
     let semantic: SemanticModelContextResult = { context: null, models: [] };
     const question = getString(input.userQuestion) ?? getString(input.question) ?? getString(input.prompt);
-    if (work.connectionId && question) {
+    if (canReadKnowledge && (question || requestedScope)) {
         try {
             semantic = await resolveSemanticModelContext(ctx.services.db, {
                 organizationId: ctx.organizationId,
-                connectionId: work.connectionId,
+                scope: workKnowledgeScope(work),
+                allowedConnectionIds: authorized,
             });
             if (semantic.models.length) {
                 await recordSemanticModelUsage(ctx.services.db, {
@@ -1424,6 +1463,7 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                 });
             }
         } catch (error) {
+            semantic.context ??= 'Knowledge rules could not be loaded. Read relevant RULES.md before relying on business definitions and disclose any material limitation.';
             try {
                 await ctx.services.db.works.recordEvent({
                     ...(ctx.services.agentEventId ? { eventId: ctx.services.agentEventId } : {}),
@@ -1432,8 +1472,8 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
                     userId: ctx.userId,
                     tokenId: ctx.actor.id ?? null,
                     connectionId: work.connectionId,
-                    toolName: 'semantic_model_context',
-                    actionId: 'knowledge.semanticContext',
+                    toolName: 'knowledge_rules_loaded',
+                    actionId: 'knowledge.analysisRules',
                     status: 'error',
                     errorCode: 'SEMANTIC_CONTEXT_FAILED',
                     errorMessage: error instanceof Error ? error.message : 'Failed to resolve semantic model context.',
@@ -1493,11 +1533,11 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
         const actionInput = toRecord(input.input);
         const work = await resolveOptionalMcpWork(ctx, {
             ...input,
-            connectionId: getString(actionInput.connectionId),
+            connectionId: null,
         });
         const startedAt = performance.now();
         try {
-            const result = await executeAction(ctx, action.id, input.input ?? {}, {
+            const result = await executeAction(withWorkKnowledge(ctx, work), action.id, input.input ?? {}, {
                 projection: input.projection,
                 reason: input.reason,
             });
@@ -1520,8 +1560,10 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
             if (work && assetType && knowledgeModelId && assetId) {
                 const model = await ctx.services.db.knowledge.getModel({ organizationId: ctx.organizationId, knowledgeModelId });
                 const assetKind = assetType === 'source' ? 'knowledge_source' : 'verified_query';
-                const pathKind = assetType === 'source' ? 'sources' : 'queries';
-                const assetRef = `dory://knowledge/${encodeURIComponent(knowledgeModelId)}/${pathKind}/${encodeURIComponent(assetId)}`;
+                const assetRef = assetType === 'source' ? knowledgeSourceAgentAssetRef(knowledgeModelId, assetId) : verifiedQueryAgentAssetRef(knowledgeModelId, assetId);
+                const revision = assetRevision(assetType === 'source' ? { id: assetId, contentText: data.contentText } : data);
+                const query = assetType === 'verified_query' ? 'tab=queries&query=' : data.format === 'markdown' ? 'tab=documents&file=' : 'tab=sources&source=';
+                const deepLink = '/' + encodeURIComponent(ctx.organizationId) + '/knowledge/' + encodeURIComponent(knowledgeModelId) + '?' + query + encodeURIComponent(assetId);
                 await ctx.services.db.works.recordAgentAssetUsageEvent(
                     {
                         workId: work.workId,
@@ -1529,15 +1571,15 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
                         userId: ctx.userId,
                         assetKind,
                         assetRef,
-                        revision: model.updatedAt.toISOString(),
+                        revision,
                         assetSnapshot: {
                             title: assetName ?? assetId,
                             knowledgeModelId,
                             knowledgeModelName: model.name,
-                            deepLink: `/${encodeURIComponent(ctx.organizationId)}/knowledge/${encodeURIComponent(knowledgeModelId)}`,
+                            deepLink,
                         },
                     },
-                    event,
+                    { ...event, outputSummary: { ...event.outputSummary, revision, ref: assetRef, deepLink } },
                 );
             } else {
                 await recordMcpActivity(ctx, work, event);
@@ -1566,13 +1608,13 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
     const actionInput = toRecord(input.input);
     const workInput = {
         ...input,
-        connectionId: getString(actionInput.connectionId),
+        connectionId: action.domain === 'catalog' ? null : getString(actionInput.connectionId),
         workId: getString(actionInput.workId) ?? input.workId,
     };
     const work = action.domain === 'savedQuery' ? await resolveMcpWork(ctx, workInput) : await resolveOptionalMcpWork(ctx, workInput);
     const startedAt = performance.now();
     try {
-        const result = await executeAction(ctx, action.id, input.input ?? {}, {
+        const result = await executeAction(withWorkKnowledge(ctx, work), action.id, input.input ?? {}, {
             projection: input.projection,
             confirmationToken: access === 'write' && actionRequiresConfirmation(action) ? MCP_CLIENT_APPROVED_CONFIRMATION_TOKEN : null,
             reason: input.reason,
@@ -1618,7 +1660,7 @@ async function searchAgentAssetsFacade(ctx: ActionContext<WebActionServices>, ra
     const input = agentAssetSearchInputSchema.parse(rawInput);
     const startedAt = performance.now();
     try {
-        const output = await executeInternal<UnknownRecord>(ctx, 'catalog.search', {
+        const output = await executeInternal<UnknownRecord>(withWorkKnowledge(ctx, work), 'catalog.search', {
             query: input.query,
             kinds: input.kinds,
             connectionId: input.connectionId,
@@ -1685,13 +1727,15 @@ async function readAgentAssetFacade(ctx: ActionContext<WebActionServices>, rawIn
     const input = agentAssetReadInputSchema.parse(rawInput);
     const startedAt = performance.now();
     try {
-        const output = await executeInternal<UnknownRecord>(ctx, 'catalog.read', {
+        const output = await executeInternal<UnknownRecord>(withWorkKnowledge(ctx, work), 'catalog.read', {
             ref: input.ref,
             contentCursor: input.contentCursor,
             maxChars: input.maxChars,
             previewRows: input.previewRows,
         });
         const asset = toRecord(output.asset);
+        const content = toRecord(output.content);
+        const rulesLoaded = toRecord(content.source).systemRole === 'analysis_rules' && content.nextCursor === null;
         if (work) {
             await ctx.services.db.works.recordAgentAssetUsageEvent(
                 {
@@ -1723,6 +1767,7 @@ async function readAgentAssetFacade(ctx: ActionContext<WebActionServices>, rawIn
                     },
                     outputSummary: {
                         kind: getString(asset.kind),
+                        ...(rulesLoaded ? { rulesLoaded: true } : {}),
                         ref: getString(asset.ref),
                         revision: getString(asset.revision),
                         ...(ctx.services.agentTurn
@@ -2234,7 +2279,7 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
             name: 'dory_search_assets',
             title: 'Search Dory Agent assets',
             description:
-                'Search verified Knowledge, reference sources, and available Artifacts across the organization. Results are summaries; call dory_read_asset before using one. Without a workId this is recorded as Agent activity.',
+                'Search verified Knowledge, reference sources, and available Artifacts across the organization. Results are summaries. Read the rulesRef of each relevant base and then the selected source with dory_read_asset before using it. Without a workId this is recorded as Agent activity.',
             inputSchema: agentAssetSearchInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -2244,7 +2289,7 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
             },
             execute: async (ctx, input) => {
                 const parsed = toRecord(input);
-                return searchAgentAssetsFacade(ctx, parsed, await resolveOptionalMcpWork(ctx, parsed));
+                return searchAgentAssetsFacade(ctx, parsed, await resolveOptionalMcpWork(ctx, { ...parsed, connectionId: null }));
             },
         },
         {
@@ -2397,14 +2442,16 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                     )
                         return completedTurn.summarySave.output ?? {};
                     const current = await ctx.services.db.works.assertChatTurn({ organizationId: ctx.organizationId, userId: ctx.userId, workId, requestId });
+                    const reviewStatus = toRecord(current.metadata?.chatTurn).definitionReviewStatus;
+                    if (reviewStatus === 'checking' || reviewStatus === 'awaiting_choice')
+                        throw new McpFacadeError('DEFINITION_REVIEW_REQUIRED', 'Resolve the business definition in the current chat before running tools.', { status: 409 });
                     const scope = current.metadata?.analysisScope as AnalysisScope | undefined;
-                    if (scope?.knowledgeMode === 'none' && ['dory_search_assets', 'dory_read_asset'].includes(definition.name))
-                        throw new McpFacadeError('SCOPE_MISMATCH', 'Knowledge is disabled for this conversation.', { status: 403 });
+                    ctx = { ...ctx, services: { ...ctx.services, knowledgeAccess: resolveKnowledgeAccess(workKnowledgeScope(current), actorConnectionIds(ctx.actor.metadata)) } };
                     if (scope?.connectionIds) {
                         const priorAllowed = ctx.actor.metadata?.allowedConnectionIds;
                         const allowed = Array.isArray(priorAllowed) ? scope.connectionIds.filter(id => priorAllowed.includes(id)) : scope.connectionIds;
                         const requested = getString(input.connectionId) ?? getString(toRecord(input.input).connectionId);
-                        if (requested && !allowed.includes(requested))
+                        if (requested && !allowed.includes(requested) && definition.name !== 'dory_search_assets')
                             throw new McpFacadeError('SCOPE_MISMATCH', 'Data source is outside the selected analysis scope.', { status: 403 });
                         if (
                             ![
@@ -2427,12 +2474,6 @@ export function getAgentExecutionTools(): McpFacadeTool[] {
                         if (['dory_run_readonly_sql', 'dory_explore_schema', 'dory_get_schema_graph'].includes(definition.name) && !requested)
                             throw new McpFacadeError('CONNECTION_REQUIRED', 'Choose an explicit connectionId from the selected scope.');
                         ctx = { ...ctx, currentConnectionId: requested, actor: { ...ctx.actor, metadata: { ...ctx.actor.metadata, allowedConnectionIds: allowed } } };
-                        if (definition.name === 'dory_search_assets' && scope.knowledgeModelId) input.knowledgeModelId = scope.knowledgeModelId;
-                        if (definition.name === 'dory_read_asset' && scope.knowledgeModelId) {
-                            const ref = parseAgentAssetRef(requireString(input.ref, 'ref'));
-                            if (ref.kind !== 'artifact' && ref.knowledgeModelId !== scope.knowledgeModelId)
-                                throw new McpFacadeError('SCOPE_MISMATCH', 'Knowledge source is outside the selected knowledge base.', { status: 403 });
-                        }
                         Object.assign(input, applyAnalysisDatabase(scope, definition.name, input));
                     }
                     if ((current.metadata?.chatTurn as { summarySaved?: boolean } | undefined)?.summarySaved && definition.name !== 'dory_finish_work') {

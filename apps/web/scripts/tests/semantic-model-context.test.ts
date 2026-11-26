@@ -8,19 +8,13 @@ require.cache[serverOnlyPath] = { id: serverOnlyPath, filename: serverOnlyPath, 
 
 const { resolveSemanticModelContext } = await import('@/lib/server/semantic-model-context');
 
-test('a document-only knowledge base supplies its guide and current rules for the active connection', async () => {
-    const updatedAt = new Date('2026-11-25T00:00:00Z');
-    const scope = { organizationId: 'org', connectionId: 'conn' };
+test('a document-only knowledge base supplies only its current rules for the active connection', async () => {
     const knowledge = {
-        listModels: async (input: typeof scope) => {
-            assert.deepEqual(input, scope);
-            return [{ id: 'model', name: 'Orders', businessContextMd: '# Sales guide', updatedAt }];
-        },
         listAnalysisRuleCandidates: async () => [{ modelId: 'model', name: 'Orders', connectionId: 'conn', sourceId: 'rules' }],
         getAnalysisRules: async () => ({ id: 'rules', contentText: 'Use paid orders.' }),
     };
-    const result = await resolveSemanticModelContext({ knowledge } as unknown as import('@dory/database').DBService, scope);
-    assert.match(result.context!, /Sales guide/);
+    const result = await resolveSemanticModelContext({ knowledge } as unknown as import('@dory/database').DBService, { organizationId: 'org', scope: { connectionIds: ['conn'] } });
+    assert.doesNotMatch(result.context!, /Sales guide/);
     assert.match(result.context!, /Use paid orders/);
-    assert.equal(result.models[0]?.modelRevision, updatedAt.toISOString());
+    assert.match(result.models[0]!.modelRevision, /^[a-f0-9]{64}$/);
 });

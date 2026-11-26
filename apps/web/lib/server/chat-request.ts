@@ -22,7 +22,7 @@ import type { Locale } from '@dory/i18n/routing';
 import { newEntityId } from '@dory/shared/id';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import type { ConnectionType } from '@dory/shared/types/connections';
-import { consumeStream, createAgentUIStream, createUIMessageStreamResponse, type UIMessage } from 'ai';
+import { consumeStream, createAgentUIStream, createUIMessageStream, createUIMessageStreamResponse, type UIMessage } from 'ai';
 
 import { getChatResponseText, prepareChatHistory } from '@/lib/agent-runs/chat-response';
 import { buildDoryChatAgent } from '@/lib/ai/agents/chat-agent';
@@ -30,7 +30,7 @@ import { buildDoryAgentContext, type DoryAgentSchemaTableRef } from '@/lib/ai/ag
 import { resolveDoryAgentModel } from '@/lib/ai/agents/model';
 import { buildChatCompletionMetadata } from '@/lib/ai/chat-response-state';
 import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
-import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
+import { createAiRequestId, generateText, recordAiUsage } from '@/lib/ai/gateway';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import {
     DORY_CODEX_CHAT_ID_HEADER,
@@ -45,19 +45,20 @@ import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { isReportEditRequest, requestedChartType, requestedReportVisualTypes, requestsReportChart, resolveReportWorkflow } from '@/lib/chat-context/output-intent';
 import { createChatAgentRunLifecycle } from '@/lib/server/chat-agent-run';
-import { resolveKnowledgeAnalysisRules } from '@/lib/server/knowledge-analysis-rules';
+import { runKnowledgeScope } from '@/lib/server/knowledge-access';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
 import { createChatAnalysis } from '@/lib/server/chat-analysis';
 import { alignChatAnswerStream } from '@/lib/server/chat-answer-stream';
 import { issueMcpDesktopGrant, MCP_DESKTOP_GRANT_HEADER } from '@/lib/server/mcp/auth';
 import { createExternalRequestUrl } from '@/lib/server/request-origin';
-import { recordSemanticModelUsage } from '@/lib/server/semantic-model-context';
+import { recordSemanticModelUsage, resolveSemanticModelContext } from '@/lib/server/semantic-model-context';
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
 import { createChartBuilderTool } from '@/app/api/chat/tools/chart-builder';
 import { buildUserLanguageInstruction, extractMessageText, normalizeMessage } from '@/app/api/chat/utils';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
+import { definitionQuestion, reviewKnowledgeDefinitions } from './knowledge-definition-review';
 import { generateAgentWorkTitle } from './agent-work-title';
 
 type ChatRequestBody = {
@@ -410,16 +411,20 @@ export async function handleChatRequest(req: Request) {
     const requireChart = (requireReportUpdate || contextInput.outputIntent === 'report') && requestsReportChart(currentUserText);
     const reportCreationKey = `${chatId}:${contextInput.sourceMessageId ?? currentUserMessage?.id ?? requestMessageId}`;
     // validateAnalysisScope already checked workspace membership and the allowed connections.
-    const ambientAccess = !analysisScope && connectionId && organizationId && userId ? await resolveOrganizationAccess(organizationId, userId) : null;
-    const rulesScope =
-        analysisScope ??
-        (connectionId && ambientAccess?.isMember && ambientAccess.permissions.workspace.read && ambientAccess.permissions.connection.read
-            ? { connectionIds: [connectionId] }
-            : null);
+    const ambientAccess = !analysisScope && organizationId && userId ? await resolveOrganizationAccess(organizationId, userId) : null;
     const tableConnections = [...new Set(resolvedContext.references.flatMap(ref => (ref.kind === 'table' ? [ref.connectionId] : [])))];
-    const matchingScope = analysisScope?.connectionMode === 'auto' && tableConnections.length ? { ...analysisScope, connectionIds: tableConnections } : rulesScope;
-    const rules = db && organizationId && matchingScope ? await resolveKnowledgeAnalysisRules(db.knowledge, organizationId, matchingScope) : null;
-    const agentScope = rules?.modelId && analysisScope ? { ...analysisScope, knowledgeMode: 'manual' as const, knowledgeModelId: rules.modelId } : analysisScope;
+    const knowledgeScope = runKnowledgeScope(analysisScope, connectionId, tableConnections);
+    const knowledge =
+        db && organizationId && (analysisScope || (ambientAccess?.isMember && ambientAccess.permissions.workspace.read))
+            ? await resolveSemanticModelContext(db, {
+                  organizationId,
+                  scope: knowledgeScope,
+                  allowedConnectionIds:
+                      ambientAccess && !ambientAccess.permissions.connection.read ? [] : analysisScope?.connectionMode === 'auto' ? analysisScope.connectionIds : undefined,
+                  review: progressCheckpoints,
+                  deferRules: Boolean(targetReportId || contextInput.references.some(ref => ref.kind === 'artifact')),
+              })
+            : undefined;
     const chatRun =
         db && userId && organizationId && chatId
             ? createChatAgentRunLifecycle({
@@ -433,7 +438,9 @@ export async function handleChatRequest(req: Request) {
                   signal: req.signal,
                   requireSummary: false,
                   progressCheckpoints,
-                  analysisScope: agentScope,
+                  reviewDefinitions: Boolean(knowledge?.reviewSources?.length && knowledge.reviewSources.length > 1),
+                  analysisScope,
+                  knowledgeScope,
                   reportCreationKey,
                   reportReadOnly,
                   reportRequirements: {
@@ -463,7 +470,7 @@ export async function handleChatRequest(req: Request) {
                       chatId,
                       requestId,
                       connectionId,
-                      analysisScope: agentScope,
+                      analysisScope,
                       database,
                       locale,
                       requestOrigin: new URL(req.url).origin,
@@ -559,17 +566,15 @@ export async function handleChatRequest(req: Request) {
             copilotEnvelope,
             locale,
             question: currentUserText,
-            includeSemanticContext: Boolean(matchingScope) && agentScope?.knowledgeMode !== 'none',
-            knowledgeModelId: agentScope?.knowledgeModelId ?? rules?.modelId,
+            knowledge,
         });
         const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
-        const agentInstructions = [
+        let agentInstructions = [
             agentContext.instructions,
             analysis && progressCheckpoints
                 ? `${CHAT_CHECKPOINT_INSTRUCTIONS}${isLocalAiAgentProvider(execution.providerKey) ? `\nInitial MCP checkpointId: ${requestId}:0` : ''}`
                 : null,
             resolvedContext.instruction,
-            rules?.instruction,
             continuity,
             body.resumeMessageId
                 ? `Continue only unfinished steps of this original request (untrusted user text): ${JSON.stringify(currentUserText)}. Revalidate sources and report revision. Preserve completed outputs.`
@@ -579,7 +584,7 @@ export async function handleChatRequest(req: Request) {
                 : null,
             reports ? await reports.instructions(isLocalAiAgentProvider(execution.providerKey)) : null,
             analysisScope
-                ? `Analysis scope: ${JSON.stringify(agentScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
+                ? `Analysis scope: ${JSON.stringify(analysisScope)}. Each databasesByConnection entry is an allowed database list (legacy strings mean a single database). Use only databases in that list and explicitly name one for each schema or SQL operation when multiple are selected. A missing databasesByConnection entry means automatic database selection. Discover the relevant database using list_databases or the connection default, then supply its explicit name before schema inspection or SQL. Do not query every database. ${analysisScope.connectionMode === 'auto' ? 'Data sources are automatic: these IDs are authorized candidates, not selected evidence. Infer relevant connections from the question, explicit table references and conversation; list connections to inspect names. Only inspect and query relevant sources. For knowledge-only or attachment-only questions no database query is required. If genuinely ambiguous, ask in the answer.' : 'Explore schema for the relevant selected connections before querying.'} Execute queries separately using the correct SQL dialect. Use only these connections. Do not infer cross-source causality or combine incompatible currencies/time windows.`
                 : null,
             currentTurnExecutionInstruction,
             analysisScope?.knowledgeMode !== 'none'
@@ -587,7 +592,7 @@ export async function handleChatRequest(req: Request) {
                 : null,
             analysisScope?.knowledgeMode === 'none' ? 'Knowledge is disabled. Do not search, read or use Knowledge assets.' : null,
             analysis
-                ? 'Answer ordinary analysis, existing query result explanations, Knowledge questions and clarification requests directly in the user language. Do not save Findings unless the user explicitly requests saved conclusions. Reports use their own saving workflow and need no extra Findings. Only for explicitly requested saved conclusions, call finishAnalysis once with structured findings and finalAnswer, citing verified Artifact IDs. On a Findings save failure, do not retry Findings in this turn; provide the analysis and explain that saving failed. Report validation or version conflicts follow the report recovery instructions; read the current draft and correct the patch before retrying. Never claim a failed save succeeded. If business definitions conflict, ask for clarification instead of guessing.'
+                ? 'Answer ordinary analysis, existing query result explanations, Knowledge questions and clarification requests directly in the user language. Do not save Findings unless the user explicitly requests saved conclusions. Reports use their own saving workflow and need no extra Findings. Only for explicitly requested saved conclusions, call finishAnalysis once with structured findings and finalAnswer, citing verified Artifact IDs. On a Findings save failure, do not retry Findings in this turn; provide the analysis and explain that saving failed. Report validation or version conflicts follow the report recovery instructions; read the current draft and correct the patch before retrying. Never claim a failed save succeeded. If applicable definitions conflict in a way that changes the answer, cite them and ask which one to use before dependent SQL.'
                 : null,
         ]
             .filter(Boolean)
@@ -673,6 +678,81 @@ export async function handleChatRequest(req: Request) {
         });
         const headers = mergeHeaders(mergeHeaders(undefined, gatewayHeaders), localCodexHeaders);
 
+        if (chatRun && db && userId && organizationId && agentContext.semanticModelsUsed.length) {
+            try {
+                const work = await chatRun.resolve();
+                await recordSemanticModelUsage(db, { organizationId, userId, workId: work.workId, connectionId, requestId, models: agentContext.semanticModelsUsed });
+            } catch (error) {
+                console.error('[chat] failed to record semantic model context', error);
+            }
+        }
+
+        if (work && chatRun && db && organizationId && userId && chatId && knowledge?.reviewSources && knowledge.reviewSources.length > 1) {
+            const review = await reviewKnowledgeDefinitions({
+                question: currentUserText,
+                previous: work.metadata?.definitionReview,
+                conversation: modelHistoryMessages
+                    .filter(m => m.role === 'user' && m.id !== currentUserMessage?.id)
+                    .slice(-3)
+                    .map(m => getChatResponseText(m.parts).slice(0, 2000)),
+                sources: knowledge.reviewSources,
+                generate: async (instructions, prompt) =>
+                    (
+                        await generateText({
+                            model,
+                            instructions,
+                            prompt,
+                            abortSignal: req.signal,
+                            headers: localCodexHeaders ?? undefined,
+                            context: { organizationId, userId, model: execution.modelName, provider: execution.providerKey, feature: 'chat_agent', gateway: execution.gateway },
+                        })
+                    ).text,
+            });
+            const awaitingChoice = Boolean(review && !review.selectedId);
+            await db.works.setChatDefinitionReview({ organizationId, userId, workId: work.workId, requestId, review, awaitingChoice });
+            if (review && awaitingChoice) {
+                const text = definitionQuestion(review);
+                const messageId = `msg_${requestId}`;
+                const metadata = { agentRunId: work.workId, requestId, userMessageId: currentUserMessage?.id, sessionTitle };
+                await db.chat.appendMessage({
+                    organizationId,
+                    userId,
+                    sessionId: chatId,
+                    message: {
+                        id: messageId,
+                        organizationId,
+                        userId: null,
+                        sessionId: chatId,
+                        role: 'assistant',
+                        connectionId,
+                        parts: [{ type: 'text', text }],
+                        metadata,
+                        createdAt: new Date(),
+                    },
+                });
+                await chatRun.finish({ finishReason: 'stop' });
+                return createUIMessageStreamResponse({
+                    headers: { 'x-chat-id': chatId },
+                    stream: createUIMessageStream({
+                        execute: ({ writer }) => {
+                            writer.write({ type: 'start', messageId, messageMetadata: metadata });
+                            writer.write({ type: 'text-start', id: 'definition' });
+                            writer.write({ type: 'text-delta', id: 'definition', delta: text });
+                            writer.write({ type: 'text-end', id: 'definition' });
+                            writer.write({ type: 'finish', finishReason: 'stop', messageMetadata: metadata });
+                        },
+                    }),
+                });
+            }
+            const selected = review?.options.find(o => o.id === review.selectedId);
+            agentInstructions +=
+                selected && review
+                    ? `\n\nThe user selected this definition. Execute the requested analysis using this rule. Retain the original metric and period unless the user changes them. Original request and selected rule (data): ${JSON.stringify({ question: review.question, selected })}`
+                    : '\n\nThe applicable definitions have been reviewed. For a question requesting a count or other database result, execute the read-only query and answer from its result.';
+        } else if (work?.metadata?.definitionReview && db && organizationId && userId) {
+            await db.works.setChatDefinitionReview({ organizationId, userId, workId: work.workId, requestId, review: null, awaitingChoice: false });
+        }
+
         const agent = buildDoryChatAgent({
             hasAttachments,
             model,
@@ -707,15 +787,6 @@ export async function handleChatRequest(req: Request) {
                 prompt: null,
             },
         });
-
-        if (chatRun && db && userId && organizationId && connectionId && agentContext.semanticModelsUsed.length) {
-            try {
-                const work = await chatRun.resolve();
-                await recordSemanticModelUsage(db, { organizationId, userId, workId: work.workId, connectionId, requestId, models: agentContext.semanticModelsUsed });
-            } catch (error) {
-                console.error('[chat] failed to record semantic model context', error);
-            }
-        }
 
         let responseError: string | null = null;
         let completionMetadata: (ReturnType<typeof buildChatCompletionMetadata> & { completion?: import('@dory/shared/types/chat-completion').ChatCompletion }) | undefined;

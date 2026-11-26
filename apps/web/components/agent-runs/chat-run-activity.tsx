@@ -104,6 +104,7 @@ function ToolGroup({ activities, ended, ...props }: Actions & { activities: Chat
         read_asset: 'ReadKnowledge',
         search_assets: 'SearchKnowledge',
         semantic_model_context: 'ReadKnowledge',
+        knowledge_rules_loaded: 'ReadKnowledge',
         exploreSchema: 'ExploreSchema',
         getSchemaGraph: 'ExploreSchema',
         sqlRunner: 'QueryData',
@@ -252,7 +253,10 @@ export function ChatRunActivity({
         : progress.length && !ended
           ? events.filter(
                 event =>
-                    progress.some(entry => entry.eventId === event.eventId) || event.inputSummary?.activitySource === 'automatic' || event.toolName === 'semantic_model_context',
+                    progress.some(entry => entry.eventId === event.eventId) ||
+                    event.inputSummary?.activitySource === 'automatic' ||
+                    event.toolName === 'semantic_model_context' ||
+                    event.toolName === 'knowledge_rules_loaded',
             )
           : events;
     const { items, tools: rows, fromMessages } = resolveChatTimeline(timeline, tools, localItems, localTools);

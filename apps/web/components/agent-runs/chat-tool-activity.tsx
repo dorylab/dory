@@ -96,7 +96,7 @@ function RecordedToolDetail({ activity, open, workId, ...actions }: SqlActions &
     if (activity.toolName === 'sqlRunner' && workId && typeof output.sessionId === 'string') {
         return <SavedSqlDetail workId={workId} sessionId={output.sessionId} open={open} {...actions} />;
     }
-    if (activity.toolName === 'semantic_model_context') {
+    if (activity.toolName === 'semantic_model_context' || activity.toolName === 'knowledge_rules_loaded') {
         return (
             <ul className="space-y-2">
                 {activity.events.map((item, index) => {
@@ -180,6 +180,7 @@ function RecordedToolDetail({ activity, open, workId, ...actions }: SqlActions &
 export function getChatToolActivityTitle(activity: ChatToolActivity<ChatMessageToolRow>, t: ReturnType<typeof useTranslations<'AgentRuns'>>) {
     const key = getAgentActivityTitleKey(activity.toolName);
     const mcpReport = activity.toolName === 'finishAnalysis' ? (activity.events.at(-1)?.inputSummary?.report as { read?: boolean; documentId?: string } | undefined) : undefined;
+    if (activity.events.some(event => event.outputSummary?.rulesLoaded === true)) return t('Timeline.Titles.loadedKnowledgeRules');
     const directTitles = {
         readArtifact: 'ReadResult',
         queryAttachment: 'QueryData',
