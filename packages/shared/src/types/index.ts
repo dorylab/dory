@@ -8,6 +8,6 @@ export * from "./api";
 export * from "./chat";
 export * from "./connector";
 export * from "./assistant";
-export * from "./ai-schema-cache";
+export * from './schema-tags';
 export * from "./ai-usage";
 export * from "./local-files";

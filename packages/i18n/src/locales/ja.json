@@ -3641,7 +3641,6 @@
         },
         "Logs": {
             "InitFailed": "データベースの初期化に失敗しました:",
-            "AiSchemaCacheInitFailed": "[postgres] AI スキーマキャッシュリポジトリの初期化に失敗しました:",
             "ChatRepoInitFailed": "[postgres] チャットリポジトリの初期化に失敗しました:",
             "QueryAuditWriteFailed": "[pg] queryAudit の書き込みに失敗しました:"
         }

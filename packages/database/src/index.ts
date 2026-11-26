@@ -6,7 +6,6 @@ import { PostgresTabStateRepository } from './postgres/impl/sql-console/tabs/tab
 import { createPgAuditService } from './postgres/impl/audit';
 import { PostgresOrganizationsRepository } from './postgres/impl/organization';
 import { PostgresConnectionsRepository } from './postgres/impl/connections';
-import { PostgresAiSchemaCacheRepository } from './postgres/impl/ai-schema-cache';
 import { PostgresSavedQueriesRepository } from './postgres/impl/sql-console/save-queries';
 import { PostgresSavedQueryFoldersRepository } from './postgres/impl/sql-console/saved-query-folders';
 import { PostgresAiUsageRepository } from './postgres/impl/ai-usage';
@@ -38,7 +37,6 @@ export type PostgresDBService = {
     // datasource: PostgresDatasourceRepository;
     organizations: PostgresOrganizationsRepository;
     connections: PostgresConnectionsRepository;
-    aiSchemaCache: PostgresAiSchemaCacheRepository;
     savedQueries: PostgresSavedQueriesRepository;
     savedQueryFolders: PostgresSavedQueryFoldersRepository;
     aiUsage: AiUsageRepository;
@@ -89,9 +87,6 @@ export async function getDBService(): Promise<DBService> {
 
             const connectionsRepo = new PostgresConnectionsRepository();
             await connectionsRepo.init();
-
-            const aiSchemaCacheRepo = new PostgresAiSchemaCacheRepository();
-            await aiSchemaCacheRepo.init();
 
             const savedQueriesRepo = new PostgresSavedQueriesRepository();
             await savedQueriesRepo.init();
@@ -151,7 +146,6 @@ export async function getDBService(): Promise<DBService> {
                 actionAudit: actionAuditRepo,
                 organizations: organizationsRepo,
                 connections: connectionsRepo,
-                aiSchemaCache: aiSchemaCacheRepo,
                 savedQueries: savedQueriesRepo,
                 savedQueryFolders: savedQueryFoldersRepo,
                 aiUsage: aiUsageRepo,

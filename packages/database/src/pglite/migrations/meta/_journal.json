@@ -358,6 +358,13 @@
             "when": 1795651200001,
             "tag": "0051_unified_queries",
             "breakpoints": true
+        },
+        {
+            "idx": 51,
+            "version": "7",
+            "when": 1795651200002,
+            "tag": "0052_drop_ai_schema_cache",
+            "breakpoints": true
         }
     ]
 }

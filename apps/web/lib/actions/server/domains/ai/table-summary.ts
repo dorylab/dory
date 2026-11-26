@@ -17,10 +17,7 @@ type TableSummaryInput = {
     model?: string | null;
     catalog?: string | null;
     dbType?: string | null;
-    ignoreCache?: boolean;
 };
-
-type TableSummarySource = 'cache' | 'ai' | 'fallback';
 
 function buildFallbackTableSummary(input: TableSummaryInput, locale?: string | null) {
     const columns = Array.isArray(input.columns) ? input.columns : [];
@@ -30,7 +27,7 @@ function buildFallbackTableSummary(input: TableSummaryInput, locale?: string | n
         highlights: buildFallbackHighlights(columns, locale),
         snippets: buildFallbackSnippets(input.table, columns, locale),
         fromCache: false as const,
-        source: 'fallback' as TableSummarySource,
+        source: 'fallback' as const,
     };
 }
 
@@ -45,25 +42,22 @@ async function runTableSummaryAction(ctx: AiActionContext, input: TableSummaryIn
 
     try {
         const provider = (await import('@/lib/ai/provider')).default;
-        const result = await provider.getTableSummaryWithCache({
+        const result = await provider.getTableSummary({
             organizationId: ctx.organizationId,
             userId: ctx.userId,
             req: ctx.services.req,
-            connectionId,
             columns,
             properties: input.properties ?? null,
             dbType: input.dbType ?? null,
-            catalog: input.catalog ?? null,
             database: input.database ?? null,
             table: input.table ?? null,
             model: input.model ?? null,
-            ignoreCache: Boolean(input.ignoreCache),
             locale: ctx.locale,
         });
 
         return {
             ...result,
-            source: result.fromCache ? ('cache' as const) : ('ai' as const),
+            source: 'ai' as const,
         };
     } catch (error) {
         console.error('[action/ai.tableSummary] failed:', error);

@@ -1,22 +1,19 @@
-import { generateText, runAiWithCache } from '@/lib/ai/gateway';
+import { generateText } from '@/lib/ai/gateway';
 
 import type { NextRequest } from 'next/server';
-import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import { cleanJson } from '../../core/clean-json';
-import { buildColumnTaggingPrompt, heuristicTagging, normalizeAIResult } from '../../core/column-tagging';
+import { buildColumnTaggingPrompt, normalizeAIResult } from '../../core/column-tagging';
 import { ColumnInput, SchemaTag, SchemaTagResponse } from '@dory/shared';
 import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
-type GetColumnTagsWithCacheOptions = {
+type GetColumnTagsOptions = {
     organizationId: string;
     userId?: string | null;
     req?: NextRequest | null;
-    connectionId: string;
     columns: ColumnInput[];
 
     dbType?: string | null;
-    catalog?: string | null;
     database?: string | null;
     table?: string | null;
     locale?: string | null;
@@ -27,15 +24,13 @@ type GetColumnTagsWithCacheOptions = {
     algoVersion?: number;
 };
 
-export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOptions) {
+export async function getColumnTags(options: GetColumnTagsOptions) {
     const {
         organizationId,
         userId,
         req,
-        connectionId,
         columns,
         dbType,
-        catalog,
         database,
         table,
         locale,
@@ -65,30 +60,16 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
         requestedModel: model,
         req,
     });
-    const effectiveCatalog = catalog ?? 'default';
     const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
 
-    const schemaHash = await computeSchemaHash({
-        dbType,
-        catalog: effectiveCatalog,
-        database,
-        table,
-        columns,
-    });
-    const localeKey = locale ?? 'en';
+    const prompt = buildColumnTaggingPrompt({ columns, dbType, database, table, locale });
 
-    const { normalized, payload, fromCache } = await runAiWithCache<SchemaTag[], SchemaTagResponse | null>({
-        organizationId,
-        connectionId,
-        feature,
-        model: providerModelName,
-        inputHash: `${schemaHash}:${localeKey}`,
-        catalog: effectiveCatalog,
-        dbType: dbType ?? null,
-        databaseName: database ?? null,
-        tableName: table ?? null,
-        promptVersion,
-        algoVersion,
+    const { text } = await generateText({
+        model: chatModel,
+        instructions: systemPrompt,
+        prompt,
+        temperature: preset.temperature,
+        topP: 1,
         context: {
             organizationId,
             userId: userId ?? null,
@@ -99,52 +80,19 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
             promptVersion,
             algoVersion,
         },
-        normalize: savedPayload => {
-            if (savedPayload?.columns) return savedPayload.columns;
-            return heuristicTagging(columns, locale);
-        },
-        run: async () => {
-            const prompt = buildColumnTaggingPrompt({ columns, dbType, database, table, locale });
-
-            const { text } = await generateText({
-                model: chatModel,
-                instructions: systemPrompt,
-                prompt,
-                temperature: preset.temperature,
-                topP: 1,
-                context: {
-                    organizationId,
-                    userId: userId ?? null,
-                    feature,
-                    model: providerModelName,
-                    provider: providerKey ?? undefined,
-                    gateway: gateway ?? undefined,
-                    promptVersion,
-                    algoVersion,
-                },
-            });
-
-            const cleaned = cleanJson(text);
-            let parsed: SchemaTagResponse | null = null;
-            try {
-                parsed = JSON.parse(cleaned) as SchemaTagResponse;
-            } catch {
-                console.error('[getColumnTagsWithCache] parse failed, raw:', text);
-            }
-
-            const normalizedResult = normalizeAIResult(columns, parsed, locale);
-            const payloadToSave: SchemaTagResponse = {
-                columns: normalizedResult,
-                raw: parsed?.raw ?? cleaned,
-            };
-
-            return { payload: payloadToSave };
-        },
     });
 
+    const cleaned = cleanJson(text);
+    let parsed: SchemaTagResponse | null = null;
+    try {
+        parsed = JSON.parse(cleaned) as SchemaTagResponse;
+    } catch {
+        console.error('[getColumnTags] parse failed.');
+    }
+
     return {
-        columns: normalized,
-        raw: payload?.raw,
-        fromCache,
+        columns: normalizeAIResult(columns, parsed, locale),
+        raw: parsed?.raw ?? cleaned,
+        fromCache: false,
     };
 }

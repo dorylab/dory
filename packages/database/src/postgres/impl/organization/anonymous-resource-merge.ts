@@ -17,7 +17,6 @@ export type AnonymousOrganizationOwnershipMigrationResult = {
     savedQueryFoldersMoved: number;
     connectionsMoved: number;
     connectionIdentitiesMoved: number;
-    aiSchemaCacheMoved: number;
     syncOperationsMoved: number;
     migrationResults: AnonymousOwnershipMigrationResult[];
     skippedTables: string[];
@@ -63,7 +62,6 @@ export async function migrateAnonymousOrganizationOwnership(
         savedQueryFoldersMoved: sumCount(migrationResults, 'savedQueryFoldersMoved'),
         connectionsMoved: sumCount(migrationResults, 'connectionsMoved'),
         connectionIdentitiesMoved: sumCount(migrationResults, 'connectionIdentitiesMoved'),
-        aiSchemaCacheMoved: sumCount(migrationResults, 'aiSchemaCacheMoved'),
         syncOperationsMoved: sumCount(migrationResults, 'syncOperationsMoved'),
         migrationResults,
         skippedTables: anonymousOwnershipNoMigratePolicies.map(policy => policy.table),

@@ -13,7 +13,6 @@ test('anonymous delete cleanup covers all anonymous workspace business tables', 
     assert.deepEqual(
         [...cleanupTables].sort(),
         [
-            'aiSchemaCache',
             'aiUsageEvents',
             'aiUsageTraces',
             'chatMessages',

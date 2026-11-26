@@ -804,5 +804,13 @@
     "bps": true,
     "folderMillis": 1795651200001,
     "hash": "b26f20cc2b47e33e1b3e9e5f499929b140d836df93b6c30ab2f22df97496da5a"
+  },
+  {
+    "sql": [
+      "DROP TABLE IF EXISTS \"ai_schema_cache\";\n"
+    ],
+    "bps": true,
+    "folderMillis": 1795651200002,
+    "hash": "161d2c251d6c3e6047dd8b14590a00b52be1521e4c9ee1c844f136aa328082e0"
   }
 ]

@@ -14,14 +14,12 @@ async function runSchemaExplanationsAction(ctx: AiActionContext, input: SchemaCo
 
     try {
         const provider = (await import('@/lib/ai/provider')).default;
-        return await provider.getColumnExplanationsWithCache({
+        return await provider.getColumnExplanations({
             organizationId: ctx.organizationId,
             userId: ctx.userId,
             req: ctx.services.req,
-            connectionId,
             columns: input.columns,
             dbType: input.dbType ?? null,
-            catalog: input.catalog ?? null,
             database: input.database ?? null,
             table: input.table ?? null,
             model: input.model ?? null,

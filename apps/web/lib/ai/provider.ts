@@ -1,20 +1,20 @@
 // lib/ai/provider.ts
 import 'server-only';
 
-import { getColumnTagsWithCache } from './runtime/features/column-tagging';
-import { getTableSummaryWithCache } from './runtime/features/table-summary';
-import { getColumnExplanationsWithCache } from './runtime/features/schema-explanations';
+import { getColumnTags } from './runtime/features/column-tagging';
+import { getTableSummary } from './runtime/features/table-summary';
+import { getColumnExplanations } from './runtime/features/schema-explanations';
 
 export type AiProvider = {
-    getColumnTagsWithCache: typeof getColumnTagsWithCache;
-    getColumnExplanationsWithCache: typeof getColumnExplanationsWithCache;
-    getTableSummaryWithCache: typeof getTableSummaryWithCache;
+    getColumnTags: typeof getColumnTags;
+    getColumnExplanations: typeof getColumnExplanations;
+    getTableSummary: typeof getTableSummary;
 };
 
 export const openProvider: AiProvider = {
-    getColumnTagsWithCache,
-    getColumnExplanationsWithCache,
-    getTableSummaryWithCache,
+    getColumnTags,
+    getColumnExplanations,
+    getTableSummary,
 };
 
 let provider: AiProvider = openProvider;

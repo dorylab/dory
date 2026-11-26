@@ -3648,7 +3648,6 @@
         },
         "Logs": {
             "InitFailed": "数据库初始化失败:",
-            "AiSchemaCacheInitFailed": "[postgres] 初始化 AI Schema 缓存仓储失败:",
             "ChatRepoInitFailed": "[postgres] 初始化聊天仓储失败:",
             "QueryAuditWriteFailed": "[pg] 写入 queryAudit 失败:"
         }

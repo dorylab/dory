@@ -14,14 +14,12 @@ async function runSchemaTagsAction(ctx: AiActionContext, input: SchemaColumnsInp
 
     try {
         const provider = (await import('@/lib/ai/provider')).default;
-        return await provider.getColumnTagsWithCache({
+        return await provider.getColumnTags({
             organizationId: ctx.organizationId,
             userId: ctx.userId,
             req: ctx.services.req,
-            connectionId,
             columns: input.columns,
             dbType: input.dbType ?? null,
-            catalog: input.catalog ?? null,
             database: input.database ?? null,
             table: input.table ?? null,
             model: input.model ?? null,

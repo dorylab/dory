@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { schema } from '@dory/database/schema';
 import type { AnonymousOwnershipMigration } from './types';
 
-const tables = ['connections', 'connectionIdentities', 'tabs', 'aiSchemaCache', 'syncOperations'];
+const tables = ['connections', 'connectionIdentities', 'tabs', 'syncOperations'];
 
 function buildImportedConnectionName(baseName: string, occupiedNames: Set<string>) {
     const normalizedBaseName = baseName.trim() || 'Imported connection';
@@ -141,25 +141,6 @@ export const connectionsAnonymousOwnershipMigration: AnonymousOwnershipMigration
             tabsMoved = movedTabs.length;
         }
 
-        let aiSchemaCacheMoved = 0;
-        if (params.sourceOrganizationId !== params.targetOrganizationId && connectionIds.length > 0) {
-            const movedCaches = await tx
-                .update(schema.aiSchemaCache)
-                .set({
-                    organizationId: params.targetOrganizationId,
-                    updatedAt: new Date().toISOString(),
-                })
-                .where(
-                    and(
-                        eq(schema.aiSchemaCache.organizationId, params.sourceOrganizationId),
-                        inArray(schema.aiSchemaCache.connectionId, connectionIds),
-                    ),
-                )
-                .returning({ id: schema.aiSchemaCache.id });
-
-            aiSchemaCacheMoved = movedCaches.length;
-        }
-
         let syncOperationsMoved = 0;
         if (params.sourceOrganizationId !== params.targetOrganizationId && (connectionIds.length > 0 || identityIds.length > 0)) {
             const syncConditions: any[] = [];
@@ -189,7 +170,6 @@ export const connectionsAnonymousOwnershipMigration: AnonymousOwnershipMigration
                 connectionsMoved,
                 connectionIdentitiesMoved,
                 tabsMoved,
-                aiSchemaCacheMoved,
                 syncOperationsMoved,
             },
             details: {

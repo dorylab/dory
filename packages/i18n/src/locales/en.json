@@ -3644,7 +3644,6 @@
         },
         "Logs": {
             "InitFailed": "Database initialization failed:",
-            "AiSchemaCacheInitFailed": "[postgres] Failed to initialize AI schema cache repository:",
             "ChatRepoInitFailed": "[postgres] Failed to initialize chat repository:",
             "QueryAuditWriteFailed": "[pg] Failed to write queryAudit:"
         }

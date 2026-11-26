@@ -7,7 +7,6 @@ import * as auditSchema from './audit';
 import * as organizationSchema from './organizations/organizations';
 import * as organizationMemberSchema from './organizations/organization-members';
 import * as connectionsSchema from './connections';
-import * as aiSchemaCache from './ai-schema-cache';
 import * as savedQueriesSchema from './saved-queries';
 import * as savedQueryFoldersSchema from './saved-query-folders';
 import * as aiUsageSchema from './ai-usage';
@@ -33,7 +32,6 @@ export * from './audit';
 export * from './organizations/organization-members';
 export * from './organizations/organizations';
 export * from './connections';
-export * from './ai-schema-cache';
 export * from './saved-queries';
 export * from './saved-query-folders';
 export * from './ai-usage';
@@ -60,7 +58,6 @@ export const schema = {
     ...organizationSchema,
     ...organizationMemberSchema,
     ...connectionsSchema,
-    ...aiSchemaCache,
     ...savedQueriesSchema,
     ...savedQueryFoldersSchema,
     ...aiUsageSchema,

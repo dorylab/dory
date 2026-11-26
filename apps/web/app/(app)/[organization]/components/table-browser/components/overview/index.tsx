@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
@@ -196,8 +196,6 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
         [columns, databaseName, properties, t, tableName],
     );
 
-    const ignoreAiCacheRef = useRef(false);
-
     const aiOverviewQuery = useQuery({
         queryKey: tableQueryKeys.aiOverview(connectionId, databaseName, tableName),
         enabled: Boolean(connectionId && databaseName && tableName && !aiBlocked && columns.length),
@@ -205,9 +203,6 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
         gcTime: 1000 * 60 * 30,
         refetchOnWindowFocus: false,
         queryFn: async () => {
-            const ignoreCache = ignoreAiCacheRef.current;
-            ignoreAiCacheRef.current = false;
-
             const data = await executeActionClient<AiOverviewResponse>(
                 'ai.tableSummary',
                 {
@@ -217,7 +212,6 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
                     columns,
                     properties,
                     dbType: currentConnection?.connection?.type,
-                    ignoreCache,
                 },
                 {
                     currentConnectionId: currentConnection?.connection?.id,
@@ -258,7 +252,6 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
                     updatedAt={aiUpdatedAt}
                     onRefresh={() => {
                         if (!aiBlocked) {
-                            ignoreAiCacheRef.current = true;
                             void aiOverviewQuery.refetch();
                         }
                     }}

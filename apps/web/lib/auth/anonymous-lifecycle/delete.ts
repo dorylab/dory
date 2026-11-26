@@ -5,7 +5,7 @@ import { findOwnedOrganizationIdsForUser, getDb } from './common';
 
 export const anonymousDeleteCleanupTableCoverage = {
     connectionIdentityScoped: ['connectionIdentitySecrets'],
-    connectionScoped: ['connectionSsh', 'tabs', 'aiSchemaCache', 'syncOperations'],
+    connectionScoped: ['connectionSsh', 'tabs', 'syncOperations'],
     organizationScoped: [
         'chatMessages',
         'chatSessionState',
@@ -73,7 +73,6 @@ async function cleanupAnonymousOrganizationsWithTx(
     if (connectionIds.length > 0) {
         await tx.delete(schema.connectionSsh).where(inArray(schema.connectionSsh.connectionId, connectionIds));
         await tx.delete(schema.tabs).where(inArray(schema.tabs.connectionId, connectionIds));
-        await tx.delete(schema.aiSchemaCache).where(inArray(schema.aiSchemaCache.connectionId, connectionIds));
         await tx.delete(schema.syncOperations).where(and(eq(schema.syncOperations.entityType, 'connection'), inArray(schema.syncOperations.entityId, connectionIds)));
     }
 

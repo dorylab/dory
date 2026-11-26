@@ -1,7 +1,6 @@
-import { generateText, runAiWithCache } from '@/lib/ai/gateway';
+import { generateText } from '@/lib/ai/gateway';
 
 import type { NextRequest } from 'next/server';
-import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import type { TablePropertiesRow } from '@dory/shared/types/table-info';
 import {
     buildFallbackSummary,
@@ -12,7 +11,6 @@ import {
     normalizeTableSummary,
     parseTableSummaryResponse,
     ColumnInput,
-    TableSummaryResponse,
 } from '../../core/table-summary';
 import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
@@ -22,12 +20,10 @@ type GetTableSummaryOptions = {
     organizationId: string;
     userId?: string | null;
     req?: NextRequest | null;
-    connectionId: string;
     columns: ColumnInput[];
 
     properties?: TablePropertiesRow | null;
     dbType?: string | null;
-    catalog?: string | null;
     database?: string | null;
     table?: string | null;
     locale?: string | null;
@@ -36,19 +32,16 @@ type GetTableSummaryOptions = {
     feature?: string; // Default 'table_summary'
     promptVersion?: number; // Default 2
     algoVersion?: number;
-    ignoreCache?: boolean;
 };
 
-export async function getTableSummaryWithCache(options: GetTableSummaryOptions) {
+export async function getTableSummary(options: GetTableSummaryOptions) {
     const {
         organizationId,
         userId,
         req,
-        connectionId,
         columns,
         properties,
         dbType,
-        catalog,
         database,
         table,
         locale,
@@ -56,7 +49,6 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         feature = 'table_summary',
         promptVersion = 2,
         algoVersion,
-        ignoreCache = false,
     } = options;
 
     const colList = columns ?? [];
@@ -85,37 +77,24 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         defaultModelName,
         req,
     });
-    const effectiveCatalog = catalog ?? 'default';
     const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
 
-    const schemaHash = await computeSchemaHash({
+    const prompt = buildTableSummaryPrompt({
         dbType,
-        catalog: effectiveCatalog,
         database,
         table,
-        columns: colList.map(col => ({
-            name: col.name,
-            type: col.type,
-            comment: col.comment,
-            defaultValue: col.defaultValue,
-            nullable: col.nullable,
-        })),
+        properties: properties ?? null,
+        columns: colList,
+        locale,
     });
-    const localeKey = locale ?? 'en';
 
-    const { normalized, payload, fromCache } = await runAiWithCache<TableSummaryResponse, TableSummaryResponse | null>({
-        organizationId,
-        connectionId,
-        feature,
-        model: effectiveModelName,
-        inputHash: `${schemaHash}:${localeKey}`,
-        catalog: effectiveCatalog,
-        dbType: dbType ?? null,
-        databaseName: database ?? null,
-        tableName: table ?? null,
-        promptVersion,
-        algoVersion,
-        ignoreCache,
+    const { text } = await generateText({
+        model: chatModel,
+        instructions: systemPrompt,
+        prompt,
+        temperature: preset.temperature,
+        topP: 1,
+        maxOutputTokens: preset.maxOutputTokens ?? 512,
         context: {
             organizationId,
             userId: userId ?? null,
@@ -126,85 +105,40 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
             promptVersion,
             algoVersion,
         },
-        normalize: savedPayload =>
-            normalizeTableSummary({
-                payload: savedPayload,
-                columns: colList,
-                properties: properties ?? null,
-                database: database ?? null,
-                table: table ?? null,
-                locale,
-            }),
-        run: async () => {
-            const prompt = buildTableSummaryPrompt({
-                dbType,
-                database,
-                table,
-                properties: properties ?? null,
-                columns: colList,
-                locale,
-            });
+    });
 
-            const { text } = await generateText({
-                model: chatModel,
-                instructions: systemPrompt,
-                prompt,
-                temperature: preset.temperature,
-                topP: 1,
-                maxOutputTokens: preset.maxOutputTokens ?? 512,
-                context: {
-                    organizationId,
-                    userId: userId ?? null,
-                    feature,
-                    model: effectiveModelName,
-                    provider: providerKey ?? undefined,
-                    gateway: gateway ?? undefined,
-                    promptVersion,
-                    algoVersion,
-                },
-            });
+    const { parsed, cleaned } = parseTableSummaryResponse(text);
+    let parsedPayload = parsed;
+    let cleanedRaw = cleaned;
 
-            const { parsed, cleaned } = parseTableSummaryResponse(text);
-            let parsedPayload = parsed;
-            let cleanedRaw = cleaned;
+    if (!parsedPayload?.summary?.trim() && typeof parsedPayload?.raw === 'string') {
+        let depth = 0;
+        let currentRaw = parsedPayload.raw;
+        while (depth < 3 && typeof currentRaw === 'string') {
+            const nested = parseTableSummaryResponse(currentRaw);
+            if (!nested.parsed) break;
 
-            if (!parsedPayload?.summary?.trim() && typeof parsedPayload?.raw === 'string') {
-                let depth = 0;
-                let currentRaw = parsedPayload.raw;
-                while (depth < 3 && typeof currentRaw === 'string') {
-                    const nested = parseTableSummaryResponse(currentRaw);
-                    if (!nested.parsed) break;
+            parsedPayload = nested.parsed;
+            cleanedRaw = nested.cleaned;
+            if (parsedPayload.summary?.trim()) break;
 
-                    parsedPayload = nested.parsed;
-                    cleanedRaw = nested.cleaned;
-                    if (parsedPayload.summary?.trim()) break;
+            currentRaw = parsedPayload.raw as string;
+            depth += 1;
+        }
+    }
 
-                    currentRaw = parsedPayload.raw as string;
-                    depth += 1;
-                }
-            }
-
-            const normalizedResult = normalizeTableSummary({
-                payload: parsedPayload,
-                columns: colList,
-                properties: properties ?? null,
-                database: database ?? null,
-                table: table ?? null,
-                locale,
-            });
-
-            const payloadToSave: TableSummaryResponse = {
-                ...normalizedResult,
-                raw: parsedPayload?.raw ?? cleanedRaw,
-            };
-
-            return { payload: payloadToSave };
-        },
+    const normalizedResult = normalizeTableSummary({
+        payload: parsedPayload,
+        columns: colList,
+        properties: properties ?? null,
+        database: database ?? null,
+        table: table ?? null,
+        locale,
     });
 
     return {
-        ...normalized,
-        raw: payload?.raw ?? normalized.raw,
-        fromCache,
+        ...normalizedResult,
+        raw: parsedPayload?.raw ?? cleanedRaw,
+        fromCache: false,
     };
 }

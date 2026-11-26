@@ -8,7 +8,6 @@ import {
     type SystemModelMessage,
 } from 'ai';
 import type { Context } from '@ai-sdk/provider-utils';
-import { runAiWithCache as runAiWithCacheBase, type RunAiWithCacheOptions, type RunAiWithCacheResult } from './runtime/runAiWithCache';
 import { AI_QUOTA_EXCEEDED_CODE, assertAiQuotaAllowed, buildCloudflareAiGatewayHeaders, resolveAiEntitlements, type AiIdentityContext } from './usage-quota';
 
 type AiUsageStatus = 'ok' | 'error' | 'aborted';
@@ -845,43 +844,4 @@ export async function streamText<TOOLS extends ToolSet>(
         });
         throw error;
     }
-}
-
-export async function runAiWithCache<TNormalized, TPayload>(
-    options: RunAiWithCacheOptions<TNormalized, TPayload> & {
-        context?: AiGatewayContext;
-    },
-): Promise<RunAiWithCacheResult<TNormalized, TPayload>> {
-    const { context, ...cacheOptions } = options;
-    const requestId = context?.requestId ?? createRequestId();
-    const promptVersion = cacheOptions.promptVersion ?? context?.promptVersion ?? 1;
-    const algoVersion = cacheOptions.algoVersion ?? context?.algoVersion;
-
-    const result = await runAiWithCacheBase({
-        ...cacheOptions,
-        promptVersion,
-        algoVersion,
-    });
-
-    if (result.fromCache) {
-        await writeAiUsage({
-            requestId,
-            organizationId: context?.organizationId ?? cacheOptions.organizationId ?? null,
-            userId: context?.userId ?? null,
-            feature: context?.feature ?? cacheOptions.feature,
-            model: context?.model ?? cacheOptions.model,
-            promptVersion,
-            algoVersion,
-            fromCache: true,
-            status: 'ok',
-            gateway: inferGateway(context),
-            provider: inferProvider(context),
-            costMicros: context?.costMicros ?? null,
-            traceId: context?.traceId ?? null,
-            spanId: context?.spanId ?? null,
-            usageJson: null,
-        });
-    }
-
-    return result;
 }

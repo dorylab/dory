@@ -48,7 +48,7 @@ test('anonymous ownership migrations only cover business resources', () => {
 
     assert.deepEqual(
         [...migrationTableSet].sort(),
-        ['aiSchemaCache', 'chatMessages', 'chatSessionState', 'chatSessions', 'connectionIdentities', 'connections', 'savedQueries', 'savedQueryCollections', 'savedQueryFolders', 'syncOperations', 'tabs'],
+        ['chatMessages', 'chatSessionState', 'chatSessions', 'connectionIdentities', 'connections', 'savedQueries', 'savedQueryCollections', 'savedQueryFolders', 'syncOperations', 'tabs'],
     );
     assert.deepEqual(
         [...noMigrateTableSet].sort(),
