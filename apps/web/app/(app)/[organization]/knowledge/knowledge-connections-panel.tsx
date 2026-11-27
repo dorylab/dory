@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { parseAsString, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
@@ -46,6 +46,7 @@ export function KnowledgeSourcesPanel({
     onDone?: () => void;
     onView?: (connectorId: string) => void;
 }) {
+    const locale = useLocale();
     const t = useTranslations('Knowledge.Connections');
     const sources = useTranslations('Knowledge.KnowledgeSources');
     const client = useQueryClient();
@@ -107,110 +108,101 @@ export function KnowledgeSourcesPanel({
         .filter(c => !action?.connectorId || c.id === action.connectorId)
         .sort((a, b) => providers.indexOf(a.provider) - providers.indexOf(b.provider) || connectionName(a).localeCompare(connectionName(b)) || a.id.localeCompare(b.id));
     const dialogProps = { organization, knowledgeModelId, onClose: closeSetup };
-    const management = (
-        <section hidden={!rows.length} className="mt-8 space-y-3" aria-label={t('Existing')}>
-            <h2 className="text-base font-semibold">{t('Existing')}</h2>
-            <ul className="divide-y rounded-xl border bg-card">
-                {rows.map(c => (
-                    <li key={c.id} className="grid min-w-0 gap-x-5 gap-y-2 p-4 md:grid-cols-[minmax(0,1fr)_auto]">
-                        <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-3">
-                                <SourceLogo provider={c.provider} className="size-5 shrink-0" />
-                                <h3 className="min-w-0 break-all font-medium">
-                                    {c.provider === 'drive' ? (
-                                        <a
-                                            href={`https://drive.google.com/drive/folders/${encodeURIComponent(c.driveFolderId)}`}
-                                            className="hover:underline"
-                                            target="_blank"
-                                            rel="noreferrer"
-                                        >
-                                            {c.displayName}
-                                        </a>
-                                    ) : (
-                                        connectionName(c)
-                                    )}
-                                </h3>
-                                <Badge variant="outline">{sources(`GitHubStatus.${c.status}`)}</Badge>
-                            </div>
-                            <p className="break-words text-sm text-muted-foreground">
-                                {c.provider === 'github'
-                                    ? c.defaultBranch + ' · ' + (c.rootPath || sources('GitHubRepositoryRoot'))
-                                    : c.provider === 'linear'
-                                      ? sources('LinearProjectCount', { count: c.projectIds.length })
-                                      : c.provider === 'local'
-                                        ? t('LocalScope')
-                                        : t('DriveScope')}
-                            </p>
-                            {c.provider === 'linear' && c.projectNames?.length ? <p className="break-words text-sm">{c.projectNames.join(' · ')}</p> : null}
-                            <p className="text-xs text-muted-foreground">
-                                {c.lastSyncedAt ? sources('GitHubLastSynced', { date: new Date(c.lastSyncedAt).toLocaleString() }) : sources('GitHubNotSynced')}
-                            </p>
-                            {c.lastError && <p className="text-sm text-destructive">{c.lastError}</p>}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
-                            <Button size="sm" variant="outline" asChild>
-                                <Link
-                                    onClick={event => {
-                                        if (onView) {
-                                            event.preventDefault();
-                                            onView(c.id);
-                                        }
-                                    }}
-                                    href={`?tab=documents&folder=${encodeURIComponent(c.id)}`}
-                                >
-                                    {t('ViewDocuments')}
-                                </Link>
+    function sourceName(c: KnowledgeConnectorView) {
+        return c.provider === 'drive' ? (
+            <a href={`https://drive.google.com/drive/folders/${encodeURIComponent(c.driveFolderId)}`} className="hover:underline" target="_blank" rel="noreferrer">
+                {c.displayName}
+            </a>
+        ) : (
+            connectionName(c)
+        );
+    }
+    function sourceDetails(c: KnowledgeConnectorView) {
+        return (
+            <div className="min-w-0 space-y-2">
+                <p className="[overflow-wrap:anywhere] text-sm text-muted-foreground">
+                    {c.provider === 'github'
+                        ? c.defaultBranch + ' · ' + (c.rootPath || sources('GitHubRepositoryRoot'))
+                        : c.provider === 'linear'
+                          ? sources('LinearProjectCount', { count: c.projectIds.length })
+                          : c.provider === 'local'
+                            ? t('LocalScope')
+                            : t('DriveScope')}
+                </p>
+                {c.provider === 'linear' && c.projectNames?.length ? <p className="[overflow-wrap:anywhere] text-sm">{c.projectNames.join(' · ')}</p> : null}
+                <p className="text-xs text-muted-foreground">
+                    {c.lastSyncedAt
+                        ? sources('GitHubLastSynced', { date: new Date(c.lastSyncedAt).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) })
+                        : sources('GitHubNotSynced')}
+                </p>
+                {c.lastError && <p className="text-sm text-destructive [overflow-wrap:anywhere]">{c.lastError}</p>}
+            </div>
+        );
+    }
+    function sourceActions(c: KnowledgeConnectorView) {
+        return (
+            <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" asChild>
+                    <Link
+                        onClick={event => {
+                            if (onView) {
+                                event.preventDefault();
+                                onView(c.id);
+                            }
+                        }}
+                        href={`?tab=documents&folder=${encodeURIComponent(c.id)}`}
+                    >
+                        {t('ViewDocuments')}
+                    </Link>
+                </Button>
+                {writable(c.provider) && (
+                    <>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={sync.isPending || c.status === 'disabled' || c.status === 'syncing'}
+                            onClick={() => {
+                                if (c.provider === 'local') {
+                                    setEditing(c);
+                                    setSetup('local');
+                                } else sync.mutate(c.id);
+                            }}
+                        >
+                            {sources('GitHubSyncNow')}
+                        </Button>
+                        {c.provider === 'drive' && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setEditing(c);
+                                    setSetup('drive');
+                                }}
+                            >
+                                {t('Authorize')}
                             </Button>
-                            {writable(c.provider) && (
-                                <>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={sync.isPending || c.status === 'disabled' || c.status === 'syncing'}
-                                        onClick={() => {
-                                            if (c.provider === 'local') {
-                                                setEditing(c);
-                                                setSetup('local');
-                                            } else sync.mutate(c.id);
-                                        }}
-                                    >
-                                        {sources('GitHubSyncNow')}
-                                    </Button>
-                                    {c.provider === 'drive' && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                setEditing(c);
-                                                setSetup('drive');
-                                            }}
-                                        >
-                                            {t('Authorize')}
-                                        </Button>
-                                    )}
-                                    {c.provider === 'linear' && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                setEditing(c);
-                                                setSetup('linear');
-                                            }}
-                                        >
-                                            {sources(c.status === 'disabled' ? 'LinearUpdateApiKey' : 'LinearEditProjects')}
-                                        </Button>
-                                    )}
-                                    <Button size="sm" variant="ghost" onClick={() => setRemoving(c)}>
-                                        {sources('GitHubDisconnect')}
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    </li>
-                ))}
-            </ul>
-        </section>
-    );
+                        )}
+                        {c.provider === 'linear' && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    setEditing(c);
+                                    setSetup('linear');
+                                }}
+                            >
+                                {sources(c.status === 'disabled' ? 'LinearUpdateApiKey' : 'LinearEditProjects')}
+                            </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => setRemoving(c)}>
+                            {sources('GitHubDisconnect')}
+                        </Button>
+                    </>
+                )}
+            </div>
+        );
+    }
+    const selected = rows[0];
     const disconnectPrompt = removing && (
         <>
             <DialogHeader>
@@ -259,7 +251,24 @@ export function KnowledgeSourcesPanel({
             {url.source && legacy.data && legacy.data.format !== 'markdown' && (
                 <SourceViewer source={legacy.data} organization={organization} knowledgeModelId={knowledgeModelId} onClose={() => void setUrl({ source: null })} />
             )}
-            {!action && management}
+            {!action && rows.length > 0 && (
+                <section className="mt-8 space-y-3" aria-label={t('Existing')}>
+                    <h2 className="text-base font-semibold">{t('Existing')}</h2>
+                    <ul className="divide-y rounded-xl border bg-card">
+                        {rows.map(c => (
+                            <li key={c.id} className="min-w-0 space-y-3 p-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <SourceLogo provider={c.provider} className="size-5 shrink-0" />
+                                    <h3 className="min-w-0 font-medium [overflow-wrap:anywhere]">{sourceName(c)}</h3>
+                                    <Badge variant="outline">{sources(`GitHubStatus.${c.status}`)}</Badge>
+                                </div>
+                                {sourceDetails(c)}
+                                {sourceActions(c)}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
             {!setup && (action?.connectorId || removing) && (
                 <Dialog
                     open
@@ -269,14 +278,37 @@ export function KnowledgeSourcesPanel({
                         else onDone?.();
                     }}
                 >
-                    <DialogContent className="max-h-[85vh] overflow-auto">
+                    <DialogContent className="max-h-[85dvh] min-w-0 overflow-y-auto text-card-foreground">
                         {disconnectPrompt ?? (
                             <>
-                                <DialogHeader>
-                                    <DialogTitle>{rows[0] ? connectionName(rows[0]) : t('Existing')}</DialogTitle>
+                                <DialogHeader className="min-w-0 gap-2 pe-6 text-start">
+                                    <DialogTitle className="flex items-start gap-2 text-start leading-snug">
+                                        {selected && <SourceLogo provider={selected.provider} className="mt-0.5 size-5 shrink-0 text-muted-foreground" />}
+                                        <span className="min-w-0 [overflow-wrap:anywhere]">{selected ? sourceName(selected) : sources('Title')}</span>
+                                    </DialogTitle>
+                                    {selected && (
+                                        <DialogDescription className="flex flex-wrap items-center gap-2">
+                                            {label(selected.provider)}
+                                            <Badge variant="outline">{sources(`GitHubStatus.${selected.status}`)}</Badge>
+                                        </DialogDescription>
+                                    )}
                                 </DialogHeader>
-                                {connections.isError && <p role="alert">{connections.error.message}</p>}
-                                {management}
+                                {connections.isError && (
+                                    <p role="alert" className="text-sm text-destructive">
+                                        {connections.error.message}
+                                    </p>
+                                )}
+                                {connections.isPending && (
+                                    <p role="status" className="text-sm text-muted-foreground">
+                                        {sources('Loading')}
+                                    </p>
+                                )}
+                                {selected && (
+                                    <>
+                                        {sourceDetails(selected)}
+                                        <div className="border-t pt-4">{sourceActions(selected)}</div>
+                                    </>
+                                )}
                             </>
                         )}
                     </DialogContent>

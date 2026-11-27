@@ -135,7 +135,7 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await page.getByRole('button', { name: 'Directory', exact: true }).click();
         await dialog.getByRole('button', { name: 'Verified Queries', exact: true }).click();
-        await page.getByRole('button', { name: 'Which orders were refunded?' }).click();
+        await page.getByRole('table').getByRole('button', { name: 'Refund SQL', exact: true }).click();
         const sourceLink = page.getByRole('link', { name: 'Updated policy.md', exact: true });
         await expect(sourceLink).toHaveAttribute('href', '?tab=documents&file=' + source!.id);
         await sourceLink.click();
@@ -358,5 +358,85 @@ test('Markdown reader and editor omit redundant metadata and preserve the docume
         expect(await action<{ connectionId: string | null }>('knowledge.getKnowledgeSource', { ...scope, id })).toMatchObject({ connectionId });
     } finally {
         await action('knowledge.delete', scope, 'knowledge.delete');
+    }
+});
+
+test('adds content from the header to the active knowledge base and folder', async ({ page, request }) => {
+    test.setTimeout(120_000);
+    page.setDefaultTimeout(10_000);
+    const action = knowledgeActions(request);
+    const { connections } = await action<{ connections: { connection: { id: string } }[] }>('connection.list', {});
+    const createdIds: string[] = [];
+    const createModel = async (prefix: string) => {
+        const model = await action<{ id: string; name: string; organizationId: string }>('knowledge.create', {
+            name: prefix + ' ' + randomUUID(),
+            connectionIds: [connections[0]!.connection.id],
+        });
+        createdIds.push(model.id);
+        return model;
+    };
+    const add = page.getByRole('button', { name: 'Add content', exact: true });
+    const item = (name: string) => page.getByRole('menuitem', { name, exact: true });
+    const dialog = page.getByRole('dialog');
+    try {
+        const first = await createModel('Finance');
+        const second = await createModel('Research');
+        await page.goto('/' + first.organizationId + '/knowledge/' + first.id);
+        const tree = page.getByRole('navigation', { name: 'Directory' });
+        await tree.getByRole('button', { name: second.name, exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(second.id));
+        await expect(add).toBeEnabled();
+        await add.press('Enter');
+        await expect(page.getByRole('menuitem')).toHaveText(['New document', 'New folder', 'Import Markdown files…', 'Connect external sources', 'Generate from database…']);
+        await item('New folder').click();
+        await expect(dialog).toContainText(second.name);
+        await dialog.getByLabel('Name', { exact: true }).fill('Reports');
+        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+        await page.getByRole('button', { name: 'Reports 0 documents', exact: true }).click();
+        await add.click();
+        await item('New document').click();
+        await expect(dialog).toContainText(second.name + ' / Reports');
+        await dialog.getByLabel('Document title').fill('Summary');
+        await dialog.getByLabel('Markdown content').fill('# Summary');
+        await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+        await tree.getByRole('button', { name: 'Summary.md', exact: true }).click();
+
+        await page.setViewportSize({ width: 390, height: 844 });
+        await add.click();
+        const chooser = page.waitForEvent('filechooser');
+        await item('Import Markdown files…').click();
+        await (await chooser).setFiles(['Annual.md', 'Quarterly.md'].map(name => ({ name, mimeType: 'text/markdown', buffer: Buffer.from('# Report') })));
+        await expect(dialog).toContainText(second.name + ' / Reports');
+        await dialog.getByRole('button', { name: /Upload 2/ }).click();
+        await expect(dialog).toBeHidden();
+        const { sources } = await action<{ sources: { fileName: string; folderId: string | null }[] }>('knowledge.listKnowledgeSources', { knowledgeModelId: second.id });
+        const reports = sources.filter(source => ['Summary.md', 'Annual.md', 'Quarterly.md'].includes(source.fileName));
+        expect(reports).toHaveLength(3);
+        expect(reports[0]!.folderId).toBeTruthy();
+        expect(new Set(reports.map(source => source.folderId)).size).toBe(1);
+
+        for (const [provider, title] of [
+            ['Local folder', 'Local folder'],
+            ['GitHub repository', 'Connect GitHub'],
+            ['Linear', 'Connect Linear'],
+            ['Google Drive', 'Google Drive'],
+        ] as const) {
+            await add.click();
+            await item('Connect external sources').press('ArrowRight');
+            await item(provider).click();
+            await expect(page.getByRole('dialog', { name: title, exact: true })).toBeVisible();
+            await page.keyboard.press('Escape');
+            await expect(dialog).toBeHidden();
+        }
+        await add.click();
+        await item('Generate from database…').click();
+        await expect(page.getByRole('dialog', { name: 'Generate from database', exact: true })).toBeVisible();
+
+        await page.goto('/' + second.organizationId + '/knowledge/' + second.id + '?tab=queries&folder=' + reports[0]!.folderId);
+        await add.click();
+        await item('New document').click();
+        await expect(dialog.getByText('Target folder: ' + second.name, { exact: true })).toBeVisible();
+    } finally {
+        for (const knowledgeModelId of createdIds) await action('knowledge.delete', { knowledgeModelId }, 'knowledge.delete');
     }
 });

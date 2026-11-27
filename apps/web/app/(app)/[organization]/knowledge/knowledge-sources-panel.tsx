@@ -103,35 +103,12 @@ function ScopeSelect({
     );
 }
 
-export function UploadSourcesDialog({
-    open,
-    onOpenChange,
-    organization,
-    knowledgeModelId,
-    dataSources,
-    folderId,
-    targetPath,
-    onUploaded,
-    markdownOnly = false,
-}: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    organization: string;
-    knowledgeModelId: string;
-    dataSources: DataSource[];
-    folderId?: string | null;
-    targetPath?: string;
-    onUploaded?: () => void;
-    markdownOnly?: boolean;
-}) {
-    const t = useTranslations('Knowledge.KnowledgeSources');
-    const docs = useTranslations('Knowledge.Documents');
-    const queryClient = useQueryClient();
-    const inputRef = useRef<HTMLInputElement | null>(null);
-    const [files, setFiles] = useState<PendingFile[]>([]);
+export const markdownFileAccept = '.md,.markdown,text/markdown';
 
-    const addFiles = (selected: File[]) => {
-        const accepted = selected.slice(0, MAX_FILES_PER_UPLOAD).filter(file => {
+export function useAcceptedUploadFiles(markdownOnly: boolean) {
+    const t = useTranslations('Knowledge.KnowledgeSources');
+    return (selected: File[]) => {
+        return selected.slice(0, MAX_FILES_PER_UPLOAD).filter(file => {
             if (!(markdownOnly ? /\.(md|markdown)$/i : SUPPORTED_FILE_NAME).test(file.name)) {
                 toast.error(t('Unsupported', { name: file.name }));
                 return false;
@@ -142,13 +119,50 @@ export function UploadSourcesDialog({
             }
             return true;
         });
-        setFiles(current => {
-            const byName = new Map(current.map(item => [item.file.name, item]));
-            for (const file of accepted) {
-                if (!byName.has(file.name)) byName.set(file.name, { file, connectionId: null });
-            }
-            return [...byName.values()].slice(0, MAX_FILES_PER_UPLOAD);
-        });
+    };
+}
+
+function mergeUploadFiles(current: PendingFile[], selected: File[]) {
+    const byName = new Map(current.map(item => [item.file.name, item]));
+    for (const file of selected) {
+        if (!byName.has(file.name)) byName.set(file.name, { file, connectionId: null });
+    }
+    return [...byName.values()].slice(0, MAX_FILES_PER_UPLOAD);
+}
+
+export function UploadSourcesDialog({
+    open,
+    onOpenChange,
+    organization,
+    knowledgeModelId,
+    dataSources,
+    folderId,
+    targetPath,
+    onUploaded,
+    markdownOnly = false,
+    initialFiles = [],
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    organization: string;
+    knowledgeModelId: string;
+    dataSources: DataSource[];
+    folderId?: string | null;
+    targetPath?: string;
+    onUploaded?: () => void;
+    markdownOnly?: boolean;
+    initialFiles?: File[];
+}) {
+    const t = useTranslations('Knowledge.KnowledgeSources');
+    const docs = useTranslations('Knowledge.Documents');
+    const queryClient = useQueryClient();
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const acceptFiles = useAcceptedUploadFiles(markdownOnly);
+    const [files, setFiles] = useState<PendingFile[]>(() => mergeUploadFiles([], initialFiles));
+
+    const addFiles = (selected: File[]) => {
+        const accepted = acceptFiles(selected);
+        setFiles(current => mergeUploadFiles(current, accepted));
     };
 
     const upload = useMutation({
@@ -215,7 +229,7 @@ export function UploadSourcesDialog({
                         ref={inputRef}
                         type="file"
                         multiple
-                        accept={markdownOnly ? '.md,.markdown,text/markdown' : '.md,.markdown,.yaml,.yml,.txt,text/markdown,text/plain,application/yaml,text/yaml'}
+                        accept={markdownOnly ? markdownFileAccept : '.md,.markdown,.yaml,.yml,.txt,text/markdown,text/plain,application/yaml,text/yaml'}
                         className="hidden"
                         onChange={event => {
                             const selected = Array.from(event.target.files ?? []);

@@ -3,7 +3,24 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { IconFileTypeSql } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, FilePlus2, FileText, LibraryBig, FolderInput, Settings, FolderPlus, MoreHorizontal, PanelLeft, Pencil, Pin, Plus, Trash2, Upload } from 'lucide-react';
+import {
+    ChevronRight,
+    Database,
+    FilePlus2,
+    FileText,
+    FolderInput,
+    FolderPlus,
+    LibraryBig,
+    Link2,
+    MoreHorizontal,
+    PanelLeft,
+    Pencil,
+    Pin,
+    Plus,
+    Settings,
+    Trash2,
+    Upload,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsString, useQueryStates } from 'nuqs';
 import { useRouter } from 'next/navigation';
@@ -39,7 +56,7 @@ import type { KnowledgeModelView } from './knowledge-page.client';
 import { DirectoryFolderIcon, SourceLogo } from './source-logo';
 import dynamic from 'next/dynamic';
 import { KnowledgeGuide } from './knowledge-guide';
-import { SourceEditor, SourceViewer, UploadSourcesDialog, type KnowledgeSourceSummary } from './knowledge-sources-panel';
+import { SourceEditor, SourceViewer, UploadSourcesDialog, markdownFileAccept, useAcceptedUploadFiles, type KnowledgeSourceSummary } from './knowledge-sources-panel';
 
 const GenerateDocumentsDialog = dynamic(() => import('./generate-documents-dialog').then(module => module.GenerateDocumentsDialog));
 type Entry = { id: string; kind: 'folder' | 'document'; name: string; parentId: string | null };
@@ -53,7 +70,7 @@ export type BrowserWorkspace = {
     navigation: NavigationIndex;
     organizationSlug: string;
     section: string;
-    header: (generate: ReactNode) => ReactNode;
+    header: (addContent: ReactNode) => ReactNode;
     createModel: () => void;
     openSettings: () => void;
 };
@@ -94,6 +111,10 @@ const locationParsers = {
     rule: parseAsString,
 };
 const emptyDirectory: DirectoryData = { canWrite: false, folders: [], connectors: [] };
+
+function keepDialogFocus(event: Event) {
+    if (document.querySelector('[role="dialog"][data-state="open"]')) event.preventDefault();
+}
 
 export function DocumentBrowser({ workspace, alternate, model, organization, sources, directory, directoryPending, directoryError, sourcesPending, sourcesError }: Props) {
     const t = useTranslations('Knowledge.Documents');
@@ -204,7 +225,10 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
     });
     const [drawer, setDrawer] = useState(false);
     const [prompt, setPrompt] = useState<Prompt | null>(null);
-    const [fileCreation, setFileCreation] = useState<{ kind: 'document' | 'upload'; folderId: string } | null>(null);
+    const [fileCreation, setFileCreation] = useState<{ kind: 'document' | 'upload'; folderId: string; files?: File[] } | null>(null);
+    const [addContentOpen, setAddContentOpen] = useState(false);
+    const markdownInput = useRef<HTMLInputElement>(null);
+    const acceptMarkdownFiles = useAcceptedUploadFiles(true);
     const [value, setValue] = useState('');
     const [drag, setDrag] = useState<Entry | null>(null);
     const [over, setOver] = useState<string | null>(null);
@@ -340,20 +364,20 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         if (kind === 'folder') ask({ operation: 'create', folderId });
         else openFileCreation(kind, folderId);
     }
-    function creationItems(onCreate: (kind: 'folder' | 'document' | 'upload') => void) {
+    function creationItems(onCreate: (kind: 'folder' | 'document' | 'upload') => void, uploadLabel = t('Upload')) {
         return (
             <>
-                <DropdownMenuItem onSelect={() => onCreate('folder')}>
-                    <FolderPlus />
-                    {t('NewFolder')}
-                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onCreate('document')}>
                     <FilePlus2 />
                     {t('Create')}
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onCreate('folder')}>
+                    <FolderPlus />
+                    {t('NewFolder')}
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onCreate('upload')}>
                     <Upload />
-                    {t('Upload')}
+                    {uploadLabel}
                 </DropdownMenuItem>
             </>
         );
@@ -520,6 +544,25 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         void setLocation({ modelAction: null }, { history: 'replace' });
     }, [modelAction, directoryPending, workspace.navigation.canWrite, data.canWrite, setLocation]);
 
+    function sourceMenu(selectAction: (provider: Provider) => void, label: string) {
+        const labels = { local: knowledge('Connections.Local'), github: t('GitHubRepository'), linear: 'Linear', drive: 'Google Drive' };
+        return (
+            <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                    <Link2 />
+                    {label}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="data-[state=closed]:animate-none">
+                    {providers.map(provider => (
+                        <DropdownMenuItem key={provider} disabled={provider === 'linear' && !workspace.navigation.canManageLinear} onSelect={() => selectAction(provider)}>
+                            <SourceLogo provider={provider} className="size-4" />
+                            {labels[provider]}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuSubContent>
+            </DropdownMenuSub>
+        );
+    }
     function modelMenu(target: NavigationIndex['models'][number]) {
         if (!workspace.navigation.canWrite || (target.id === modelId && !data.canWrite)) return null;
         function selectAction(action: ModelAction) {
@@ -536,30 +579,14 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                         <MoreHorizontal />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="end"
-                    className="data-[state=closed]:animate-none"
-                    onCloseAutoFocus={event => {
-                        if (document.querySelector('[role="dialog"][data-state="open"]')) event.preventDefault();
-                    }}
-                >
+                <DropdownMenuContent align="end" className="data-[state=closed]:animate-none" onCloseAutoFocus={keepDialogFocus}>
                     <DropdownMenuItem onSelect={() => selectAction('settings')}>
                         <Settings />
                         {common('settings')}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {creationItems(selectAction)}
-                    <DropdownMenuSub>
-                        <DropdownMenuSubTrigger>{knowledge('KnowledgeSources.Tab')}</DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="data-[state=closed]:animate-none">
-                            {providers.map(provider => (
-                                <DropdownMenuItem key={provider} disabled={provider === 'linear' && !workspace.navigation.canManageLinear} onSelect={() => selectAction(provider)}>
-                                    <SourceLogo provider={provider} className="size-4" />
-                                    {provider === 'local' ? knowledge('Connections.Local') : provider === 'drive' ? 'Google Drive' : provider === 'github' ? 'GitHub' : 'Linear'}
-                                </DropdownMenuItem>
-                            ))}
-                        </DropdownMenuSubContent>
-                    </DropdownMenuSub>
+                    {sourceMenu(selectAction, knowledge('KnowledgeSources.Tab'))}
                 </DropdownMenuContent>
             </DropdownMenu>
         );
@@ -732,6 +759,45 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                   .filter(folder => validDestination(prompt.entry, folder))
                   .sort((a, b) => path(a.id).localeCompare(path(b.id)))
             : [];
+    const targetFolder = documentsView && !current.managed ? current.id : ROOT;
+    const addContentMenu = workspace.navigation.canWrite && data.canWrite && (
+        <>
+            <input
+                hidden
+                ref={markdownInput}
+                type="file"
+                multiple
+                accept={markdownFileAccept}
+                onChange={event => {
+                    const files = acceptMarkdownFiles(Array.from(event.currentTarget.files ?? []));
+                    event.currentTarget.value = '';
+                    if (files.length) setFileCreation({ kind: 'upload', folderId: targetFolder, files });
+                }}
+            />
+            <DropdownMenu modal={false} open={addContentOpen} onOpenChange={setAddContentOpen}>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" disabled={loading || Boolean(loadError)}>
+                        <Plus />
+                        {t('AddContent')}
+                    </Button>
+                </DropdownMenuTrigger>
+                {/* Unmount the menu before a dialog takes focus so its dismissal handlers release the trigger. */}
+                {addContentOpen && (
+                    <DropdownMenuContent align="end" onCloseAutoFocus={keepDialogFocus}>
+                        {creationItems(kind => {
+                            if (kind === 'upload') markdownInput.current?.click();
+                            else createInFolder(kind, targetFolder);
+                        }, t('ImportMarkdown'))}
+                        {sourceMenu(runModelAction, t('ConnectExternal'))}
+                        <DropdownMenuItem onSelect={() => setGenerationOpenedAt(Date.now())}>
+                            <Database />
+                            {knowledge('Generation.Title')}…
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                )}
+            </DropdownMenu>
+        </>
+    );
     const generateButton = data.canWrite && (
         <Button variant="outline" disabled={loading || Boolean(loadError)} onClick={() => setGenerationOpenedAt(Date.now())}>
             {knowledge('Generation.Title')}
@@ -797,7 +863,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                             </span>
                         )}
                     </nav>
-                    {workspace.header(generateButton)}
+                    {workspace.header(addContentMenu)}
                 </header>
                 <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-5">
                     {loadError && (
@@ -883,7 +949,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     sources={sources}
                     folders={data.folders}
                     targets={[...index.folders.values()].filter(f => !f.managed).map(f => ({ id: f.id, label: f.id === ROOT ? model.name : path(f.id) }))}
-                    target={documentsView && !current.managed ? current.id : ROOT}
+                    target={targetFolder}
                     currentId={documentsView ? selected?.source?.id : undefined}
                     close={closeGeneration}
                     created={async (docs, parent, landing) => {
@@ -987,6 +1053,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     <UploadSourcesDialog
                         open
                         markdownOnly
+                        initialFiles={fileCreation.files}
                         folderId={storedFolderId(fileCreation.folderId)}
                         targetPath={creationPath(fileCreation.folderId)}
                         organization={organization}

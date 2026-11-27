@@ -664,11 +664,11 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                         section: section === 'documents' ? 'documents' : activeTab,
                         createModel: () => setCreating(true),
                         openSettings: () => setEditingModel(model),
-                        header: generate => (
+                        header: addContent => (
                             <div className="flex shrink-0 items-center gap-2">
                                 <KnowledgeDataSourceAvatars sources={model.dataSources} />
                                 <div className="flex gap-2">
-                                    {generate}
+                                    {addContent}
                                     {navigation.canWrite && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
