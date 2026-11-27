@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 
 import { refreshQueryLibraries } from '@/lib/knowledge-query-cache';
 import { executeActionClient } from '@/lib/actions/client';
+import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Input } from '@/registry/new-york-v4/ui/input';
@@ -36,6 +37,7 @@ export function AddVerifiedQueryDialog({
     initialTitle?: string;
 }) {
     const t = useTranslations('Knowledge');
+    const sqlOverview = useTranslations('SqlConsole.Overview');
     const client = useQueryClient();
     const requestId = useRef('');
     const [selectedConnection, setConnection] = useState('');
@@ -104,7 +106,7 @@ export function AddVerifiedQueryDialog({
     const hasModels = Boolean(models.data?.models.length);
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{t('AddVerifiedQuery')}</DialogTitle>
                     <DialogDescription>{t('AddVerifiedQueryDescription')}</DialogDescription>
@@ -144,7 +146,7 @@ export function AddVerifiedQueryDialog({
                                 </SelectContent>
                             </Select>
                             {candidates.isError && <p role="alert">{candidates.error.message}</p>}
-                            {!existing && <Textarea aria-label="SQL" value={draft} onChange={event => setDraft(event.target.value)} />}
+                            {!existing && <SmartCodeBlock label="SQL" type="sql" value={draft} onValueChange={setDraft} copyLabel={sqlOverview('CopySql')} />}
                         </>
                     ) : hasModels ? (
                         <Select value={knowledgeModelId} onValueChange={setKnowledgeModelId}>
@@ -166,7 +168,7 @@ export function AddVerifiedQueryDialog({
                     {!existing && (
                         <Textarea aria-label={t('VerifiedQueryDescription')} value={description} onChange={event => setDescription(event.target.value)} maxLength={4000} />
                     )}
-                    {!model && <Textarea className="min-h-40 font-mono" value={sql ?? ''} readOnly />}
+                    {!model && <SmartCodeBlock label="SQL" type="sql" value={sql ?? ''} copyLabel={sqlOverview('CopySql')} />}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>

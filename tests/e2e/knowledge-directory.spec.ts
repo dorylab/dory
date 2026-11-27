@@ -12,7 +12,7 @@ function knowledgeActions(request: APIRequestContext) {
     };
 }
 
-test('organizes nested Markdown, preserves navigation and follows a moved query source', async ({ page, request }) => {
+test('organizes nested Markdown and preserves navigation to moved documents', async ({ page, request }) => {
     test.setTimeout(180_000);
     page.setDefaultTimeout(20_000);
     await page.goto('/');
@@ -67,7 +67,7 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await page.reload();
         await expect(crumb.getByRole('button', { name: 'Refunds' })).toHaveAttribute('aria-current', 'page');
         await expect(tree.getByRole('button', { name: 'Policy.md', exact: true })).toBeVisible();
-        await newItem('Upload Markdown', 'Refunds');
+        await newItem('Import Markdown files…', 'Refunds');
         await dialog.locator('input[type=file]').setInputFiles({ name: 'Checklist.md', mimeType: 'text/markdown', buffer: Buffer.from('# Check') });
         await dialog.getByRole('button', { name: /Upload 1/ }).click();
         await expect(dialog).toBeHidden();
@@ -136,9 +136,9 @@ test('organizes nested Markdown, preserves navigation and follows a moved query 
         await page.getByRole('button', { name: 'Directory', exact: true }).click();
         await dialog.getByRole('button', { name: 'Verified Queries', exact: true }).click();
         await page.getByRole('table').getByRole('button', { name: 'Refund SQL', exact: true }).click();
-        const sourceLink = page.getByRole('link', { name: 'Updated policy.md', exact: true });
-        await expect(sourceLink).toHaveAttribute('href', '?tab=documents&file=' + source!.id);
-        await sourceLink.click();
+        await expect(page.getByRole('button', { name: 'Open in workspace' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Linked Knowledge Sources' })).toHaveCount(0);
+        await page.goto('/' + slug + '/knowledge/' + knowledgeModelId + '?tab=documents&file=' + source!.id);
         const preview = page.getByRole('region', { name: 'Updated policy.md' });
         await expect(preview.getByRole('heading', { name: 'Refund window' })).toBeVisible();
         await preview.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -217,7 +217,7 @@ test('creates in a targeted directory, retries only failed uploads and returns t
         await page.setViewportSize({ width: 390, height: 844 });
         await page.getByRole('button', { name: 'Directory', exact: true }).click();
         await dialog.getByRole('button', { name: 'Actions for Support' }).click();
-        await choose('Upload Markdown');
+        await choose('Import Markdown files…');
         await expect(dialog).toContainText('Operations / Support');
         const attempts: string[] = [];
         await page.route('**/api/actions/execute', async route => {

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { cn } from '@dory/web-utils';
 import { Check, Copy } from 'lucide-react';
@@ -14,6 +15,8 @@ import { studioPrismDarkTheme, studioPrismLightTheme } from './studio-prism-them
 
 SyntaxHighlighter.registerLanguage('sql', sql);
 SyntaxHighlighter.registerLanguage('json', json);
+
+const CodeEditor = dynamic(() => import('@/components/@dory/ui/monaco-editor'), { ssr: false });
 
 type ContentType = 'text' | 'sql' | 'json' | 'auto';
 
@@ -30,6 +33,7 @@ interface SmartCodeBlockProps {
     onCopy?: () => void;
     copyLabel?: string;
     actions?: React.ReactNode;
+    onValueChange?: (value: string) => void;
 }
 
 export function SmartCodeBlock({
@@ -45,6 +49,7 @@ export function SmartCodeBlock({
     onCopy,
     copyLabel,
     actions,
+    onValueChange,
 }: SmartCodeBlockProps) {
     const [copied, setCopied] = React.useState(false);
     const { resolvedTheme } = useTheme();
@@ -159,6 +164,7 @@ export function SmartCodeBlock({
                           : variant === 'bare'
                             ? 'rounded-lg bg-transparent'
                             : 'rounded-lg border bg-muted/40',
+                    onValueChange && 'p-3',
                     maxHeightClassName,
                 )}
             >
@@ -191,21 +197,42 @@ export function SmartCodeBlock({
                     {actions}
                 </div>
 
-                <div
-                    className={cn(
-                        'relative overflow-auto',
-                        variant === 'codex'
-                            ? 'rounded-none bg-transparent px-5 py-4'
-                            : variant === 'soft'
-                              ? 'rounded-xl bg-transparent p-4'
-                              : variant === 'bare'
-                                ? 'rounded-lg bg-transparent px-2 py-1.5'
-                                : 'rounded-lg bg-card p-3',
-                        maxHeightClassName,
-                    )}
-                >
-                    {contentNode}
-                </div>
+                {onValueChange ? (
+                    <CodeEditor
+                        height="10rem"
+                        language={language ?? 'plaintext'}
+                        value={value}
+                        onChange={next => onValueChange(next ?? '')}
+                        options={{
+                            ariaLabel: label,
+                            automaticLayout: true,
+                            editContext: false,
+                            minimap: { enabled: false },
+                            lineNumbers: showLineNumbers ? 'on' : 'off',
+                            folding: showLineNumbers,
+                            lineDecorationsWidth: showLineNumbers ? undefined : 0,
+                            scrollBeyondLastLine: false,
+                            wordWrap: 'on',
+                            tabFocusMode: true,
+                        }}
+                    />
+                ) : (
+                    <div
+                        className={cn(
+                            'relative overflow-auto',
+                            variant === 'codex'
+                                ? 'rounded-none bg-transparent px-5 py-4'
+                                : variant === 'soft'
+                                  ? 'rounded-xl bg-transparent p-4'
+                                  : variant === 'bare'
+                                    ? 'rounded-lg bg-transparent px-2 py-1.5'
+                                    : 'rounded-lg bg-card p-3',
+                            maxHeightClassName,
+                        )}
+                    >
+                        {contentNode}
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -364,7 +364,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         if (kind === 'folder') ask({ operation: 'create', folderId });
         else openFileCreation(kind, folderId);
     }
-    function creationItems(onCreate: (kind: 'folder' | 'document' | 'upload') => void, uploadLabel = t('Upload')) {
+    function creationItems(onCreate: (kind: 'folder' | 'document' | 'upload') => void) {
         return (
             <>
                 <DropdownMenuItem onSelect={() => onCreate('document')}>
@@ -377,7 +377,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => onCreate('upload')}>
                     <Upload />
-                    {uploadLabel}
+                    {t('ImportMarkdown')}
                 </DropdownMenuItem>
             </>
         );
@@ -544,13 +544,13 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
         void setLocation({ modelAction: null }, { history: 'replace' });
     }, [modelAction, directoryPending, workspace.navigation.canWrite, data.canWrite, setLocation]);
 
-    function sourceMenu(selectAction: (provider: Provider) => void, label: string) {
+    function sourceMenu(selectAction: (provider: Provider) => void) {
         const labels = { local: knowledge('Connections.Local'), github: t('GitHubRepository'), linear: 'Linear', drive: 'Google Drive' };
         return (
             <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                     <Link2 />
-                    {label}
+                    {t('ConnectExternal')}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="data-[state=closed]:animate-none">
                     {providers.map(provider => (
@@ -586,7 +586,7 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {creationItems(selectAction)}
-                    {sourceMenu(selectAction, knowledge('KnowledgeSources.Tab'))}
+                    {sourceMenu(selectAction)}
                 </DropdownMenuContent>
             </DropdownMenu>
         );
@@ -787,8 +787,8 @@ export function DocumentBrowser({ workspace, alternate, model, organization, sou
                         {creationItems(kind => {
                             if (kind === 'upload') markdownInput.current?.click();
                             else createInFolder(kind, targetFolder);
-                        }, t('ImportMarkdown'))}
-                        {sourceMenu(runModelAction, t('ConnectExternal'))}
+                        })}
+                        {sourceMenu(runModelAction)}
                         <DropdownMenuItem onSelect={() => setGenerationOpenedAt(Date.now())}>
                             <Database />
                             {knowledge('Generation.Title')}…

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { refreshQueryLibraries } from '@/lib/knowledge-query-cache';
 import { executeActionClient } from '@/lib/actions/client';
+import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { KnowledgeBaseCheckboxes } from '@/components/knowledge/query-knowledge-target';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -27,6 +28,8 @@ export function EditSavedQueryDialog({
     onClose: () => void;
 }) {
     const t = useTranslations('SqlConsole.SavedQueries');
+    const sqlOverview = useTranslations('SqlConsole.Overview');
+    const [sqlText, setSqlText] = useState(query.sqlText);
     const client = useQueryClient();
     const actionContext = { currentConnectionId: connectionId, organizationId };
     const [changes, setChanges] = useState<Record<string, boolean>>({});
@@ -48,7 +51,7 @@ export function EditSavedQueryDialog({
             const patch = {
                 title: String(form.get('title')).trim(),
                 description: String(form.get('description')).trim(),
-                sqlText: String(form.get('sql')).trim(),
+                sqlText: sqlText.trim(),
                 revision: query.revision,
             };
             const addModelIds = models.filter(model => !model.included && selected(model)).map(model => model.id);
@@ -76,6 +79,7 @@ export function EditSavedQueryDialog({
             window.dispatchEvent(new CustomEvent('saved-queries-updated'));
         },
     });
+    const canSave = options.isSuccess && !save.isPending && Boolean(sqlText.trim());
     return (
         <Dialog
             open
@@ -91,7 +95,7 @@ export function EditSavedQueryDialog({
                     className="space-y-3"
                     onSubmit={event => {
                         event.preventDefault();
-                        if (options.isSuccess && !save.isPending) save.mutate(new FormData(event.currentTarget));
+                        if (canSave) save.mutate(new FormData(event.currentTarget));
                     }}
                 >
                     <label className="block text-sm">
@@ -102,10 +106,7 @@ export function EditSavedQueryDialog({
                         {t('QueryDescription')}
                         <Textarea name="description" defaultValue={query.description ?? ''} maxLength={4000} />
                     </label>
-                    <label className="block text-sm">
-                        SQL
-                        <Textarea aria-label="SQL" name="sql" defaultValue={query.sqlText} required className="min-h-36 font-mono" />
-                    </label>
+                    <SmartCodeBlock label="SQL" type="sql" value={sqlText} onValueChange={setSqlText} copyLabel={sqlOverview('CopySql')} />
                     <fieldset className="space-y-2 border-t pt-2" disabled={save.isPending}>
                         <legend className="text-sm font-medium">{t('Memberships')}</legend>
                         {options.isPending && <p className="text-sm text-muted-foreground">{t('Loading')}</p>}
@@ -141,7 +142,7 @@ export function EditSavedQueryDialog({
                         <Button type="button" variant="outline" onClick={onClose} disabled={save.isPending}>
                             {t('Cancel')}
                         </Button>
-                        <Button type="submit" disabled={save.isPending || !options.isSuccess}>
+                        <Button type="submit" disabled={!canSave}>
                             {t('Save')}
                         </Button>
                     </DialogFooter>

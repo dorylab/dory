@@ -1,9 +1,9 @@
 'use client';
+import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { AddVerifiedQueryDialog } from '@/components/knowledge/add-verified-query-dialog';
 import { EditSavedQueryDialog } from '@/components/knowledge/edit-saved-query-dialog';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
     AlertDialog,
@@ -15,10 +15,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
-import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/registry/new-york-v4/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
@@ -27,7 +25,7 @@ import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { IconFileTypeSql } from '@tabler/icons-react';
-import { ExternalLink, FileText, MoreHorizontal, Plus, Trash2, UserRound } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
@@ -39,7 +37,6 @@ import { useOrganizationId } from '../components/organization-context';
 import { KnowledgeDataSourceAvatars } from './knowledge-data-source-avatars';
 import { KnowledgeDocumentsPanel } from './knowledge-documents-panel';
 import { useKnowledgeListPagination } from './knowledge-list-pagination';
-import { knowledgeSourceDisplayName } from './knowledge-source-display';
 import { KnowledgeSourcesPanel } from './knowledge-connections-panel';
 import type { KnowledgeSourceSummary } from './knowledge-sources-panel';
 
@@ -74,158 +71,6 @@ type VerifiedQuery = {
     createdAt: string;
     updatedAt: string;
 };
-type QuerySource = { sourceId: string; relationType: 'provided' | 'generated' };
-function QuerySourceEditor({
-    organization,
-    knowledgeModelId,
-    canWrite = true,
-    queryId,
-    sources,
-}: {
-    organization: string;
-    knowledgeModelId: string;
-    canWrite?: boolean;
-    queryId: string;
-    sources: KnowledgeSourceSummary[];
-}) {
-    const t = useTranslations('Knowledge');
-    const queryClient = useQueryClient();
-    const [editing, setEditing] = useState(false);
-    const [draftSourceIds, setDraftSourceIds] = useState<string[]>([]);
-    const [search, setSearch] = useState('');
-    const key = [...modelKey(knowledgeModelId), 'query-sources', queryId];
-    const links = useQuery({
-        queryKey: key,
-        queryFn: () => executeActionClient<QuerySource[]>('knowledge.listQuerySources', { knowledgeModelId, queryId }, { organizationId: organization }),
-    });
-    const relationBySourceId = new Map(links.data?.map(link => [link.sourceId, link.relationType]));
-    const selectedSourceIds = [...relationBySourceId.keys()];
-    const linkedSources = sources.filter(source => relationBySourceId.has(source.id));
-    const rulesAlias = t('Documents.RulesSearchAlias').toLocaleLowerCase();
-    const needle = search.trim().toLocaleLowerCase();
-    const matchingSources = sources.filter(
-        source =>
-            knowledgeSourceDisplayName(source).toLocaleLowerCase().includes(needle) ||
-            source.fileName.toLocaleLowerCase().includes(needle) ||
-            (source.systemRole === 'analysis_rules' && rulesAlias.includes(needle)),
-    );
-    const changed = draftSourceIds.length !== selectedSourceIds.length || draftSourceIds.some(id => !relationBySourceId.has(id));
-    const update = useMutation({
-        mutationFn: (sourceIds: string[]) => executeActionClient('knowledge.replaceQuerySources', { knowledgeModelId, queryId, sourceIds }, { organizationId: organization }),
-        onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: key });
-            setEditing(false);
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateReferences')),
-    });
-    const openEditor = () => {
-        setDraftSourceIds(selectedSourceIds);
-        setSearch('');
-        setEditing(true);
-    };
-    return (
-        <section className="min-w-0 rounded-lg border bg-background/60 p-4">
-            <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                    <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <div>
-                        <h3 className="text-sm font-semibold">{t('VerifiedQueryDetails.RelatedSources')}</h3>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('VerifiedQueryDetails.SourcesDescription')}</p>
-                    </div>
-                </div>
-                <Button disabled={!canWrite || !links.isSuccess} size="sm" variant="outline" aria-label={t('QuerySources.EditAction')} onClick={openEditor}>
-                    {t('QuerySources.EditAction')}
-                </Button>
-            </div>
-            {links.isError ? (
-                <p role="alert">{links.error.message}</p>
-            ) : links.isPending ? null : linkedSources.length ? (
-                <div className="mt-3 max-h-48 divide-y overflow-y-auto rounded-md border">
-                    {linkedSources.map(source => {
-                        const name = knowledgeSourceDisplayName(source);
-                        return (
-                            <div key={source.id} className="flex min-h-10 items-center gap-3 px-3 py-2">
-                                <Link
-                                    className="min-w-0 flex-1 truncate text-sm hover:underline"
-                                    href={
-                                        source.format === 'markdown'
-                                            ? `?tab=documents&file=${encodeURIComponent(source.id)}`
-                                            : `?tab=sources&source=${encodeURIComponent(source.id)}`
-                                    }
-                                >
-                                    {name}
-                                </Link>
-                                <Badge variant="outline">{t(`RelationTypes.${relationBySourceId.get(source.id)}`)}</Badge>
-                                <Button variant="ghost" size="icon-sm" asChild>
-                                    <Link
-                                        href={
-                                            source.format === 'markdown'
-                                                ? `?tab=documents&file=${encodeURIComponent(source.id)}`
-                                                : `?tab=sources&source=${encodeURIComponent(source.id)}`
-                                        }
-                                        aria-label={t('QuerySources.OpenNamed', { name })}
-                                        title={t('QuerySources.OpenNamed', { name })}
-                                    >
-                                        <ExternalLink />
-                                    </Link>
-                                </Button>
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : (
-                <p className="mt-3 rounded-md border border-dashed px-3 py-2.5 text-sm text-muted-foreground">{t('QuerySources.EmptyTitle')}</p>
-            )}
-            <Dialog
-                open={editing}
-                onOpenChange={open => {
-                    if (!update.isPending) setEditing(open);
-                }}
-            >
-                <DialogContent className="sm:max-w-xl">
-                    <DialogHeader>
-                        <DialogTitle>{t('QuerySources.EditAction')}</DialogTitle>
-                        <DialogDescription>{t('QuerySources.EditDescription')}</DialogDescription>
-                    </DialogHeader>
-                    {sources.length ? (
-                        <>
-                            <Input aria-label={t('QuerySources.Search')} placeholder={t('QuerySources.Search')} value={search} onChange={event => setSearch(event.target.value)} />
-                            <div className="max-h-72 divide-y overflow-y-auto rounded-md border">
-                                {matchingSources.length ? (
-                                    matchingSources.map(source => {
-                                        const name = knowledgeSourceDisplayName(source);
-                                        return (
-                                            <label key={source.id} className="flex min-h-10 cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-                                                <Checkbox
-                                                    checked={draftSourceIds.includes(source.id)}
-                                                    disabled={update.isPending}
-                                                    onCheckedChange={checked => setDraftSourceIds(ids => (checked ? [...ids, source.id] : ids.filter(id => id !== source.id)))}
-                                                />
-                                                <span className="min-w-0 flex-1 break-words">{name}</span>
-                                            </label>
-                                        );
-                                    })
-                                ) : (
-                                    <p className="p-3 text-sm text-muted-foreground">{t('QuerySources.NoMatches')}</p>
-                                )}
-                            </div>
-                        </>
-                    ) : (
-                        <p className="text-sm text-muted-foreground">{t('VerifiedQueryDetails.NoKnowledgeSources')}</p>
-                    )}
-                    <DialogFooter>
-                        <Button variant="outline" disabled={update.isPending} onClick={() => setEditing(false)}>
-                            {t('Cancel')}
-                        </Button>
-                        <Button disabled={!changed || update.isPending} onClick={() => update.mutate(draftSourceIds)}>
-                            {t('SaveChanges')}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </section>
-    );
-}
 
 const modelKey = (modelId: string) => ['knowledge-model', modelId] as const;
 const connectionIdOf = (item: ConnectionListItem) => item.connection.id!;
@@ -506,6 +351,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
     const t = useTranslations('Knowledge');
     const tQueries = useTranslations('SqlConsole.SavedQueries');
     const common = useTranslations('Common');
+    const sqlOverview = useTranslations('SqlConsole.Overview');
     const router = useRouter();
     const queryClient = useQueryClient();
     const modelActionsRef = useRef<HTMLButtonElement>(null);
@@ -618,9 +464,7 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                         })}
                     </p>
                 </div>
-                <pre className="max-h-48 w-full max-w-full overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted px-3 py-2.5 font-mono text-xs leading-5 [overflow-wrap:anywhere]">
-                    {item.sql}
-                </pre>
+                <SmartCodeBlock value={item.sql} type="sql" variant="soft" maxHeightClassName="max-h-48" copyLabel={sqlOverview('CopySql')} />
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <Button disabled={!accessible || openQuery.isPending} onClick={() => openQuery.mutate(item)}>
                         {t('VerifiedQueryDetails.Open')}
@@ -636,15 +480,6 @@ function KnowledgeModelDetail({ organizationSlug, knowledgeModelId, navigation }
                             {openQuery.error.message}
                         </span>
                     ) : null}
-                </div>
-                <div className="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
-                    <QuerySourceEditor
-                        organization={organization}
-                        knowledgeModelId={knowledgeModelId}
-                        canWrite={navigation.canWrite}
-                        queryId={item.id}
-                        sources={sources.data?.sources ?? []}
-                    />
                 </div>
             </div>
         );

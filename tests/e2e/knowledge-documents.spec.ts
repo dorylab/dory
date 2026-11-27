@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 import { openDataSources } from './helpers/navigation';
+
+async function replaceSql(dialog: Locator, sql: string) {
+    const editor = dialog.getByRole('textbox', { name: /^SQL\b/ });
+    await editor.press('Home');
+    await editor.press('Shift+End');
+    await dialog.page().keyboard.insertText(sql);
+}
 
 test('authors Markdown, edits the guide in place and opens verified SQL in a fresh workspace tab', async ({ page, request }) => {
     test.setTimeout(180_000);
@@ -73,7 +80,7 @@ test('authors Markdown, edits the guide in place and opens verified SQL in a fre
         await expect(page.getByText('No matching queries.')).toBeVisible();
         await filter.fill(title);
         await page.getByRole('main').getByRole('table').getByRole('button', { name: title, exact: true }).click();
-        await expect(page.locator('pre').getByText(sql)).toBeVisible();
+        await expect(page.locator('pre code')).toHaveText(sql);
         const created = page.waitForResponse(response => response.url().endsWith('/api/actions/execute') && response.request().postDataJSON()?.actionId === 'tab.create');
         const executions: string[] = [];
         page.on('request', req => {
@@ -362,11 +369,11 @@ test('finds read-only YAML and edits a verified query without losing its source'
         await expect(nextMembership).not.toBeChecked();
         await expect(dialog.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('How many orders?');
         await nextMembership.check();
-        await dialog.getByRole('textbox', { name: 'SQL', exact: true }).fill('SELECT 2');
+        await replaceSql(dialog, 'SELECT 2');
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(dialog).toBeHidden();
         await expect(page.locator('#verified-query-details-' + query.id + ' pre')).toHaveText('SELECT 2');
-        await expect(page.getByRole('link', { name: fileName, exact: true })).toBeVisible();
+        expect(await action('knowledge.listQuerySources', { ...scope, queryId: query.id })).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: source.id })]));
         const tree = page.getByRole('navigation', { name: 'Directory' });
         await page.getByRole('searchbox').fill(fileName);
         await tree.getByRole('button', { name: new RegExp(fileName) }).click();
@@ -433,7 +440,7 @@ test('collects existing SQL into a knowledge base and edits the same query from 
         await page.getByRole('menuitem', { name: 'Edit SQL' }).click();
         await expect(dialog.getByRole('checkbox', { name, exact: true })).toBeChecked();
         await expect(dialog.getByRole('checkbox', { name: secondName, exact: true })).not.toBeChecked();
-        await dialog.getByRole('textbox', { name: 'SQL', exact: true }).fill('SELECT 66');
+        await replaceSql(dialog, 'SELECT 66');
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
         await expect(dialog).toBeHidden();
         expect((await action<{ sql: string }>('knowledge.getVerifiedQuery', { ...scope, id: query.id })).sql).toBe('SELECT 66');
@@ -441,10 +448,11 @@ test('collects existing SQL into a knowledge base and edits the same query from 
         await page.getByRole('combobox').filter({ hasText: 'In knowledge bases' }).click();
         await page.getByRole('option', { name: 'My Queries' }).click();
         const personalRow = page.getByRole('button', { name: new RegExp(name) });
+        await expect(personalRow).toContainText('SELECT 66');
         await personalRow.locator('..').getByRole('button', { name: 'More actions' }).click();
         await page.getByRole('menuitem', { name: 'Edit SQL' }).click();
         await dialog.getByRole('textbox', { name: 'Description', exact: true }).fill('Updated during sharing');
-        await dialog.getByRole('textbox', { name: 'SQL', exact: true }).fill('SELECT 67');
+        await replaceSql(dialog, 'SELECT 67');
         await dialog.getByRole('checkbox', { name, exact: true }).uncheck();
         await dialog.getByRole('checkbox', { name: secondName, exact: true }).check();
         await dialog.getByRole('button', { name: 'Save', exact: true }).click();
